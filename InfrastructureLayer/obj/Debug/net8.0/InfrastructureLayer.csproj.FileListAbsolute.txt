@@ -1,0 +1,14 @@
+D:\KLTN\KLTN_SU26_SNM_BE\InfrastructureLayer\bin\Debug\net8.0\InfrastructureLayer.deps.json
+D:\KLTN\KLTN_SU26_SNM_BE\InfrastructureLayer\bin\Debug\net8.0\InfrastructureLayer.runtimeconfig.json
+D:\KLTN\KLTN_SU26_SNM_BE\InfrastructureLayer\bin\Debug\net8.0\InfrastructureLayer.dll
+D:\KLTN\KLTN_SU26_SNM_BE\InfrastructureLayer\bin\Debug\net8.0\InfrastructureLayer.pdb
+D:\KLTN\KLTN_SU26_SNM_BE\InfrastructureLayer\obj\Debug\net8.0\InfrastructureLayer.csproj.AssemblyReference.cache
+D:\KLTN\KLTN_SU26_SNM_BE\InfrastructureLayer\obj\Debug\net8.0\InfrastructureLayer.GeneratedMSBuildEditorConfig.editorconfig
+D:\KLTN\KLTN_SU26_SNM_BE\InfrastructureLayer\obj\Debug\net8.0\InfrastructureLayer.AssemblyInfoInputs.cache
+D:\KLTN\KLTN_SU26_SNM_BE\InfrastructureLayer\obj\Debug\net8.0\InfrastructureLayer.AssemblyInfo.cs
+D:\KLTN\KLTN_SU26_SNM_BE\InfrastructureLayer\obj\Debug\net8.0\InfrastructureLayer.csproj.CoreCompileInputs.cache
+D:\KLTN\KLTN_SU26_SNM_BE\InfrastructureLayer\obj\Debug\net8.0\InfrastructureLayer.dll
+D:\KLTN\KLTN_SU26_SNM_BE\InfrastructureLayer\obj\Debug\net8.0\refint\InfrastructureLayer.dll
+D:\KLTN\KLTN_SU26_SNM_BE\InfrastructureLayer\obj\Debug\net8.0\InfrastructureLayer.pdb
+D:\KLTN\KLTN_SU26_SNM_BE\InfrastructureLayer\obj\Debug\net8.0\InfrastructureLayer.genruntimeconfig.cache
+D:\KLTN\KLTN_SU26_SNM_BE\InfrastructureLayer\obj\Debug\net8.0\ref\InfrastructureLayer.dll

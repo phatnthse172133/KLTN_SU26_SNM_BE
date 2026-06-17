@@ -1,0 +1,11 @@
+D:\KLTN\KLTN_SU26_SNM_BE\ApplicationLayer\bin\Debug\net8.0\ApplicationLayer.deps.json
+D:\KLTN\KLTN_SU26_SNM_BE\ApplicationLayer\bin\Debug\net8.0\ApplicationLayer.dll
+D:\KLTN\KLTN_SU26_SNM_BE\ApplicationLayer\bin\Debug\net8.0\ApplicationLayer.pdb
+D:\KLTN\KLTN_SU26_SNM_BE\ApplicationLayer\obj\Debug\net8.0\ApplicationLayer.GeneratedMSBuildEditorConfig.editorconfig
+D:\KLTN\KLTN_SU26_SNM_BE\ApplicationLayer\obj\Debug\net8.0\ApplicationLayer.AssemblyInfoInputs.cache
+D:\KLTN\KLTN_SU26_SNM_BE\ApplicationLayer\obj\Debug\net8.0\ApplicationLayer.AssemblyInfo.cs
+D:\KLTN\KLTN_SU26_SNM_BE\ApplicationLayer\obj\Debug\net8.0\ApplicationLayer.csproj.CoreCompileInputs.cache
+D:\KLTN\KLTN_SU26_SNM_BE\ApplicationLayer\obj\Debug\net8.0\ApplicationLayer.dll
+D:\KLTN\KLTN_SU26_SNM_BE\ApplicationLayer\obj\Debug\net8.0\refint\ApplicationLayer.dll
+D:\KLTN\KLTN_SU26_SNM_BE\ApplicationLayer\obj\Debug\net8.0\ApplicationLayer.pdb
+D:\KLTN\KLTN_SU26_SNM_BE\ApplicationLayer\obj\Debug\net8.0\ref\ApplicationLayer.dll

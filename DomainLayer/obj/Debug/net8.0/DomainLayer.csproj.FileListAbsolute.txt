@@ -1,0 +1,11 @@
+D:\KLTN\KLTN_SU26_SNM_BE\DomainLayer\bin\Debug\net8.0\DomainLayer.deps.json
+D:\KLTN\KLTN_SU26_SNM_BE\DomainLayer\bin\Debug\net8.0\DomainLayer.dll
+D:\KLTN\KLTN_SU26_SNM_BE\DomainLayer\bin\Debug\net8.0\DomainLayer.pdb
+D:\KLTN\KLTN_SU26_SNM_BE\DomainLayer\obj\Debug\net8.0\DomainLayer.GeneratedMSBuildEditorConfig.editorconfig
+D:\KLTN\KLTN_SU26_SNM_BE\DomainLayer\obj\Debug\net8.0\DomainLayer.AssemblyInfoInputs.cache
+D:\KLTN\KLTN_SU26_SNM_BE\DomainLayer\obj\Debug\net8.0\DomainLayer.AssemblyInfo.cs
+D:\KLTN\KLTN_SU26_SNM_BE\DomainLayer\obj\Debug\net8.0\DomainLayer.csproj.CoreCompileInputs.cache
+D:\KLTN\KLTN_SU26_SNM_BE\DomainLayer\obj\Debug\net8.0\DomainLayer.dll
+D:\KLTN\KLTN_SU26_SNM_BE\DomainLayer\obj\Debug\net8.0\refint\DomainLayer.dll
+D:\KLTN\KLTN_SU26_SNM_BE\DomainLayer\obj\Debug\net8.0\DomainLayer.pdb
+D:\KLTN\KLTN_SU26_SNM_BE\DomainLayer\obj\Debug\net8.0\ref\DomainLayer.dll

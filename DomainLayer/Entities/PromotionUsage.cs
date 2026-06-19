@@ -3,9 +3,8 @@ using System.Collections.Generic;
 
 namespace DomainLayer.Entities;
 
-/// <summary>
-/// Lịch sử sử dụng mã khuyến mãi - kiểm tra UsageLimit và chống dùng trùng
-/// </summary>
+
+// Lịch sử sử dụng mã khuyến mãi - kiểm tra UsageLimit và chống dùng trùng
 public partial class PromotionUsage
 {
     public Guid Id { get; set; }

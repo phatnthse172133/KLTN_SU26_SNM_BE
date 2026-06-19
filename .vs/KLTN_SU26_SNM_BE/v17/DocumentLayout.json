@@ -3,28 +3,172 @@
   "WorkspaceRootPath": "D:\\KLTN\\KLTN_SU26_SNM_BE\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{795A04CC-B639-46AD-BB91-F3F2F3828ACC}|ApplicationLayer\\ApplicationLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\applicationlayer\\helppers\\pagination.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{795A04CC-B639-46AD-BB91-F3F2F3828ACC}|ApplicationLayer\\ApplicationLayer.csproj|solutionrelative:applicationlayer\\helppers\\pagination.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+      "AbsoluteMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\domainlayer\\entities\\booth.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|solutionrelative:domainlayer\\entities\\booth.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{6DB7D288-2527-4FEB-B054-C70BF08D64DB}|PresentationLayer\\PresentationLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\presentationlayer\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
-      "RelativeMoniker": "D:0:0:{6DB7D288-2527-4FEB-B054-C70BF08D64DB}|PresentationLayer\\PresentationLayer.csproj|solutionrelative:presentationlayer\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+      "AbsoluteMoniker": "D:0:0:{795A04CC-B639-46AD-BB91-F3F2F3828ACC}|ApplicationLayer\\ApplicationLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\applicationlayer\\services\\account\\iaccountservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{795A04CC-B639-46AD-BB91-F3F2F3828ACC}|ApplicationLayer\\ApplicationLayer.csproj|solutionrelative:applicationlayer\\services\\account\\iaccountservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{6DB7D288-2527-4FEB-B054-C70BF08D64DB}|PresentationLayer\\PresentationLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\presentationlayer\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{6DB7D288-2527-4FEB-B054-C70BF08D64DB}|PresentationLayer\\PresentationLayer.csproj|solutionrelative:presentationlayer\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+      "AbsoluteMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\domainlayer\\entities\\boothimage.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|solutionrelative:domainlayer\\entities\\boothimage.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{7F801C40-B229-4258-B7CB-B1ED50B3999D}|InfrastructureLayer\\InfrastructureLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\infrastructurelayer\\infrastructurelayer.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|",
-      "RelativeMoniker": "D:0:0:{7F801C40-B229-4258-B7CB-B1ED50B3999D}|InfrastructureLayer\\InfrastructureLayer.csproj|solutionrelative:infrastructurelayer\\infrastructurelayer.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|"
+      "AbsoluteMoniker": "D:0:0:{795A04CC-B639-46AD-BB91-F3F2F3828ACC}|ApplicationLayer\\ApplicationLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\applicationlayer\\services\\account\\accountservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{795A04CC-B639-46AD-BB91-F3F2F3828ACC}|ApplicationLayer\\ApplicationLayer.csproj|solutionrelative:applicationlayer\\services\\account\\accountservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\domainlayer\\enums\\generalenum.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|solutionrelative:domainlayer\\enums\\generalenum.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{795A04CC-B639-46AD-BB91-F3F2F3828ACC}|ApplicationLayer\\ApplicationLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\applicationlayer\\helppers\\apiresponse.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{795A04CC-B639-46AD-BB91-F3F2F3828ACC}|ApplicationLayer\\ApplicationLayer.csproj|solutionrelative:applicationlayer\\helppers\\apiresponse.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+      "AbsoluteMoniker": "D:0:0:{7F801C40-B229-4258-B7CB-B1ED50B3999D}|InfrastructureLayer\\InfrastructureLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\infrastructurelayer\\data\\applicationdbcontext.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{7F801C40-B229-4258-B7CB-B1ED50B3999D}|InfrastructureLayer\\InfrastructureLayer.csproj|solutionrelative:infrastructurelayer\\data\\applicationdbcontext.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\domainlayer\\entities\\boothlocation.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|solutionrelative:domainlayer\\entities\\boothlocation.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\domainlayer\\entities\\boothdocument.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|solutionrelative:domainlayer\\entities\\boothdocument.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\domainlayer\\entities\\promotionalpackage.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|solutionrelative:domainlayer\\entities\\promotionalpackage.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\domainlayer\\entities\\foodprice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|solutionrelative:domainlayer\\entities\\foodprice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\domainlayer\\entities\\subscriptionpackage.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|solutionrelative:domainlayer\\entities\\subscriptionpackage.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\domainlayer\\entities\\user.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|solutionrelative:domainlayer\\entities\\user.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{795A04CC-B639-46AD-BB91-F3F2F3828ACC}|ApplicationLayer\\ApplicationLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\applicationlayer\\services\\auth\\authservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{795A04CC-B639-46AD-BB91-F3F2F3828ACC}|ApplicationLayer\\ApplicationLayer.csproj|solutionrelative:applicationlayer\\services\\auth\\authservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{795A04CC-B639-46AD-BB91-F3F2F3828ACC}|ApplicationLayer\\ApplicationLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\applicationlayer\\services\\auth\\iauthservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{795A04CC-B639-46AD-BB91-F3F2F3828ACC}|ApplicationLayer\\ApplicationLayer.csproj|solutionrelative:applicationlayer\\services\\auth\\iauthservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{795A04CC-B639-46AD-BB91-F3F2F3828ACC}|ApplicationLayer\\ApplicationLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\applicationlayer\\mappings\\mappingprofiles.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{795A04CC-B639-46AD-BB91-F3F2F3828ACC}|ApplicationLayer\\ApplicationLayer.csproj|solutionrelative:applicationlayer\\mappings\\mappingprofiles.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\domainlayer\\entities\\reviewreply.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|solutionrelative:domainlayer\\entities\\reviewreply.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\domainlayer\\entities\\role.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|solutionrelative:domainlayer\\entities\\role.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\domainlayer\\entities\\review.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|solutionrelative:domainlayer\\entities\\review.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\domainlayer\\entities\\promotionusage.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|solutionrelative:domainlayer\\entities\\promotionusage.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\domainlayer\\entities\\promotion.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|solutionrelative:domainlayer\\entities\\promotion.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\domainlayer\\entities\\order.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|solutionrelative:domainlayer\\entities\\order.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\domainlayer\\entities\\payment.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|solutionrelative:domainlayer\\entities\\payment.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\domainlayer\\entities\\orderdetail.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|solutionrelative:domainlayer\\entities\\orderdetail.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\domainlayer\\entities\\notification.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|solutionrelative:domainlayer\\entities\\notification.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\domainlayer\\entities\\nightmarket.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|solutionrelative:domainlayer\\entities\\nightmarket.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\domainlayer\\entities\\message.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|solutionrelative:domainlayer\\entities\\message.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\domainlayer\\entities\\marketlayout.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|solutionrelative:domainlayer\\entities\\marketlayout.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\domainlayer\\entities\\layoutnode.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|solutionrelative:domainlayer\\entities\\layoutnode.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\domainlayer\\entities\\layoutedge.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|solutionrelative:domainlayer\\entities\\layoutedge.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\domainlayer\\entities\\fooditem.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|solutionrelative:domainlayer\\entities\\fooditem.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\domainlayer\\entities\\foodimage.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|solutionrelative:domainlayer\\entities\\foodimage.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\domainlayer\\entities\\foodcategory.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|solutionrelative:domainlayer\\entities\\foodcategory.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\domainlayer\\entities\\conversation.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|solutionrelative:domainlayer\\entities\\conversation.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\domainlayer\\entities\\complaintimage.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|solutionrelative:domainlayer\\entities\\complaintimage.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\domainlayer\\entities\\complaint.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|solutionrelative:domainlayer\\entities\\complaint.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\domainlayer\\entities\\boothsubscription.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|solutionrelative:domainlayer\\entities\\boothsubscription.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\domainlayer\\entities\\boothqrcode.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|solutionrelative:domainlayer\\entities\\boothqrcode.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\domainlayer\\entities\\boothpromotionalpackage.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|solutionrelative:domainlayer\\entities\\boothpromotionalpackage.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\domainlayer\\entities\\boothpaymentinfo.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|solutionrelative:domainlayer\\entities\\boothpaymentinfo.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{7F801C40-B229-4258-B7CB-B1ED50B3999D}|InfrastructureLayer\\InfrastructureLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\infrastructurelayer\\cores\\emails\\emailservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{7F801C40-B229-4258-B7CB-B1ED50B3999D}|InfrastructureLayer\\InfrastructureLayer.csproj|solutionrelative:infrastructurelayer\\cores\\emails\\emailservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{7F801C40-B229-4258-B7CB-B1ED50B3999D}|InfrastructureLayer\\InfrastructureLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\infrastructurelayer\\data\\applicationdbcontextseed.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{7F801C40-B229-4258-B7CB-B1ED50B3999D}|InfrastructureLayer\\InfrastructureLayer.csproj|solutionrelative:infrastructurelayer\\data\\applicationdbcontextseed.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{7F801C40-B229-4258-B7CB-B1ED50B3999D}|InfrastructureLayer\\InfrastructureLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\infrastructurelayer\\cores\\emails\\iemailservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{7F801C40-B229-4258-B7CB-B1ED50B3999D}|InfrastructureLayer\\InfrastructureLayer.csproj|solutionrelative:infrastructurelayer\\cores\\emails\\iemailservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     }
   ],
   "DocumentGroupContainers": [
@@ -34,7 +178,7 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 5,
+          "SelectedChildIndex": 7,
           "Children": [
             {
               "$type": "Bookmark",
@@ -42,42 +186,39 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
-              "Title": "appsettings.json",
-              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\PresentationLayer\\appsettings.json",
-              "RelativeDocumentMoniker": "PresentationLayer\\appsettings.json",
-              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\PresentationLayer\\appsettings.json",
-              "RelativeToolTip": "PresentationLayer\\appsettings.json",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAsAAAAFAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
-              "WhenOpened": "2026-06-17T05:32:41.821Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
               "DocumentIndex": 2,
-              "Title": "Program.cs",
-              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\PresentationLayer\\Program.cs",
-              "RelativeDocumentMoniker": "PresentationLayer\\Program.cs",
-              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\PresentationLayer\\Program.cs",
-              "RelativeToolTip": "PresentationLayer\\Program.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Title": "BoothImage.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\BoothImage.cs",
+              "RelativeDocumentMoniker": "DomainLayer\\Entities\\BoothImage.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\BoothImage.cs",
+              "RelativeToolTip": "DomainLayer\\Entities\\BoothImage.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-06-17T05:32:40.29Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-06-19T02:39:33.785Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 3,
-              "Title": "InfrastructureLayer",
-              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\InfrastructureLayer\\InfrastructureLayer.csproj",
-              "RelativeDocumentMoniker": "InfrastructureLayer\\InfrastructureLayer.csproj",
-              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\InfrastructureLayer\\InfrastructureLayer.csproj",
-              "RelativeToolTip": "InfrastructureLayer\\InfrastructureLayer.csproj",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAACAAAABfAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000758|",
-              "WhenOpened": "2026-06-17T05:19:15.978Z",
-              "EditorCaption": ""
+              "DocumentIndex": 6,
+              "Title": "BoothLocation.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\BoothLocation.cs",
+              "RelativeDocumentMoniker": "DomainLayer\\Entities\\BoothLocation.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\BoothLocation.cs",
+              "RelativeToolTip": "DomainLayer\\Entities\\BoothLocation.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAUAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T02:40:34.796Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "ApplicationDbContext.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\InfrastructureLayer\\Data\\ApplicationDbContext.cs",
+              "RelativeDocumentMoniker": "InfrastructureLayer\\Data\\ApplicationDbContext.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\InfrastructureLayer\\Data\\ApplicationDbContext.cs",
+              "RelativeToolTip": "InfrastructureLayer\\Data\\ApplicationDbContext.cs",
+              "ViewState": "AgIAANkCAAAAAAAAAAAAAAUAAAAjAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T05:28:47.506Z"
             },
             {
               "$type": "Document",
@@ -87,35 +228,467 @@
               "RelativeDocumentMoniker": "DomainLayer\\Enums\\GeneralEnum.cs",
               "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Enums\\GeneralEnum.cs",
               "RelativeToolTip": "DomainLayer\\Enums\\GeneralEnum.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAoAAAAAAAAAAAAAAA==",
+              "ViewState": "AgIAAEsAAAAAAAAAAAAIwIkAAAAJAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-06-16T18:38:52.319Z",
+              "WhenOpened": "2026-06-19T02:27:57.812Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "AccountService.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\Services\\Account\\AccountService.cs",
+              "RelativeDocumentMoniker": "ApplicationLayer\\Services\\Account\\AccountService.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\Services\\Account\\AccountService.cs",
+              "RelativeToolTip": "ApplicationLayer\\Services\\Account\\AccountService.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T06:28:51.06Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "IAccountService.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\Services\\Account\\IAccountService.cs",
+              "RelativeDocumentMoniker": "ApplicationLayer\\Services\\Account\\IAccountService.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\Services\\Account\\IAccountService.cs",
+              "RelativeToolTip": "ApplicationLayer\\Services\\Account\\IAccountService.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T06:28:43.116Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
               "DocumentIndex": 0,
-              "Title": "Pagination.cs",
-              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\Helppers\\Pagination.cs",
-              "RelativeDocumentMoniker": "ApplicationLayer\\Helppers\\Pagination.cs",
-              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\Helppers\\Pagination.cs",
-              "RelativeToolTip": "ApplicationLayer\\Helppers\\Pagination.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Title": "Booth.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\Booth.cs",
+              "RelativeDocumentMoniker": "DomainLayer\\Entities\\Booth.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\Booth.cs",
+              "RelativeToolTip": "DomainLayer\\Entities\\Booth.cs",
+              "ViewState": "AgIAAC0AAAAAAAAAAAAxwD4AAABwAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-06-16T18:38:13.649Z",
+              "WhenOpened": "2026-06-19T02:24:57.491Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 5,
-              "Title": "ApiResponse.cs",
-              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\Helppers\\ApiResponse.cs",
-              "RelativeDocumentMoniker": "ApplicationLayer\\Helppers\\ApiResponse.cs",
-              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\Helppers\\ApiResponse.cs",
-              "RelativeToolTip": "ApplicationLayer\\Helppers\\ApiResponse.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAkAAAAFAAAAAAAAAA==",
+              "DocumentIndex": 7,
+              "Title": "BoothDocument.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\BoothDocument.cs",
+              "RelativeDocumentMoniker": "DomainLayer\\Entities\\BoothDocument.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\BoothDocument.cs",
+              "RelativeToolTip": "DomainLayer\\Entities\\BoothDocument.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABMAAAA/AAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-06-16T18:37:52.516Z"
+              "WhenOpened": "2026-06-19T02:28:13.16Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 8,
+              "Title": "PromotionalPackage.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\PromotionalPackage.cs",
+              "RelativeDocumentMoniker": "DomainLayer\\Entities\\PromotionalPackage.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\PromotionalPackage.cs",
+              "RelativeToolTip": "DomainLayer\\Entities\\PromotionalPackage.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABMAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T05:18:37.404Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 9,
+              "Title": "FoodPrice.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\FoodPrice.cs",
+              "RelativeDocumentMoniker": "DomainLayer\\Entities\\FoodPrice.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\FoodPrice.cs",
+              "RelativeToolTip": "DomainLayer\\Entities\\FoodPrice.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T02:47:25.941Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 10,
+              "Title": "SubscriptionPackage.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\SubscriptionPackage.cs",
+              "RelativeDocumentMoniker": "DomainLayer\\Entities\\SubscriptionPackage.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\SubscriptionPackage.cs",
+              "RelativeToolTip": "DomainLayer\\Entities\\SubscriptionPackage.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABQAAAA5AAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T05:17:53.606Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 11,
+              "Title": "User.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\User.cs",
+              "RelativeDocumentMoniker": "DomainLayer\\Entities\\User.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\User.cs",
+              "RelativeToolTip": "DomainLayer\\Entities\\User.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAACAAAAAqAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T02:49:54.536Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 12,
+              "Title": "AuthService.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\Services\\Auth\\AuthService.cs",
+              "RelativeDocumentMoniker": "ApplicationLayer\\Services\\Auth\\AuthService.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\Services\\Auth\\AuthService.cs",
+              "RelativeToolTip": "ApplicationLayer\\Services\\Auth\\AuthService.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T06:28:24.602Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 13,
+              "Title": "IAuthService.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\Services\\Auth\\IAuthService.cs",
+              "RelativeDocumentMoniker": "ApplicationLayer\\Services\\Auth\\IAuthService.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\Services\\Auth\\IAuthService.cs",
+              "RelativeToolTip": "ApplicationLayer\\Services\\Auth\\IAuthService.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T06:28:13.718Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 14,
+              "Title": "MappingProfiles.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\Mappings\\MappingProfiles.cs",
+              "RelativeDocumentMoniker": "ApplicationLayer\\Mappings\\MappingProfiles.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\Mappings\\MappingProfiles.cs",
+              "RelativeToolTip": "ApplicationLayer\\Mappings\\MappingProfiles.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T06:27:56.662Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 15,
+              "Title": "ReviewReply.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\ReviewReply.cs",
+              "RelativeDocumentMoniker": "DomainLayer\\Entities\\ReviewReply.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\ReviewReply.cs",
+              "RelativeToolTip": "DomainLayer\\Entities\\ReviewReply.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAUAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T05:18:08.635Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 16,
+              "Title": "Role.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\Role.cs",
+              "RelativeDocumentMoniker": "DomainLayer\\Entities\\Role.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\Role.cs",
+              "RelativeToolTip": "DomainLayer\\Entities\\Role.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAUAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T05:18:01.228Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 17,
+              "Title": "Review.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\Review.cs",
+              "RelativeDocumentMoniker": "DomainLayer\\Entities\\Review.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\Review.cs",
+              "RelativeToolTip": "DomainLayer\\Entities\\Review.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABUAAAApAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T05:18:16.72Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 18,
+              "Title": "PromotionUsage.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\PromotionUsage.cs",
+              "RelativeDocumentMoniker": "DomainLayer\\Entities\\PromotionUsage.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\PromotionUsage.cs",
+              "RelativeToolTip": "DomainLayer\\Entities\\PromotionUsage.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAUAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T05:18:27.792Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 19,
+              "Title": "Promotion.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\Promotion.cs",
+              "RelativeDocumentMoniker": "DomainLayer\\Entities\\Promotion.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\Promotion.cs",
+              "RelativeToolTip": "DomainLayer\\Entities\\Promotion.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABMAAAAzAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T05:18:46.183Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 20,
+              "Title": "Order.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\Order.cs",
+              "RelativeDocumentMoniker": "DomainLayer\\Entities\\Order.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\Order.cs",
+              "RelativeToolTip": "DomainLayer\\Entities\\Order.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T05:20:14.402Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 21,
+              "Title": "Payment.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\Payment.cs",
+              "RelativeDocumentMoniker": "DomainLayer\\Entities\\Payment.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\Payment.cs",
+              "RelativeToolTip": "DomainLayer\\Entities\\Payment.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABAAAAAsAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T05:19:08.431Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 22,
+              "Title": "OrderDetail.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\OrderDetail.cs",
+              "RelativeDocumentMoniker": "DomainLayer\\Entities\\OrderDetail.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\OrderDetail.cs",
+              "RelativeToolTip": "DomainLayer\\Entities\\OrderDetail.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAUAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T05:19:52.967Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 23,
+              "Title": "Notification.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\Notification.cs",
+              "RelativeDocumentMoniker": "DomainLayer\\Entities\\Notification.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\Notification.cs",
+              "RelativeToolTip": "DomainLayer\\Entities\\Notification.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABcAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T05:20:44.755Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 24,
+              "Title": "NightMarket.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\NightMarket.cs",
+              "RelativeDocumentMoniker": "DomainLayer\\Entities\\NightMarket.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\NightMarket.cs",
+              "RelativeToolTip": "DomainLayer\\Entities\\NightMarket.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAIAAAArAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T05:21:17.487Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 25,
+              "Title": "Message.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\Message.cs",
+              "RelativeDocumentMoniker": "DomainLayer\\Entities\\Message.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\Message.cs",
+              "RelativeToolTip": "DomainLayer\\Entities\\Message.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABMAAAAiAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T02:48:34.024Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 26,
+              "Title": "MarketLayout.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\MarketLayout.cs",
+              "RelativeDocumentMoniker": "DomainLayer\\Entities\\MarketLayout.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\MarketLayout.cs",
+              "RelativeToolTip": "DomainLayer\\Entities\\MarketLayout.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAUAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T02:48:26.536Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 27,
+              "Title": "LayoutNode.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\LayoutNode.cs",
+              "RelativeDocumentMoniker": "DomainLayer\\Entities\\LayoutNode.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\LayoutNode.cs",
+              "RelativeToolTip": "DomainLayer\\Entities\\LayoutNode.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAUAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T02:48:19.967Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 28,
+              "Title": "LayoutEdge.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\LayoutEdge.cs",
+              "RelativeDocumentMoniker": "DomainLayer\\Entities\\LayoutEdge.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\LayoutEdge.cs",
+              "RelativeToolTip": "DomainLayer\\Entities\\LayoutEdge.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAUAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T02:48:05.681Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 29,
+              "Title": "FoodItem.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\FoodItem.cs",
+              "RelativeDocumentMoniker": "DomainLayer\\Entities\\FoodItem.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\FoodItem.cs",
+              "RelativeToolTip": "DomainLayer\\Entities\\FoodItem.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABgAAAAGAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T02:47:00.208Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 30,
+              "Title": "FoodImage.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\FoodImage.cs",
+              "RelativeDocumentMoniker": "DomainLayer\\Entities\\FoodImage.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\FoodImage.cs",
+              "RelativeToolTip": "DomainLayer\\Entities\\FoodImage.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAUAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T02:46:50.52Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 31,
+              "Title": "FoodCategory.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\FoodCategory.cs",
+              "RelativeDocumentMoniker": "DomainLayer\\Entities\\FoodCategory.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\FoodCategory.cs",
+              "RelativeToolTip": "DomainLayer\\Entities\\FoodCategory.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAUAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T02:46:39.444Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 32,
+              "Title": "Conversation.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\Conversation.cs",
+              "RelativeDocumentMoniker": "DomainLayer\\Entities\\Conversation.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\Conversation.cs",
+              "RelativeToolTip": "DomainLayer\\Entities\\Conversation.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAUAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T02:46:31.418Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 33,
+              "Title": "ComplaintImage.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\ComplaintImage.cs",
+              "RelativeDocumentMoniker": "DomainLayer\\Entities\\ComplaintImage.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\ComplaintImage.cs",
+              "RelativeToolTip": "DomainLayer\\Entities\\ComplaintImage.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAUAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T02:46:23.107Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 34,
+              "Title": "Complaint.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\Complaint.cs",
+              "RelativeDocumentMoniker": "DomainLayer\\Entities\\Complaint.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\Complaint.cs",
+              "RelativeToolTip": "DomainLayer\\Entities\\Complaint.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABkAAAAvAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T02:43:41.353Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 35,
+              "Title": "BoothSubscription.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\BoothSubscription.cs",
+              "RelativeDocumentMoniker": "DomainLayer\\Entities\\BoothSubscription.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\BoothSubscription.cs",
+              "RelativeToolTip": "DomainLayer\\Entities\\BoothSubscription.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABQAAAA3AAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T02:43:07.637Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 36,
+              "Title": "BoothQrcode.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\BoothQrcode.cs",
+              "RelativeDocumentMoniker": "DomainLayer\\Entities\\BoothQrcode.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\BoothQrcode.cs",
+              "RelativeToolTip": "DomainLayer\\Entities\\BoothQrcode.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAUAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T02:42:59.518Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 37,
+              "Title": "BoothPromotionalPackage.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\BoothPromotionalPackage.cs",
+              "RelativeDocumentMoniker": "DomainLayer\\Entities\\BoothPromotionalPackage.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\BoothPromotionalPackage.cs",
+              "RelativeToolTip": "DomainLayer\\Entities\\BoothPromotionalPackage.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAUAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T02:42:27.98Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 38,
+              "Title": "BoothPaymentInfo.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\BoothPaymentInfo.cs",
+              "RelativeDocumentMoniker": "DomainLayer\\Entities\\BoothPaymentInfo.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\BoothPaymentInfo.cs",
+              "RelativeToolTip": "DomainLayer\\Entities\\BoothPaymentInfo.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAA0AAAA0AAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T02:40:39.442Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 39,
+              "Title": "EmailService.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\InfrastructureLayer\\Cores\\Emails\\EmailService.cs",
+              "RelativeDocumentMoniker": "InfrastructureLayer\\Cores\\Emails\\EmailService.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\InfrastructureLayer\\Cores\\Emails\\EmailService.cs",
+              "RelativeToolTip": "InfrastructureLayer\\Cores\\Emails\\EmailService.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T05:28:25.447Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 40,
+              "Title": "ApplicationDbContextSeed.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\InfrastructureLayer\\Data\\ApplicationDbContextSeed.cs",
+              "RelativeDocumentMoniker": "InfrastructureLayer\\Data\\ApplicationDbContextSeed.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\InfrastructureLayer\\Data\\ApplicationDbContextSeed.cs",
+              "RelativeToolTip": "InfrastructureLayer\\Data\\ApplicationDbContextSeed.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAcAAAAjAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T05:29:01.51Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 41,
+              "Title": "IEmailService.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\InfrastructureLayer\\Cores\\Emails\\IEmailService.cs",
+              "RelativeDocumentMoniker": "InfrastructureLayer\\Cores\\Emails\\IEmailService.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\InfrastructureLayer\\Cores\\Emails\\IEmailService.cs",
+              "RelativeToolTip": "InfrastructureLayer\\Cores\\Emails\\IEmailService.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-19T05:28:15.807Z"
             }
           ]
         }

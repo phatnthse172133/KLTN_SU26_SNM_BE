@@ -1,11 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using static DomainLayer.Enums.GeneralEnum;
 
 namespace DomainLayer.Entities;
 
-/// <summary>
-/// Lịch sử giao dịch thanh toán/hoàn tiền - tích hợp đa cổng VNPay/ZaloPay/MoMo/Payos
-/// </summary>
+
+// Lịch sử giao dịch thanh toán/hoàn tiền - tích hợp đa cổng VNPay/ZaloPay/MoMo/Payos
 public partial class Payment
 {
     public Guid Id { get; set; }
@@ -14,22 +14,18 @@ public partial class Payment
 
     public Guid CustomerId { get; set; }
 
-    /// <summary>
-    /// Payment: thu tiền | Refund: hoàn tiền
-    /// </summary>
-    public string Type { get; set; } = null!;
+    // Payment: thu tiền | Refund: hoàn tiền
+    public PaymentType Type { get; set; }
 
-    public string Gateway { get; set; } = null!;
+    public PaymentMethod Gateway { get; set; }
 
     public decimal Amount { get; set; }
 
     public string Currency { get; set; } = null!;
 
-    public string Status { get; set; } = null!;
+    public PaymentStatus Status { get; set; }
 
-    /// <summary>
-    /// Mã tham chiếu từ cổng thanh toán bên thứ 3 - dùng để tra soát/khiếu nại
-    /// </summary>
+    // Mã tham chiếu từ cổng thanh toán bên thứ 3 - dùng để tra soát/khiếu nại
     public string? GatewayRef { get; set; }
 
     public string? RefundReason { get; set; }

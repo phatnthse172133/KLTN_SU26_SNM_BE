@@ -3,9 +3,8 @@ using System.Collections.Generic;
 
 namespace DomainLayer.Entities;
 
-/// <summary>
-/// Lịch sử mua/sử dụng gói quảng bá của gian hàng
-/// </summary>
+
+// Lịch sử mua/sử dụng gói quảng bá của gian hàng
 public partial class BoothPromotionalPackage
 {
     public Guid Id { get; set; }

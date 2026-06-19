@@ -1,11 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using static DomainLayer.Enums.GeneralEnum;
 
 namespace DomainLayer.Entities;
 
-/// <summary>
-/// Danh sách các gói quảng bá - gian hàng mua để được ưu tiên hiển thị (IsFeatured = true)
-/// </summary>
+
+// Danh sách các gói quảng bá - gian hàng mua để được ưu tiên hiển thị (IsFeatured = true)
 public partial class PromotionalPackage
 {
     public Guid Id { get; set; }
@@ -18,7 +18,7 @@ public partial class PromotionalPackage
 
     public string? Description { get; set; }
 
-    public string Status { get; set; } = null!;
+    public PromotionalPackageStatus Status { get; set; }
 
     public DateTime CreatedAt { get; set; }
 

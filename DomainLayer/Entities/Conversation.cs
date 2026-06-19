@@ -3,9 +3,8 @@ using System.Collections.Generic;
 
 namespace DomainLayer.Entities;
 
-/// <summary>
-/// Cuộc trò chuyện giữa 1 khách hàng và 1 gian hàng - dùng SignalR để realtime
-/// </summary>
+
+// Cuộc trò chuyện giữa 1 khách hàng và 1 gian hàng - dùng SignalR để realtime
 public partial class Conversation
 {
     public Guid Id { get; set; }

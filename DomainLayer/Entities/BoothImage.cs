@@ -3,9 +3,6 @@ using System.Collections.Generic;
 
 namespace DomainLayer.Entities;
 
-/// <summary>
-/// Thư viện ảnh (gallery) của gian hàng
-/// </summary>
 public partial class BoothImage
 {
     public Guid Id { get; set; }

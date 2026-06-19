@@ -1,11 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using static DomainLayer.Enums.GeneralEnum;
 
 namespace DomainLayer.Entities;
 
-/// <summary>
-/// Chương trình khuyến mãi/mã giảm giá do gian hàng tạo
-/// </summary>
+
+// Chương trình khuyến mãi/mã giảm giá do gian hàng tạo
 public partial class Promotion
 {
     public Guid Id { get; set; }
@@ -16,10 +16,8 @@ public partial class Promotion
 
     public string? Description { get; set; }
 
-    /// <summary>
-    /// Percentage: giảm % | FixedAmount: giảm số tiền cố định
-    /// </summary>
-    public string DiscountType { get; set; } = null!;
+    // Percentage: giảm % | FixedAmount: giảm số tiền cố định
+    public DiscountType DiscountType { get; set; } 
 
     public decimal DiscountValue { get; set; }
 
@@ -27,12 +25,10 @@ public partial class Promotion
 
     public DateTime EndDate { get; set; }
 
-    /// <summary>
-    /// NULL = không giới hạn số lần sử dụng
-    /// </summary>
+    // NULL = không giới hạn số lần sử dụng
     public int? UsageLimit { get; set; }
 
-    public string Status { get; set; } = null!;
+    public PromotionStatus Status { get; set; }
 
     public DateTime CreatedAt { get; set; }
 

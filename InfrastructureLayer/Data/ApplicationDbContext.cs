@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using DomainLayer.Entities;
 using Microsoft.EntityFrameworkCore;
 
-namespace InfrastructureLayer.Db;
+namespace InfrastructureLayer.Data;
 
 public partial class ApplicationDbContext : DbContext
 {

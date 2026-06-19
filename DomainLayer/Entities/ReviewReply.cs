@@ -3,9 +3,8 @@ using System.Collections.Generic;
 
 namespace DomainLayer.Entities;
 
-/// <summary>
-/// Phản hồi của chủ gian hàng đối với đánh giá - quan hệ 1-1 với Reviews
-/// </summary>
+
+// Phản hồi của chủ gian hàng đối với đánh giá - quan hệ 1-1 với Reviews
 public partial class ReviewReply
 {
     public Guid Id { get; set; }

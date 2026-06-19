@@ -1,11 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using static DomainLayer.Enums.GeneralEnum;
 
 namespace DomainLayer.Entities;
 
-/// <summary>
-/// Gian hàng ẩm thực - thực thể trung tâm, mỗi gian hàng thuộc 1 NightMarket và do 1 User (BoothOwner) quản lý
-/// </summary>
+
+// Gian hàng ẩm thực - thực thể trung tâm, mỗi gian hàng thuộc 1 NightMarket và do 1 User (BoothOwner) quản lý
 public partial class Booth
 {
     public Guid Id { get; set; }
@@ -36,9 +36,7 @@ public partial class Booth
 
     public TimeOnly? CloseTime { get; set; }
 
-    /// <summary>
-    /// Cache điểm trung bình review, cập nhật qua trigger hoặc job định kỳ
-    /// </summary>
+    // Cache điểm trung bình review, cập nhật qua trigger hoặc job định kỳ
     public decimal? AverageRating { get; set; }
 
     public bool IsFeatured { get; set; }
@@ -47,10 +45,8 @@ public partial class Booth
 
     public DateTime? PackageExpiryDate { get; set; }
 
-    /// <summary>
-    /// Pending: chờ Admin duyệt | Active: hoạt động | Inactive: tạm ngừng | Suspended: bị khóa do vi phạm
-    /// </summary>
-    public string Status { get; set; } = null!;
+    // Pending: chờ Admin duyệt | Active: hoạt động | Inactive: tạm ngừng | Suspended: bị khóa do vi phạm
+    public BoothStatus Status { get; set; }
 
     public DateTime CreatedAt { get; set; }
 

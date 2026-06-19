@@ -3,9 +3,8 @@ using System.Collections.Generic;
 
 namespace DomainLayer.Entities;
 
-/// <summary>
-/// Đánh giá của khách hàng cho gian hàng, gắn liền với 1 đơn hàng đã hoàn tất
-/// </summary>
+
+// Đánh giá của khách hàng cho gian hàng, gắn liền với 1 đơn hàng đã hoàn tất
 public partial class Review
 {
     public Guid Id { get; set; }
@@ -22,9 +21,7 @@ public partial class Review
 
     public string? ImageUrl { get; set; }
 
-    /// <summary>
-    /// false: Admin ẩn review nhưng vẫn giữ dữ liệu để tính rating
-    /// </summary>
+    // false: Admin ẩn review nhưng vẫn giữ dữ liệu để tính rating
     public bool IsVisible { get; set; }
 
     public DateTime CreatedAt { get; set; }

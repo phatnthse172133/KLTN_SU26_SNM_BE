@@ -3,9 +3,8 @@ using System.Collections.Generic;
 
 namespace DomainLayer.Entities;
 
-/// <summary>
-/// Thư viện ảnh (gallery) cho từng món ăn
-/// </summary>
+
+// Thư viện ảnh (gallery) cho từng món ăn
 public partial class FoodImage
 {
     public Guid Id { get; set; }

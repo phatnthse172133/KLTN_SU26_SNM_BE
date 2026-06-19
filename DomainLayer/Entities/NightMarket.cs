@@ -1,11 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using static DomainLayer.Enums.GeneralEnum;
 
 namespace DomainLayer.Entities;
 
-/// <summary>
-/// Thông tin các chợ đêm - đơn vị quản lý cấp cao nhất, chứa nhiều Booth
-/// </summary>
+
+// Thông tin các chợ đêm - đơn vị quản lý cấp cao nhất, chứa nhiều Booth
 public partial class NightMarket
 {
     public Guid Id { get; set; }
@@ -24,9 +24,8 @@ public partial class NightMarket
 
     public TimeOnly? ClosingHours { get; set; }
 
-    /// <summary>
-    /// Số lượng gian hàng - giá trị cache, đồng bộ qua trigger hoặc job định kỳ
-    /// </summary>
+
+    // Số lượng gian hàng - giá trị cache, đồng bộ qua trigger hoặc job định kỳ
     public int TotalBooth { get; set; }
 
     public int? MapWidth { get; set; }
@@ -35,7 +34,7 @@ public partial class NightMarket
 
     public string? ThumbnailUrl { get; set; }
 
-    public string Status { get; set; } = null!;
+    public NightMarketStatus Status { get; set; } = null!;
 
     public DateTime CreatedAt { get; set; }
 

@@ -9,9 +9,7 @@
   <ItemGroup>
     <Folder Include="DTOs\Responses\" />
     <Folder Include="DTOs\Requests\" />
-    <Folder Include="Mappings\" />
     <Folder Include="Exceptions\" />
-    <Folder Include="Services\" />
   </ItemGroup>
 
   <ItemGroup>

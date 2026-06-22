@@ -1,5 +1,6 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using DomainLayer.Enums;
 
 namespace DomainLayer.Entities;
 
@@ -32,9 +33,9 @@ public partial class User
     public string? AvatarUrl { get; set; }
 
     /// <summary>
-    /// Active: đang hoạt động | Inactive: chưa xác thực | Banned: bị khóa bởi Admin
+    /// Active | Inactive | Suspended
     /// </summary>
-    public string Status { get; set; } = null!;
+    public UserStatus Status { get; set; }
 
     public DateTime CreatedAt { get; set; }
 
@@ -61,4 +62,6 @@ public partial class User
     public virtual ICollection<Review> Reviews { get; set; } = new List<Review>();
 
     public virtual Role Role { get; set; } = null!;
+
+    public virtual ICollection<BoothRegistration> BoothRegistrations { get; set; } = new List<BoothRegistration>();
 }

@@ -1,5 +1,6 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using DomainLayer.Enums;
 
 namespace DomainLayer.Entities;
 
@@ -12,12 +13,15 @@ public partial class Payment
 
     public Guid OrderId { get; set; }
 
-    public Guid CustomerId { get; set; }
+    /// <summary>
+    /// FK tới User – chủ gian hàng nhận tiền
+    /// </summary>
+    public Guid BoothOwnerId { get; set; }
 
     /// <summary>
     /// Payment: thu tiền | Refund: hoàn tiền
     /// </summary>
-    public string Type { get; set; } = null!;
+    public PaymentType Type { get; set; }
 
     public string Gateway { get; set; } = null!;
 
@@ -25,7 +29,7 @@ public partial class Payment
 
     public string Currency { get; set; } = null!;
 
-    public string Status { get; set; } = null!;
+    public PaymentStatus Status { get; set; }
 
     /// <summary>
     /// Mã tham chiếu từ cổng thanh toán bên thứ 3 - dùng để tra soát/khiếu nại
@@ -40,7 +44,10 @@ public partial class Payment
 
     public DateTime UpdatedAt { get; set; }
 
-    public virtual User Customer { get; set; } = null!;
+    /// <summary>
+    /// Navigation: chủ gian hàng nhận tiền
+    /// </summary>
+    public virtual User BoothOwner { get; set; } = null!;
 
     public virtual Order Order { get; set; } = null!;
 }

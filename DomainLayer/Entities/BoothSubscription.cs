@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using DomainLayer.Enums;
 using System.Collections.Generic;
 
 namespace DomainLayer.Entities;
@@ -21,7 +22,7 @@ public partial class BoothSubscription
     /// <summary>
     /// Active | Expired | Cancelled
     /// </summary>
-    public string Status { get; set; } = null!;
+    public SubscriptionStatus Status { get; set; }
 
     public DateTime CreatedAt { get; set; }
 
@@ -29,5 +30,5 @@ public partial class BoothSubscription
 
     public virtual Booth Booth { get; set; } = null!;
 
-    public virtual SubscriptionPackage Package { get; set; } = null!;
+    public virtual Package Package { get; set; } = null!;
 }

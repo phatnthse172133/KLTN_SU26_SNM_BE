@@ -1,16 +1,15 @@
 using System;
-using System.Collections.Generic;
 
 namespace DomainLayer.Entities;
 
 /// <summary>
-/// Bảng giá theo thời điểm - override giá mặc định của FoodItem
+/// Bảng giá theo thời điểm của gói dịch vụ
 /// </summary>
-public partial class FoodPrice
+public partial class PackagePrice
 {
     public Guid Id { get; set; }
 
-    public Guid FoodItemId { get; set; }
+    public Guid PackageId { get; set; }
 
     public decimal Price { get; set; }
 
@@ -22,5 +21,5 @@ public partial class FoodPrice
 
     public DateTime UpdatedAt { get; set; }
 
-    public virtual FoodItem FoodItem { get; set; } = null!;
+    public virtual Package Package { get; set; } = null!;
 }

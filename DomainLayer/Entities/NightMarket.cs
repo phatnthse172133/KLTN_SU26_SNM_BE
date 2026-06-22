@@ -1,5 +1,6 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using DomainLayer.Enums;
 
 namespace DomainLayer.Entities;
 
@@ -35,7 +36,7 @@ public partial class NightMarket
 
     public string? ThumbnailUrl { get; set; }
 
-    public string Status { get; set; } = null!;
+    public NightMarketStatus Status { get; set; }
 
     public DateTime CreatedAt { get; set; }
 
@@ -44,4 +45,8 @@ public partial class NightMarket
     public virtual ICollection<Booth> Booths { get; set; } = new List<Booth>();
 
     public virtual ICollection<MarketLayout> MarketLayouts { get; set; } = new List<MarketLayout>();
+
+    public virtual ICollection<Zone> Zones { get; set; } = new List<Zone>();
+
+    public virtual ICollection<BoothRegistration> BoothRegistrations { get; set; } = new List<BoothRegistration>();
 }

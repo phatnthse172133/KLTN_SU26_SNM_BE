@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using DomainLayer.Enums;
 
 namespace DomainLayer.Entities;
 
@@ -22,7 +23,7 @@ public partial class Message
     /// <summary>
     /// Text | Image | System
     /// </summary>
-    public string MessageType { get; set; } = null!;
+    public MessageType Type { get; set; }
 
     public string Content { get; set; } = null!;
 

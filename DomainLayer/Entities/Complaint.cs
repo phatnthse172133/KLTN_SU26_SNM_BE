@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using DomainLayer.Enums;
 
 namespace DomainLayer.Entities;
 
@@ -25,7 +26,7 @@ public partial class Complaint
     /// <summary>
     /// Open | InProgress | Resolved | Rejected
     /// </summary>
-    public string Status { get; set; } = null!;
+    public ComplaintStatus Status { get; set; }
 
     public DateTime CreatedAt { get; set; }
 

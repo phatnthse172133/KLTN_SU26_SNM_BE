@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using DomainLayer.Enums;
 
 namespace DomainLayer.Entities;
 
@@ -17,7 +18,7 @@ public partial class Order
     /// <summary>
     /// Pending | Confirmed | Preparing | Completed | Cancelled
     /// </summary>
-    public string Status { get; set; } = null!;
+    public OrderStatus Status { get; set; }
 
     public decimal TotalAmount { get; set; }
 

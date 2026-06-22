@@ -87,7 +87,7 @@ namespace InfrastructureLayer.Db
                     Email = "admin@smartnightmarket.com",
                     Phone = "0123456789",
                     Address = "Tra Vinh Night Market",
-                    Status = "Active",
+                    Status = DomainLayer.Enums.UserStatus.Active,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 };

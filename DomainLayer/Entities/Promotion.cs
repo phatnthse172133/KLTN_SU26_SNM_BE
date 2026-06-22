@@ -1,16 +1,22 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using DomainLayer.Enums;
 
 namespace DomainLayer.Entities;
 
 /// <summary>
-/// Chương trình khuyến mãi/mã giảm giá do gian hàng tạo
+/// Chương trình khuyến mãi / mã giảm giá (voucher) do gian hàng tạo
 /// </summary>
 public partial class Promotion
 {
     public Guid Id { get; set; }
 
     public Guid BoothId { get; set; }
+
+    /// <summary>
+    /// Mã khuyến mãi / mã voucher (ví dụ: GIAM20K, FREESHIP)
+    /// </summary>
+    public string? PromotionCode { get; set; }
 
     public string Title { get; set; } = null!;
 
@@ -27,12 +33,7 @@ public partial class Promotion
 
     public DateTime EndDate { get; set; }
 
-    /// <summary>
-    /// NULL = không giới hạn số lần sử dụng
-    /// </summary>
-    public int? UsageLimit { get; set; }
-
-    public string Status { get; set; } = null!;
+    public PromotionStatus Status { get; set; }
 
     public DateTime CreatedAt { get; set; }
 

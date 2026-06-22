@@ -1,5 +1,6 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using DomainLayer.Enums;
 
 namespace DomainLayer.Entities;
 
@@ -10,17 +11,23 @@ public partial class Booth
 {
     public Guid Id { get; set; }
 
+    public Guid RegistrationId { get; set; }
+
     public Guid NightMarketId { get; set; }
 
     public Guid BoothOwnerId { get; set; }
 
+    public Guid? ZoneId { get; set; }
+
     public string BoothName { get; set; } = null!;
 
-    public string? BoothNumber { get; set; }
+    public string? BoothCode { get; set; }
+
+    public string? Description { get; set; }
 
     public string? PhoneNumber { get; set; }
 
-    public string? Description { get; set; }
+    public string? SlotNumber { get; set; }
 
     public string? ThumbnailUrl { get; set; }
 
@@ -47,10 +54,12 @@ public partial class Booth
 
     public DateTime? PackageExpiryDate { get; set; }
 
+    public string? PaymentQRImage { get; set; }
+
     /// <summary>
     /// Pending: chờ Admin duyệt | Active: hoạt động | Inactive: tạm ngừng | Suspended: bị khóa do vi phạm
     /// </summary>
-    public string Status { get; set; } = null!;
+    public BoothStatus Status { get; set; }
 
     public DateTime CreatedAt { get; set; }
 
@@ -66,15 +75,13 @@ public partial class Booth
 
     public virtual ICollection<BoothPaymentInfo> BoothPaymentInfos { get; set; } = new List<BoothPaymentInfo>();
 
-    public virtual ICollection<BoothPromotionalPackage> BoothPromotionalPackages { get; set; } = new List<BoothPromotionalPackage>();
+    public virtual BoothRegistration Registration { get; set; } = null!;
 
-    public virtual BoothQrcode? BoothQrcode { get; set; }
+    public virtual Zone? Zone { get; set; }
 
     public virtual ICollection<BoothSubscription> BoothSubscriptions { get; set; } = new List<BoothSubscription>();
 
     public virtual ICollection<Complaint> Complaints { get; set; } = new List<Complaint>();
-
-    public virtual ICollection<Conversation> Conversations { get; set; } = new List<Conversation>();
 
     public virtual ICollection<FoodItem> FoodItems { get; set; } = new List<FoodItem>();
 

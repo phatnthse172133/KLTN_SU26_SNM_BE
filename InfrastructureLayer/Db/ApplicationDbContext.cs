@@ -26,9 +26,6 @@ public partial class ApplicationDbContext : DbContext
 
     public virtual DbSet<BoothPaymentInfo> BoothPaymentInfos { get; set; }
 
-    public virtual DbSet<BoothPromotionalPackage> BoothPromotionalPackages { get; set; }
-
-    public virtual DbSet<BoothQrcode> BoothQrcodes { get; set; }
 
     public virtual DbSet<BoothSubscription> BoothSubscriptions { get; set; }
 
@@ -68,17 +65,13 @@ public partial class ApplicationDbContext : DbContext
 
     public virtual DbSet<PromotionUsage> PromotionUsages { get; set; }
 
-    public virtual DbSet<PromotionalPackage> PromotionalPackages { get; set; }
-
-    public virtual DbSet<Review> Reviews { get; set; }
+public virtual DbSet<Review> Reviews { get; set; }
 
     public virtual DbSet<ReviewReply> ReviewReplies { get; set; }
 
     public virtual DbSet<Role> Roles { get; set; }
 
-    public virtual DbSet<SubscriptionPackage> SubscriptionPackages { get; set; }
-
-    public virtual DbSet<User> Users { get; set; }
+public virtual DbSet<User> Users { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -105,7 +98,7 @@ public partial class ApplicationDbContext : DbContext
                 .HasDefaultValueSql("0")
                 .HasComment("Cache điểm trung bình review, cập nhật qua trigger hoặc job định kỳ");
             entity.Property(e => e.BoothName).HasMaxLength(200);
-            entity.Property(e => e.BoothNumber).HasMaxLength(50);
+            entity.Property(e => e.BoothCode).HasMaxLength(50);
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
             entity.Property(e => e.IsFeatured).HasDefaultValue(false);
             entity.Property(e => e.Latitude).HasPrecision(10, 7);
@@ -115,6 +108,7 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.PackageName).HasMaxLength(100);
             entity.Property(e => e.PhoneNumber).HasMaxLength(20);
             entity.Property(e => e.Status)
+                .HasConversion<string>()
                 .HasMaxLength(20)
                 .HasDefaultValueSql("'Pending'::character varying")
                 .HasComment("Pending: chờ Admin duyệt | Active: hoạt động | Inactive: tạm ngừng | Suspended: bị khóa do vi phạm");
@@ -140,15 +134,16 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
             entity.Property(e => e.DocumentType).HasMaxLength(50);
-            entity.Property(e => e.DocumentUrl).HasMaxLength(500);
+            entity.Property(e => e.FileUrl).HasMaxLength(500);
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
             entity.Property(e => e.VerificationStatus)
+                .HasConversion<string>()
                 .HasMaxLength(20)
                 .HasDefaultValueSql("'Pending'::character varying")
                 .HasComment("Pending: chờ duyệt | Verified: đã xác minh | Rejected: bị từ chối");
 
-            entity.HasOne(d => d.Booth).WithMany(p => p.BoothDocuments)
-                .HasForeignKey(d => d.BoothId)
+            entity.HasOne(d => d.Registration).WithMany(p => p.BoothDocuments)
+                .HasForeignKey(d => d.RegistrationId)
                 .HasConstraintName("BoothDocuments_BoothId_fkey");
         });
 
@@ -223,55 +218,6 @@ public partial class ApplicationDbContext : DbContext
                 .HasForeignKey(d => d.BoothId)
                 .HasConstraintName("BoothPaymentInfos_BoothId_fkey");
         });
-
-        modelBuilder.Entity<BoothPromotionalPackage>(entity =>
-        {
-            entity.HasKey(e => e.Id).HasName("BoothPromotionalPackages_pkey");
-
-            entity.ToTable(tb => tb.HasComment("Lịch sử mua/sử dụng gói quảng bá của gian hàng"));
-
-            entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
-            entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
-            entity.Property(e => e.Status)
-                .HasMaxLength(20)
-                .HasDefaultValueSql("'Active'::character varying");
-            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
-
-            entity.HasOne(d => d.Booth).WithMany(p => p.BoothPromotionalPackages)
-                .HasForeignKey(d => d.BoothId)
-                .HasConstraintName("BoothPromotionalPackages_BoothId_fkey");
-
-            entity.HasOne(d => d.PromotionalPackage).WithMany(p => p.BoothPromotionalPackages)
-                .HasForeignKey(d => d.PromotionalPackageId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("BoothPromotionalPackages_PromotionalPackageId_fkey");
-        });
-
-        modelBuilder.Entity<BoothQrcode>(entity =>
-        {
-            entity.HasKey(e => e.Id).HasName("BoothQRCode_pkey");
-
-            entity.ToTable("BoothQRCode", tb => tb.HasComment("Mã QR định danh gian hàng - khách hàng quét mã này để truy cập menu và đặt món trực tiếp tại bàn"));
-
-            entity.HasIndex(e => e.BoothId, "BoothQRCode_BoothId_key").IsUnique();
-
-            entity.HasIndex(e => e.QrcodeValue, "BoothQRCode_QRCodeValue_key").IsUnique();
-
-            entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
-            entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
-            entity.Property(e => e.QrcodeImageUrl)
-                .HasMaxLength(500)
-                .HasColumnName("QRCodeImageUrl");
-            entity.Property(e => e.QrcodeValue)
-                .HasMaxLength(255)
-                .HasColumnName("QRCodeValue");
-            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
-
-            entity.HasOne(d => d.Booth).WithOne(p => p.BoothQrcode)
-                .HasForeignKey<BoothQrcode>(d => d.BoothId)
-                .HasConstraintName("BoothQRCode_BoothId_fkey");
-        });
-
         modelBuilder.Entity<BoothSubscription>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("BoothSubscriptions_pkey");
@@ -281,6 +227,7 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
             entity.Property(e => e.Status)
+                .HasConversion<string>()
                 .HasMaxLength(20)
                 .HasDefaultValueSql("'Active'::character varying")
                 .HasComment("Active | Expired | Cancelled");
@@ -305,6 +252,7 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
             entity.Property(e => e.Status)
+                .HasConversion<string>()
                 .HasMaxLength(20)
                 .HasDefaultValueSql("'Open'::character varying")
                 .HasComment("Open | InProgress | Resolved | Rejected");
@@ -349,7 +297,7 @@ public partial class ApplicationDbContext : DbContext
 
             entity.ToTable(tb => tb.HasComment("Cuộc trò chuyện giữa 1 khách hàng và 1 gian hàng - dùng SignalR để realtime"));
 
-            entity.HasIndex(e => new { e.CustomerId, e.BoothId }, "uq_conversation_customer_booth").IsUnique();
+            entity.HasIndex(e => new { e.CustomerId, e.BoothOwnerId }, "uq_conversation_customer_boothowner").IsUnique();
 
             entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
@@ -358,9 +306,10 @@ public partial class ApplicationDbContext : DbContext
                 .HasDefaultValueSql("'Active'::character varying");
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
 
-            entity.HasOne(d => d.Booth).WithMany(p => p.Conversations)
-                .HasForeignKey(d => d.BoothId)
-                .HasConstraintName("Conversations_BoothId_fkey");
+            entity.HasOne(d => d.BoothOwner).WithMany()
+                .HasForeignKey(d => d.BoothOwnerId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("Conversations_BoothOwnerId_fkey");
 
             entity.HasOne(d => d.Customer).WithMany(p => p.Conversations)
                 .HasForeignKey(d => d.CustomerId)
@@ -438,13 +387,7 @@ public partial class ApplicationDbContext : DbContext
 
             entity.ToTable("FoodPrice", tb => tb.HasComment("Bảng giá theo ngày trong tuần - override giá mặc định của FoodItem"));
 
-            entity.HasIndex(e => new { e.FoodItemId, e.DayApply }, "uq_foodprice_item_day").IsUnique();
-
             entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
-            entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
-            entity.Property(e => e.DayApply)
-                .HasMaxLength(20)
-                .HasComment("Monday/Tuesday/.../Sunday hoặc Weekday/Weekend");
             entity.Property(e => e.Price).HasPrecision(12, 2);
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
 
@@ -514,7 +457,8 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
             entity.Property(e => e.IsRead).HasDefaultValue(false);
-            entity.Property(e => e.MessageType)
+            entity.Property(e => e.Type)
+                .HasConversion<string>()
                 .HasMaxLength(20)
                 .HasDefaultValueSql("'Text'::character varying")
                 .HasComment("Text | Image | System");
@@ -546,6 +490,7 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.Longitude).HasPrecision(10, 7);
             entity.Property(e => e.Name).HasMaxLength(200);
             entity.Property(e => e.Status)
+                .HasConversion<string>()
                 .HasMaxLength(20)
                 .HasDefaultValueSql("'Active'::character varying");
             entity.Property(e => e.ThumbnailUrl).HasMaxLength(500);
@@ -568,6 +513,7 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
             entity.Property(e => e.Title).HasMaxLength(200);
             entity.Property(e => e.Type)
+                .HasConversion<string>()
                 .HasMaxLength(50)
                 .HasComment("NewOrder | OrderStatusChanged | NewMessage | Promotion | System");
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
@@ -600,6 +546,7 @@ public partial class ApplicationDbContext : DbContext
                 .HasComment("TotalAmount - DiscountAmount");
             entity.Property(e => e.OrderCode).HasMaxLength(50);
             entity.Property(e => e.Status)
+                .HasConversion<string>()
                 .HasMaxLength(20)
                 .HasDefaultValueSql("'Pending'::character varying")
                 .HasComment("Pending | Confirmed | Preparing | Completed | Cancelled");
@@ -657,17 +604,19 @@ public partial class ApplicationDbContext : DbContext
                 .HasMaxLength(255)
                 .HasComment("Mã tham chiếu từ cổng thanh toán bên thứ 3 - dùng để tra soát/khiếu nại");
             entity.Property(e => e.Status)
+                .HasConversion<string>()
                 .HasMaxLength(20)
                 .HasDefaultValueSql("'Pending'::character varying");
             entity.Property(e => e.Type)
+                .HasConversion<string>()
                 .HasMaxLength(20)
                 .HasComment("Payment: thu tiền | Refund: hoàn tiền");
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
 
-            entity.HasOne(d => d.Customer).WithMany(p => p.Payments)
-                .HasForeignKey(d => d.CustomerId)
+            entity.HasOne(d => d.BoothOwner).WithMany(p => p.Payments)
+                .HasForeignKey(d => d.BoothOwnerId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("Payments_CustomerId_fkey");
+                .HasConstraintName("Payments_BoothOwnerId_fkey");
 
             entity.HasOne(d => d.Order).WithMany(p => p.Payments)
                 .HasForeignKey(d => d.OrderId)
@@ -687,11 +636,12 @@ public partial class ApplicationDbContext : DbContext
                 .HasComment("Percentage: giảm % | FixedAmount: giảm số tiền cố định");
             entity.Property(e => e.DiscountValue).HasPrecision(12, 2);
             entity.Property(e => e.Status)
+                .HasConversion<string>()
                 .HasMaxLength(20)
                 .HasDefaultValueSql("'Active'::character varying");
+            entity.Property(e => e.PromotionCode).HasMaxLength(50);
             entity.Property(e => e.Title).HasMaxLength(200);
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
-            entity.Property(e => e.UsageLimit).HasComment("NULL = không giới hạn số lần sử dụng");
 
             entity.HasOne(d => d.Booth).WithMany(p => p.Promotions)
                 .HasForeignKey(d => d.BoothId)
@@ -723,23 +673,6 @@ public partial class ApplicationDbContext : DbContext
                 .HasForeignKey(d => d.PromotionId)
                 .HasConstraintName("PromotionUsages_PromotionId_fkey");
         });
-
-        modelBuilder.Entity<PromotionalPackage>(entity =>
-        {
-            entity.HasKey(e => e.Id).HasName("PromotionalPackages_pkey");
-
-            entity.ToTable(tb => tb.HasComment("Danh sách các gói quảng bá - gian hàng mua để được ưu tiên hiển thị (IsFeatured = true)"));
-
-            entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
-            entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
-            entity.Property(e => e.PackageName).HasMaxLength(100);
-            entity.Property(e => e.Price).HasPrecision(12, 2);
-            entity.Property(e => e.Status)
-                .HasMaxLength(20)
-                .HasDefaultValueSql("'Active'::character varying");
-            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
-        });
-
         modelBuilder.Entity<Review>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("Reviews_pkey");
@@ -808,23 +741,6 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.RoleName).HasMaxLength(50);
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
         });
-
-        modelBuilder.Entity<SubscriptionPackage>(entity =>
-        {
-            entity.HasKey(e => e.Id).HasName("SubscriptionPackages_pkey");
-
-            entity.ToTable(tb => tb.HasComment("Danh sách các gói thuê bao dịch vụ mà gian hàng có thể mua"));
-
-            entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
-            entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
-            entity.Property(e => e.PackageName).HasMaxLength(100);
-            entity.Property(e => e.Price).HasPrecision(12, 2);
-            entity.Property(e => e.Status)
-                .HasMaxLength(20)
-                .HasDefaultValueSql("'Active'::character varying");
-            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
-        });
-
         modelBuilder.Entity<User>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("User_pkey");
@@ -846,6 +762,7 @@ public partial class ApplicationDbContext : DbContext
                 .HasComment("Mật khẩu đã được mã hóa (hash), tuyệt đối không lưu plaintext");
             entity.Property(e => e.Phone).HasMaxLength(20);
             entity.Property(e => e.Status)
+                .HasConversion<string>()
                 .HasMaxLength(20)
                 .HasDefaultValueSql("'Active'::character varying")
                 .HasComment("Active: đang hoạt động | Inactive: chưa xác thực | Banned: bị khóa bởi Admin");
@@ -863,3 +780,4 @@ public partial class ApplicationDbContext : DbContext
 
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
 }
+

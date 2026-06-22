@@ -1,5 +1,6 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using DomainLayer.Enums;
 
 namespace DomainLayer.Entities;
 
@@ -20,7 +21,7 @@ public partial class Notification
     /// <summary>
     /// NewOrder | OrderStatusChanged | NewMessage | Promotion | System
     /// </summary>
-    public string Type { get; set; } = null!;
+    public NotificationType Type { get; set; }
 
     public string Title { get; set; } = null!;
 

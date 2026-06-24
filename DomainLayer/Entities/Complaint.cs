@@ -1,11 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using static DomainLayer.Enums.GeneralEnum;
 
 namespace DomainLayer.Entities;
 
-/// <summary>
-/// Khiếu nại của khách hàng về đơn hàng/gian hàng
-/// </summary>
+
+// Khiếu nại của khách hàng về đơn hàng/gian hàng
 public partial class Complaint
 {
     public Guid Id { get; set; }
@@ -22,10 +22,7 @@ public partial class Complaint
 
     public string? AdminResponse { get; set; }
 
-    /// <summary>
-    /// Open | InProgress | Resolved | Rejected
-    /// </summary>
-    public string Status { get; set; } = null!;
+    public ComplaintStatus Status { get; set; }
 
     public DateTime CreatedAt { get; set; }
 

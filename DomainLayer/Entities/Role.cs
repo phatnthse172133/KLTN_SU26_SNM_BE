@@ -3,9 +3,8 @@ using System.Collections.Generic;
 
 namespace DomainLayer.Entities;
 
-/// <summary>
-/// Danh sách vai trò người dùng trong hệ thống (Customer, BoothOwner, Admin)
-/// </summary>
+
+// Danh sách vai trò người dùng trong hệ thống (Customer, BoothOwner, Admin)
 public partial class Role
 {
     public Guid Id { get; set; }

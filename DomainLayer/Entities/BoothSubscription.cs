@@ -1,11 +1,12 @@
-﻿using System;
+using DomainLayer.Enums;
+using System;
 using System.Collections.Generic;
+using static DomainLayer.Enums.GeneralEnum;
 
 namespace DomainLayer.Entities;
 
-/// <summary>
-/// Lịch sử đăng ký gói dịch vụ của gian hàng
-/// </summary>
+
+// Lịch sử đăng ký gói dịch vụ của gian hàng
 public partial class BoothSubscription
 {
     public Guid Id { get; set; }
@@ -18,10 +19,8 @@ public partial class BoothSubscription
 
     public DateTime EndDate { get; set; }
 
-    /// <summary>
-    /// Active | Expired | Cancelled
-    /// </summary>
-    public string Status { get; set; } = null!;
+    // Active | Expired | Cancelled
+    public SubscriptionStatus Status { get; set; }
 
     public DateTime CreatedAt { get; set; }
 
@@ -29,5 +28,5 @@ public partial class BoothSubscription
 
     public virtual Booth Booth { get; set; } = null!;
 
-    public virtual SubscriptionPackage Package { get; set; } = null!;
+    public virtual Package Package { get; set; } = null!;
 }

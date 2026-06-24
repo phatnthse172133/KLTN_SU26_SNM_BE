@@ -1,26 +1,20 @@
 ﻿using System;
 using System.Collections.Generic;
+using static DomainLayer.Enums.GeneralEnum;
 
 namespace DomainLayer.Entities;
 
-/// <summary>
-/// Thông báo đẩy (push notification qua FCM) cho người dùng
-/// </summary>
+// Thông báo đẩy (push notification qua FCM) cho người dùng
 public partial class Notification
 {
     public Guid Id { get; set; }
 
     public Guid UserId { get; set; }
 
-    /// <summary>
-    /// NULL khi thông báo không gắn với gian hàng cụ thể (VD: thông báo hệ thống)
-    /// </summary>
+    // NULL khi thông báo không gắn với gian hàng cụ thể (VD: thông báo hệ thống)
     public Guid? BoothId { get; set; }
 
-    /// <summary>
-    /// NewOrder | OrderStatusChanged | NewMessage | Promotion | System
-    /// </summary>
-    public string Type { get; set; } = null!;
+    public NotificationType Type { get; set; }
 
     public string Title { get; set; } = null!;
 

@@ -7,9 +7,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Folder Include="Cores\JWTs\" />
-    <Folder Include="Cores\Emails\" />
-    <Folder Include="Data\" />
     <Folder Include="Migrations\" />
   </ItemGroup>
 

@@ -1,11 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using static DomainLayer.Enums.GeneralEnum;
 
 namespace DomainLayer.Entities;
 
-/// <summary>
-/// Đơn hàng của khách
-/// </summary>
+
+// Đơn hàng của khách
 public partial class Order
 {
     public Guid Id { get; set; }
@@ -14,18 +14,15 @@ public partial class Order
 
     public string OrderCode { get; set; } = null!;
 
-    /// <summary>
-    /// Pending | Confirmed | Preparing | Completed | Cancelled
-    /// </summary>
-    public string Status { get; set; } = null!;
+    public OrderStatus Status { get; set; }
+
+    public PayOrderStatus PayStatus { get; set; }
 
     public decimal TotalAmount { get; set; }
 
     public decimal DiscountAmount { get; set; }
 
-    /// <summary>
-    /// TotalAmount - DiscountAmount
-    /// </summary>
+    // TotalAmount - DiscountAmount
     public decimal FinalAmount { get; set; }
 
     public string? Note { get; set; }

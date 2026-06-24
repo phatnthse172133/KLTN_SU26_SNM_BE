@@ -3,9 +3,8 @@ using System.Collections.Generic;
 
 namespace DomainLayer.Entities;
 
-/// <summary>
-/// Ảnh minh chứng đính kèm theo khiếu nại
-/// </summary>
+
+// Ảnh minh chứng đính kèm theo khiếu nại
 public partial class ComplaintImage
 {
     public Guid Id { get; set; }

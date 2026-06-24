@@ -1,11 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using static DomainLayer.Enums.GeneralEnum;
 
 namespace DomainLayer.Entities;
 
-/// <summary>
-/// Tài khoản người dùng - dùng chung cho Customer, BoothOwner, Admin (phân biệt qua RoleId)
-/// </summary>
+
+// Tài khoản người dùng - dùng chung cho Customer, BoothOwner, Admin (phân biệt qua RoleId)
 public partial class User
 {
     public Guid Id { get; set; }
@@ -14,9 +14,7 @@ public partial class User
 
     public string UserName { get; set; } = null!;
 
-    /// <summary>
-    /// Mật khẩu đã được mã hóa (hash), tuyệt đối không lưu plaintext
-    /// </summary>
+    // Mật khẩu đã được mã hóa (hash), tuyệt đối không lưu plaintext
     public string PasswordHash { get; set; } = null!;
 
     public string FullName { get; set; } = null!;
@@ -31,10 +29,8 @@ public partial class User
 
     public string? AvatarUrl { get; set; }
 
-    /// <summary>
-    /// Active: đang hoạt động | Inactive: chưa xác thực | Banned: bị khóa bởi Admin
-    /// </summary>
-    public string Status { get; set; } = null!;
+    /// Active | Inactive | Suspended
+    public UserStatus Status { get; set; }
 
     public DateTime CreatedAt { get; set; }
 
@@ -60,5 +56,11 @@ public partial class User
 
     public virtual ICollection<Review> Reviews { get; set; } = new List<Review>();
 
+    public virtual ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
+
+    public virtual ICollection<EmailVerificationToken> EmailVerificationTokens { get; set; } = new List<EmailVerificationToken>();
+
     public virtual Role Role { get; set; } = null!;
+
+    public virtual ICollection<BoothRegistration> BoothRegistrations { get; set; } = new List<BoothRegistration>();
 }

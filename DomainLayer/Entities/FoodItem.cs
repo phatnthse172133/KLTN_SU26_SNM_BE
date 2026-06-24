@@ -3,9 +3,8 @@ using System.Collections.Generic;
 
 namespace DomainLayer.Entities;
 
-/// <summary>
-/// Món ăn của từng gian hàng
-/// </summary>
+
+// Món ăn của từng gian hàng
 public partial class FoodItem
 {
     public Guid Id { get; set; }
@@ -18,16 +17,12 @@ public partial class FoodItem
 
     public string? Description { get; set; }
 
-    /// <summary>
-    /// Giá mặc định. Nếu có FoodPrice theo ngày hiện tại thì giá đó được ưu tiên (override)
-    /// </summary>
+    // Giá mặc định. Nếu có FoodPrice theo ngày hiện tại thì giá đó được ưu tiên (override)
     public decimal Price { get; set; }
 
     public string? ThumbnailUrl { get; set; }
 
-    /// <summary>
-    /// false khi món hết nguyên liệu hoặc chủ quán tạm ẩn
-    /// </summary>
+    // false khi món hết nguyên liệu hoặc chủ quán tạm ẩn
     public bool IsAvailable { get; set; }
 
     public bool IsFeatured { get; set; }

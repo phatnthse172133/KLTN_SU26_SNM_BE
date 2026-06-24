@@ -1,11 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using static DomainLayer.Enums.GeneralEnum;
 
 namespace DomainLayer.Entities;
 
-/// <summary>
-/// Tin nhắn trong cuộc trò chuyện - truyền tải qua SignalR Hub
-/// </summary>
+
+// Tin nhắn trong cuộc trò chuyện - truyền tải qua SignalR Hub
 public partial class Message
 {
     public Guid Id { get; set; }
@@ -14,15 +14,11 @@ public partial class Message
 
     public Guid SenderId { get; set; }
 
-    /// <summary>
-    /// Snapshot vai trò người gửi: Customer | BoothOwner
-    /// </summary>
+    // Snapshot vai trò người gửi: Customer | BoothOwner
     public string SenderRole { get; set; } = null!;
 
-    /// <summary>
-    /// Text | Image | System
-    /// </summary>
-    public string MessageType { get; set; } = null!;
+    // Text | Image | System | File
+    public MessageType Type { get; set; }
 
     public string Content { get; set; } = null!;
 

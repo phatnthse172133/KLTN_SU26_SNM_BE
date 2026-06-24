@@ -1,62 +1,85 @@
 using InfrastructureLayer;
+using InfrastructureLayer.Cores.JWTs;
+using InfrastructureLayer.Data;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
+using System.Security.Claims;
+using System.Text;
+using static DomainLayer.Enums.GeneralEnum;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Load environment variables from .env file if it exists
-var envFilePath = Path.Combine(builder.Environment.ContentRootPath, ".env");
-if (File.Exists(envFilePath))
-{
-    foreach (var line in File.ReadAllLines(envFilePath))
-    {
-        if (string.IsNullOrWhiteSpace(line) || line.StartsWith("#")) continue;
-        var parts = line.Split('=', 2);
-        if (parts.Length == 2)
-        {
-            var key = parts[0].Trim();
-            var value = parts[1].Trim().Trim('"').Trim('\'');
-            Environment.SetEnvironmentVariable(key, value);
-        }
-    }
-}
-builder.Configuration.AddEnvironmentVariables();
+var jwtSettings = builder.Configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>() ?? new JwtSettings();
+if (string.IsNullOrWhiteSpace(jwtSettings.SecretKey) || jwtSettings.SecretKey.Length < 32)
+    throw new InvalidOperationException("JWT secret is missing. Set Jwt:SecretKey in PresentationLayer/appsettings.json (minimum 32 characters).");
 
-// Add services to the container.
-builder.Services.AddInfrastructureServices(builder.Configuration);
-
+builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = jwtSettings.Issuer,
+            ValidateAudience = true,
+            ValidAudience = jwtSettings.Audience,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.SecretKey)),
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.Zero,
+            NameClaimType = ClaimTypes.Email,
+            RoleClaimType = ClaimTypes.Role
+        };
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var subject = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (!Guid.TryParse(subject, out var userId)) 
+                { 
+                    context.Fail("Invalid user claim."); 
+                    return; 
+                }
+                var dbContext = context.HttpContext.RequestServices.GetRequiredService<SNMDbContext>();
+                var isActive = await dbContext.Users.AnyAsync(user => user.Id == userId && user.Status == UserStatus.Active);
+
+                if (!isActive) context.Fail("Account is not active.");
+            }
+        };
+    });
+
+builder.Services.AddAuthorization();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme 
+    { 
+        Name = "Authorization", 
+        Type = SecuritySchemeType.Http, 
+        Scheme = "bearer", 
+        BearerFormat = "JWT", 
+        In = ParameterLocation.Header 
+    });
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement { { new OpenApiSecurityScheme { Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" } }, Array.Empty<string>() } });
+});
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
+if (app.Environment.IsDevelopment()) 
+{ 
+    app.UseSwagger(); 
+    app.UseSwaggerUI(); 
 }
 
 app.UseHttpsRedirection();
 
+app.UseAuthentication();
+
 app.UseAuthorization();
 
 app.MapControllers();
-
-// Seed Database
-using (var scope = app.Services.CreateScope())
-{
-    var services = scope.ServiceProvider;
-    try
-    {
-        var context = services.GetRequiredService<InfrastructureLayer.Db.ApplicationDbContext>();
-        await InfrastructureLayer.Db.ApplicationDbContextSeed.SeedAsync(context);
-    }
-    catch (Exception ex)
-    {
-        var logger = services.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "An error occurred while seeding the database.");
-    }
-}
 
 app.Run();

@@ -1,21 +1,18 @@
 ﻿using System;
 using System.Collections.Generic;
+using static DomainLayer.Enums.GeneralEnum;
 
 namespace DomainLayer.Entities;
 
-/// <summary>
-/// Thông tin tài khoản/QR nhận thanh toán của gian hàng
-/// </summary>
+
+// Thông tin tài khoản/QR nhận thanh toán của gian hàng
 public partial class BoothPaymentInfo
 {
     public Guid Id { get; set; }
 
     public Guid BoothId { get; set; }
 
-    /// <summary>
-    /// BankTransfer | VNPay | MoMo | ZaloPay | Payos
-    /// </summary>
-    public string PaymentType { get; set; } = null!;
+    public PaymentType PaymentType { get; set; }
 
     public string? BankName { get; set; }
 
@@ -27,7 +24,7 @@ public partial class BoothPaymentInfo
 
     public bool IsDefault { get; set; }
 
-    public string Status { get; set; } = null!;
+    public BoothPaymentStatus Status { get; set; }
 
     public DateTime CreatedAt { get; set; }
 

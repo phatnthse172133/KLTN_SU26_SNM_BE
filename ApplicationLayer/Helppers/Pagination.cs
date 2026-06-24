@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace ApplicationLayer.Helppers
 {
-    internal class Pagination
+    public class Pagination
     {
     }
 }

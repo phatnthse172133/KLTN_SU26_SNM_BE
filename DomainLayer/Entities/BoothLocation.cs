@@ -3,9 +3,8 @@ using System.Collections.Generic;
 
 namespace DomainLayer.Entities;
 
-/// <summary>
-/// Vị trí cụ thể (tọa độ) của 1 gian hàng trên 1 sơ đồ mặt bằng
-/// </summary>
+
+// Vị trí cụ thể (tọa độ) của 1 gian hàng trên 1 sơ đồ mặt bằng
 public partial class BoothLocation
 {
     public Guid Id { get; set; }

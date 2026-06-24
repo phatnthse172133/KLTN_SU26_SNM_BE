@@ -34,8 +34,8 @@ public class EmailService : IEmailService
 
         message.From.Add(new MailboxAddress(_configuration["Email:FromName"] ?? "Smart Night Market", _configuration["Email:FromAddress"]));
         message.To.Add(MailboxAddress.Parse(email));
-        message.Subject = "Xác thực tài khoản Smart Night Market";
-        message.Body = new TextPart("html") { Text = $"<p>Chào {System.Net.WebUtility.HtmlEncode(fullName)},</p><p>Hãy xác thực tài khoản tại <a href=\"{link}\">đây</a>.</p>" };
+        message.Subject = "Verify your Smart Night Market account";
+        message.Body = new TextPart("html") { Text = $"<p>Hello {System.Net.WebUtility.HtmlEncode(fullName)},</p><p>Please verify your account <a href=\"{link}\">here</a>.</p>" };
 
         using var client = new SmtpClient();
 
@@ -60,12 +60,36 @@ public class EmailService : IEmailService
         var message = new MimeMessage();
         message.From.Add(new MailboxAddress(_configuration["Email:FromName"] ?? "Smart Night Market", _configuration["Email:FromAddress"]));
         message.To.Add(MailboxAddress.Parse(email));
-        message.Subject = "Mã đặt lại mật khẩu Smart Night Market";
+        message.Subject = "Smart Night Market password reset code";
         message.Body = new TextPart("html")
         {
-            Text = $"<p>Chào {System.Net.WebUtility.HtmlEncode(fullName)},</p><p>Mã OTP đặt lại mật khẩu của bạn là <strong>{otp}</strong>.</p><p>Mã có hiệu lực trong 10 phút. Không chia sẻ mã này cho bất kỳ ai.</p>"
+            Text = $"<p>Hello {System.Net.WebUtility.HtmlEncode(fullName)},</p><p>Your password reset OTP is <strong>{otp}</strong>.</p><p>This code expires in 10 minutes. Do not share it with anyone.</p>"
         };
 
+        using var client = new SmtpClient();
+        await client.ConnectAsync(host, _configuration.GetValue<int>("Email:Port", 587), SecureSocketOptions.StartTls, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(_configuration["Email:Username"]))
+            await client.AuthenticateAsync(_configuration["Email:Username"], _configuration["Email:Password"], cancellationToken);
+        await client.SendAsync(message, cancellationToken);
+        await client.DisconnectAsync(true, cancellationToken);
+    }
+
+    public async Task SendPasswordResetLinkAsync(string email, string fullName, string token, CancellationToken cancellationToken = default)
+    {
+        var endpoint = _configuration["Auth:PasswordResetEndpoint"];
+        var host = _configuration["Email:SmtpHost"];
+        if (string.IsNullOrWhiteSpace(endpoint) || string.IsNullOrWhiteSpace(host))
+        {
+            _logger.LogWarning("Password-reset endpoint or email is not configured; reset link for {Email} was not delivered.", email);
+            return;
+        }
+
+        var link = $"{endpoint}{(endpoint.Contains('?') ? '&' : '?')}token={Uri.EscapeDataString(token)}";
+        var message = new MimeMessage();
+        message.From.Add(new MailboxAddress(_configuration["Email:FromName"] ?? "Smart Night Market", _configuration["Email:FromAddress"]));
+        message.To.Add(MailboxAddress.Parse(email));
+        message.Subject = "Reset your Smart Night Market password";
+        message.Body = new TextPart("html") { Text = $"<p>Hello {System.Net.WebUtility.HtmlEncode(fullName)},</p><p>Reset your password <a href=\"{link}\">here</a>. This link expires in 15 minutes.</p>" };
         using var client = new SmtpClient();
         await client.ConnectAsync(host, _configuration.GetValue<int>("Email:Port", 587), SecureSocketOptions.StartTls, cancellationToken);
         if (!string.IsNullOrWhiteSpace(_configuration["Email:Username"]))

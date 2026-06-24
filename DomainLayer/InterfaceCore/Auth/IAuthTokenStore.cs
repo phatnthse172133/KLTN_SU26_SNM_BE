@@ -14,4 +14,6 @@ public interface IAuthTokenStore
     Task StorePasswordResetOtpAsync(Guid userId, string otpHash, TimeSpan ttl);
     Task<bool> IsPasswordResetOtpValidAsync(Guid userId, string otpHash);
     Task<bool> ConsumePasswordResetOtpAsync(Guid userId, string otpHash);
+    Task StorePasswordResetTokenAsync(string tokenHash, Guid userId, TimeSpan ttl);
+    Task<Guid?> ConsumePasswordResetTokenAsync(string tokenHash);
 }

@@ -76,3 +76,15 @@ public class ResetPasswordRequest : VerifyPasswordResetOtpRequest
     [Required, Compare(nameof(NewPassword))]
     public string ConfirmNewPassword { get; set; } = string.Empty;
 }
+
+public class ResetPasswordByTokenRequest
+{
+    [Required]
+    public string Token { get; set; } = string.Empty;
+
+    [Required, MinLength(8)]
+    public string NewPassword { get; set; } = string.Empty;
+
+    [Required, Compare(nameof(NewPassword))]
+    public string ConfirmNewPassword { get; set; } = string.Empty;
+}

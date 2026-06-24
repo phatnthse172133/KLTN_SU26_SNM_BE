@@ -61,8 +61,18 @@ public class RedisAuthTokenStore : IAuthTokenStore
         return result == 1;
     }
 
+    public Task StorePasswordResetTokenAsync(string tokenHash, Guid userId, TimeSpan ttl) =>
+        _database.StringSetAsync(PasswordResetTokenKey(tokenHash), userId.ToString(), ttl);
+
+    public async Task<Guid?> ConsumePasswordResetTokenAsync(string tokenHash)
+    {
+        var value = await _database.StringGetDeleteAsync(PasswordResetTokenKey(tokenHash));
+        return Guid.TryParse(value, out var userId) ? userId : null;
+    }
+
     private static RedisKey RefreshKey(string hash) => $"auth:refresh:{hash}";
     private static RedisKey UserRefreshTokensKey(Guid userId) => $"auth:refresh:user:{userId:N}";
     private static RedisKey EmailVerificationKey(string hash) => $"auth:email-verification:{hash}";
     private static RedisKey PasswordResetOtpKey(Guid userId) => $"auth:password-reset-otp:{userId:N}";
+    private static RedisKey PasswordResetTokenKey(string hash) => $"auth:password-reset-token:{hash}";
 }

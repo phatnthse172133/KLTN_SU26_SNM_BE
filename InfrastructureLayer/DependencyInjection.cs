@@ -6,7 +6,11 @@ using InfrastructureLayer.Cores.Helppers;
 using InfrastructureLayer.Cores.JWTs;
 using InfrastructureLayer.Repositories;
 using ApplicationLayer.Services.Auth;
-using ApplicationLayer.Services.Profile;
+using ApplicationLayer.Services.Account;
+using ApplicationLayer.Services.BoothRegistrations;
+using ApplicationLayer.Services.Booths;
+using ApplicationLayer.Services.NightMarkets;
+using ApplicationLayer.Mappings;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceCore.Email;
 using DomainLayer.InterfaceCore.Auth;
@@ -45,7 +49,11 @@ namespace InfrastructureLayer
             services.AddScoped<IAuthTokenStore, RedisAuthTokenStore>();
             services.AddHttpClient<IGoogleTokenValidator, GoogleTokenValidator>();
             services.AddScoped<IAuthService, AuthService>();
-            services.AddScoped<IProfileService, ProfileService>();
+            services.AddScoped<IAccountService, AccountService>();
+            services.AddScoped<IBoothRegistrationService, BoothRegistrationService>();
+            services.AddScoped<IBoothService, BoothService>();
+            services.AddScoped<INightMarketService, NightMarketService>();
+            services.AddAutoMapper(typeof(MappingProfile).Assembly);
 
             // Add HttpContextAccessor
             services.AddHttpContextAccessor();

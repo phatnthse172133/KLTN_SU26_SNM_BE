@@ -46,12 +46,12 @@ public class AuthService : IAuthService
 
         if (await _userRepository.AnyAsync(user => user.Email == email))
         {
-            return ApiResponse<object>.Failure("Email đã được sử dụng.");
+            return ApiResponse<object>.Failure("Email is already in use.");
         }
 
         if (await _userRepository.AnyAsync(user => user.UserName == userName))
         {
-            return ApiResponse<object>.Failure("Tên đăng nhập đã được sử dụng.");
+            return ApiResponse<object>.Failure("Username is already in use.");
         }
 
         var customerRole = await GetCustomerRoleAsync();
@@ -73,7 +73,7 @@ public class AuthService : IAuthService
         await _userRepository.SaveChangesAsync();
         await CreateAndSendVerificationTokenAsync(user, cancellationToken);
 
-        return ApiResponse<object>.SuccessResponse(new { user.Id, user.Email }, "Đăng ký thành công. Vui lòng kiểm tra email để xác thực tài khoản.");
+        return ApiResponse<object>.SuccessResponse(new { user.Id, user.Email }, "Registration successful. Please check your email to verify your account.");
     }
 
     public async Task<ApiResponse<AuthResponse>> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default)
@@ -83,7 +83,7 @@ public class AuthService : IAuthService
 
         if (user is null || !_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
         {
-            return ApiResponse<AuthResponse>.Failure("Email/tên đăng nhập hoặc mật khẩu không đúng.");
+            return ApiResponse<AuthResponse>.Failure("Email/username or password is incorrect.");
         }
 
         return await CreateSessionForActiveUserAsync(user, cancellationToken);
@@ -99,12 +99,12 @@ public class AuthService : IAuthService
         }
         catch (Exception)
         {
-            return ApiResponse<AuthResponse>.Failure("Không thể xác thực Google token.");
+            return ApiResponse<AuthResponse>.Failure("Unable to validate the Google token.");
         }
 
         if (googleUser is null)
         {
-            return ApiResponse<AuthResponse>.Failure("Google token không hợp lệ hoặc email chưa được xác thực.");
+            return ApiResponse<AuthResponse>.Failure("Google token is invalid or the email has not been verified.");
         }
 
         var user = await _userRepository.FirstOrDefaultAsync(item => item.Email == googleUser.Email);
@@ -137,20 +137,20 @@ public class AuthService : IAuthService
     {
         if (string.IsNullOrWhiteSpace(token))
         {
-            return ApiResponse<object>.Failure("Verification token không hợp lệ.");
+            return ApiResponse<object>.Failure("Verification token is invalid.");
         }
 
         var tokenHash = _jwtService.HashToken(token);
         var userId = await _tokenStore.ConsumeEmailVerificationAsync(tokenHash);
         if (userId is null)
         {
-            return ApiResponse<object>.Failure("Verification token không hợp lệ hoặc đã hết hạn.");
+            return ApiResponse<object>.Failure("Verification token is invalid or has expired.");
         }
 
         var user = await _userRepository.GetByIdAsync(userId.Value);
         if (user is null)
         {
-            return ApiResponse<object>.Failure("Không tìm thấy tài khoản.");
+            return ApiResponse<object>.Failure("Account was not found.");
         }
 
         if (user.Status == UserStatus.PendingVerification)
@@ -161,7 +161,7 @@ public class AuthService : IAuthService
         }
 
         await _userRepository.SaveChangesAsync();
-        return ApiResponse<object>.SuccessResponse(new { user.Id }, "Xác thực email thành công.");
+        return ApiResponse<object>.SuccessResponse(new { user.Id }, "Email verified successfully.");
     }
 
     public async Task<ApiResponse<object>> ResendVerificationAsync(ResendVerificationRequest request, CancellationToken cancellationToken = default)
@@ -171,11 +171,11 @@ public class AuthService : IAuthService
 
         if (user is null || user.Status != UserStatus.PendingVerification)
         {
-            return ApiResponse<object>.SuccessResponse(new { }, "Nếu tài khoản cần xác thực, email đã được gửi.");
+            return ApiResponse<object>.SuccessResponse(new { }, "If the account requires verification, an email has been sent.");
         }
 
         await CreateAndSendVerificationTokenAsync(user, cancellationToken);
-        return ApiResponse<object>.SuccessResponse(new { }, "Nếu tài khoản cần xác thực, email đã được gửi.");
+        return ApiResponse<object>.SuccessResponse(new { }, "If the account requires verification, an email has been sent.");
     }
 
     public async Task<ApiResponse<object>> ForgotPasswordAsync(ForgotPasswordRequest request, CancellationToken cancellationToken = default)
@@ -186,7 +186,10 @@ public class AuthService : IAuthService
 
         var otp = Random.Shared.Next(0, 1_000_000).ToString("D6");
         await _tokenStore.StorePasswordResetOtpAsync(user.Id, _jwtService.HashToken(otp), TimeSpan.FromMinutes(10));
+        var rawResetToken = _jwtService.GenerateSecureToken();
+        await _tokenStore.StorePasswordResetTokenAsync(_jwtService.HashToken(rawResetToken), user.Id, TimeSpan.FromMinutes(15));
         await _emailService.SendPasswordResetOtpAsync(user.Email, user.FullName, otp, cancellationToken);
+        await _emailService.SendPasswordResetLinkAsync(user.Email, user.FullName, rawResetToken, cancellationToken);
         return ApiResponse<object>.SuccessResponse(new { }, "If the email exists, a password-reset OTP has been sent.");
     }
 
@@ -217,19 +220,34 @@ public class AuthService : IAuthService
         return ApiResponse<object>.SuccessResponse(new { }, "Password reset successfully. Please sign in again.");
     }
 
+    public async Task<ApiResponse<object>> ResetPasswordByTokenAsync(ResetPasswordByTokenRequest request, CancellationToken cancellationToken = default)
+    {
+        var userId = await _tokenStore.ConsumePasswordResetTokenAsync(_jwtService.HashToken(request.Token));
+        if (userId is null) return ApiResponse<object>.Failure("Reset link is invalid, expired, or already used.");
+        var user = await _userRepository.GetByIdAsync(userId.Value);
+        if (user is null || user.Status != UserStatus.Active) return ApiResponse<object>.Failure("This account cannot reset its password.");
+        if (_passwordHasher.VerifyPassword(request.NewPassword, user.PasswordHash)) return ApiResponse<object>.Failure("New password must differ from the current password.");
+        user.PasswordHash = _passwordHasher.HashPassword(request.NewPassword);
+        user.UpdatedAt = DateTime.UtcNow;
+        _userRepository.Update(user);
+        await _tokenStore.RevokeAllRefreshTokensAsync(user.Id);
+        await _userRepository.SaveChangesAsync();
+        return ApiResponse<object>.SuccessResponse(new { }, "Password reset successfully. Please sign in again.");
+    }
+
     public async Task<ApiResponse<AuthResponse>> RefreshTokenAsync(RefreshTokenRequest request, CancellationToken cancellationToken = default)
     {
         var tokenHash = _jwtService.HashToken(request.RefreshToken);
         var userId = await _tokenStore.ConsumeRefreshTokenAsync(tokenHash);
         if (userId is null)
         {
-            return ApiResponse<AuthResponse>.Failure("Refresh token không hợp lệ hoặc đã hết hạn.");
+            return ApiResponse<AuthResponse>.Failure("Refresh token is invalid or has expired.");
         }
 
         var user = await _userRepository.GetByIdAsync(userId.Value);
         if (user is null || user.Status != UserStatus.Active)
         {
-            return ApiResponse<AuthResponse>.Failure("Tài khoản không còn hoạt động.");
+            return ApiResponse<AuthResponse>.Failure("Account is no longer active.");
         }
 
         var newRawToken = _jwtService.GenerateSecureToken();
@@ -243,19 +261,19 @@ public class AuthService : IAuthService
         var tokenHash = _jwtService.HashToken(request.RefreshToken);
         await _tokenStore.RevokeRefreshTokenAsync(tokenHash);
 
-        return ApiResponse<object>.SuccessResponse(new { }, "Đăng xuất thành công.");
+        return ApiResponse<object>.SuccessResponse(new { }, "Logged out successfully.");
     }
 
     private async Task<ApiResponse<AuthResponse>> CreateSessionForActiveUserAsync(User user, CancellationToken cancellationToken)
     {
         if (user.Status == UserStatus.PendingVerification)
         {
-            return ApiResponse<AuthResponse>.Failure("Vui lòng xác thực email trước khi đăng nhập.");
+            return ApiResponse<AuthResponse>.Failure("Please verify your email before signing in.");
         }
 
         if (user.Status != UserStatus.Active)
         {
-            return ApiResponse<AuthResponse>.Failure("Tài khoản đang không hoạt động.");
+            return ApiResponse<AuthResponse>.Failure("Account is not active.");
         }
 
         var rawToken = _jwtService.GenerateSecureToken();
@@ -269,7 +287,7 @@ public class AuthService : IAuthService
         var role = await _roleRepository.GetByIdAsync(user.RoleId);
         if (role is null)
         {
-            return ApiResponse<AuthResponse>.Failure("Tài khoản chưa được gán role hợp lệ.");
+            return ApiResponse<AuthResponse>.Failure("Account has no valid assigned role.");
         }
 
         var response = new AuthResponse(
@@ -279,7 +297,7 @@ public class AuthService : IAuthService
             role.RoleName,
             new UserResponse(user.Id, user.UserName, user.FullName, user.Email, role.RoleName, user.Status.ToString(), user.AvatarUrl));
 
-        return ApiResponse<AuthResponse>.SuccessResponse(response, "Đăng nhập thành công.");
+        return ApiResponse<AuthResponse>.SuccessResponse(response, "Signed in successfully.");
     }
 
     private async Task<Role> GetCustomerRoleAsync()

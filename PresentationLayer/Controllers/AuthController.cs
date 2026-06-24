@@ -72,6 +72,13 @@ public class AuthController : ControllerBase
         return response.Success ? Ok(response) : BadRequest(response);
     }
 
+    [HttpPost("reset-password-by-token")]
+    public async Task<IActionResult> ResetPasswordByToken(ResetPasswordByTokenRequest request, CancellationToken cancellationToken)
+    {
+        var response = await _authService.ResetPasswordByTokenAsync(request, cancellationToken);
+        return response.Success ? Ok(response) : BadRequest(response);
+    }
+
     [HttpPost("refresh-token")]
     public async Task<IActionResult> RefreshToken(RefreshTokenRequest request, CancellationToken cancellationToken)
     {

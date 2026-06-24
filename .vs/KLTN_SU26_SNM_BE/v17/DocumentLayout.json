@@ -3,8 +3,44 @@
   "WorkspaceRootPath": "D:\\KLTN\\KLTN_SU26_SNM_BE\\",
   "Documents": [
     {
+      "AbsoluteMoniker": "D:0:0:{795A04CC-B639-46AD-BB91-F3F2F3828ACC}|ApplicationLayer\\ApplicationLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\applicationlayer\\mappings\\mappingprofile.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{795A04CC-B639-46AD-BB91-F3F2F3828ACC}|ApplicationLayer\\ApplicationLayer.csproj|solutionrelative:applicationlayer\\mappings\\mappingprofile.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{795A04CC-B639-46AD-BB91-F3F2F3828ACC}|ApplicationLayer\\ApplicationLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\applicationlayer\\helppers\\apiresponse.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{795A04CC-B639-46AD-BB91-F3F2F3828ACC}|ApplicationLayer\\ApplicationLayer.csproj|solutionrelative:applicationlayer\\helppers\\apiresponse.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{795A04CC-B639-46AD-BB91-F3F2F3828ACC}|ApplicationLayer\\ApplicationLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\applicationlayer\\helppers\\pagination.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{795A04CC-B639-46AD-BB91-F3F2F3828ACC}|ApplicationLayer\\ApplicationLayer.csproj|solutionrelative:applicationlayer\\helppers\\pagination.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{795A04CC-B639-46AD-BB91-F3F2F3828ACC}|ApplicationLayer\\ApplicationLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\applicationlayer\\applicationlayer.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|",
+      "RelativeMoniker": "D:0:0:{795A04CC-B639-46AD-BB91-F3F2F3828ACC}|ApplicationLayer\\ApplicationLayer.csproj|solutionrelative:applicationlayer\\applicationlayer.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{795A04CC-B639-46AD-BB91-F3F2F3828ACC}|ApplicationLayer\\ApplicationLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\applicationlayer\\services\\profile\\profileservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{795A04CC-B639-46AD-BB91-F3F2F3828ACC}|ApplicationLayer\\ApplicationLayer.csproj|solutionrelative:applicationlayer\\services\\profile\\profileservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{795A04CC-B639-46AD-BB91-F3F2F3828ACC}|ApplicationLayer\\ApplicationLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\applicationlayer\\services\\profile\\iprofileservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{795A04CC-B639-46AD-BB91-F3F2F3828ACC}|ApplicationLayer\\ApplicationLayer.csproj|solutionrelative:applicationlayer\\services\\profile\\iprofileservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6DB7D288-2527-4FEB-B054-C70BF08D64DB}|PresentationLayer\\PresentationLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\presentationlayer\\controllers\\profilecontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{6DB7D288-2527-4FEB-B054-C70BF08D64DB}|PresentationLayer\\PresentationLayer.csproj|solutionrelative:presentationlayer\\controllers\\profilecontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6DB7D288-2527-4FEB-B054-C70BF08D64DB}|PresentationLayer\\PresentationLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\presentationlayer\\controllers\\authcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{6DB7D288-2527-4FEB-B054-C70BF08D64DB}|PresentationLayer\\PresentationLayer.csproj|solutionrelative:presentationlayer\\controllers\\authcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
       "AbsoluteMoniker": "D:0:0:{6DB7D288-2527-4FEB-B054-C70BF08D64DB}|PresentationLayer\\PresentationLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\presentationlayer\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
       "RelativeMoniker": "D:0:0:{6DB7D288-2527-4FEB-B054-C70BF08D64DB}|PresentationLayer\\PresentationLayer.csproj|solutionrelative:presentationlayer\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{7F801C40-B229-4258-B7CB-B1ED50B3999D}|InfrastructureLayer\\InfrastructureLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\infrastructurelayer\\data\\snmdbcontext.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{7F801C40-B229-4258-B7CB-B1ED50B3999D}|InfrastructureLayer\\InfrastructureLayer.csproj|solutionrelative:infrastructurelayer\\data\\snmdbcontext.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{795A04CC-B639-46AD-BB91-F3F2F3828ACC}|ApplicationLayer\\ApplicationLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\applicationlayer\\dtos\\requests\\authrequests.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
@@ -17,10 +53,6 @@
     {
       "AbsoluteMoniker": "D:0:0:{6DB7D288-2527-4FEB-B054-C70BF08D64DB}|PresentationLayer\\PresentationLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\presentationlayer\\properties\\launchsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
       "RelativeMoniker": "D:0:0:{6DB7D288-2527-4FEB-B054-C70BF08D64DB}|PresentationLayer\\PresentationLayer.csproj|solutionrelative:presentationlayer\\properties\\launchsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{6DB7D288-2527-4FEB-B054-C70BF08D64DB}|PresentationLayer\\PresentationLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\presentationlayer\\controllers\\authcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{6DB7D288-2527-4FEB-B054-C70BF08D64DB}|PresentationLayer\\PresentationLayer.csproj|solutionrelative:presentationlayer\\controllers\\authcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{7F801C40-B229-4258-B7CB-B1ED50B3999D}|InfrastructureLayer\\InfrastructureLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\infrastructurelayer\\repositories\\genericrepository.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
@@ -37,10 +69,6 @@
     {
       "AbsoluteMoniker": "D:0:0:{795A04CC-B639-46AD-BB91-F3F2F3828ACC}|ApplicationLayer\\ApplicationLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\applicationlayer\\services\\auth\\authservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{795A04CC-B639-46AD-BB91-F3F2F3828ACC}|ApplicationLayer\\ApplicationLayer.csproj|solutionrelative:applicationlayer\\services\\auth\\authservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{7F801C40-B229-4258-B7CB-B1ED50B3999D}|InfrastructureLayer\\InfrastructureLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\infrastructurelayer\\data\\snmdbcontext.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{7F801C40-B229-4258-B7CB-B1ED50B3999D}|InfrastructureLayer\\InfrastructureLayer.csproj|solutionrelative:infrastructurelayer\\data\\snmdbcontext.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\domainlayer\\enums\\generalenum.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
@@ -79,14 +107,6 @@
       "RelativeMoniker": "D:0:0:{795A04CC-B639-46AD-BB91-F3F2F3828ACC}|ApplicationLayer\\ApplicationLayer.csproj|solutionrelative:applicationlayer\\dtos\\responses\\authresponses.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{795A04CC-B639-46AD-BB91-F3F2F3828ACC}|ApplicationLayer\\ApplicationLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\applicationlayer\\helppers\\pagination.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{795A04CC-B639-46AD-BB91-F3F2F3828ACC}|ApplicationLayer\\ApplicationLayer.csproj|solutionrelative:applicationlayer\\helppers\\pagination.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{795A04CC-B639-46AD-BB91-F3F2F3828ACC}|ApplicationLayer\\ApplicationLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\applicationlayer\\helppers\\apiresponse.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{795A04CC-B639-46AD-BB91-F3F2F3828ACC}|ApplicationLayer\\ApplicationLayer.csproj|solutionrelative:applicationlayer\\helppers\\apiresponse.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
       "AbsoluteMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|d:\\kltn\\kltn_su26_snm_be\\domainlayer\\interfacerepositories\\igenericrepository.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{830ABE3B-118B-441B-B096-A1C96DB09AF8}|DomainLayer\\DomainLayer.csproj|solutionrelative:domainlayer\\interfacerepositories\\igenericrepository.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
@@ -118,7 +138,7 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 5,
+          "SelectedChildIndex": 2,
           "Children": [
             {
               "$type": "Bookmark",
@@ -126,43 +146,98 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 7,
-              "Title": "IAuthService.cs",
-              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\Services\\Auth\\IAuthService.cs",
-              "RelativeDocumentMoniker": "ApplicationLayer\\Services\\Auth\\IAuthService.cs",
-              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\Services\\Auth\\IAuthService.cs",
-              "RelativeToolTip": "ApplicationLayer\\Services\\Auth\\IAuthService.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-06-24T12:51:33.077Z"
+              "DocumentIndex": 3,
+              "Title": "ApplicationLayer",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\ApplicationLayer.csproj",
+              "RelativeDocumentMoniker": "ApplicationLayer\\ApplicationLayer.csproj",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\ApplicationLayer.csproj",
+              "RelativeToolTip": "ApplicationLayer\\ApplicationLayer.csproj",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABwAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000758|",
+              "WhenOpened": "2026-06-24T15:33:31.777Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 8,
-              "Title": "AuthService.cs",
-              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\Services\\Auth\\AuthService.cs",
-              "RelativeDocumentMoniker": "ApplicationLayer\\Services\\Auth\\AuthService.cs",
-              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\Services\\Auth\\AuthService.cs",
-              "RelativeToolTip": "ApplicationLayer\\Services\\Auth\\AuthService.cs",
-              "ViewState": "AgIAAHYAAAAAAAAAAAAhwJEAAAAMAAAAAAAAAA==",
+              "DocumentIndex": 0,
+              "Title": "MappingProfile.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\Mappings\\MappingProfile.cs",
+              "RelativeDocumentMoniker": "ApplicationLayer\\Mappings\\MappingProfile.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\Mappings\\MappingProfile.cs",
+              "RelativeToolTip": "ApplicationLayer\\Mappings\\MappingProfile.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAA0AAAAMAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-06-24T12:49:56.941Z"
+              "WhenOpened": "2026-06-24T15:33:19.212Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 11,
-              "Title": "IEmailService.cs",
-              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\InterfaceCore\\Email\\IEmailService.cs",
-              "RelativeDocumentMoniker": "DomainLayer\\InterfaceCore\\Email\\IEmailService.cs",
-              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\InterfaceCore\\Email\\IEmailService.cs",
-              "RelativeToolTip": "DomainLayer\\InterfaceCore\\Email\\IEmailService.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "DocumentIndex": 4,
+              "Title": "ProfileService.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\Services\\Profile\\ProfileService.cs",
+              "RelativeDocumentMoniker": "ApplicationLayer\\Services\\Profile\\ProfileService.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\Services\\Profile\\ProfileService.cs",
+              "RelativeToolTip": "ApplicationLayer\\Services\\Profile\\ProfileService.cs",
+              "ViewState": "AgIAAAYAAAAAAAAAAAAAACwAAAAcAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-06-24T12:48:36.097Z"
+              "WhenOpened": "2026-06-24T15:30:57.61Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 12,
+              "DocumentIndex": 5,
+              "Title": "IProfileService.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\Services\\Profile\\IProfileService.cs",
+              "RelativeDocumentMoniker": "ApplicationLayer\\Services\\Profile\\IProfileService.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\Services\\Profile\\IProfileService.cs",
+              "RelativeToolTip": "ApplicationLayer\\Services\\Profile\\IProfileService.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAwAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-24T15:30:47.537Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "ProfileController.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\PresentationLayer\\Controllers\\ProfileController.cs",
+              "RelativeDocumentMoniker": "PresentationLayer\\Controllers\\ProfileController.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\PresentationLayer\\Controllers\\ProfileController.cs",
+              "RelativeToolTip": "PresentationLayer\\Controllers\\ProfileController.cs",
+              "ViewState": "AgIAAAcAAAAAAAAAAAAAACIAAABiAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-24T15:27:34.785Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "Pagination.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\Helppers\\Pagination.cs",
+              "RelativeDocumentMoniker": "ApplicationLayer\\Helppers\\Pagination.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\Helppers\\Pagination.cs",
+              "RelativeToolTip": "ApplicationLayer\\Helppers\\Pagination.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAgAAAAKAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-24T11:55:58.259Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "ApiResponse.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\Helppers\\ApiResponse.cs",
+              "RelativeDocumentMoniker": "ApplicationLayer\\Helppers\\ApiResponse.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\Helppers\\ApiResponse.cs",
+              "RelativeToolTip": "ApplicationLayer\\Helppers\\ApiResponse.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAgAAAAcAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-24T11:55:55.832Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 19,
               "Title": "IGoogleTokenValidator.cs",
               "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\InterfaceCore\\External\\IGoogleTokenValidator.cs",
               "RelativeDocumentMoniker": "DomainLayer\\InterfaceCore\\External\\IGoogleTokenValidator.cs",
@@ -174,20 +249,32 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 0,
+              "DocumentIndex": 18,
+              "Title": "IEmailService.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\InterfaceCore\\Email\\IEmailService.cs",
+              "RelativeDocumentMoniker": "DomainLayer\\InterfaceCore\\Email\\IEmailService.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\InterfaceCore\\Email\\IEmailService.cs",
+              "RelativeToolTip": "DomainLayer\\InterfaceCore\\Email\\IEmailService.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-24T12:48:36.097Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 8,
               "Title": "appsettings.json",
               "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\PresentationLayer\\appsettings.json",
               "RelativeDocumentMoniker": "PresentationLayer\\appsettings.json",
               "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\PresentationLayer\\appsettings.json",
               "RelativeToolTip": "PresentationLayer\\appsettings.json",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAYAAAApAAAAAAAAAA==",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAACAAAAAnAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
               "WhenOpened": "2026-06-24T12:39:24.707Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 2,
+              "DocumentIndex": 11,
               "Title": "Program.cs",
               "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\PresentationLayer\\Program.cs",
               "RelativeDocumentMoniker": "PresentationLayer\\Program.cs",
@@ -199,7 +286,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 10,
               "Title": "AuthRequests.cs",
               "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\DTOs\\Requests\\AuthRequests.cs",
               "RelativeDocumentMoniker": "ApplicationLayer\\DTOs\\Requests\\AuthRequests.cs",
@@ -207,24 +294,61 @@
               "RelativeToolTip": "ApplicationLayer\\DTOs\\Requests\\AuthRequests.cs",
               "ViewState": "AgIAAAMAAAAAAAAAAAAAAAoAAAA4AAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-06-24T12:14:39.624Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-06-24T12:14:39.624Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 4,
+              "DocumentIndex": 7,
               "Title": "AuthController.cs",
               "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\PresentationLayer\\Controllers\\AuthController.cs",
               "RelativeDocumentMoniker": "PresentationLayer\\Controllers\\AuthController.cs",
               "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\PresentationLayer\\Controllers\\AuthController.cs",
               "RelativeToolTip": "PresentationLayer\\Controllers\\AuthController.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "ViewState": "AgIAABgAAAAAAAAAAAAYwAAAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-06-24T12:51:50.829Z"
+              "WhenOpened": "2026-06-24T12:51:50.829Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 3,
+              "DocumentIndex": 16,
+              "Title": "AuthService.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\Services\\Auth\\AuthService.cs",
+              "RelativeDocumentMoniker": "ApplicationLayer\\Services\\Auth\\AuthService.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\Services\\Auth\\AuthService.cs",
+              "RelativeToolTip": "ApplicationLayer\\Services\\Auth\\AuthService.cs",
+              "ViewState": "AgIAAHYAAAAAAAAAAAAhwJEAAAAMAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-24T12:49:56.941Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 9,
+              "Title": "SNMDbContext.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\InfrastructureLayer\\Data\\SNMDbContext.cs",
+              "RelativeDocumentMoniker": "InfrastructureLayer\\Data\\SNMDbContext.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\InfrastructureLayer\\Data\\SNMDbContext.cs",
+              "RelativeToolTip": "InfrastructureLayer\\Data\\SNMDbContext.cs",
+              "ViewState": "AgIAADUAAAAAAAAAAAA+wFEAAAAtAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-24T12:23:51.465Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 15,
+              "Title": "IAuthService.cs",
+              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\Services\\Auth\\IAuthService.cs",
+              "RelativeDocumentMoniker": "ApplicationLayer\\Services\\Auth\\IAuthService.cs",
+              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\Services\\Auth\\IAuthService.cs",
+              "RelativeToolTip": "ApplicationLayer\\Services\\Auth\\IAuthService.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-24T12:51:33.077Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 12,
               "Title": "launchSettings.json",
               "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\PresentationLayer\\Properties\\launchSettings.json",
               "RelativeDocumentMoniker": "PresentationLayer\\Properties\\launchSettings.json",
@@ -236,7 +360,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 13,
+              "DocumentIndex": 20,
               "Title": "EmailService.cs",
               "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\InfrastructureLayer\\Cores\\Emails\\EmailService.cs",
               "RelativeDocumentMoniker": "InfrastructureLayer\\Cores\\Emails\\EmailService.cs",
@@ -248,7 +372,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 6,
+              "DocumentIndex": 14,
               "Title": "JwtPayload.cs",
               "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\InfrastructureLayer\\Cores\\Helppers\\JwtPayload.cs",
               "RelativeDocumentMoniker": "InfrastructureLayer\\Cores\\Helppers\\JwtPayload.cs",
@@ -260,7 +384,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 5,
+              "DocumentIndex": 13,
               "Title": "GenericRepository.cs",
               "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\InfrastructureLayer\\Repositories\\GenericRepository.cs",
               "RelativeDocumentMoniker": "InfrastructureLayer\\Repositories\\GenericRepository.cs",
@@ -272,7 +396,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 16,
+              "DocumentIndex": 23,
               "Title": "PasswordHasher.cs",
               "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\InfrastructureLayer\\Cores\\Helppers\\PasswordHasher.cs",
               "RelativeDocumentMoniker": "InfrastructureLayer\\Cores\\Helppers\\PasswordHasher.cs",
@@ -284,19 +408,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 9,
-              "Title": "SNMDbContext.cs",
-              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\InfrastructureLayer\\Data\\SNMDbContext.cs",
-              "RelativeDocumentMoniker": "InfrastructureLayer\\Data\\SNMDbContext.cs",
-              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\InfrastructureLayer\\Data\\SNMDbContext.cs",
-              "RelativeToolTip": "InfrastructureLayer\\Data\\SNMDbContext.cs",
-              "ViewState": "AgIAADUAAAAAAAAAAAAAAE0AAABGAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-06-24T12:23:51.465Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 17,
+              "DocumentIndex": 24,
               "Title": "GoogleTokenValidator.cs",
               "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\InfrastructureLayer\\Cores\\External\\GoogleTokenValidator.cs",
               "RelativeDocumentMoniker": "InfrastructureLayer\\Cores\\External\\GoogleTokenValidator.cs",
@@ -308,7 +420,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 10,
+              "DocumentIndex": 17,
               "Title": "GeneralEnum.cs",
               "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Enums\\GeneralEnum.cs",
               "RelativeDocumentMoniker": "DomainLayer\\Enums\\GeneralEnum.cs",
@@ -320,7 +432,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 18,
+              "DocumentIndex": 25,
               "Title": "AuthResponses.cs",
               "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\DTOs\\Responses\\AuthResponses.cs",
               "RelativeDocumentMoniker": "ApplicationLayer\\DTOs\\Responses\\AuthResponses.cs",
@@ -332,7 +444,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 15,
+              "DocumentIndex": 22,
               "Title": "JWTService.cs",
               "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\InfrastructureLayer\\Cores\\JWTs\\JWTService.cs",
               "RelativeDocumentMoniker": "InfrastructureLayer\\Cores\\JWTs\\JWTService.cs",
@@ -344,7 +456,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 14,
+              "DocumentIndex": 21,
               "Title": "JwtSettings.cs",
               "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\InfrastructureLayer\\Cores\\JWTs\\JwtSettings.cs",
               "RelativeDocumentMoniker": "InfrastructureLayer\\Cores\\JWTs\\JwtSettings.cs",
@@ -356,31 +468,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 20,
-              "Title": "ApiResponse.cs",
-              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\Helppers\\ApiResponse.cs",
-              "RelativeDocumentMoniker": "ApplicationLayer\\Helppers\\ApiResponse.cs",
-              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\Helppers\\ApiResponse.cs",
-              "RelativeToolTip": "ApplicationLayer\\Helppers\\ApiResponse.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAgAAAAcAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-06-24T11:55:55.832Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 19,
-              "Title": "Pagination.cs",
-              "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\Helppers\\Pagination.cs",
-              "RelativeDocumentMoniker": "ApplicationLayer\\Helppers\\Pagination.cs",
-              "ToolTip": "D:\\KLTN\\KLTN_SU26_SNM_BE\\ApplicationLayer\\Helppers\\Pagination.cs",
-              "RelativeToolTip": "ApplicationLayer\\Helppers\\Pagination.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAgAAAAKAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-06-24T11:55:58.259Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 21,
+              "DocumentIndex": 26,
               "Title": "IGenericRepository.cs",
               "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\InterfaceRepositories\\IGenericRepository.cs",
               "RelativeDocumentMoniker": "DomainLayer\\InterfaceRepositories\\IGenericRepository.cs",
@@ -392,7 +480,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 22,
+              "DocumentIndex": 27,
               "Title": "SNMContextFactory.cs",
               "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\InfrastructureLayer\\Data\\SNMContextFactory.cs",
               "RelativeDocumentMoniker": "InfrastructureLayer\\Data\\SNMContextFactory.cs",
@@ -404,7 +492,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 23,
+              "DocumentIndex": 28,
               "Title": "DependencyInjection.cs",
               "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\InfrastructureLayer\\DependencyInjection.cs",
               "RelativeDocumentMoniker": "InfrastructureLayer\\DependencyInjection.cs",
@@ -416,7 +504,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 24,
+              "DocumentIndex": 29,
               "Title": "Role.cs",
               "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\Role.cs",
               "RelativeDocumentMoniker": "DomainLayer\\Entities\\Role.cs",
@@ -428,7 +516,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 25,
+              "DocumentIndex": 30,
               "Title": "User.cs",
               "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\User.cs",
               "RelativeDocumentMoniker": "DomainLayer\\Entities\\User.cs",
@@ -440,7 +528,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 26,
+              "DocumentIndex": 31,
               "Title": "Booth.cs",
               "DocumentMoniker": "D:\\KLTN\\KLTN_SU26_SNM_BE\\DomainLayer\\Entities\\Booth.cs",
               "RelativeDocumentMoniker": "DomainLayer\\Entities\\Booth.cs",

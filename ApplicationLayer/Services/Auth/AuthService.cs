@@ -3,6 +3,7 @@ using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Helppers;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceCore.Email;
+using DomainLayer.InterfaceCore.Auth;
 using DomainLayer.InterfaceCore.External;
 using DomainLayer.InterfaceCore.JWT;
 using DomainLayer.InterfaceRepository;
@@ -14,8 +15,7 @@ public class AuthService : IAuthService
 {
     private readonly IGenericRepository<User> _userRepository;
     private readonly IGenericRepository<Role> _roleRepository;
-    private readonly IGenericRepository<RefreshToken> _refreshTokenRepository;
-    private readonly IGenericRepository<EmailVerificationToken> _verificationTokenRepository;
+    private readonly IAuthTokenStore _tokenStore;
     private readonly IPasswordHasher _passwordHasher;
     private readonly IJwtService _jwtService;
     private readonly IEmailService _emailService;
@@ -24,8 +24,7 @@ public class AuthService : IAuthService
     public AuthService(
         IGenericRepository<User> userRepository,
         IGenericRepository<Role> roleRepository,
-        IGenericRepository<RefreshToken> refreshTokenRepository,
-        IGenericRepository<EmailVerificationToken> verificationTokenRepository,
+        IAuthTokenStore tokenStore,
         IPasswordHasher passwordHasher,
         IJwtService jwtService,
         IEmailService emailService,
@@ -33,8 +32,7 @@ public class AuthService : IAuthService
     {
         _userRepository = userRepository;
         _roleRepository = roleRepository;
-        _refreshTokenRepository = refreshTokenRepository;
-        _verificationTokenRepository = verificationTokenRepository;
+        _tokenStore = tokenStore;
         _passwordHasher = passwordHasher;
         _jwtService = jwtService;
         _emailService = emailService;
@@ -143,22 +141,17 @@ public class AuthService : IAuthService
         }
 
         var tokenHash = _jwtService.HashToken(token);
-        var verification = await _verificationTokenRepository.FirstOrDefaultAsync(item =>
-            item.TokenHash == tokenHash && item.UsedAt == null && item.ExpiresAt > DateTime.UtcNow);
-
-        if (verification is null)
+        var userId = await _tokenStore.ConsumeEmailVerificationAsync(tokenHash);
+        if (userId is null)
         {
             return ApiResponse<object>.Failure("Verification token không hợp lệ hoặc đã hết hạn.");
         }
 
-        var user = await _userRepository.GetByIdAsync(verification.UserId);
+        var user = await _userRepository.GetByIdAsync(userId.Value);
         if (user is null)
         {
             return ApiResponse<object>.Failure("Không tìm thấy tài khoản.");
         }
-
-        verification.UsedAt = DateTime.UtcNow;
-        _verificationTokenRepository.Update(verification);
 
         if (user.Status == UserStatus.PendingVerification)
         {
@@ -167,7 +160,7 @@ public class AuthService : IAuthService
             _userRepository.Update(user);
         }
 
-        await _verificationTokenRepository.SaveChangesAsync();
+        await _userRepository.SaveChangesAsync();
         return ApiResponse<object>.SuccessResponse(new { user.Id }, "Xác thực email thành công.");
     }
 
@@ -181,49 +174,66 @@ public class AuthService : IAuthService
             return ApiResponse<object>.SuccessResponse(new { }, "Nếu tài khoản cần xác thực, email đã được gửi.");
         }
 
-        var oldTokens = await _verificationTokenRepository.FindAsync(item => item.UserId == user.Id && item.UsedAt == null);
-        foreach (var oldToken in oldTokens)
-        {
-            oldToken.UsedAt = DateTime.UtcNow;
-            _verificationTokenRepository.Update(oldToken);
-        }
-
-        await _verificationTokenRepository.SaveChangesAsync();
         await CreateAndSendVerificationTokenAsync(user, cancellationToken);
         return ApiResponse<object>.SuccessResponse(new { }, "Nếu tài khoản cần xác thực, email đã được gửi.");
+    }
+
+    public async Task<ApiResponse<object>> ForgotPasswordAsync(ForgotPasswordRequest request, CancellationToken cancellationToken = default)
+    {
+        var user = await _userRepository.FirstOrDefaultAsync(item => item.Email == request.Email.Trim().ToLowerInvariant());
+        if (user is null || user.Status != UserStatus.Active)
+            return ApiResponse<object>.SuccessResponse(new { }, "If the email exists, a password-reset OTP has been sent.");
+
+        var otp = Random.Shared.Next(0, 1_000_000).ToString("D6");
+        await _tokenStore.StorePasswordResetOtpAsync(user.Id, _jwtService.HashToken(otp), TimeSpan.FromMinutes(10));
+        await _emailService.SendPasswordResetOtpAsync(user.Email, user.FullName, otp, cancellationToken);
+        return ApiResponse<object>.SuccessResponse(new { }, "If the email exists, a password-reset OTP has been sent.");
+    }
+
+    public async Task<ApiResponse<object>> VerifyPasswordResetOtpAsync(VerifyPasswordResetOtpRequest request, CancellationToken cancellationToken = default)
+    {
+        var user = await FindActiveUserByEmailAsync(request.Email);
+        var valid = user is not null && await _tokenStore.IsPasswordResetOtpValidAsync(user.Id, _jwtService.HashToken(request.Otp));
+        return !valid
+            ? ApiResponse<object>.Failure("OTP is invalid, expired, or already used.")
+            : ApiResponse<object>.SuccessResponse(new { }, "OTP is valid. You can set a new password.");
+    }
+
+    public async Task<ApiResponse<object>> ResetPasswordAsync(ResetPasswordRequest request, CancellationToken cancellationToken = default)
+    {
+        var user = await FindActiveUserByEmailAsync(request.Email);
+        if (user is null)
+            return ApiResponse<object>.Failure("This account cannot reset its password.");
+        if (_passwordHasher.VerifyPassword(request.NewPassword, user.PasswordHash))
+            return ApiResponse<object>.Failure("New password must differ from the current password.");
+        if (!await _tokenStore.ConsumePasswordResetOtpAsync(user.Id, _jwtService.HashToken(request.Otp)))
+            return ApiResponse<object>.Failure("OTP is invalid, expired, or already used.");
+
+        user.PasswordHash = _passwordHasher.HashPassword(request.NewPassword);
+        user.UpdatedAt = DateTime.UtcNow;
+        _userRepository.Update(user);
+        await _tokenStore.RevokeAllRefreshTokensAsync(user.Id);
+        await _userRepository.SaveChangesAsync();
+        return ApiResponse<object>.SuccessResponse(new { }, "Password reset successfully. Please sign in again.");
     }
 
     public async Task<ApiResponse<AuthResponse>> RefreshTokenAsync(RefreshTokenRequest request, CancellationToken cancellationToken = default)
     {
         var tokenHash = _jwtService.HashToken(request.RefreshToken);
-        var refreshToken = await _refreshTokenRepository.FirstOrDefaultAsync(item =>
-            item.TokenHash == tokenHash && item.RevokedAt == null && item.ExpiresAt > DateTime.UtcNow);
-
-        if (refreshToken is null)
+        var userId = await _tokenStore.ConsumeRefreshTokenAsync(tokenHash);
+        if (userId is null)
         {
             return ApiResponse<AuthResponse>.Failure("Refresh token không hợp lệ hoặc đã hết hạn.");
         }
 
-        var user = await _userRepository.GetByIdAsync(refreshToken.UserId);
+        var user = await _userRepository.GetByIdAsync(userId.Value);
         if (user is null || user.Status != UserStatus.Active)
         {
             return ApiResponse<AuthResponse>.Failure("Tài khoản không còn hoạt động.");
         }
 
         var newRawToken = _jwtService.GenerateSecureToken();
-        refreshToken.RevokedAt = DateTime.UtcNow;
-        refreshToken.ReplacedByTokenHash = _jwtService.HashToken(newRawToken);
-        _refreshTokenRepository.Update(refreshToken);
-
-        await _refreshTokenRepository.AddAsync(new RefreshToken
-        {
-            Id = Guid.NewGuid(),
-            UserId = user.Id,
-            TokenHash = refreshToken.ReplacedByTokenHash,
-            CreatedAt = DateTime.UtcNow,
-            ExpiresAt = _jwtService.GetRefreshTokenExpiry()
-        });
-        await _refreshTokenRepository.SaveChangesAsync();
+        await _tokenStore.StoreRefreshTokenAsync(_jwtService.HashToken(newRawToken), user.Id, GetRefreshTokenTtl());
 
         return await BuildAuthResponseAsync(user, newRawToken);
     }
@@ -231,14 +241,7 @@ public class AuthService : IAuthService
     public async Task<ApiResponse<object>> LogoutAsync(LogoutRequest request, CancellationToken cancellationToken = default)
     {
         var tokenHash = _jwtService.HashToken(request.RefreshToken);
-        var token = await _refreshTokenRepository.FirstOrDefaultAsync(item => item.TokenHash == tokenHash && item.RevokedAt == null);
-
-        if (token is not null)
-        {
-            token.RevokedAt = DateTime.UtcNow;
-            _refreshTokenRepository.Update(token);
-            await _refreshTokenRepository.SaveChangesAsync();
-        }
+        await _tokenStore.RevokeRefreshTokenAsync(tokenHash);
 
         return ApiResponse<object>.SuccessResponse(new { }, "Đăng xuất thành công.");
     }
@@ -256,15 +259,7 @@ public class AuthService : IAuthService
         }
 
         var rawToken = _jwtService.GenerateSecureToken();
-        await _refreshTokenRepository.AddAsync(new RefreshToken
-        {
-            Id = Guid.NewGuid(),
-            UserId = user.Id,
-            TokenHash = _jwtService.HashToken(rawToken),
-            CreatedAt = DateTime.UtcNow,
-            ExpiresAt = _jwtService.GetRefreshTokenExpiry()
-        });
-        await _refreshTokenRepository.SaveChangesAsync();
+        await _tokenStore.StoreRefreshTokenAsync(_jwtService.HashToken(rawToken), user.Id, GetRefreshTokenTtl());
 
         return await BuildAuthResponseAsync(user, rawToken);
     }
@@ -312,15 +307,15 @@ public class AuthService : IAuthService
     private async Task CreateAndSendVerificationTokenAsync(User user, CancellationToken cancellationToken)
     {
         var rawToken = _jwtService.GenerateSecureToken();
-        await _verificationTokenRepository.AddAsync(new EmailVerificationToken
-        {
-            Id = Guid.NewGuid(),
-            UserId = user.Id,
-            TokenHash = _jwtService.HashToken(rawToken),
-            CreatedAt = DateTime.UtcNow,
-            ExpiresAt = _jwtService.GetEmailVerificationExpiry()
-        });
-        await _verificationTokenRepository.SaveChangesAsync();
+        await _tokenStore.StoreEmailVerificationAsync(
+            _jwtService.HashToken(rawToken), user.Id, _jwtService.GetEmailVerificationExpiry() - DateTime.UtcNow);
         await _emailService.SendVerificationEmailAsync(user.Email, user.FullName, rawToken, cancellationToken);
     }
+
+    private Task<User?> FindActiveUserByEmailAsync(string email)
+    {
+        return _userRepository.FirstOrDefaultAsync(item => item.Email == email.Trim().ToLowerInvariant() && item.Status == UserStatus.Active);
+    }
+
+    private TimeSpan GetRefreshTokenTtl() => _jwtService.GetRefreshTokenExpiry() - DateTime.UtcNow;
 }

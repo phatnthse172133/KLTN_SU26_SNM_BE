@@ -47,4 +47,30 @@ public class EmailService : IEmailService
         await client.SendAsync(message, cancellationToken);
         await client.DisconnectAsync(true, cancellationToken);
     }
+
+    public async Task SendPasswordResetOtpAsync(string email, string fullName, string otp, CancellationToken cancellationToken = default)
+    {
+        var host = _configuration["Email:SmtpHost"];
+        if (string.IsNullOrWhiteSpace(host))
+        {
+            _logger.LogWarning("Email is not configured. Password reset OTP for {Email} was generated but not delivered.", email);
+            return;
+        }
+
+        var message = new MimeMessage();
+        message.From.Add(new MailboxAddress(_configuration["Email:FromName"] ?? "Smart Night Market", _configuration["Email:FromAddress"]));
+        message.To.Add(MailboxAddress.Parse(email));
+        message.Subject = "Mã đặt lại mật khẩu Smart Night Market";
+        message.Body = new TextPart("html")
+        {
+            Text = $"<p>Chào {System.Net.WebUtility.HtmlEncode(fullName)},</p><p>Mã OTP đặt lại mật khẩu của bạn là <strong>{otp}</strong>.</p><p>Mã có hiệu lực trong 10 phút. Không chia sẻ mã này cho bất kỳ ai.</p>"
+        };
+
+        using var client = new SmtpClient();
+        await client.ConnectAsync(host, _configuration.GetValue<int>("Email:Port", 587), SecureSocketOptions.StartTls, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(_configuration["Email:Username"]))
+            await client.AuthenticateAsync(_configuration["Email:Username"], _configuration["Email:Password"], cancellationToken);
+        await client.SendAsync(message, cancellationToken);
+        await client.DisconnectAsync(true, cancellationToken);
+    }
 }

@@ -75,10 +75,6 @@ namespace InfrastructureLayer.Data
 
         public virtual DbSet<Zone> Zones { get; set; }
 
-        public virtual DbSet<RefreshToken> RefreshTokens { get; set; }
-
-        public virtual DbSet<EmailVerificationToken> EmailVerificationTokens { get; set; }
-
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -742,25 +738,6 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
                 entity.Property(e => e.RoleName).HasMaxLength(50);
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
-            });
-            modelBuilder.Entity<RefreshToken>(entity =>
-            {
-                entity.HasKey(e => e.Id);
-                entity.ToTable("RefreshToken");
-                entity.HasIndex(e => e.TokenHash).IsUnique();
-                entity.HasIndex(e => new { e.UserId, e.ExpiresAt });
-                entity.Property(e => e.TokenHash).HasMaxLength(128);
-                entity.Property(e => e.ReplacedByTokenHash).HasMaxLength(128);
-                entity.HasOne(e => e.User).WithMany(e => e.RefreshTokens).HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Cascade);
-            });
-            modelBuilder.Entity<EmailVerificationToken>(entity =>
-            {
-                entity.HasKey(e => e.Id);
-                entity.ToTable("EmailVerificationToken");
-                entity.HasIndex(e => e.TokenHash).IsUnique();
-                entity.HasIndex(e => new { e.UserId, e.ExpiresAt });
-                entity.Property(e => e.TokenHash).HasMaxLength(128);
-                entity.HasOne(e => e.User).WithMany(e => e.EmailVerificationTokens).HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Cascade);
             });
             modelBuilder.Entity<User>(entity =>
             {

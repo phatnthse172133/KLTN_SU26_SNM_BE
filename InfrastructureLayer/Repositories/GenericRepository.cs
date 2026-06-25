@@ -1,4 +1,5 @@
-﻿using DomainLayer.InterfaceRepository;
+using DomainLayer.Common;
+using DomainLayer.InterfaceRepository;
 using InfrastructureLayer.Data;
 using Microsoft.EntityFrameworkCore;
 using System;
@@ -48,8 +49,8 @@ namespace InfrastructureLayer.Repositories
 
         public virtual async Task<int> CountAsync(Expression<Func<T, bool>>? predicate = null)
         {
-            return predicate == null 
-                ? await _dbSet.CountAsync() 
+            return predicate == null
+                ? await _dbSet.CountAsync()
                 : await _dbSet.CountAsync(predicate);
         }
 
@@ -104,12 +105,32 @@ namespace InfrastructureLayer.Repositories
 
         public virtual void Delete(T entity)
         {
+            if (entity is ISoftDelete softDeleteEntity)
+            {
+                softDeleteEntity.IsDeleted = true;
+                _dbSet.Update(entity);
+                return;
+            }
+
             _dbSet.Remove(entity);
         }
 
         public virtual void DeleteRange(IEnumerable<T> entities)
         {
-            _dbSet.RemoveRange(entities);
+            var entityList = entities.ToList();
+            var softDeleteEntities = entityList.OfType<ISoftDelete>().ToList();
+            if (softDeleteEntities.Count == entityList.Count)
+            {
+                foreach (var entity in softDeleteEntities)
+                {
+                    entity.IsDeleted = true;
+                }
+
+                _dbSet.UpdateRange(entityList);
+                return;
+            }
+
+            _dbSet.RemoveRange(entityList);
         }
 
         public virtual async Task<int> SaveChangesAsync()

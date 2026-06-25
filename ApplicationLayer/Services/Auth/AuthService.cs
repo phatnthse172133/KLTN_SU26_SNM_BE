@@ -1,5 +1,6 @@
 using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.DTOs.Responses;
+using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceCore.Email;
@@ -46,12 +47,12 @@ public class AuthService : IAuthService
 
         if (await _userRepository.AnyAsync(user => user.Email == email))
         {
-            return ApiResponse<object>.Failure("Email is already in use.");
+            throw AppException.Conflict("Email is already in use.");
         }
 
         if (await _userRepository.AnyAsync(user => user.UserName == userName))
         {
-            return ApiResponse<object>.Failure("Username is already in use.");
+            throw AppException.Conflict("Username is already in use.");
         }
 
         var customerRole = await GetCustomerRoleAsync();
@@ -83,7 +84,7 @@ public class AuthService : IAuthService
 
         if (user is null || !_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
         {
-            return ApiResponse<AuthResponse>.Failure("Email/username or password is incorrect.");
+            throw AppException.Unauthorized("Email/username or password is incorrect.");
         }
 
         return await CreateSessionForActiveUserAsync(user, cancellationToken);
@@ -99,12 +100,12 @@ public class AuthService : IAuthService
         }
         catch (Exception)
         {
-            return ApiResponse<AuthResponse>.Failure("Unable to validate the Google token.");
+            throw AppException.Unauthorized("Unable to validate the Google token.");
         }
 
         if (googleUser is null)
         {
-            return ApiResponse<AuthResponse>.Failure("Google token is invalid or the email has not been verified.");
+            throw AppException.Unauthorized("Google token is invalid or the email has not been verified.");
         }
 
         var user = await _userRepository.FirstOrDefaultAsync(item => item.Email == googleUser.Email);
@@ -137,20 +138,20 @@ public class AuthService : IAuthService
     {
         if (string.IsNullOrWhiteSpace(token))
         {
-            return ApiResponse<object>.Failure("Verification token is invalid.");
+            throw AppException.BadRequest("Verification token is invalid.");
         }
 
         var tokenHash = _jwtService.HashToken(token);
         var userId = await _tokenStore.ConsumeEmailVerificationAsync(tokenHash);
         if (userId is null)
         {
-            return ApiResponse<object>.Failure("Verification token is invalid or has expired.");
+            throw AppException.BadRequest("Verification token is invalid or has expired.");
         }
 
         var user = await _userRepository.GetByIdAsync(userId.Value);
         if (user is null)
         {
-            return ApiResponse<object>.Failure("Account was not found.");
+            throw AppException.NotFound("Account was not found.");
         }
 
         if (user.Status == UserStatus.PendingVerification)
@@ -198,7 +199,7 @@ public class AuthService : IAuthService
         var user = await FindActiveUserByEmailAsync(request.Email);
         var valid = user is not null && await _tokenStore.IsPasswordResetOtpValidAsync(user.Id, _jwtService.HashToken(request.Otp));
         return !valid
-            ? ApiResponse<object>.Failure("OTP is invalid, expired, or already used.")
+            ? throw AppException.BadRequest("OTP is invalid, expired, or already used.")
             : ApiResponse<object>.SuccessResponse(new { }, "OTP is valid. You can set a new password.");
     }
 
@@ -206,11 +207,11 @@ public class AuthService : IAuthService
     {
         var user = await FindActiveUserByEmailAsync(request.Email);
         if (user is null)
-            return ApiResponse<object>.Failure("This account cannot reset its password.");
+            throw AppException.BadRequest("This account cannot reset its password.");
         if (_passwordHasher.VerifyPassword(request.NewPassword, user.PasswordHash))
-            return ApiResponse<object>.Failure("New password must differ from the current password.");
+            throw AppException.BadRequest("New password must differ from the current password.");
         if (!await _tokenStore.ConsumePasswordResetOtpAsync(user.Id, _jwtService.HashToken(request.Otp)))
-            return ApiResponse<object>.Failure("OTP is invalid, expired, or already used.");
+            throw AppException.BadRequest("OTP is invalid, expired, or already used.");
 
         user.PasswordHash = _passwordHasher.HashPassword(request.NewPassword);
         user.UpdatedAt = DateTime.UtcNow;
@@ -223,10 +224,10 @@ public class AuthService : IAuthService
     public async Task<ApiResponse<object>> ResetPasswordByTokenAsync(ResetPasswordByTokenRequest request, CancellationToken cancellationToken = default)
     {
         var userId = await _tokenStore.ConsumePasswordResetTokenAsync(_jwtService.HashToken(request.Token));
-        if (userId is null) return ApiResponse<object>.Failure("Reset link is invalid, expired, or already used.");
+        if (userId is null) throw AppException.BadRequest("Reset link is invalid, expired, or already used.");
         var user = await _userRepository.GetByIdAsync(userId.Value);
-        if (user is null || user.Status != UserStatus.Active) return ApiResponse<object>.Failure("This account cannot reset its password.");
-        if (_passwordHasher.VerifyPassword(request.NewPassword, user.PasswordHash)) return ApiResponse<object>.Failure("New password must differ from the current password.");
+        if (user is null || user.Status != UserStatus.Active) throw AppException.BadRequest("This account cannot reset its password.");
+        if (_passwordHasher.VerifyPassword(request.NewPassword, user.PasswordHash)) throw AppException.BadRequest("New password must differ from the current password.");
         user.PasswordHash = _passwordHasher.HashPassword(request.NewPassword);
         user.UpdatedAt = DateTime.UtcNow;
         _userRepository.Update(user);
@@ -241,13 +242,13 @@ public class AuthService : IAuthService
         var userId = await _tokenStore.ConsumeRefreshTokenAsync(tokenHash);
         if (userId is null)
         {
-            return ApiResponse<AuthResponse>.Failure("Refresh token is invalid or has expired.");
+            throw AppException.Unauthorized("Refresh token is invalid or has expired.");
         }
 
         var user = await _userRepository.GetByIdAsync(userId.Value);
         if (user is null || user.Status != UserStatus.Active)
         {
-            return ApiResponse<AuthResponse>.Failure("Account is no longer active.");
+            throw AppException.Forbidden("Account is no longer active.");
         }
 
         var newRawToken = _jwtService.GenerateSecureToken();
@@ -268,12 +269,12 @@ public class AuthService : IAuthService
     {
         if (user.Status == UserStatus.PendingVerification)
         {
-            return ApiResponse<AuthResponse>.Failure("Please verify your email before signing in.");
+            throw AppException.Forbidden("Please verify your email before signing in.");
         }
 
         if (user.Status != UserStatus.Active)
         {
-            return ApiResponse<AuthResponse>.Failure("Account is not active.");
+            throw AppException.Forbidden("Account is not active.");
         }
 
         var rawToken = _jwtService.GenerateSecureToken();
@@ -287,7 +288,7 @@ public class AuthService : IAuthService
         var role = await _roleRepository.GetByIdAsync(user.RoleId);
         if (role is null)
         {
-            return ApiResponse<AuthResponse>.Failure("Account has no valid assigned role.");
+            throw AppException.BadRequest("Account has no valid assigned role.");
         }
 
         var response = new AuthResponse(

@@ -9,6 +9,8 @@ using ApplicationLayer.Services.Auth;
 using ApplicationLayer.Services.Account;
 using ApplicationLayer.Services.BoothRegistrations;
 using ApplicationLayer.Services.Booths;
+using ApplicationLayer.Services.FoodCategories;
+using ApplicationLayer.Services.Menus;
 using ApplicationLayer.Services.NightMarkets;
 using ApplicationLayer.Mappings;
 using DomainLayer.Entities;
@@ -38,21 +40,32 @@ namespace InfrastructureLayer
 
             // Register Repositories
             services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
+            services.AddScoped<IBoothRepository, BoothRepository>();
+            services.AddScoped<IFoodCategoryRepository, FoodCategoryRepository>();
+            services.AddScoped<IFoodItemRepository, FoodItemRepository>();
             services.Configure<JwtSettings>(configuration.GetSection(JwtSettings.SectionName));
             services.AddScoped<IJwtService, JWTService>();
             services.AddScoped<IPasswordHasher, PasswordHasher>();
             services.AddScoped<IEmailService, EmailService>();
+            
             var redisConnectionString = configuration["Redis:ConnectionString"];
             if (string.IsNullOrWhiteSpace(redisConnectionString))
                 throw new InvalidOperationException("Redis:ConnectionString must be configured.");
+            
             services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisConnectionString));
             services.AddScoped<IAuthTokenStore, RedisAuthTokenStore>();
             services.AddHttpClient<IGoogleTokenValidator, GoogleTokenValidator>();
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<IAccountService, AccountService>();
+            
             services.AddScoped<IBoothRegistrationService, BoothRegistrationService>();
             services.AddScoped<IBoothService, BoothService>();
+            
+            services.AddScoped<IFoodCategoryService, FoodCategoryService>();
+            services.AddScoped<IMenuService, MenuService>();
+            
             services.AddScoped<INightMarketService, NightMarketService>();
+            
             services.AddAutoMapper(typeof(MappingProfile).Assembly);
 
             // Add HttpContextAccessor

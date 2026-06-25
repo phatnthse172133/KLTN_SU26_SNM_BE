@@ -1,6 +1,7 @@
 using AutoMapper;
 using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.DTOs.Responses;
+using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceCore.Auth;
@@ -30,14 +31,14 @@ public class AccountService : IAccountService
     public async Task<ApiResponse<UserResponse>> GetMyAccountAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         var user = await _users.GetByIdAsync(userId);
-        return user is null ? ApiResponse<UserResponse>.Failure("Account was not found.") : await ToMyAccountResponseAsync(user);
+        return user is null ? throw AppException.NotFound("Account was not found.") : await ToMyAccountResponseAsync(user);
     }
 
     public async Task<ApiResponse<UserResponse>> UpdateMyAccountAsync(Guid userId, UpdateProfileRequest request, CancellationToken cancellationToken = default)
     {
         var user = await _users.GetByIdAsync(userId);
         if (user is null)
-            return ApiResponse<UserResponse>.Failure("Account was not found.");
+            throw AppException.NotFound("Account was not found.");
 
         _mapper.Map(request, user);
 
@@ -55,7 +56,7 @@ public class AccountService : IAccountService
     {
         var user = await _users.GetByIdAsync(userId);
         if (user is null)
-            return ApiResponse<UserResponse>.Failure("Account was not found.");
+            throw AppException.NotFound("Account was not found.");
 
         user.AvatarUrl = request.AvatarUrl.Trim();
         user.UpdatedAt = DateTime.UtcNow;
@@ -70,13 +71,13 @@ public class AccountService : IAccountService
         var user = await _users.GetByIdAsync(userId);
 
         if (user is null)
-            return ApiResponse<object>.Failure("Account was not found.");
+            throw AppException.NotFound("Account was not found.");
 
         if (!_passwordHasher.VerifyPassword(request.CurrentPassword, user.PasswordHash))
-            return ApiResponse<object>.Failure("Current password is incorrect.");
+            throw AppException.BadRequest("Current password is incorrect.");
 
         if (_passwordHasher.VerifyPassword(request.NewPassword, user.PasswordHash))
-            return ApiResponse<object>.Failure("New password must be different from the current password.");
+            throw AppException.BadRequest("New password must be different from the current password.");
 
         user.PasswordHash = _passwordHasher.HashPassword(request.NewPassword);
         user.UpdatedAt = DateTime.UtcNow;
@@ -101,21 +102,21 @@ public class AccountService : IAccountService
     public async Task<ApiResponse<ManagedUserResponse>> GetUserAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         var user = await _users.GetByIdAsync(userId);
-        return user is null ? ApiResponse<ManagedUserResponse>.Failure("Account was not found.")
+        return user is null ? throw AppException.NotFound("Account was not found.")
             : ApiResponse<ManagedUserResponse>.SuccessResponse(await ToManagedUserResponseAsync(user));
     }
 
     public async Task<ApiResponse<ManagedUserResponse>> ChangeUserStatusAsync(Guid adminId, Guid userId, ChangeUserStatusRequest request, CancellationToken cancellationToken = default)
     {
         if (adminId == userId)
-            return ApiResponse<ManagedUserResponse>.Failure("Administrators cannot change the status of their own account.");
+            throw AppException.BadRequest("Administrators cannot change the status of their own account.");
 
         if (request.Status == UserStatus.PendingVerification)
-            return ApiResponse<ManagedUserResponse>.Failure("An account cannot be moved back to pending verification.");
+            throw AppException.BadRequest("An account cannot be moved back to pending verification.");
 
         var user = await _users.GetByIdAsync(userId);
         if (user is null)
-            return ApiResponse<ManagedUserResponse>.Failure("Account was not found.");
+            throw AppException.NotFound("Account was not found.");
 
         user.Status = request.Status;
         user.UpdatedAt = DateTime.UtcNow;
@@ -130,7 +131,7 @@ public class AccountService : IAccountService
     {
         var role = await _roles.GetByIdAsync(user.RoleId);
         return role is null
-            ? ApiResponse<UserResponse>.Failure("Account has no valid assigned role.")
+            ? throw AppException.BadRequest("Account has no valid assigned role.")
             : ApiResponse<UserResponse>.SuccessResponse(new UserResponse(user.Id, user.UserName, user.FullName, user.Email, role.RoleName, user.Status.ToString(), user.AvatarUrl), message);
     }
 

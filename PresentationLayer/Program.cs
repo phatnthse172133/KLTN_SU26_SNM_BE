@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using PresentationLayer.Middlewares;
 using System.Security.Claims;
 using System.Text;
 using static DomainLayer.Enums.GeneralEnum;
@@ -73,6 +74,8 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger(); 
     app.UseSwaggerUI(); 
 }
+
+app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 app.UseHttpsRedirection();
 

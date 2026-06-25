@@ -74,6 +74,39 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.Id, o => o.Ignore()).ForMember(d => d.TotalBooth, o => o.Ignore())
                 .ForMember(d => d.CreatedAt, o => o.Ignore()).ForMember(d => d.UpdatedAt, o => o.Ignore());
             CreateMap<NightMarket, NightMarketResponse>().ForMember(d => d.Status, o => o.MapFrom(s => s.Status.ToString()));
+
+            CreateMap<CreateFoodCategoryRequest, FoodCategory>()
+                .ForMember(d => d.Id, o => o.Ignore())
+                .ForMember(d => d.BoothId, o => o.Ignore())
+                .ForMember(d => d.Name, o => o.MapFrom(s => s.Name.Trim()))
+                .ForMember(d => d.Description, o => o.MapFrom(s => ApplicationLayer.Helppers.TextHelper.NormalizeOptionalText(s.Description)))
+                .ForMember(d => d.IsDeleted, o => o.Ignore())
+                .ForMember(d => d.CreatedAt, o => o.Ignore())
+                .ForMember(d => d.UpdatedAt, o => o.Ignore())
+                .ForMember(d => d.Booth, o => o.Ignore())
+                .ForMember(d => d.FoodItems, o => o.Ignore());
+            CreateMap<UpdateFoodCategoryRequest, FoodCategory>()
+                .IncludeBase<CreateFoodCategoryRequest, FoodCategory>();
+            CreateMap<FoodCategory, FoodCategoryResponse>();
+
+            CreateMap<CreateFoodItemRequest, FoodItem>()
+                .ForMember(d => d.Id, o => o.Ignore())
+                .ForMember(d => d.BoothId, o => o.Ignore())
+                .ForMember(d => d.Name, o => o.MapFrom(s => s.Name.Trim()))
+                .ForMember(d => d.Description, o => o.MapFrom(s => ApplicationLayer.Helppers.TextHelper.NormalizeOptionalText(s.Description)))
+                .ForMember(d => d.ThumbnailUrl, o => o.MapFrom(s => ApplicationLayer.Helppers.TextHelper.NormalizeOptionalText(s.ThumbnailUrl)))
+                .ForMember(d => d.IsDeleted, o => o.Ignore())
+                .ForMember(d => d.CreatedAt, o => o.Ignore())
+                .ForMember(d => d.UpdatedAt, o => o.Ignore())
+                .ForMember(d => d.Booth, o => o.Ignore())
+                .ForMember(d => d.Category, o => o.Ignore())
+                .ForMember(d => d.FoodImages, o => o.Ignore())
+                .ForMember(d => d.FoodPrices, o => o.Ignore())
+                .ForMember(d => d.OrderDetails, o => o.Ignore());
+            CreateMap<UpdateFoodItemRequest, FoodItem>()
+                .IncludeBase<CreateFoodItemRequest, FoodItem>();
+            CreateMap<FoodItem, FoodItemResponse>()
+                .ForMember(d => d.CategoryName, o => o.MapFrom(s => s.Category.Name));
         }
     }
 }

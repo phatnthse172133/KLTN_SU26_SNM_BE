@@ -1,6 +1,7 @@
 using AutoMapper;
 using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.DTOs.Responses;
+using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
@@ -28,7 +29,7 @@ public class NightMarketService : INightMarketService
     public async Task<ApiResponse<NightMarketResponse>> GetAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var market = await _markets.GetByIdAsync(id);
-        return market is null ? ApiResponse<NightMarketResponse>.Failure("Night market was not found.")
+        return market is null ? throw AppException.NotFound("Night market was not found.")
             : ApiResponse<NightMarketResponse>.SuccessResponse(_mapper.Map<NightMarketResponse>(market));
     }
 
@@ -47,7 +48,7 @@ public class NightMarketService : INightMarketService
     {
         var market = await _markets.GetByIdAsync(id);
         if (market is null)
-            return ApiResponse<NightMarketResponse>.Failure("Night market was not found.");
+            throw AppException.NotFound("Night market was not found.");
 
         _mapper.Map(request, market);
         market.Name = market.Name.Trim(); market.Address = market.Address.Trim(); market.UpdatedAt = DateTime.UtcNow;

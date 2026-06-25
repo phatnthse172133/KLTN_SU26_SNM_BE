@@ -1,11 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using DomainLayer.Common;
 
 namespace DomainLayer.Entities;
 
 
 // Món ăn của từng gian hàng
-public partial class FoodItem
+public partial class FoodItem : ISoftDelete
 {
     public Guid Id { get; set; }
 
@@ -26,6 +27,8 @@ public partial class FoodItem
     public bool IsAvailable { get; set; }
 
     public bool IsFeatured { get; set; }
+
+    public bool IsDeleted { get; set; }
 
     public DateTime CreatedAt { get; set; }
 

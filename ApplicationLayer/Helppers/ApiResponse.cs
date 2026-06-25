@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -15,7 +15,7 @@ namespace ApplicationLayer.Helppers
         public static ApiResponse<T> SuccessResponse(T data, string message = "Success") =>
             new() { Success = true, Message = message, Data = data };
 
-        public static ApiResponse<T> Failure(string message) =>
-            new() { Success = false, Message = message };
+        public static ApiResponse<T> Failure(string message, T? data = default) =>
+            new() { Success = false, Message = message, Data = data };
     }
 }

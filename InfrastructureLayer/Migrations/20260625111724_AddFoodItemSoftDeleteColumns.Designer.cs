@@ -3,6 +3,7 @@ using System;
 using InfrastructureLayer.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace InfrastructureLayer.Migrations
 {
     [DbContext(typeof(SNMDbContext))]
-    partial class SNMDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260625111724_AddFoodItemSoftDeleteColumns")]
+    partial class AddFoodItemSoftDeleteColumns
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -604,9 +607,6 @@ namespace InfrastructureLayer.Migrations
                         .HasColumnType("uuid")
                         .HasDefaultValueSql("uuid_generate_v4()");
 
-                    b.Property<Guid>("BoothId")
-                        .HasColumnType("uuid");
-
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -614,11 +614,6 @@ namespace InfrastructureLayer.Migrations
 
                     b.Property<string>("Description")
                         .HasColumnType("text");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -633,15 +628,12 @@ namespace InfrastructureLayer.Migrations
                     b.HasKey("Id")
                         .HasName("FoodCategories_pkey");
 
-                    b.HasIndex(new[] { "BoothId", "Name" }, "FoodCategories_BoothId_Name_key")
-                        .IsUnique()
-                        .HasFilter("\"IsDeleted\" = false");
-
-                    b.HasIndex(new[] { "BoothId" }, "idx_foodcategory_booth");
+                    b.HasIndex(new[] { "Name" }, "FoodCategories_Name_key")
+                        .IsUnique();
 
                     b.ToTable("FoodCategories", t =>
                         {
-                            t.HasComment("Danh mục món ăn của từng gian hàng");
+                            t.HasComment("Danh mục món ăn dùng chung toàn hệ thống");
                         });
                 });
 
@@ -1922,18 +1914,6 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("Customer");
                 });
 
-            modelBuilder.Entity("DomainLayer.Entities.FoodCategory", b =>
-                {
-                    b.HasOne("DomainLayer.Entities.Booth", "Booth")
-                        .WithMany("FoodCategories")
-                        .HasForeignKey("BoothId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("FoodCategories_BoothId_fkey");
-
-                    b.Navigation("Booth");
-                });
-
             modelBuilder.Entity("DomainLayer.Entities.FoodImage", b =>
                 {
                     b.HasOne("DomainLayer.Entities.FoodItem", "FoodItem")
@@ -2228,8 +2208,6 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("BoothSubscriptions");
 
                     b.Navigation("Complaints");
-
-                    b.Navigation("FoodCategories");
 
                     b.Navigation("FoodItems");
 

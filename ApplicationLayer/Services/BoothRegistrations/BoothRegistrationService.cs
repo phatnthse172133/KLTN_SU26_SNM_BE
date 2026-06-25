@@ -1,6 +1,7 @@
 using AutoMapper;
 using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.DTOs.Responses;
+using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
@@ -36,17 +37,21 @@ public class BoothRegistrationService : IBoothRegistrationService
     public async Task<ApiResponse<BoothRegistrationResponse>> CreateAsync(Guid ownerId, CreateBoothRegistrationRequest request, CancellationToken cancellationToken = default)
     {
         var validationError = await ValidateRequestAsync(request);
-        if (validationError is not null) return ApiResponse<BoothRegistrationResponse>.Failure(validationError);
+        if (validationError is not null) 
+            throw AppException.BadRequest(validationError);
+
         if (await _registrations.AnyAsync(r => r.OwnerId == ownerId && r.Status == BoothRegistrationStatus.PendingReview))
-            return ApiResponse<BoothRegistrationResponse>.Failure("You already have a booth registration pending review.");
+            throw AppException.Conflict("You already have a booth registration pending review.");
 
         var now = DateTime.UtcNow;
         var registration = _mapper.Map<BoothRegistration>(request);
         registration.Id = Guid.NewGuid(); registration.OwnerId = ownerId; registration.Status = BoothRegistrationStatus.PendingReview;
         registration.CreatedAt = now; registration.UpdatedAt = now;
         await _registrations.AddAsync(registration);
+
         var documents = CreateDocuments(registration.Id, request.Documents, now);
         await _documents.AddRangeAsync(documents);
+
         await _registrations.SaveChangesAsync();
         return ApiResponse<BoothRegistrationResponse>.SuccessResponse(ToResponse(registration, documents), "Booth registration submitted successfully.");
     }
@@ -57,6 +62,7 @@ public class BoothRegistrationService : IBoothRegistrationService
     public async Task<ApiResponse<PaginationResp<BoothRegistrationResponse>>> GetPendingAsync(PaginationReq pagination, CancellationToken cancellationToken = default)
     {
         var (items, total) = await _registrations.GetPagedAsync(r => r.Status == BoothRegistrationStatus.PendingReview, pagination.Page, pagination.PageSize, r => r.CreatedAt);
+
         return ApiResponse<PaginationResp<BoothRegistrationResponse>>.SuccessResponse(new PaginationResp<BoothRegistrationResponse>
         {
             Items = await ToResponsesAsync(items), Page = pagination.Page, PageSize = pagination.PageSize, Total = total
@@ -66,15 +72,22 @@ public class BoothRegistrationService : IBoothRegistrationService
     public async Task<ApiResponse<BoothRegistrationResponse>> ReviewAsync(Guid registrationId, ReviewBoothRegistrationRequest request, CancellationToken cancellationToken = default)
     {
         var registration = await _registrations.GetByIdAsync(registrationId);
-        if (registration is null) return ApiResponse<BoothRegistrationResponse>.Failure("Booth registration was not found.");
-        if (registration.Status != BoothRegistrationStatus.PendingReview) return ApiResponse<BoothRegistrationResponse>.Failure("This registration has already been processed.");
-        if (!request.Approved && string.IsNullOrWhiteSpace(request.RejectReason)) return ApiResponse<BoothRegistrationResponse>.Failure("A rejection reason is required.");
+        if (registration is null) 
+            throw AppException.NotFound("Booth registration was not found.");
+
+        if (registration.Status != BoothRegistrationStatus.PendingReview) 
+            throw AppException.Conflict("This registration has already been processed.");
+
+        if (!request.Approved && string.IsNullOrWhiteSpace(request.RejectReason)) 
+            throw AppException.BadRequest("A rejection reason is required.");
+
         if (request.Approved && request.ZoneId.HasValue && !(await IsZoneInMarketAsync(request.ZoneId.Value, registration.RequestedNightMarketId)))
-            return ApiResponse<BoothRegistrationResponse>.Failure("The assigned zone does not belong to the night market.");
+            throw AppException.BadRequest("The assigned zone does not belong to the night market.");
 
         var now = DateTime.UtcNow;
         registration.Status = request.Approved ? BoothRegistrationStatus.Approved : BoothRegistrationStatus.Rejected;
         registration.RejectReason = request.Approved ? null : request.RejectReason!.Trim(); registration.UpdatedAt = now;
+
         var docs = (await _documents.FindAsync(d => d.RegistrationId == registration.Id)).ToList();
         foreach (var doc in docs) { doc.VerificationStatus = request.Approved ? BoothDocumentStatus.Verified : BoothDocumentStatus.Rejected; doc.UpdatedAt = now; }
         _documents.UpdateRange(docs);
@@ -84,13 +97,19 @@ public class BoothRegistrationService : IBoothRegistrationService
                 BoothOwnerId = registration.OwnerId, ZoneId = request.ZoneId ?? registration.PreferredZoneId, BoothName = registration.BoothName,
                 Description = registration.Description, PhoneNumber = registration.Phone, SlotNumber = request.SlotNumber?.Trim(),
                 MapPositionX = request.MapPositionX, MapPositionY = request.MapPositionY, Status = BoothStatus.Active, CreatedAt = now, UpdatedAt = now };
+
             await _booths.AddAsync(booth);
             registration.Booth = booth;
+
             var owner = await _users.GetByIdAsync(registration.OwnerId);
             var boothOwnerRole = await _roles.FirstOrDefaultAsync(r => r.RoleName == "BoothOwner");
-            if (owner is not null && boothOwnerRole is not null) { owner.RoleId = boothOwnerRole.Id; owner.UpdatedAt = now; _users.Update(owner); }
+
+            if (owner is not null && boothOwnerRole is not null) { 
+                owner.RoleId = boothOwnerRole.Id; owner.UpdatedAt = now; _users.Update(owner); 
+            }
         }
         _registrations.Update(registration);
+
         await _registrations.SaveChangesAsync();
         return ApiResponse<BoothRegistrationResponse>.SuccessResponse(ToResponse(registration, docs), request.Approved ? "Registration approved and booth created." : "Booth registration rejected.");
     }
@@ -99,11 +118,15 @@ public class BoothRegistrationService : IBoothRegistrationService
 
     private async Task<string?> ValidateRequestAsync(CreateBoothRegistrationRequest request)
     {
-        if (await _markets.GetByIdAsync(request.RequestedNightMarketId) is null) return "Night market was not found.";
+        if (await _markets.GetByIdAsync(request.RequestedNightMarketId) is null) 
+            return "Night market was not found.";
+
         if (request.PreferredZoneId.HasValue && !(await IsZoneInMarketAsync(request.PreferredZoneId.Value, request.RequestedNightMarketId)))
             return "The selected zone does not belong to the night market.";
+
         if (request.PreferredLayoutNodeId.HasValue && await _nodes.GetByIdAsync(request.PreferredLayoutNodeId.Value) is null)
             return "The selected layout node was not found.";
+
         return null;
     }
 
@@ -118,12 +141,14 @@ public class BoothRegistrationService : IBoothRegistrationService
             document.UpdatedAt = now;
             return document;
         }).ToList();
+
     private async Task<List<BoothRegistrationResponse>> ToResponsesAsync(IEnumerable<BoothRegistration> registrations)
     {
         var result = new List<BoothRegistrationResponse>();
         foreach (var registration in registrations) result.Add(ToResponse(registration, await _documents.FindAsync(d => d.RegistrationId == registration.Id)));
         return result;
     }
+
     private BoothRegistrationResponse ToResponse(BoothRegistration registration, IEnumerable<BoothDocument> documents)
     {
         var response = _mapper.Map<BoothRegistrationResponse>(registration);

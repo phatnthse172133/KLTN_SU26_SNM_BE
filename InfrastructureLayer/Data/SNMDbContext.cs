@@ -319,14 +319,23 @@ namespace InfrastructureLayer.Data
             {
                 entity.HasKey(e => e.Id).HasName("FoodCategories_pkey");
 
-                entity.ToTable(tb => tb.HasComment("Danh mục món ăn dùng chung toàn hệ thống"));
+                entity.ToTable(tb => tb.HasComment("Danh mục món ăn của từng gian hàng"));
 
-                entity.HasIndex(e => e.Name, "FoodCategories_Name_key").IsUnique();
+                entity.HasIndex(e => e.BoothId, "idx_foodcategory_booth");
+
+                entity.HasIndex(e => new { e.BoothId, e.Name }, "FoodCategories_BoothId_Name_key")
+                    .IsUnique()
+                    .HasFilter("\"IsDeleted\" = false");
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+                entity.Property(e => e.IsDeleted).HasDefaultValue(false);
                 entity.Property(e => e.Name).HasMaxLength(100);
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+
+                entity.HasOne(d => d.Booth).WithMany(p => p.FoodCategories)
+                    .HasForeignKey(d => d.BoothId)
+                    .HasConstraintName("FoodCategories_BoothId_fkey");
             });
 
             modelBuilder.Entity<FoodImage>(entity =>
@@ -361,6 +370,7 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.IsAvailable)
                     .HasDefaultValue(true)
                     .HasComment("false khi món hết nguyên liệu hoặc chủ quán tạm ẩn");
+                entity.Property(e => e.IsDeleted).HasDefaultValue(false);
                 entity.Property(e => e.IsFeatured).HasDefaultValue(false);
                 entity.Property(e => e.Name).HasMaxLength(200);
                 entity.Property(e => e.Price)
@@ -377,6 +387,7 @@ namespace InfrastructureLayer.Data
                     .HasForeignKey(d => d.CategoryId)
                     .OnDelete(DeleteBehavior.ClientSetNull)
                     .HasConstraintName("FoodItem_CategoryId_fkey");
+
             });
 
             modelBuilder.Entity<FoodPrice>(entity =>

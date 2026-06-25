@@ -24,6 +24,10 @@ public partial class Complaint
 
     public ComplaintStatus Status { get; set; }
 
+    public ComplaintResolutionAction? ResolutionAction { get; set; }
+
+    public string? PolicyViolation { get; set; }
+
     public DateTime CreatedAt { get; set; }
 
     public DateTime UpdatedAt { get; set; }

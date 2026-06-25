@@ -100,6 +100,14 @@ namespace DomainLayer.Enums
             Closed = 4
         }
 
+        public enum ComplaintResolutionAction
+        {
+            NoViolation = 0,
+            Warning = 1,
+            SuspendBooth = 2,
+            CloseBooth = 3
+        }
+
         public enum ConversationStatus
         {
             Active = 0,

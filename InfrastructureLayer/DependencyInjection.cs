@@ -12,6 +12,8 @@ using ApplicationLayer.Services.Booths;
 using ApplicationLayer.Services.FoodCategories;
 using ApplicationLayer.Services.Menus;
 using ApplicationLayer.Services.NightMarkets;
+using ApplicationLayer.Services.Complaints;
+using ApplicationLayer.Services.Reviews;
 using ApplicationLayer.Mappings;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceCore.Email;
@@ -43,6 +45,9 @@ namespace InfrastructureLayer
             services.AddScoped<IBoothRepository, BoothRepository>();
             services.AddScoped<IFoodCategoryRepository, FoodCategoryRepository>();
             services.AddScoped<IFoodItemRepository, FoodItemRepository>();
+            services.AddScoped<IOrderRepository, OrderRepository>();
+            services.AddScoped<IComplaintRepository, ComplaintRepository>();
+            services.AddScoped<IReviewRepository, ReviewRepository>();
             services.Configure<JwtSettings>(configuration.GetSection(JwtSettings.SectionName));
             services.AddScoped<IJwtService, JWTService>();
             services.AddScoped<IPasswordHasher, PasswordHasher>();
@@ -65,6 +70,8 @@ namespace InfrastructureLayer
             services.AddScoped<IMenuService, MenuService>();
             
             services.AddScoped<INightMarketService, NightMarketService>();
+            services.AddScoped<IComplaintService, ComplaintService>();
+            services.AddScoped<IReviewService, ReviewService>();
             
             services.AddAutoMapper(typeof(MappingProfile).Assembly);
 

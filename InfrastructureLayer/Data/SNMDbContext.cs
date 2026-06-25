@@ -254,6 +254,11 @@ namespace InfrastructureLayer.Data
                     .HasMaxLength(20)
                     .HasDefaultValueSql("'Open'::character varying")
                     .HasComment("Open | InProgress | Resolved | Rejected");
+                entity.Property(e => e.ResolutionAction)
+                    .HasConversion<string>()
+                    .HasMaxLength(30)
+                    .HasComment("NoViolation | Warning | SuspendBooth | CloseBooth");
+                entity.Property(e => e.PolicyViolation).HasMaxLength(500);
                 entity.Property(e => e.Title).HasMaxLength(200);
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
 

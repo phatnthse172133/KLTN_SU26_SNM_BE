@@ -107,6 +107,40 @@ namespace ApplicationLayer.Mappings
                 .IncludeBase<CreateFoodItemRequest, FoodItem>();
             CreateMap<FoodItem, FoodItemResponse>()
                 .ForMember(d => d.CategoryName, o => o.MapFrom(s => s.Category.Name));
+
+            CreateMap<CreateComplaintRequest, Complaint>()
+                .ForMember(d => d.Id, o => o.Ignore())
+                .ForMember(d => d.CustomerId, o => o.Ignore())
+                .ForMember(d => d.Title, o => o.MapFrom(s => s.Title.Trim()))
+                .ForMember(d => d.Description, o => o.MapFrom(s => s.Description.Trim()))
+                .ForMember(d => d.AdminResponse, o => o.Ignore())
+                .ForMember(d => d.Status, o => o.Ignore())
+                .ForMember(d => d.CreatedAt, o => o.Ignore())
+                .ForMember(d => d.UpdatedAt, o => o.Ignore())
+                .ForMember(d => d.Booth, o => o.Ignore())
+                .ForMember(d => d.Customer, o => o.Ignore())
+                .ForMember(d => d.Order, o => o.Ignore())
+                .ForMember(d => d.ComplaintImages, o => o.Ignore());
+            CreateMap<Complaint, ComplaintResponse>()
+                .ForMember(d => d.Status, o => o.MapFrom(s => s.Status.ToString()))
+                .ForMember(d => d.ResolutionAction, o => o.MapFrom(s => s.ResolutionAction == null ? null : s.ResolutionAction.ToString()))
+                .ForMember(d => d.ImageUrls, o => o.MapFrom(s => s.ComplaintImages.Select(i => i.ImageUrl)));
+
+            CreateMap<CreateReviewRequest, Review>()
+                .ForMember(d => d.Id, o => o.Ignore())
+                .ForMember(d => d.CustomerId, o => o.Ignore())
+                .ForMember(d => d.Content, o => o.MapFrom(s => ApplicationLayer.Helppers.TextHelper.NormalizeOptionalText(s.Content)))
+                .ForMember(d => d.ImageUrl, o => o.MapFrom(s => ApplicationLayer.Helppers.TextHelper.NormalizeOptionalText(s.ImageUrl)))
+                .ForMember(d => d.IsVisible, o => o.Ignore())
+                .ForMember(d => d.CreatedAt, o => o.Ignore())
+                .ForMember(d => d.UpdatedAt, o => o.Ignore())
+                .ForMember(d => d.Booth, o => o.Ignore())
+                .ForMember(d => d.Customer, o => o.Ignore())
+                .ForMember(d => d.Order, o => o.Ignore())
+                .ForMember(d => d.ReviewReply, o => o.Ignore());
+            CreateMap<Review, ReviewResponse>()
+                .ForMember(d => d.Reply, o => o.MapFrom(s => s.ReviewReply));
+            CreateMap<ReviewReply, ReviewReplyResponse>();
         }
     }
 }

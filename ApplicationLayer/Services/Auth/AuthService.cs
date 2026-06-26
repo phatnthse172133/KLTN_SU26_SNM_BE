@@ -187,10 +187,13 @@ public class AuthService : IAuthService
 
         var otp = Random.Shared.Next(0, 1_000_000).ToString("D6");
         await _tokenStore.StorePasswordResetOtpAsync(user.Id, _jwtService.HashToken(otp), TimeSpan.FromMinutes(10));
+
         var rawResetToken = _jwtService.GenerateSecureToken();
         await _tokenStore.StorePasswordResetTokenAsync(_jwtService.HashToken(rawResetToken), user.Id, TimeSpan.FromMinutes(15));
+
         await _emailService.SendPasswordResetOtpAsync(user.Email, user.FullName, otp, cancellationToken);
         await _emailService.SendPasswordResetLinkAsync(user.Email, user.FullName, rawResetToken, cancellationToken);
+
         return ApiResponse<object>.SuccessResponse(new { }, "If the email exists, a password-reset OTP has been sent.");
     }
 
@@ -208,31 +211,43 @@ public class AuthService : IAuthService
         var user = await FindActiveUserByEmailAsync(request.Email);
         if (user is null)
             throw AppException.BadRequest("This account cannot reset its password.");
+
         if (_passwordHasher.VerifyPassword(request.NewPassword, user.PasswordHash))
             throw AppException.BadRequest("New password must differ from the current password.");
+
         if (!await _tokenStore.ConsumePasswordResetOtpAsync(user.Id, _jwtService.HashToken(request.Otp)))
             throw AppException.BadRequest("OTP is invalid, expired, or already used.");
 
         user.PasswordHash = _passwordHasher.HashPassword(request.NewPassword);
         user.UpdatedAt = DateTime.UtcNow;
+
         _userRepository.Update(user);
         await _tokenStore.RevokeAllRefreshTokensAsync(user.Id);
         await _userRepository.SaveChangesAsync();
+
         return ApiResponse<object>.SuccessResponse(new { }, "Password reset successfully. Please sign in again.");
     }
 
     public async Task<ApiResponse<object>> ResetPasswordByTokenAsync(ResetPasswordByTokenRequest request, CancellationToken cancellationToken = default)
     {
         var userId = await _tokenStore.ConsumePasswordResetTokenAsync(_jwtService.HashToken(request.Token));
-        if (userId is null) throw AppException.BadRequest("Reset link is invalid, expired, or already used.");
+        if (userId is null) 
+            throw AppException.BadRequest("Reset link is invalid, expired, or already used.");
+
         var user = await _userRepository.GetByIdAsync(userId.Value);
-        if (user is null || user.Status != UserStatus.Active) throw AppException.BadRequest("This account cannot reset its password.");
-        if (_passwordHasher.VerifyPassword(request.NewPassword, user.PasswordHash)) throw AppException.BadRequest("New password must differ from the current password.");
+        if (user is null || user.Status != UserStatus.Active) 
+            throw AppException.BadRequest("This account cannot reset its password.");
+
+        if (_passwordHasher.VerifyPassword(request.NewPassword, user.PasswordHash)) 
+            throw AppException.BadRequest("New password must differ from the current password.");
+
         user.PasswordHash = _passwordHasher.HashPassword(request.NewPassword);
         user.UpdatedAt = DateTime.UtcNow;
         _userRepository.Update(user);
+
         await _tokenStore.RevokeAllRefreshTokensAsync(user.Id);
         await _userRepository.SaveChangesAsync();
+
         return ApiResponse<object>.SuccessResponse(new { }, "Password reset successfully. Please sign in again.");
     }
 

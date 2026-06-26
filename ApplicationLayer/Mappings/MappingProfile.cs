@@ -85,8 +85,10 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.UpdatedAt, o => o.Ignore())
                 .ForMember(d => d.Booth, o => o.Ignore())
                 .ForMember(d => d.FoodItems, o => o.Ignore());
+
             CreateMap<UpdateFoodCategoryRequest, FoodCategory>()
                 .IncludeBase<CreateFoodCategoryRequest, FoodCategory>();
+
             CreateMap<FoodCategory, FoodCategoryResponse>();
 
             CreateMap<CreateFoodItemRequest, FoodItem>()
@@ -141,6 +143,47 @@ namespace ApplicationLayer.Mappings
             CreateMap<Review, ReviewResponse>()
                 .ForMember(d => d.Reply, o => o.MapFrom(s => s.ReviewReply));
             CreateMap<ReviewReply, ReviewReplyResponse>();
+
+            CreateMap<CreateZoneRequest, Zone>()
+                .ForMember(d => d.Id, o => o.Ignore())
+                .ForMember(d => d.ZoneName, o => o.MapFrom(s => s.ZoneName.Trim()))
+                .ForMember(d => d.Description, o => o.MapFrom(s => ApplicationLayer.Helppers.TextHelper.NormalizeOptionalText(s.Description)))
+                .ForMember(d => d.Color, o => o.MapFrom(s => ApplicationLayer.Helppers.TextHelper.NormalizeOptionalText(s.Color)))
+                .ForMember(d => d.CreatedAt, o => o.Ignore())
+                .ForMember(d => d.UpdatedAt, o => o.Ignore())
+                .ForMember(d => d.NightMarket, o => o.Ignore())
+                .ForMember(d => d.BoothRegistrations, o => o.Ignore());
+            CreateMap<UpdateZoneRequest, Zone>().IncludeBase<CreateZoneRequest, Zone>();
+            CreateMap<Zone, ZoneResponse>().ForMember(d => d.Status, o => o.MapFrom(s => s.Status.ToString()));
+
+            CreateMap<CreatePackageRequest, Package>()
+                .ForMember(d => d.Id, o => o.Ignore())
+                .ForMember(d => d.PackageName, o => o.MapFrom(s => s.PackageName.Trim()))
+                .ForMember(d => d.Description, o => o.MapFrom(s => ApplicationLayer.Helppers.TextHelper.NormalizeOptionalText(s.Description)))
+                .ForMember(d => d.CreatedAt, o => o.Ignore())
+                .ForMember(d => d.UpdatedAt, o => o.Ignore())
+                .ForMember(d => d.PackagePrices, o => o.Ignore())
+                .ForMember(d => d.BoothSubscriptions, o => o.Ignore());
+            CreateMap<UpdatePackageRequest, Package>().IncludeBase<CreatePackageRequest, Package>();
+            CreateMap<Package, PackageResponse>().ForMember(d => d.Status, o => o.MapFrom(s => s.Status.ToString()));
+
+            CreateMap<CreatePriceRequest, FoodPrice>()
+                .ForMember(d => d.Id, o => o.Ignore())
+                .ForMember(d => d.FoodItemId, o => o.Ignore())
+                .ForMember(d => d.CreatedAt, o => o.Ignore())
+                .ForMember(d => d.UpdatedAt, o => o.Ignore())
+                .ForMember(d => d.FoodItem, o => o.Ignore());
+            CreateMap<UpdatePriceRequest, FoodPrice>().IncludeBase<CreatePriceRequest, FoodPrice>();
+            CreateMap<FoodPrice, FoodPriceResponse>();
+
+            CreateMap<CreatePriceRequest, PackagePrice>()
+                .ForMember(d => d.Id, o => o.Ignore())
+                .ForMember(d => d.PackageId, o => o.Ignore())
+                .ForMember(d => d.CreatedAt, o => o.Ignore())
+                .ForMember(d => d.UpdatedAt, o => o.Ignore())
+                .ForMember(d => d.Package, o => o.Ignore());
+            CreateMap<UpdatePriceRequest, PackagePrice>().IncludeBase<CreatePriceRequest, PackagePrice>();
+            CreateMap<PackagePrice, PackagePriceResponse>();
         }
     }
 }

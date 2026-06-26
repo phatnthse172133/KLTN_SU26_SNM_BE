@@ -14,6 +14,9 @@ using ApplicationLayer.Services.Menus;
 using ApplicationLayer.Services.NightMarkets;
 using ApplicationLayer.Services.Complaints;
 using ApplicationLayer.Services.Reviews;
+using ApplicationLayer.Services.Zones;
+using ApplicationLayer.Services.Packages;
+using ApplicationLayer.Services.Prices;
 using ApplicationLayer.Mappings;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceCore.Email;
@@ -72,6 +75,9 @@ namespace InfrastructureLayer
             services.AddScoped<INightMarketService, NightMarketService>();
             services.AddScoped<IComplaintService, ComplaintService>();
             services.AddScoped<IReviewService, ReviewService>();
+            services.AddScoped<IZoneService, ZoneService>();
+            services.AddScoped<IPackageService, PackageService>();
+            services.AddScoped<IPriceService, PriceService>();
             
             services.AddAutoMapper(typeof(MappingProfile).Assembly);
 

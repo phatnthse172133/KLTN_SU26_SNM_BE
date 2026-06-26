@@ -61,6 +61,10 @@ namespace InfrastructureLayer.Data
 
         public virtual DbSet<Payment> Payments { get; set; }
 
+        public virtual DbSet<Package> Packages { get; set; }
+
+        public virtual DbSet<PackagePrice> PackagePrices { get; set; }
+
         public virtual DbSet<Promotion> Promotions { get; set; }
 
         public virtual DbSet<PromotionUsage> PromotionUsages { get; set; }
@@ -637,6 +641,39 @@ namespace InfrastructureLayer.Data
                     .HasConstraintName("Payments_OrderId_fkey");
             });
 
+            modelBuilder.Entity<Package>(entity =>
+            {
+                entity.HasKey(e => e.Id).HasName("Package_pkey");
+
+                entity.ToTable("Package");
+
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.PackageName).HasMaxLength(100);
+                entity.Property(e => e.Price).HasPrecision(12, 2);
+                entity.Property(e => e.Status)
+                    .HasConversion<string>()
+                    .HasMaxLength(20)
+                    .HasDefaultValueSql("'Active'::character varying");
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+            });
+
+            modelBuilder.Entity<PackagePrice>(entity =>
+            {
+                entity.HasKey(e => e.Id).HasName("PackagePrice_pkey");
+
+                entity.ToTable("PackagePrice");
+
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.Price).HasPrecision(12, 2);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+
+                entity.HasOne(d => d.Package).WithMany(p => p.PackagePrices)
+                    .HasForeignKey(d => d.PackageId)
+                    .HasConstraintName("PackagePrice_PackageId_fkey");
+            });
+
             modelBuilder.Entity<Promotion>(entity =>
             {
                 entity.HasKey(e => e.Id).HasName("Promotion_pkey");
@@ -787,6 +824,25 @@ namespace InfrastructureLayer.Data
                     .HasForeignKey(d => d.RoleId)
                     .OnDelete(DeleteBehavior.ClientSetNull)
                     .HasConstraintName("User_RoleId_fkey");
+            });
+
+            modelBuilder.Entity<Zone>(entity =>
+            {
+                entity.HasKey(e => e.Id).HasName("Zones_pkey");
+
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.ZoneName).HasMaxLength(100);
+                entity.Property(e => e.Color).HasMaxLength(50);
+                entity.Property(e => e.Status)
+                    .HasConversion<string>()
+                    .HasMaxLength(20)
+                    .HasDefaultValueSql("'Active'::character varying");
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+
+                entity.HasOne(d => d.NightMarket).WithMany(p => p.Zones)
+                    .HasForeignKey(d => d.NightMarketId)
+                    .HasConstraintName("Zones_NightMarketId_fkey");
             });
         }
     }

@@ -13,13 +13,15 @@ public class GoogleTokenValidator : IGoogleTokenValidator
     public GoogleTokenValidator(HttpClient httpClient, IConfiguration configuration)
     {
         _httpClient = httpClient;
-        _clientId = configuration["Google:ClientId"] ?? string.Empty;
+        _clientId = configuration["Google:ClientId"]
+            ?? configuration["Google OAuth:ClientId"]
+            ?? string.Empty;
     }
 
     public async Task<GoogleUserInfo?> ValidateAsync(string idToken, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(_clientId)) 
-            throw new InvalidOperationException("Google:ClientId is not configured.");
+            throw new InvalidOperationException("Google:ClientId or Google OAuth:ClientId is not configured.");
 
         var response = await _httpClient.GetFromJsonAsync<GoogleTokenInfo>($"https://oauth2.googleapis.com/tokeninfo?id_token={Uri.EscapeDataString(idToken)}", cancellationToken);
 

@@ -4,7 +4,6 @@ using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
 using DomainLayer.Entities;
-using DomainLayer.InterfaceCore.Auth;
 using DomainLayer.InterfaceCore.JWT;
 using DomainLayer.InterfaceRepository;
 using static DomainLayer.Enums.GeneralEnum;
@@ -15,15 +14,13 @@ public class AccountService : IAccountService
 {
     private readonly IGenericRepository<User> _users;
     private readonly IGenericRepository<Role> _roles;
-    private readonly IAuthTokenStore _tokenStore;
     private readonly IPasswordHasher _passwordHasher;
     private readonly IMapper _mapper;
 
-    public AccountService(IGenericRepository<User> users, IGenericRepository<Role> roles, IAuthTokenStore tokenStore, IPasswordHasher passwordHasher, IMapper mapper)
+    public AccountService(IGenericRepository<User> users, IGenericRepository<Role> roles, IPasswordHasher passwordHasher, IMapper mapper)
     {
         _users = users;
         _roles = roles;
-        _tokenStore = tokenStore;
         _passwordHasher = passwordHasher;
         _mapper = mapper;
     }
@@ -80,10 +77,11 @@ public class AccountService : IAccountService
             throw AppException.BadRequest("New password must be different from the current password.");
 
         user.PasswordHash = _passwordHasher.HashPassword(request.NewPassword);
+        user.RefreshTokenHash = null;
+        user.RefreshTokenExpiresAt = null;
         user.UpdatedAt = DateTime.UtcNow;
         _users.Update(user);
 
-        await _tokenStore.RevokeAllRefreshTokensAsync(user.Id);
         await _users.SaveChangesAsync();
         return ApiResponse<object>.SuccessResponse(new { }, "Password changed successfully. Please sign in again.");
     }
@@ -119,10 +117,11 @@ public class AccountService : IAccountService
             throw AppException.NotFound("Account was not found.");
 
         user.Status = request.Status;
+        user.RefreshTokenHash = null;
+        user.RefreshTokenExpiresAt = null;
         user.UpdatedAt = DateTime.UtcNow;
         _users.Update(user);
 
-        await _tokenStore.RevokeAllRefreshTokensAsync(user.Id);
         await _users.SaveChangesAsync();
         return ApiResponse<ManagedUserResponse>.SuccessResponse(await ToManagedUserResponseAsync(user), "Account status updated successfully.");
     }

@@ -5,28 +5,14 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace InfrastructureLayer.Migrations
 {
+    /// <inheritdoc />
     public partial class InitialCreate : Migration
     {
+        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AlterDatabase()
                 .Annotation("Npgsql:PostgresExtension:uuid-ossp", ",,");
-
-            migrationBuilder.CreateTable(
-                name: "FoodCategories",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "uuid_generate_v4()"),
-                    Name = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
-                    Description = table.Column<string>(type: "text", nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()"),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()")
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("FoodCategories_pkey", x => x.Id);
-                },
-                comment: "Danh mục món ăn dùng chung toàn hệ thống");
 
             migrationBuilder.CreateTable(
                 name: "LayoutEdges",
@@ -75,18 +61,18 @@ namespace InfrastructureLayer.Migrations
                 name: "Package",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    PackageName = table.Column<string>(type: "text", nullable: false),
-                    Price = table.Column<decimal>(type: "numeric", nullable: false),
+                    Id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "uuid_generate_v4()"),
+                    PackageName = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    Price = table.Column<decimal>(type: "numeric(12,2)", precision: 12, scale: 2, nullable: false),
                     DurationDays = table.Column<int>(type: "integer", nullable: false),
                     Description = table.Column<string>(type: "text", nullable: true),
-                    Status = table.Column<int>(type: "integer", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                    Status = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false, defaultValueSql: "'Active'::character varying"),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()"),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()")
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Package", x => x.Id);
+                    table.PrimaryKey("Package_pkey", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -130,23 +116,23 @@ namespace InfrastructureLayer.Migrations
                 comment: "Sơ đồ mặt bằng của một chợ đêm - dùng làm nền để đặt các điểm (LayoutNodes) và gian hàng (BoothLocations)");
 
             migrationBuilder.CreateTable(
-                name: "Zone",
+                name: "Zones",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    Id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "uuid_generate_v4()"),
                     NightMarketId = table.Column<Guid>(type: "uuid", nullable: false),
-                    ZoneName = table.Column<string>(type: "text", nullable: false),
+                    ZoneName = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
                     Description = table.Column<string>(type: "text", nullable: true),
-                    Color = table.Column<string>(type: "text", nullable: true),
-                    Status = table.Column<int>(type: "integer", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                    Color = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
+                    Status = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false, defaultValueSql: "'Active'::character varying"),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()"),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()")
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Zone", x => x.Id);
+                    table.PrimaryKey("Zones_pkey", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Zone_NightMarket_NightMarketId",
+                        name: "Zones_NightMarketId_fkey",
                         column: x => x.NightMarketId,
                         principalTable: "NightMarket",
                         principalColumn: "Id",
@@ -157,19 +143,19 @@ namespace InfrastructureLayer.Migrations
                 name: "PackagePrice",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    Id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "uuid_generate_v4()"),
                     PackageId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Price = table.Column<decimal>(type: "numeric", nullable: false),
+                    Price = table.Column<decimal>(type: "numeric(12,2)", precision: 12, scale: 2, nullable: false),
                     StartDate = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     EndDate = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()"),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()")
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_PackagePrice", x => x.Id);
+                    table.PrimaryKey("PackagePrice_pkey", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_PackagePrice_Package_PackageId",
+                        name: "PackagePrice_PackageId_fkey",
                         column: x => x.PackageId,
                         principalTable: "Package",
                         principalColumn: "Id",
@@ -190,7 +176,17 @@ namespace InfrastructureLayer.Migrations
                     Address = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
                     DoB = table.Column<DateOnly>(type: "date", nullable: true),
                     AvatarUrl = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    Status = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false, defaultValueSql: "'Active'::character varying", comment: "Active: đang hoạt động | Inactive: chưa xác thực | Banned: bị khóa bởi Admin"),
+                    AuthProvider = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: false, defaultValue: "Local"),
+                    GoogleId = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    RefreshTokenHash = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
+                    RefreshTokenExpiresAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    EmailVerificationTokenHash = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
+                    EmailVerificationTokenExpiresAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    PasswordResetOtpHash = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
+                    PasswordResetOtpExpiresAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    PasswordResetTokenHash = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
+                    PasswordResetTokenExpiresAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    Status = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false, comment: "Active: đang hoạt động | Inactive: chưa xác thực | Banned: bị khóa bởi Admin"),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()"),
                     UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()")
                 },
@@ -284,7 +280,7 @@ namespace InfrastructureLayer.Migrations
                 comment: "Đơn hàng của khách");
 
             migrationBuilder.CreateTable(
-                name: "BoothRegistration",
+                name: "BoothRegistrations",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
@@ -302,28 +298,28 @@ namespace InfrastructureLayer.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_BoothRegistration", x => x.Id);
+                    table.PrimaryKey("PK_BoothRegistrations", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_BoothRegistration_LayoutNodes_PreferredLayoutNodeId",
+                        name: "FK_BoothRegistrations_LayoutNodes_PreferredLayoutNodeId",
                         column: x => x.PreferredLayoutNodeId,
                         principalTable: "LayoutNodes",
                         principalColumn: "Id");
                     table.ForeignKey(
-                        name: "FK_BoothRegistration_NightMarket_RequestedNightMarketId",
+                        name: "FK_BoothRegistrations_NightMarket_RequestedNightMarketId",
                         column: x => x.RequestedNightMarketId,
                         principalTable: "NightMarket",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
-                        name: "FK_BoothRegistration_User_OwnerId",
+                        name: "FK_BoothRegistrations_User_OwnerId",
                         column: x => x.OwnerId,
                         principalTable: "User",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
-                        name: "FK_BoothRegistration_Zone_PreferredZoneId",
+                        name: "FK_BoothRegistrations_Zones_PreferredZoneId",
                         column: x => x.PreferredZoneId,
-                        principalTable: "Zone",
+                        principalTable: "Zones",
                         principalColumn: "Id");
                 });
 
@@ -438,15 +434,15 @@ namespace InfrastructureLayer.Migrations
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
-                        name: "FK_Booth_BoothRegistration_RegistrationId",
+                        name: "FK_Booth_BoothRegistrations_RegistrationId",
                         column: x => x.RegistrationId,
-                        principalTable: "BoothRegistration",
+                        principalTable: "BoothRegistrations",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
-                        name: "FK_Booth_Zone_ZoneId",
+                        name: "FK_Booth_Zones_ZoneId",
                         column: x => x.ZoneId,
-                        principalTable: "Zone",
+                        principalTable: "Zones",
                         principalColumn: "Id");
                 },
                 comment: "Gian hàng ẩm thực - thực thể trung tâm, mỗi gian hàng thuộc 1 NightMarket và do 1 User (BoothOwner) quản lý");
@@ -471,7 +467,7 @@ namespace InfrastructureLayer.Migrations
                     table.ForeignKey(
                         name: "BoothDocuments_BoothId_fkey",
                         column: x => x.RegistrationId,
-                        principalTable: "BoothRegistration",
+                        principalTable: "BoothRegistrations",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
@@ -547,7 +543,7 @@ namespace InfrastructureLayer.Migrations
                     BankAccountHolder = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: true),
                     QRImageUrl = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
                     IsDefault = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    Status = table.Column<int>(type: "integer", maxLength: 20, nullable: false, defaultValueSql: "'Active'::character varying"),
+                    Status = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false, defaultValueSql: "'Active'::character varying"),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()"),
                     UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()")
                 },
@@ -605,6 +601,8 @@ namespace InfrastructureLayer.Migrations
                     Description = table.Column<string>(type: "text", nullable: false),
                     AdminResponse = table.Column<string>(type: "text", nullable: true),
                     Status = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false, defaultValueSql: "'Open'::character varying", comment: "Open | InProgress | Resolved | Rejected"),
+                    ResolutionAction = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: true, comment: "NoViolation | Warning | SuspendBooth | CloseBooth"),
+                    PolicyViolation = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()"),
                     UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()")
                 },
@@ -630,37 +628,28 @@ namespace InfrastructureLayer.Migrations
                 comment: "Khiếu nại của khách hàng về đơn hàng/gian hàng");
 
             migrationBuilder.CreateTable(
-                name: "FoodItem",
+                name: "FoodCategories",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "uuid_generate_v4()"),
                     BoothId = table.Column<Guid>(type: "uuid", nullable: false),
-                    CategoryId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    Name = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
                     Description = table.Column<string>(type: "text", nullable: true),
-                    Price = table.Column<decimal>(type: "numeric(12,2)", precision: 12, scale: 2, nullable: false, comment: "Giá mặc định. Nếu có FoodPrice theo ngày hiện tại thì giá đó được ưu tiên (override)"),
-                    ThumbnailUrl = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    IsAvailable = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true, comment: "false khi món hết nguyên liệu hoặc chủ quán tạm ẩn"),
-                    IsFeatured = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()"),
                     UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()")
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("FoodItem_pkey", x => x.Id);
+                    table.PrimaryKey("FoodCategories_pkey", x => x.Id);
                     table.ForeignKey(
-                        name: "FoodItem_BoothId_fkey",
+                        name: "FoodCategories_BoothId_fkey",
                         column: x => x.BoothId,
                         principalTable: "Booth",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FoodItem_CategoryId_fkey",
-                        column: x => x.CategoryId,
-                        principalTable: "FoodCategories",
-                        principalColumn: "Id");
                 },
-                comment: "Món ăn của từng gian hàng");
+                comment: "Danh mục món ăn của từng gian hàng");
 
             migrationBuilder.CreateTable(
                 name: "Notification",
@@ -782,6 +771,102 @@ namespace InfrastructureLayer.Migrations
                 comment: "Ảnh minh chứng đính kèm theo khiếu nại");
 
             migrationBuilder.CreateTable(
+                name: "FoodItem",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "uuid_generate_v4()"),
+                    BoothId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CategoryId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    Description = table.Column<string>(type: "text", nullable: true),
+                    Price = table.Column<decimal>(type: "numeric(12,2)", precision: 12, scale: 2, nullable: false, comment: "Giá mặc định. Nếu có FoodPrice theo ngày hiện tại thì giá đó được ưu tiên (override)"),
+                    ThumbnailUrl = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    IsAvailable = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true, comment: "false khi món hết nguyên liệu hoặc chủ quán tạm ẩn"),
+                    IsFeatured = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()"),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()")
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("FoodItem_pkey", x => x.Id);
+                    table.ForeignKey(
+                        name: "FoodItem_BoothId_fkey",
+                        column: x => x.BoothId,
+                        principalTable: "Booth",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FoodItem_CategoryId_fkey",
+                        column: x => x.CategoryId,
+                        principalTable: "FoodCategories",
+                        principalColumn: "Id");
+                },
+                comment: "Món ăn của từng gian hàng");
+
+            migrationBuilder.CreateTable(
+                name: "PromotionUsages",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "uuid_generate_v4()"),
+                    PromotionId = table.Column<Guid>(type: "uuid", nullable: false),
+                    OrderId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CustomerId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()"),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()")
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PromotionUsages_pkey", x => x.Id);
+                    table.ForeignKey(
+                        name: "PromotionUsages_CustomerId_fkey",
+                        column: x => x.CustomerId,
+                        principalTable: "User",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "PromotionUsages_OrderId_fkey",
+                        column: x => x.OrderId,
+                        principalTable: "Order",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "PromotionUsages_PromotionId_fkey",
+                        column: x => x.PromotionId,
+                        principalTable: "Promotion",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                },
+                comment: "Lịch sử sử dụng mã khuyến mãi - kiểm tra UsageLimit và chống dùng trùng");
+
+            migrationBuilder.CreateTable(
+                name: "ReviewReplies",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "uuid_generate_v4()"),
+                    ReviewId = table.Column<Guid>(type: "uuid", nullable: false),
+                    BoothOwnerId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Content = table.Column<string>(type: "text", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()"),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()")
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("ReviewReplies_pkey", x => x.Id);
+                    table.ForeignKey(
+                        name: "ReviewReplies_BoothOwnerId_fkey",
+                        column: x => x.BoothOwnerId,
+                        principalTable: "User",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "ReviewReplies_ReviewId_fkey",
+                        column: x => x.ReviewId,
+                        principalTable: "Reviews",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                },
+                comment: "Phản hồi của chủ gian hàng đối với đánh giá - quan hệ 1-1 với Reviews");
+
+            migrationBuilder.CreateTable(
                 name: "FoodImages",
                 columns: table => new
                 {
@@ -858,68 +943,6 @@ namespace InfrastructureLayer.Migrations
                 },
                 comment: "Chi tiết món ăn trong từng đơn hàng");
 
-            migrationBuilder.CreateTable(
-                name: "PromotionUsages",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "uuid_generate_v4()"),
-                    PromotionId = table.Column<Guid>(type: "uuid", nullable: false),
-                    OrderId = table.Column<Guid>(type: "uuid", nullable: false),
-                    CustomerId = table.Column<Guid>(type: "uuid", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()"),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()")
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PromotionUsages_pkey", x => x.Id);
-                    table.ForeignKey(
-                        name: "PromotionUsages_CustomerId_fkey",
-                        column: x => x.CustomerId,
-                        principalTable: "User",
-                        principalColumn: "Id");
-                    table.ForeignKey(
-                        name: "PromotionUsages_OrderId_fkey",
-                        column: x => x.OrderId,
-                        principalTable: "Order",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "PromotionUsages_PromotionId_fkey",
-                        column: x => x.PromotionId,
-                        principalTable: "Promotion",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                },
-                comment: "Lịch sử sử dụng mã khuyến mãi - kiểm tra UsageLimit và chống dùng trùng");
-
-            migrationBuilder.CreateTable(
-                name: "ReviewReplies",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "uuid_generate_v4()"),
-                    ReviewId = table.Column<Guid>(type: "uuid", nullable: false),
-                    BoothOwnerId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Content = table.Column<string>(type: "text", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()"),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()")
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("ReviewReplies_pkey", x => x.Id);
-                    table.ForeignKey(
-                        name: "ReviewReplies_BoothOwnerId_fkey",
-                        column: x => x.BoothOwnerId,
-                        principalTable: "User",
-                        principalColumn: "Id");
-                    table.ForeignKey(
-                        name: "ReviewReplies_ReviewId_fkey",
-                        column: x => x.ReviewId,
-                        principalTable: "Reviews",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                },
-                comment: "Phản hồi của chủ gian hàng đối với đánh giá - quan hệ 1-1 với Reviews");
-
             migrationBuilder.CreateIndex(
                 name: "idx_booth_nightmarket",
                 table: "Booth",
@@ -973,23 +996,23 @@ namespace InfrastructureLayer.Migrations
                 column: "BoothId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_BoothRegistration_OwnerId",
-                table: "BoothRegistration",
+                name: "IX_BoothRegistrations_OwnerId",
+                table: "BoothRegistrations",
                 column: "OwnerId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_BoothRegistration_PreferredLayoutNodeId",
-                table: "BoothRegistration",
+                name: "IX_BoothRegistrations_PreferredLayoutNodeId",
+                table: "BoothRegistrations",
                 column: "PreferredLayoutNodeId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_BoothRegistration_PreferredZoneId",
-                table: "BoothRegistration",
+                name: "IX_BoothRegistrations_PreferredZoneId",
+                table: "BoothRegistrations",
                 column: "PreferredZoneId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_BoothRegistration_RequestedNightMarketId",
-                table: "BoothRegistration",
+                name: "IX_BoothRegistrations_RequestedNightMarketId",
+                table: "BoothRegistrations",
                 column: "RequestedNightMarketId");
 
             migrationBuilder.CreateIndex(
@@ -1034,10 +1057,16 @@ namespace InfrastructureLayer.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "FoodCategories_Name_key",
+                name: "FoodCategories_BoothId_Name_key",
                 table: "FoodCategories",
-                column: "Name",
-                unique: true);
+                columns: new[] { "BoothId", "Name" },
+                unique: true,
+                filter: "\"IsDeleted\" = false");
+
+            migrationBuilder.CreateIndex(
+                name: "idx_foodcategory_booth",
+                table: "FoodCategories",
+                column: "BoothId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_FoodImages_FoodItemId",
@@ -1181,6 +1210,20 @@ namespace InfrastructureLayer.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_User_GoogleId",
+                table: "User",
+                column: "GoogleId",
+                unique: true,
+                filter: "\"GoogleId\" IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_User_RefreshTokenHash",
+                table: "User",
+                column: "RefreshTokenHash",
+                unique: true,
+                filter: "\"RefreshTokenHash\" IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_User_RoleId",
                 table: "User",
                 column: "RoleId");
@@ -1198,8 +1241,8 @@ namespace InfrastructureLayer.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_Zone_NightMarketId",
-                table: "Zone",
+                name: "IX_Zones_NightMarketId",
+                table: "Zones",
                 column: "NightMarketId");
         }
 
@@ -1276,13 +1319,13 @@ namespace InfrastructureLayer.Migrations
                 name: "FoodCategories");
 
             migrationBuilder.DropTable(
-                name: "Booth");
-
-            migrationBuilder.DropTable(
                 name: "Order");
 
             migrationBuilder.DropTable(
-                name: "BoothRegistration");
+                name: "Booth");
+
+            migrationBuilder.DropTable(
+                name: "BoothRegistrations");
 
             migrationBuilder.DropTable(
                 name: "LayoutNodes");
@@ -1291,7 +1334,7 @@ namespace InfrastructureLayer.Migrations
                 name: "User");
 
             migrationBuilder.DropTable(
-                name: "Zone");
+                name: "Zones");
 
             migrationBuilder.DropTable(
                 name: "MarketLayouts");

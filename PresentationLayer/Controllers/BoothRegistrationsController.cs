@@ -8,7 +8,6 @@ using Microsoft.AspNetCore.Mvc;
 namespace PresentationLayer.Controllers;
 
 [ApiController]
-[Authorize]
 [Route("api/booth-registrations")]
 public class BoothRegistrationsController : ControllerBase
 {
@@ -16,6 +15,7 @@ public class BoothRegistrationsController : ControllerBase
     public BoothRegistrationsController(IBoothRegistrationService service) => _service = service;
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
+    [Authorize(Roles = "BoothOwner")]
     [HttpPost]
     public async Task<IActionResult> Create(CreateBoothRegistrationRequest request, CancellationToken cancellationToken)
     {
@@ -23,6 +23,7 @@ public class BoothRegistrationsController : ControllerBase
         return response.Success ? CreatedAtAction(nameof(GetMine), new { }, response) : BadRequest(response);
     }
 
+    [Authorize(Roles = "BoothOwner")]
     [HttpGet("mine")]
     public async Task<IActionResult> GetMine(CancellationToken cancellationToken) => Ok(await _service.GetMineAsync(UserId, cancellationToken));
 

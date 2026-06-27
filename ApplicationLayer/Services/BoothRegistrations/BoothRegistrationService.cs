@@ -36,6 +36,9 @@ public class BoothRegistrationService : IBoothRegistrationService
 
     public async Task<ApiResponse<BoothRegistrationResponse>> CreateAsync(Guid ownerId, CreateBoothRegistrationRequest request, CancellationToken cancellationToken = default)
     {
+        if (!await IsBoothOwnerAsync(ownerId))
+            throw AppException.Forbidden("Only accounts registered as BoothOwner can submit a booth registration.");
+
         var validationError = await ValidateRequestAsync(request);
         if (validationError is not null) 
             throw AppException.BadRequest(validationError);
@@ -84,6 +87,9 @@ public class BoothRegistrationService : IBoothRegistrationService
         if (request.Approved && request.ZoneId.HasValue && !(await IsZoneInMarketAsync(request.ZoneId.Value, registration.RequestedNightMarketId)))
             throw AppException.BadRequest("The assigned zone does not belong to the night market.");
 
+        if (request.Approved && !await IsBoothOwnerAsync(registration.OwnerId))
+            throw AppException.Conflict("The registration owner is not a BoothOwner account and cannot be approved.");
+
         var now = DateTime.UtcNow;
         registration.Status = request.Approved ? BoothRegistrationStatus.Approved : BoothRegistrationStatus.Rejected;
         registration.RejectReason = request.Approved ? null : request.RejectReason!.Trim(); registration.UpdatedAt = now;
@@ -100,13 +106,6 @@ public class BoothRegistrationService : IBoothRegistrationService
 
             await _booths.AddAsync(booth);
             registration.Booth = booth;
-
-            var owner = await _users.GetByIdAsync(registration.OwnerId);
-            var boothOwnerRole = await _roles.FirstOrDefaultAsync(r => r.RoleName == "BoothOwner");
-
-            if (owner is not null && boothOwnerRole is not null) { 
-                owner.RoleId = boothOwnerRole.Id; owner.UpdatedAt = now; _users.Update(owner); 
-            }
         }
         _registrations.Update(registration);
 
@@ -115,6 +114,16 @@ public class BoothRegistrationService : IBoothRegistrationService
     }
 
     private async Task<bool> IsZoneInMarketAsync(Guid zoneId, Guid marketId) => (await _zones.GetByIdAsync(zoneId))?.NightMarketId == marketId;
+
+    private async Task<bool> IsBoothOwnerAsync(Guid userId)
+    {
+        var user = await _users.GetByIdAsync(userId);
+        if (user is null)
+            return false;
+
+        var role = await _roles.GetByIdAsync(user.RoleId);
+        return role?.RoleName == "BoothOwner";
+    }
 
     private async Task<string?> ValidateRequestAsync(CreateBoothRegistrationRequest request)
     {

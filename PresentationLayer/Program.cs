@@ -12,6 +12,10 @@ using static DomainLayer.Enums.GeneralEnum;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.AddDebug();
+
 var jwtSettings = builder.Configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>() ?? new JwtSettings();
 if (string.IsNullOrWhiteSpace(jwtSettings.SecretKey) || jwtSettings.SecretKey.Length < 32)
     throw new InvalidOperationException("JWT secret is missing. Set Jwt:SecretKey in PresentationLayer/appsettings.json (minimum 32 characters).");

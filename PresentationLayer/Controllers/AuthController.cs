@@ -16,10 +16,17 @@ public class AuthController : ControllerBase
         _authService = authService;
     }
 
-    [HttpPost("register")]
-    public async Task<IActionResult> Register(RegisterRequest request, CancellationToken cancellationToken)
+    [HttpPost("register/customer")]
+    public async Task<IActionResult> RegisterCustomer(RegisterCustomerRequest request, CancellationToken cancellationToken)
     {
-        var response = await _authService.RegisterAsync(request, cancellationToken);
+        var response = await _authService.RegisterCustomerAsync(request, cancellationToken);
+        return response.Success ? Ok(response) : BadRequest(response);
+    }
+
+    [HttpPost("register/booth-owner")]
+    public async Task<IActionResult> RegisterBoothOwner(RegisterBoothOwnerRequest request, CancellationToken cancellationToken)
+    {
+        var response = await _authService.RegisterBoothOwnerAsync(request, cancellationToken);
         return response.Success ? Ok(response) : BadRequest(response);
     }
 

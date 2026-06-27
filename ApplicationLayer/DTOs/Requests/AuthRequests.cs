@@ -13,11 +13,19 @@ public class RegisterRequest
     [Required, EmailAddress, StringLength(150)]
     public string Email { get; set; } = string.Empty;
 
-    [Required, MinLength(8)]
+    [Required, MinLength(6)]
     public string Password { get; set; } = string.Empty;
 
     [Required, Compare(nameof(Password))]
     public string ConfirmPassword { get; set; } = string.Empty;
+}
+
+public sealed class RegisterCustomerRequest : RegisterRequest
+{
+}
+
+public sealed class RegisterBoothOwnerRequest : RegisterRequest
+{
 }
 
 public class LoginRequest
@@ -70,7 +78,7 @@ public class VerifyPasswordResetOtpRequest
 
 public class ResetPasswordRequest : VerifyPasswordResetOtpRequest
 {
-    [Required, MinLength(8)]
+    [Required, MinLength(6)]
     public string NewPassword { get; set; } = string.Empty;
 
     [Required, Compare(nameof(NewPassword))]
@@ -82,7 +90,7 @@ public class ResetPasswordByTokenRequest
     [Required]
     public string Token { get; set; } = string.Empty;
 
-    [Required, MinLength(8)]
+    [Required, MinLength(6)]
     public string NewPassword { get; set; } = string.Empty;
 
     [Required, Compare(nameof(NewPassword))]

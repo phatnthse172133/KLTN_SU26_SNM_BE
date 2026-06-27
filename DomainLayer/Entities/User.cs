@@ -29,6 +29,28 @@ public partial class User
 
     public string? AvatarUrl { get; set; }
 
+    // Local | Google | Local,Google
+    public string AuthProvider { get; set; } = "Local";
+
+    public string? GoogleId { get; set; }
+
+    // Authentication tokens are hashed before being persisted.
+    public string? RefreshTokenHash { get; set; }
+
+    public DateTime? RefreshTokenExpiresAt { get; set; }
+
+    public string? EmailVerificationTokenHash { get; set; }
+
+    public DateTime? EmailVerificationTokenExpiresAt { get; set; }
+
+    public string? PasswordResetOtpHash { get; set; }
+
+    public DateTime? PasswordResetOtpExpiresAt { get; set; }
+
+    public string? PasswordResetTokenHash { get; set; }
+
+    public DateTime? PasswordResetTokenExpiresAt { get; set; }
+
     /// Active | Inactive | Suspended
     public UserStatus Status { get; set; }
 

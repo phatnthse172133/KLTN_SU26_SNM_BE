@@ -212,6 +212,7 @@ namespace InfrastructureLayer.Data
                     .HasMaxLength(500)
                     .HasColumnName("QRImageUrl");
                 entity.Property(e => e.Status)
+                    .HasConversion<string>()
                     .HasMaxLength(20)
                     .HasDefaultValueSql("'Active'::character varying");
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
@@ -805,20 +806,33 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.Address).HasMaxLength(255);
                 entity.Property(e => e.AvatarUrl).HasMaxLength(500);
+                entity.Property(e => e.AuthProvider).HasMaxLength(30).HasDefaultValue("Local");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
                 entity.Property(e => e.Email).HasMaxLength(150);
+                entity.Property(e => e.EmailVerificationTokenHash).HasMaxLength(64);
                 entity.Property(e => e.FullName).HasMaxLength(150);
+                entity.Property(e => e.GoogleId).HasMaxLength(100);
                 entity.Property(e => e.PasswordHash)
                     .HasMaxLength(255)
                     .HasComment("Mật khẩu đã được mã hóa (hash), tuyệt đối không lưu plaintext");
+                entity.Property(e => e.PasswordResetOtpHash).HasMaxLength(64);
+                entity.Property(e => e.PasswordResetTokenHash).HasMaxLength(64);
                 entity.Property(e => e.Phone).HasMaxLength(20);
+                entity.Property(e => e.RefreshTokenHash).HasMaxLength(64);
                 entity.Property(e => e.Status)
                     .HasConversion<string>()
                     .HasMaxLength(20)
-                    .HasDefaultValueSql("'Active'::character varying")
                     .HasComment("Active: đang hoạt động | Inactive: chưa xác thực | Banned: bị khóa bởi Admin");
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
                 entity.Property(e => e.UserName).HasMaxLength(100);
+
+                entity.HasIndex(e => e.GoogleId)
+                    .IsUnique()
+                    .HasFilter("\"GoogleId\" IS NOT NULL");
+
+                entity.HasIndex(e => e.RefreshTokenHash)
+                    .IsUnique()
+                    .HasFilter("\"RefreshTokenHash\" IS NOT NULL");
 
                 entity.HasOne(d => d.Role).WithMany(p => p.Users)
                     .HasForeignKey(d => d.RoleId)

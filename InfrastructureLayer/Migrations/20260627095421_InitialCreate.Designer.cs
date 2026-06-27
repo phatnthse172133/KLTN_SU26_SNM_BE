@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace InfrastructureLayer.Migrations
 {
     [DbContext(typeof(SNMDbContext))]
-    [Migration("20260623124801_InitialCreate")]
+    [Migration("20260627095421_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -334,10 +334,11 @@ namespace InfrastructureLayer.Migrations
                         .HasColumnType("character varying(500)")
                         .HasColumnName("QRImageUrl");
 
-                    b.Property<int>("Status")
+                    b.Property<string>("Status")
+                        .IsRequired()
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(20)
-                        .HasColumnType("integer")
+                        .HasColumnType("character varying(20)")
                         .HasDefaultValueSql("'Active'::character varying");
 
                     b.Property<DateTime>("UpdatedAt")
@@ -406,7 +407,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.HasIndex("RequestedNightMarketId");
 
-                    b.ToTable("BoothRegistration");
+                    b.ToTable("BoothRegistrations");
                 });
 
             modelBuilder.Entity("DomainLayer.Entities.BoothSubscription", b =>
@@ -486,6 +487,15 @@ namespace InfrastructureLayer.Migrations
 
                     b.Property<Guid>("OrderId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("PolicyViolation")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("ResolutionAction")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasComment("NoViolation | Warning | SuspendBooth | CloseBooth");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -607,6 +617,9 @@ namespace InfrastructureLayer.Migrations
                         .HasColumnType("uuid")
                         .HasDefaultValueSql("uuid_generate_v4()");
 
+                    b.Property<Guid>("BoothId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -614,6 +627,11 @@ namespace InfrastructureLayer.Migrations
 
                     b.Property<string>("Description")
                         .HasColumnType("text");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -628,12 +646,15 @@ namespace InfrastructureLayer.Migrations
                     b.HasKey("Id")
                         .HasName("FoodCategories_pkey");
 
-                    b.HasIndex(new[] { "Name" }, "FoodCategories_Name_key")
-                        .IsUnique();
+                    b.HasIndex(new[] { "BoothId", "Name" }, "FoodCategories_BoothId_Name_key")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
+
+                    b.HasIndex(new[] { "BoothId" }, "idx_foodcategory_booth");
 
                     b.ToTable("FoodCategories", t =>
                         {
-                            t.HasComment("Danh mục món ăn dùng chung toàn hệ thống");
+                            t.HasComment("Danh mục món ăn của từng gian hàng");
                         });
                 });
 
@@ -704,6 +725,11 @@ namespace InfrastructureLayer.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(true)
                         .HasComment("false khi món hết nguyên liệu hoặc chủ quán tạm ẩn");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
 
                     b.Property<bool>("IsFeatured")
                         .ValueGeneratedOnAdd()
@@ -1209,10 +1235,13 @@ namespace InfrastructureLayer.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("uuid_generate_v4()");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
 
                     b.Property<string>("Description")
                         .HasColumnType("text");
@@ -1222,30 +1251,42 @@ namespace InfrastructureLayer.Migrations
 
                     b.Property<string>("PackageName")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<decimal>("Price")
-                        .HasColumnType("numeric");
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
 
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValueSql("'Active'::character varying");
 
                     b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
 
-                    b.HasKey("Id");
+                    b.HasKey("Id")
+                        .HasName("Package_pkey");
 
-                    b.ToTable("Package");
+                    b.ToTable("Package", (string)null);
                 });
 
             modelBuilder.Entity("DomainLayer.Entities.PackagePrice", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("uuid_generate_v4()");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
 
                     b.Property<DateTime?>("EndDate")
                         .HasColumnType("timestamp with time zone");
@@ -1254,19 +1295,23 @@ namespace InfrastructureLayer.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<decimal>("Price")
-                        .HasColumnType("numeric");
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
 
                     b.Property<DateTime?>("StartDate")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
 
-                    b.HasKey("Id");
+                    b.HasKey("Id")
+                        .HasName("PackagePrice_pkey");
 
                     b.HasIndex("PackageId");
 
-                    b.ToTable("PackagePrice");
+                    b.ToTable("PackagePrice", (string)null);
                 });
 
             modelBuilder.Entity("DomainLayer.Entities.Payment", b =>
@@ -1600,6 +1645,13 @@ namespace InfrastructureLayer.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
 
+                    b.Property<string>("AuthProvider")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasDefaultValue("Local");
+
                     b.Property<string>("AvatarUrl")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
@@ -1617,10 +1669,21 @@ namespace InfrastructureLayer.Migrations
                         .HasMaxLength(150)
                         .HasColumnType("character varying(150)");
 
+                    b.Property<DateTime?>("EmailVerificationTokenExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("EmailVerificationTokenHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<string>("FullName")
                         .IsRequired()
                         .HasMaxLength(150)
                         .HasColumnType("character varying(150)");
+
+                    b.Property<string>("GoogleId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("PasswordHash")
                         .IsRequired()
@@ -1628,19 +1691,38 @@ namespace InfrastructureLayer.Migrations
                         .HasColumnType("character varying(255)")
                         .HasComment("Mật khẩu đã được mã hóa (hash), tuyệt đối không lưu plaintext");
 
+                    b.Property<DateTime?>("PasswordResetOtpExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PasswordResetOtpHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("PasswordResetTokenExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PasswordResetTokenHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<string>("Phone")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime?>("RefreshTokenExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RefreshTokenHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<Guid>("RoleId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .ValueGeneratedOnAdd()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
-                        .HasDefaultValueSql("'Active'::character varying")
                         .HasComment("Active: đang hoạt động | Inactive: chưa xác thực | Banned: bị khóa bởi Admin");
 
                     b.Property<DateTime>("UpdatedAt")
@@ -1655,6 +1737,14 @@ namespace InfrastructureLayer.Migrations
 
                     b.HasKey("Id")
                         .HasName("User_pkey");
+
+                    b.HasIndex("GoogleId")
+                        .IsUnique()
+                        .HasFilter("\"GoogleId\" IS NOT NULL");
+
+                    b.HasIndex("RefreshTokenHash")
+                        .IsUnique()
+                        .HasFilter("\"RefreshTokenHash\" IS NOT NULL");
 
                     b.HasIndex("RoleId");
 
@@ -1674,13 +1764,17 @@ namespace InfrastructureLayer.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("uuid_generate_v4()");
 
                     b.Property<string>("Color")
-                        .HasColumnType("text");
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
 
                     b.Property<string>("Description")
                         .HasColumnType("text");
@@ -1688,21 +1782,29 @@ namespace InfrastructureLayer.Migrations
                     b.Property<Guid>("NightMarketId")
                         .HasColumnType("uuid");
 
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValueSql("'Active'::character varying");
 
                     b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
 
                     b.Property<string>("ZoneName")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
-                    b.HasKey("Id");
+                    b.HasKey("Id")
+                        .HasName("Zones_pkey");
 
                     b.HasIndex("NightMarketId");
 
-                    b.ToTable("Zone");
+                    b.ToTable("Zones");
                 });
 
             modelBuilder.Entity("DomainLayer.Entities.Booth", b =>
@@ -1909,6 +2011,18 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("Customer");
                 });
 
+            modelBuilder.Entity("DomainLayer.Entities.FoodCategory", b =>
+                {
+                    b.HasOne("DomainLayer.Entities.Booth", "Booth")
+                        .WithMany("FoodCategories")
+                        .HasForeignKey("BoothId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("FoodCategories_BoothId_fkey");
+
+                    b.Navigation("Booth");
+                });
+
             modelBuilder.Entity("DomainLayer.Entities.FoodImage", b =>
                 {
                     b.HasOne("DomainLayer.Entities.FoodItem", "FoodItem")
@@ -2054,7 +2168,8 @@ namespace InfrastructureLayer.Migrations
                         .WithMany("PackagePrices")
                         .HasForeignKey("PackageId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("PackagePrice_PackageId_fkey");
 
                     b.Navigation("Package");
                 });
@@ -2185,7 +2300,8 @@ namespace InfrastructureLayer.Migrations
                         .WithMany("Zones")
                         .HasForeignKey("NightMarketId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("Zones_NightMarketId_fkey");
 
                     b.Navigation("NightMarket");
                 });
@@ -2203,6 +2319,8 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("BoothSubscriptions");
 
                     b.Navigation("Complaints");
+
+                    b.Navigation("FoodCategories");
 
                     b.Navigation("FoodItems");
 

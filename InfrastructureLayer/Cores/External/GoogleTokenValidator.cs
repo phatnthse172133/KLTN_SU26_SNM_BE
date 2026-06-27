@@ -28,16 +28,24 @@ public class GoogleTokenValidator : IGoogleTokenValidator
         if (response is null || 
             response.Audience != _clientId || 
             !string.Equals(response.EmailVerified, "true", StringComparison.OrdinalIgnoreCase) || 
+            string.IsNullOrWhiteSpace(response.Subject) ||
             string.IsNullOrWhiteSpace(response.Email)) 
             return null;
 
-        return new GoogleUserInfo(response.Email.Trim().ToLowerInvariant(), response.Name ?? response.Email, response.Picture);
+        return new GoogleUserInfo(
+            response.Subject,
+            response.Email.Trim().ToLowerInvariant(),
+            response.Name ?? response.Email,
+            response.Picture);
     }
 
     private class GoogleTokenInfo
     {
         [JsonPropertyName("aud")]
         public string? Audience { get; init; }
+
+        [JsonPropertyName("sub")]
+        public string? Subject { get; init; }
 
         [JsonPropertyName("email")]
         public string? Email { get; init; }

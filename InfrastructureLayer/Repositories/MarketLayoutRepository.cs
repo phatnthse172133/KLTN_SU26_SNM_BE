@@ -52,18 +52,21 @@ public class MarketLayoutRepository : GenericRepository<MarketLayout>, IMarketLa
 
     public Task<MarketLayout?> GetEditorLayoutAsync(Guid id, CancellationToken cancellationToken = default)
         => _dbSet.AsNoTracking()
-            .Include(layout => layout.LayoutNodes)
-            .Include(layout => layout.BoothLocations)
+            .Include(layout => layout.LayoutNodes.Where(node => !node.IsDeleted))
+            .Include(layout => layout.BoothLocations.Where(location => !location.IsDeleted))
             .FirstOrDefaultAsync(
                 layout => layout.Id == id && !layout.IsDeleted && !layout.NightMarket.IsDeleted,
                 cancellationToken);
 
+    public Task<MarketLayout?> GetActiveMapAsync(Guid nightMarketId, CancellationToken cancellationToken = default)
+        => _dbSet.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.NightMarketId == nightMarketId && !x.IsDeleted &&
+                x.Status == MarketLayoutStatus.Active && !x.NightMarket.IsDeleted, cancellationToken);
+
     public async Task<IReadOnlyCollection<LayoutEdge>> GetEdgesByLayoutIdAsync(
         Guid layoutId, CancellationToken cancellationToken = default)
         => await _context.LayoutEdges.AsNoTracking()
-            .Where(edge =>
-                _context.LayoutNodes.Any(node => node.LayoutId == layoutId && node.Id == edge.FromNodeId) &&
-                _context.LayoutNodes.Any(node => node.LayoutId == layoutId && node.Id == edge.ToNodeId))
+            .Where(edge => edge.LayoutId == layoutId && !edge.IsDeleted)
             .OrderBy(edge => edge.CreatedAt)
             .ToListAsync(cancellationToken);
 

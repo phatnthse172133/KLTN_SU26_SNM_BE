@@ -15,15 +15,17 @@ public class MarketLayoutService : IMarketLayoutService
     private readonly IZoneRepository _zones;
     private readonly INightMarketRepository _nightMarkets;
     private readonly IMapper _mapper;
+    private readonly ILayoutGraphValidationService _graphValidation;
 
     public MarketLayoutService(
         IMarketLayoutRepository layouts, IZoneRepository zones,
-        INightMarketRepository nightMarkets, IMapper mapper)
+        INightMarketRepository nightMarkets, IMapper mapper, ILayoutGraphValidationService graphValidation)
     {
         _layouts = layouts;
         _zones = zones;
         _nightMarkets = nightMarkets;
         _mapper = mapper;
+        _graphValidation = graphValidation;
     }
 
     public async Task<ApiResponse<PaginationResp<MarketLayoutResponse>>> GetAllAsync(
@@ -121,9 +123,7 @@ public class MarketLayoutService : IMarketLayoutService
     public async Task<ApiResponse<MarketLayoutValidationResponse>> ValidateAsync(
         Guid layoutId, CancellationToken cancellationToken = default)
     {
-        var layout = await _layouts.GetEditorLayoutAsync(layoutId, cancellationToken)
-                     ?? throw AppException.NotFound("Market layout was not found.");
-        var result = BuildValidation(layout);
+        var result = await _graphValidation.ValidateAsync(layoutId, cancellationToken);
         return ApiResponse<MarketLayoutValidationResponse>.SuccessResponse(result,
             result.IsValid ? "Market layout is valid." : "Market layout validation failed.");
     }
@@ -133,7 +133,7 @@ public class MarketLayoutService : IMarketLayoutService
     {
         var layout = await _layouts.GetEditorLayoutAsync(layoutId, cancellationToken)
                      ?? throw AppException.NotFound("Market layout was not found.");
-        var validation = BuildValidation(layout);
+        var validation = await _graphValidation.ValidateAsync(layoutId, cancellationToken);
         if (!validation.IsValid)
             throw AppException.BadRequest(string.Join(" ", validation.Errors));
 

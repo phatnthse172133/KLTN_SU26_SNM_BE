@@ -11,17 +11,19 @@ namespace ApplicationLayer.Services.BoothRegistrations;
 
 public class BoothRegistrationService : IBoothRegistrationService
 {
-    private readonly IGenericRepository<BoothRegistration> _registrations;
+    private readonly IBoothRegistrationRepository _registrations;
     private readonly IGenericRepository<BoothDocument> _documents;
     private readonly IGenericRepository<Booth> _booths;
-    private readonly IGenericRepository<NightMarket> _markets;
-    private readonly IGenericRepository<Zone> _zones;
-    private readonly IGenericRepository<LayoutNode> _nodes;
+    private readonly INightMarketRepository _markets;
+    private readonly IZoneRepository _zones;
+    private readonly ILayoutNodeRepository _nodes;
+    private readonly IMarketLayoutRepository _layouts;
+    private readonly IBoothLocationRepository _locations;
     private readonly IGenericRepository<User> _users;
     private readonly IGenericRepository<Role> _roles;
     private readonly IMapper _mapper;
 
-    public BoothRegistrationService(IGenericRepository<BoothRegistration> registrations, IGenericRepository<BoothDocument> documents, IGenericRepository<Booth> booths, IGenericRepository<NightMarket> markets, IGenericRepository<Zone> zones, IGenericRepository<LayoutNode> nodes, IGenericRepository<User> users, IGenericRepository<Role> roles, IMapper mapper)
+    public BoothRegistrationService(IBoothRegistrationRepository registrations, IGenericRepository<BoothDocument> documents, IGenericRepository<Booth> booths, INightMarketRepository markets, IZoneRepository zones, ILayoutNodeRepository nodes, IMarketLayoutRepository layouts, IBoothLocationRepository locations, IGenericRepository<User> users, IGenericRepository<Role> roles, IMapper mapper)
     {
         _registrations = registrations;
         _documents = documents;
@@ -29,6 +31,8 @@ public class BoothRegistrationService : IBoothRegistrationService
         _markets = markets;
         _zones = zones;
         _nodes = nodes;
+        _layouts = layouts;
+        _locations = locations;
         _users = users;
         _roles = roles;
         _mapper = mapper;
@@ -43,7 +47,7 @@ public class BoothRegistrationService : IBoothRegistrationService
         if (validationError is not null) 
             throw AppException.BadRequest(validationError);
 
-        if (await _registrations.AnyAsync(r => r.OwnerId == ownerId && r.Status == BoothRegistrationStatus.PendingReview))
+        if (await _registrations.HasPendingAsync(ownerId, cancellationToken))
             throw AppException.Conflict("You already have a booth registration pending review.");
 
         var now = DateTime.UtcNow;
@@ -60,11 +64,11 @@ public class BoothRegistrationService : IBoothRegistrationService
     }
 
     public async Task<ApiResponse<object>> GetMineAsync(Guid ownerId, CancellationToken cancellationToken = default)
-        => ApiResponse<object>.SuccessResponse(await ToResponsesAsync(await _registrations.FindAsync(r => r.OwnerId == ownerId)));
+        => ApiResponse<object>.SuccessResponse(await ToResponsesAsync(await _registrations.GetByOwnerAsync(ownerId, cancellationToken)));
 
     public async Task<ApiResponse<PaginationResp<BoothRegistrationResponse>>> GetPendingAsync(PaginationReq pagination, CancellationToken cancellationToken = default)
     {
-        var (items, total) = await _registrations.GetPagedAsync(r => r.Status == BoothRegistrationStatus.PendingReview, pagination.Page, pagination.PageSize, r => r.CreatedAt);
+        var (items, total) = await _registrations.GetPendingPagedAsync(pagination.Page, pagination.PageSize, cancellationToken);
 
         return ApiResponse<PaginationResp<BoothRegistrationResponse>>.SuccessResponse(new PaginationResp<BoothRegistrationResponse>
         {
@@ -90,6 +94,10 @@ public class BoothRegistrationService : IBoothRegistrationService
         if (request.Approved && !await IsBoothOwnerAsync(registration.OwnerId))
             throw AppException.Conflict("The registration owner is not a BoothOwner account and cannot be approved.");
 
+        if (request.Approved && registration.PreferredLayoutNodeId.HasValue &&
+            await _locations.GetCurrentByNodeAsync(registration.PreferredLayoutNodeId.Value, cancellationToken) is not null)
+            throw AppException.Conflict("The preferred layout node is no longer available.");
+
         var now = DateTime.UtcNow;
         registration.Status = request.Approved ? BoothRegistrationStatus.Approved : BoothRegistrationStatus.Rejected;
         registration.RejectReason = request.Approved ? null : request.RejectReason!.Trim(); registration.UpdatedAt = now;
@@ -113,7 +121,7 @@ public class BoothRegistrationService : IBoothRegistrationService
         return ApiResponse<BoothRegistrationResponse>.SuccessResponse(ToResponse(registration, docs), request.Approved ? "Registration approved and booth created." : "Booth registration rejected.");
     }
 
-    private async Task<bool> IsZoneInMarketAsync(Guid zoneId, Guid marketId) => (await _zones.GetByIdAsync(zoneId))?.NightMarketId == marketId;
+    private async Task<bool> IsZoneInMarketAsync(Guid zoneId, Guid marketId) => (await _zones.GetActiveByIdAsync(zoneId))?.NightMarketId == marketId;
 
     private async Task<bool> IsBoothOwnerAsync(Guid userId)
     {
@@ -127,14 +135,22 @@ public class BoothRegistrationService : IBoothRegistrationService
 
     private async Task<string?> ValidateRequestAsync(CreateBoothRegistrationRequest request)
     {
-        if (await _markets.GetByIdAsync(request.RequestedNightMarketId) is null) 
+        if (await _markets.GetActiveByIdAsync(request.RequestedNightMarketId) is null)
             return "Night market was not found.";
 
         if (request.PreferredZoneId.HasValue && !(await IsZoneInMarketAsync(request.PreferredZoneId.Value, request.RequestedNightMarketId)))
             return "The selected zone does not belong to the night market.";
 
-        if (request.PreferredLayoutNodeId.HasValue && await _nodes.GetByIdAsync(request.PreferredLayoutNodeId.Value) is null)
-            return "The selected layout node was not found.";
+        if (request.PreferredLayoutNodeId.HasValue)
+        {
+            var node = await _nodes.GetActiveByIdAsync(request.PreferredLayoutNodeId.Value);
+            if (node is null) return "The selected layout node was not found.";
+            if (node.NodeType != LayoutNodeType.BoothAccess || !node.IsAccessible)
+                return "The selected layout node must be an accessible BoothAccess node.";
+            var layout = await _layouts.GetActiveByIdAsync(node.LayoutId);
+            if (layout?.NightMarketId != request.RequestedNightMarketId)
+                return "The selected layout node does not belong to the requested night market.";
+        }
 
         return null;
     }

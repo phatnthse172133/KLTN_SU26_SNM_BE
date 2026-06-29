@@ -64,7 +64,7 @@ public partial class Booth
 
     public virtual ICollection<BoothImage> BoothImages { get; set; } = new List<BoothImage>();
 
-    public virtual BoothLocation? BoothLocation { get; set; }
+    public virtual ICollection<BoothLocation> BoothLocations { get; set; } = new List<BoothLocation>();
 
     public virtual User BoothOwner { get; set; } = null!;
 

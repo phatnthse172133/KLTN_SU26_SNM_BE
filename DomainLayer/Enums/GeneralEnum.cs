@@ -68,6 +68,15 @@ namespace DomainLayer.Enums
             Archived = 3
         }
 
+        public enum LayoutNodeType
+        {
+            Junction = 0,    // Điểm giao nhau hoặc điểm trung chuyển giữa các lối đi
+            Entrance = 1,    // Cổng vào của chợ, có thể dùng làm điểm bắt đầu tìm đường
+            Exit = 2,        // Cổng ra của chợ, có thể dùng làm điểm bắt đầu hoặc điểm đích
+            BoothAccess = 3, // Điểm tiếp cận một gian hàng, dùng để gán BoothLocation và tìm đường đến Booth
+            Landmark = 4     // Địa điểm nổi bật/dễ nhận biết như sân khấu, nhà vệ sinh hoặc khu check-in
+        }
+
         public enum NightMarketStatus
         {
             Draft = 0,

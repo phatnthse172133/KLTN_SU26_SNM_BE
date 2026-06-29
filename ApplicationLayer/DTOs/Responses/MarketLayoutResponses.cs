@@ -27,17 +27,24 @@ public class LayoutNodeResponse
 {
     public Guid Id { get; set; }
     public Guid LayoutId { get; set; }
+    public Guid? ZoneId { get; set; }
     public string? NodeName { get; set; }
-    public decimal Xcoordinate { get; set; }
-    public decimal Ycoordinate { get; set; }
+    public string NodeType { get; set; } = string.Empty;
+    public decimal XCoordinate { get; set; }
+    public decimal YCoordinate { get; set; }
+    public bool IsAccessible { get; set; }
+    public bool IsStartingPoint { get; set; }
 }
 
 public class LayoutEdgeResponse
 {
     public Guid Id { get; set; }
+    public Guid LayoutId { get; set; }
     public Guid FromNodeId { get; set; }
     public Guid ToNodeId { get; set; }
     public decimal Distance { get; set; }
+    public bool IsBidirectional { get; set; }
+    public bool IsAccessible { get; set; }
 }
 
 public class BoothLocationResponse
@@ -45,8 +52,12 @@ public class BoothLocationResponse
     public Guid Id { get; set; }
     public Guid BoothId { get; set; }
     public Guid LayoutId { get; set; }
-    public decimal Xcoordinate { get; set; }
-    public decimal Ycoordinate { get; set; }
+    public Guid LayoutNodeId { get; set; }
+    public Guid? ZoneId { get; set; }
+    public string? SlotNumber { get; set; }
+    public decimal XCoordinate { get; set; }
+    public decimal YCoordinate { get; set; }
+    public DateTime? ReleasedAt { get; set; }
 }
 
 public class MarketLayoutValidationResponse

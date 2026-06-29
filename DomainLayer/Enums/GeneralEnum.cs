@@ -60,6 +60,14 @@ namespace DomainLayer.Enums
             Maintenance = 2
         }
 
+        public enum MarketLayoutStatus
+        {
+            Draft = 0,
+            Active = 1,
+            Inactive = 2,
+            Archived = 3
+        }
+
         public enum NightMarketStatus
         {
             Draft = 0,

@@ -1,12 +1,25 @@
 using System.ComponentModel.DataAnnotations;
+using ApplicationLayer.Helppers;
 using static DomainLayer.Enums.GeneralEnum;
 
 namespace ApplicationLayer.DTOs.Requests;
 
+public class ZoneListRequest : PaginationReq
+{
+    [StringLength(200)]
+    public string? Keyword { get; set; }
+
+    public ZoneStatus? Status { get; set; }
+
+    [RegularExpression("(?i)^(name|status|createdAt|updatedAt)$")]
+    public string SortBy { get; set; } = "createdAt";
+
+    [RegularExpression("(?i)^(asc|desc)$")]
+    public string SortDirection { get; set; } = "desc";
+}
+
 public class CreateZoneRequest
 {
-    public Guid NightMarketId { get; set; }
-
     [Required, StringLength(100)]
     public string ZoneName { get; set; } = string.Empty;
 
@@ -20,3 +33,8 @@ public class CreateZoneRequest
 }
 
 public class UpdateZoneRequest : CreateZoneRequest { }
+
+public class UpdateZoneStatusRequest
+{
+    public ZoneStatus Status { get; set; }
+}

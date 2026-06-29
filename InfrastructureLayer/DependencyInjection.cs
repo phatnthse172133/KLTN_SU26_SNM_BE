@@ -14,6 +14,7 @@ using ApplicationLayer.Services.NightMarkets;
 using ApplicationLayer.Services.Complaints;
 using ApplicationLayer.Services.Reviews;
 using ApplicationLayer.Services.Zones;
+using ApplicationLayer.Services.MarketLayouts;
 using ApplicationLayer.Services.Packages;
 using ApplicationLayer.Services.Prices;
 using ApplicationLayer.Mappings;
@@ -49,6 +50,8 @@ namespace InfrastructureLayer
             services.AddScoped<IComplaintRepository, ComplaintRepository>();
             services.AddScoped<IReviewRepository, ReviewRepository>();
             services.AddScoped<INightMarketRepository, NightMarketRepository>();
+            services.AddScoped<IZoneRepository, ZoneRepository>();
+            services.AddScoped<IMarketLayoutRepository, MarketLayoutRepository>();
             services.Configure<JwtSettings>(configuration.GetSection(JwtSettings.SectionName));
             services.AddScoped<IJwtService, JWTService>();
             services.AddScoped<IPasswordHasher, PasswordHasher>();
@@ -67,10 +70,11 @@ namespace InfrastructureLayer
             services.AddScoped<IComplaintService, ComplaintService>();
             services.AddScoped<IReviewService, ReviewService>();
             services.AddScoped<IZoneService, ZoneService>();
+            services.AddScoped<IMarketLayoutService, MarketLayoutService>();
             services.AddScoped<IPackageService, PackageService>();
             services.AddScoped<IPriceService, PriceService>();
             
-            services.AddAutoMapper(typeof(MappingProfile).Assembly);
+            services.AddAutoMapper(_ => { }, typeof(MappingProfile).Assembly);
 
             // Add HttpContextAccessor
             services.AddHttpContextAccessor();

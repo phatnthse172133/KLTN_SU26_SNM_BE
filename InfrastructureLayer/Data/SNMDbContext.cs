@@ -457,8 +457,25 @@ namespace InfrastructureLayer.Data
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+                entity.Property(e => e.LayoutName).HasMaxLength(150);
                 entity.Property(e => e.LayoutImageUrl).HasMaxLength(500);
+                entity.Property(e => e.Version).HasDefaultValue(1);
+                entity.Property(e => e.Status)
+                    .HasConversion<string>()
+                    .HasMaxLength(20)
+                    .HasDefaultValueSql("'Draft'::character varying");
+                entity.Property(e => e.IsDeleted).HasDefaultValue(false);
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+
+                entity.HasIndex(e => new { e.NightMarketId, e.LayoutName }, "ux_marketlayout_market_name_active")
+                    .IsUnique()
+                    .HasFilter("\"IsDeleted\" = false");
+                entity.HasIndex(e => new { e.NightMarketId, e.Version }, "ux_marketlayout_market_version_active")
+                    .IsUnique()
+                    .HasFilter("\"IsDeleted\" = false");
+                entity.HasIndex(e => e.NightMarketId, "ux_marketlayout_one_active_per_market")
+                    .IsUnique()
+                    .HasFilter("\"IsDeleted\" = false AND \"Status\" = 'Active'");
 
                 entity.HasOne(d => d.NightMarket).WithMany(p => p.MarketLayouts)
                     .HasForeignKey(d => d.NightMarketId)
@@ -854,8 +871,13 @@ namespace InfrastructureLayer.Data
                     .HasConversion<string>()
                     .HasMaxLength(20)
                     .HasDefaultValueSql("'Active'::character varying");
+                entity.Property(e => e.IsDeleted).HasDefaultValue(false);
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+
+                entity.HasIndex(e => new { e.NightMarketId, e.ZoneName }, "ux_zone_market_name_active")
+                    .IsUnique()
+                    .HasFilter("\"IsDeleted\" = false");
 
                 entity.HasOne(d => d.NightMarket).WithMany(p => p.Zones)
                     .HasForeignKey(d => d.NightMarketId)

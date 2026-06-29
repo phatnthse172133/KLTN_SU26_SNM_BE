@@ -2,6 +2,7 @@ using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
+using ApplicationLayer.Mappings;
 using AutoMapper;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
@@ -46,12 +47,16 @@ public class MapNavigationService : IMapNavigationService
         });
     }
 
-    public async Task<ApiResponse<IReadOnlyCollection<LayoutNodeResponse>>> GetStartingPointsAsync(Guid layoutId, CancellationToken cancellationToken = default)
+    public async Task<ApiResponse<PaginationResp<LayoutNodeResponse>>> GetStartingPointsAsync(
+        Guid layoutId,
+        PaginationReq pagination,
+        CancellationToken cancellationToken = default)
     {
         await EnsureLayoutAsync(layoutId, cancellationToken);
-        var nodes = await _nodes.GetByLayoutAsync(layoutId, accessibleOnly: true, cancellationToken);
-        return ApiResponse<IReadOnlyCollection<LayoutNodeResponse>>.SuccessResponse(
-            _mapper.Map<List<LayoutNodeResponse>>(nodes.Where(IsStartingPoint)));
+        var page = await _nodes.GetStartingPointsPagedAsync(
+            layoutId, pagination.Page, pagination.PageSize, cancellationToken);
+        return ApiResponse<PaginationResp<LayoutNodeResponse>>.SuccessResponse(
+            _mapper.MapPage<LayoutNode, LayoutNodeResponse>(page, pagination));
     }
 
     public async Task<ApiResponse<NearestNodeResponse>> FindNearestNodeAsync(Guid layoutId, NearestNodeRequest request, CancellationToken cancellationToken = default)

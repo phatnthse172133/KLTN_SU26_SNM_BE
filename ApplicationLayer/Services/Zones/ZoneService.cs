@@ -2,6 +2,7 @@ using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
+using ApplicationLayer.Mappings;
 using AutoMapper;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
@@ -25,18 +26,13 @@ public class ZoneService : IZoneService
         Guid nightMarketId, ZoneListRequest request, CancellationToken cancellationToken = default)
     {
         await EnsureNightMarketExistsAsync(nightMarketId, cancellationToken);
-        var (items, total) = await _zones.GetActivePagedAsync(
+        var page = await _zones.GetActivePagedAsync(
             nightMarketId, request.Keyword, request.Status, request.Page, request.PageSize,
             request.SortBy, request.SortDirection.Equals("asc", StringComparison.OrdinalIgnoreCase),
             cancellationToken);
 
-        return ApiResponse<PaginationResp<ZoneResponse>>.SuccessResponse(new PaginationResp<ZoneResponse>
-        {
-            Items = _mapper.Map<List<ZoneResponse>>(items),
-            Page = request.Page,
-            PageSize = request.PageSize,
-            Total = total
-        });
+        return ApiResponse<PaginationResp<ZoneResponse>>.SuccessResponse(
+            _mapper.MapPage<Zone, ZoneResponse>(page, request));
     }
 
     public async Task<ApiResponse<ZoneResponse>> GetByIdAsync(Guid zoneId, CancellationToken cancellationToken = default)

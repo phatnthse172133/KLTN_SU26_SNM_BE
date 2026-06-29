@@ -1,3 +1,4 @@
+using DomainLayer.Common;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
 using InfrastructureLayer.Data;
@@ -10,7 +11,7 @@ public class ZoneRepository : GenericRepository<Zone>, IZoneRepository
 {
     public ZoneRepository(SNMDbContext context) : base(context) { }
 
-    public async Task<(IReadOnlyCollection<Zone> Items, int TotalCount)> GetActivePagedAsync(
+    public async Task<PagedResult<Zone>> GetActivePagedAsync(
         Guid nightMarketId, string? keyword, ZoneStatus? status, int page, int pageSize,
         string sortBy, bool ascending, CancellationToken cancellationToken = default)
     {
@@ -42,7 +43,7 @@ public class ZoneRepository : GenericRepository<Zone>, IZoneRepository
         };
 
         var items = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
-        return (items, total);
+        return new PagedResult<Zone>(items, total);
     }
 
     public Task<Zone?> GetActiveByIdAsync(Guid id, CancellationToken cancellationToken = default)

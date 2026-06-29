@@ -2,6 +2,7 @@ using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
+using ApplicationLayer.Mappings;
 using AutoMapper;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
@@ -20,11 +21,9 @@ public class LayoutEdgeService : ILayoutEdgeService
     public async Task<ApiResponse<PaginationResp<LayoutEdgeResponse>>> GetAllAsync(Guid layoutId, PaginationReq request, CancellationToken cancellationToken = default)
     {
         await EnsureLayoutAsync(layoutId, cancellationToken);
-        var (items, total) = await _edges.GetPagedAsync(layoutId, request.Page, request.PageSize, cancellationToken);
-        return ApiResponse<PaginationResp<LayoutEdgeResponse>>.SuccessResponse(new()
-        {
-            Items = _mapper.Map<List<LayoutEdgeResponse>>(items), Page = request.Page, PageSize = request.PageSize, Total = total
-        });
+        var page = await _edges.GetPagedAsync(layoutId, request.Page, request.PageSize, cancellationToken);
+        return ApiResponse<PaginationResp<LayoutEdgeResponse>>.SuccessResponse(
+            _mapper.MapPage<LayoutEdge, LayoutEdgeResponse>(page, request));
     }
 
     public async Task<ApiResponse<LayoutEdgeResponse>> GetAsync(Guid id, CancellationToken cancellationToken = default)
@@ -76,15 +75,22 @@ public class LayoutEdgeService : ILayoutEdgeService
     private async Task<LayoutEdge> BuildAsync(Guid layoutId, CreateLayoutEdgeRequest request, Guid? excludeId, CancellationToken token)
     {
         await EnsureLayoutAsync(layoutId, token);
-        if (request.FromNodeId == request.ToNodeId) throw AppException.BadRequest("An edge cannot connect a node to itself.");
+        if (request.FromNodeId == request.ToNodeId) 
+            throw AppException.BadRequest("An edge cannot connect a node to itself.");
+
         var from = await _nodes.GetActiveByIdAsync(request.FromNodeId, token);
         var to = await _nodes.GetActiveByIdAsync(request.ToNodeId, token);
+
         if (from is null || to is null || from.LayoutId != layoutId || to.LayoutId != layoutId)
             throw AppException.BadRequest("Both edge nodes must belong to the requested layout.");
+
         if (await _edges.ExistsAsync(layoutId, from.Id, to.Id, excludeId, token))
             throw AppException.Conflict("This edge already exists.");
+
         var distance = request.Distance ?? (decimal)Math.Sqrt(Math.Pow((double)(from.Xcoordinate - to.Xcoordinate), 2) + Math.Pow((double)(from.Ycoordinate - to.Ycoordinate), 2));
-        if (distance <= 0) throw AppException.BadRequest("Edge distance must be greater than zero.");
+        if (distance <= 0) 
+            throw AppException.BadRequest("Edge distance must be greater than zero.");
+
         var now = DateTime.UtcNow;
         return new LayoutEdge { Id = Guid.NewGuid(), LayoutId = layoutId, FromNodeId = from.Id, ToNodeId = to.Id,
             Distance = distance, IsBidirectional = request.IsBidirectional, IsAccessible = request.IsAccessible,

@@ -3,6 +3,7 @@ using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
+using ApplicationLayer.Mappings;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
 
@@ -23,7 +24,7 @@ public class NightMarketService : INightMarketService
         NightMarketListRequest request,
         CancellationToken cancellationToken = default)
     {
-        var (items, total) = await _markets.GetActivePagedAsync(
+        var page = await _markets.GetActivePagedAsync(
             request.Keyword,
             request.Status,
             request.Page,
@@ -32,13 +33,8 @@ public class NightMarketService : INightMarketService
             request.SortDirection.Equals("asc", StringComparison.OrdinalIgnoreCase),
             cancellationToken);
 
-        return ApiResponse<PaginationResp<NightMarketResponse>>.SuccessResponse(new PaginationResp<NightMarketResponse>
-        {
-            Items = _mapper.Map<List<NightMarketResponse>>(items),
-            Page = request.Page,
-            PageSize = request.PageSize,
-            Total = total
-        });
+        return ApiResponse<PaginationResp<NightMarketResponse>>.SuccessResponse(
+            _mapper.MapPage<NightMarket, NightMarketResponse>(page, request));
     }
 
     public async Task<ApiResponse<NightMarketResponse>> GetAsync(Guid id, CancellationToken cancellationToken = default)

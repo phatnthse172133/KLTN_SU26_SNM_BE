@@ -1,3 +1,4 @@
+using DomainLayer.Common;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
 using InfrastructureLayer.Data;
@@ -10,7 +11,7 @@ public class MarketLayoutRepository : GenericRepository<MarketLayout>, IMarketLa
 {
     public MarketLayoutRepository(SNMDbContext context) : base(context) { }
 
-    public async Task<(IReadOnlyCollection<MarketLayout> Items, int TotalCount)> GetActivePagedAsync(
+    public async Task<PagedResult<MarketLayout>> GetActivePagedAsync(
         Guid nightMarketId, string? keyword, MarketLayoutStatus? status, int page, int pageSize,
         string sortBy, bool ascending, CancellationToken cancellationToken = default)
     {
@@ -42,7 +43,7 @@ public class MarketLayoutRepository : GenericRepository<MarketLayout>, IMarketLa
         };
 
         var items = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
-        return (items, total);
+        return new PagedResult<MarketLayout>(items, total);
     }
 
     public Task<MarketLayout?> GetActiveByIdAsync(Guid id, CancellationToken cancellationToken = default)

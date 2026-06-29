@@ -1,3 +1,4 @@
+using DomainLayer.Common;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
 using InfrastructureLayer.Data;
@@ -44,14 +45,14 @@ public class ReviewRepository : GenericRepository<Review>, IReviewRepository
     public async Task<bool> ExistsByOrderAsync(Guid orderId)
         => await _dbSet.AnyAsync(review => review.OrderId == orderId);
 
-    public async Task<(IEnumerable<Review> Items, int TotalCount)> GetPagedWithReplyAsync(int page, int pageSize)
-        => await ToPagedAsync(QueryWithReply(), page, pageSize);
+    public async Task<PagedResult<Review>> GetPagedWithReplyAsync(int page, int pageSize, CancellationToken cancellationToken = default)
+        => await ToPagedAsync(QueryWithReply(), page, pageSize, cancellationToken);
 
-    public async Task<(IEnumerable<Review> Items, int TotalCount)> GetPagedByCustomerWithReplyAsync(Guid customerId, int page, int pageSize)
-        => await ToPagedAsync(QueryWithReply().Where(review => review.CustomerId == customerId), page, pageSize);
+    public async Task<PagedResult<Review>> GetPagedByCustomerWithReplyAsync(Guid customerId, int page, int pageSize, CancellationToken cancellationToken = default)
+        => await ToPagedAsync(QueryWithReply().Where(review => review.CustomerId == customerId), page, pageSize, cancellationToken);
 
-    public async Task<(IEnumerable<Review> Items, int TotalCount)> GetPagedVisibleByBoothWithReplyAsync(Guid boothId, int page, int pageSize)
-        => await ToPagedAsync(QueryWithReply().Where(review => review.BoothId == boothId && review.IsVisible), page, pageSize);
+    public async Task<PagedResult<Review>> GetPagedVisibleByBoothWithReplyAsync(Guid boothId, int page, int pageSize, CancellationToken cancellationToken = default)
+        => await ToPagedAsync(QueryWithReply().Where(review => review.BoothId == boothId && review.IsVisible), page, pageSize, cancellationToken);
 
     public async Task RefreshBoothAverageRatingAsync(Guid boothId)
     {
@@ -78,15 +79,19 @@ public class ReviewRepository : GenericRepository<Review>, IReviewRepository
             .Include(review => review.ReviewReply)
             .AsSplitQuery();
 
-    private static async Task<(IEnumerable<Review> Items, int TotalCount)> ToPagedAsync(IQueryable<Review> query, int page, int pageSize)
+    private static async Task<PagedResult<Review>> ToPagedAsync(
+        IQueryable<Review> query,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
     {
-        var totalCount = await query.CountAsync();
+        var totalCount = await query.CountAsync(cancellationToken);
         var items = await query
             .OrderByDescending(review => review.CreatedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
-        return (items, totalCount);
+        return new PagedResult<Review>(items, totalCount);
     }
 }

@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using ApplicationLayer.DTOs.Requests;
+using ApplicationLayer.Helppers;
 using ApplicationLayer.Services.Prices;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -17,8 +18,13 @@ public class PricesController : ControllerBase
 
     [Authorize(Roles = "BoothOwner")]
     [HttpGet("api/booths/mine/{boothId:guid}/menu/{foodItemId:guid}/prices")]
-    public async Task<IActionResult> GetFoodPrices(Guid boothId, Guid foodItemId, CancellationToken cancellationToken)
-        => Ok(await _service.GetFoodPricesAsync(CurrentUserId, boothId, foodItemId, cancellationToken));
+    public async Task<IActionResult> GetFoodPrices(
+        Guid boothId,
+        Guid foodItemId,
+        [FromQuery] PaginationReq pagination,
+        CancellationToken cancellationToken)
+        => Ok(await _service.GetFoodPricesAsync(
+            CurrentUserId, boothId, foodItemId, pagination, cancellationToken));
 
     [Authorize(Roles = "BoothOwner")]
     [HttpPost("api/booths/mine/{boothId:guid}/menu/{foodItemId:guid}/prices")]
@@ -37,8 +43,11 @@ public class PricesController : ControllerBase
 
     [Authorize(Roles = "Admin")]
     [HttpGet("api/admin/packages/{packageId:guid}/prices")]
-    public async Task<IActionResult> GetPackagePrices(Guid packageId, CancellationToken cancellationToken)
-        => Ok(await _service.GetPackagePricesAsync(packageId, cancellationToken));
+    public async Task<IActionResult> GetPackagePrices(
+        Guid packageId,
+        [FromQuery] PaginationReq pagination,
+        CancellationToken cancellationToken)
+        => Ok(await _service.GetPackagePricesAsync(packageId, pagination, cancellationToken));
 
     [Authorize(Roles = "Admin")]
     [HttpPost("api/admin/packages/{packageId:guid}/prices")]

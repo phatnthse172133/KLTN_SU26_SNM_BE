@@ -267,6 +267,7 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.Id, o => o.Ignore())
                 .ForMember(d => d.PackageName, o => o.MapFrom(s => s.PackageName.Trim()))
                 .ForMember(d => d.Description, o => o.MapFrom(s => ApplicationLayer.Helppers.TextHelper.NormalizeOptionalText(s.Description)))
+                .ForMember(d => d.IsDeleted, o => o.Ignore())
                 .ForMember(d => d.CreatedAt, o => o.Ignore())
                 .ForMember(d => d.UpdatedAt, o => o.Ignore())
                 .ForMember(d => d.PackagePrices, o => o.Ignore())
@@ -277,6 +278,7 @@ namespace ApplicationLayer.Mappings
             CreateMap<CreatePriceRequest, FoodPrice>()
                 .ForMember(d => d.Id, o => o.Ignore())
                 .ForMember(d => d.FoodItemId, o => o.Ignore())
+                .ForMember(d => d.IsDeleted, o => o.Ignore())
                 .ForMember(d => d.CreatedAt, o => o.Ignore())
                 .ForMember(d => d.UpdatedAt, o => o.Ignore())
                 .ForMember(d => d.FoodItem, o => o.Ignore());
@@ -286,6 +288,7 @@ namespace ApplicationLayer.Mappings
             CreateMap<CreatePriceRequest, PackagePrice>()
                 .ForMember(d => d.Id, o => o.Ignore())
                 .ForMember(d => d.PackageId, o => o.Ignore())
+                .ForMember(d => d.IsDeleted, o => o.Ignore())
                 .ForMember(d => d.CreatedAt, o => o.Ignore())
                 .ForMember(d => d.UpdatedAt, o => o.Ignore())
                 .ForMember(d => d.Package, o => o.Ignore());

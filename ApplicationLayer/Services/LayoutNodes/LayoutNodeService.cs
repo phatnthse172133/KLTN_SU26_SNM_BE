@@ -2,6 +2,7 @@ using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
+using ApplicationLayer.Mappings;
 using AutoMapper;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
@@ -24,11 +25,9 @@ public class LayoutNodeService : ILayoutNodeService
     public async Task<ApiResponse<PaginationResp<LayoutNodeResponse>>> GetAllAsync(Guid layoutId, MapListRequest request, CancellationToken cancellationToken = default)
     {
         await GetLayoutAsync(layoutId, cancellationToken);
-        var (items, total) = await _nodes.GetPagedAsync(layoutId, request.Keyword, request.Page, request.PageSize, cancellationToken);
-        return ApiResponse<PaginationResp<LayoutNodeResponse>>.SuccessResponse(new()
-        {
-            Items = _mapper.Map<List<LayoutNodeResponse>>(items), Page = request.Page, PageSize = request.PageSize, Total = total
-        });
+        var page = await _nodes.GetPagedAsync(layoutId, request.Keyword, request.Page, request.PageSize, cancellationToken);
+        return ApiResponse<PaginationResp<LayoutNodeResponse>>.SuccessResponse(
+            _mapper.MapPage<LayoutNode, LayoutNodeResponse>(page, request));
     }
 
     public async Task<ApiResponse<LayoutNodeResponse>> GetAsync(Guid id, CancellationToken cancellationToken = default)

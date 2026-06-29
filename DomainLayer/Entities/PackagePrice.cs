@@ -1,10 +1,12 @@
 using System;
 
+using DomainLayer.Common;
+
 namespace DomainLayer.Entities;
 
 
 // Bảng giá theo thời điểm của gói dịch vụ
-public partial class PackagePrice
+public partial class PackagePrice : ISoftDelete
 {
     public Guid Id { get; set; }
 
@@ -15,6 +17,8 @@ public partial class PackagePrice
     public DateTime? StartDate { get; set; }
 
     public DateTime? EndDate { get; set; }
+
+    public bool IsDeleted { get; set; }
 
     public DateTime CreatedAt { get; set; }
 

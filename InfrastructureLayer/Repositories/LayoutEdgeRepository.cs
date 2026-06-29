@@ -1,3 +1,4 @@
+using DomainLayer.Common;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
 using InfrastructureLayer.Data;
@@ -9,13 +10,13 @@ public class LayoutEdgeRepository : GenericRepository<LayoutEdge>, ILayoutEdgeRe
 {
     public LayoutEdgeRepository(SNMDbContext context) : base(context) { }
 
-    public async Task<(IReadOnlyCollection<LayoutEdge> Items, int TotalCount)> GetPagedAsync(
+    public async Task<PagedResult<LayoutEdge>> GetPagedAsync(
         Guid layoutId, int page, int pageSize, CancellationToken cancellationToken = default)
     {
         var query = _dbSet.AsNoTracking().Where(x => x.LayoutId == layoutId && !x.IsDeleted);
         var total = await query.CountAsync(cancellationToken);
         var items = await query.OrderBy(x => x.CreatedAt).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
-        return (items, total);
+        return new PagedResult<LayoutEdge>(items, total);
     }
 
     public async Task<IReadOnlyCollection<LayoutEdge>> GetByLayoutAsync(

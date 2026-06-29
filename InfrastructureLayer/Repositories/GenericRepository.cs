@@ -24,51 +24,53 @@ namespace InfrastructureLayer.Repositories
 
         public virtual async Task<T?> GetByIdAsync(Guid id)
         {
-            return await _dbSet.FindAsync(id);
+            var entity = await _dbSet.FindAsync(id);
+            return entity is ISoftDelete { IsDeleted: true } ? null : entity;
         }
 
         public virtual async Task<IEnumerable<T>> GetAllAsync()
         {
-            return await _dbSet.ToListAsync();
+            return await ActiveQuery().ToListAsync();
         }
 
         public virtual async Task<IEnumerable<T>> FindAsync(Expression<Func<T, bool>> predicate)
         {
-            return await _dbSet.Where(predicate).ToListAsync();
+            return await ActiveQuery().Where(predicate).ToListAsync();
         }
 
         public virtual async Task<T?> FirstOrDefaultAsync(Expression<Func<T, bool>> predicate)
         {
-            return await _dbSet.FirstOrDefaultAsync(predicate);
+            return await ActiveQuery().FirstOrDefaultAsync(predicate);
         }
 
         public virtual async Task<bool> AnyAsync(Expression<Func<T, bool>> predicate)
         {
-            return await _dbSet.AnyAsync(predicate);
+            return await ActiveQuery().AnyAsync(predicate);
         }
 
         public virtual async Task<int> CountAsync(Expression<Func<T, bool>>? predicate = null)
         {
             return predicate == null
-                ? await _dbSet.CountAsync()
-                : await _dbSet.CountAsync(predicate);
+                ? await ActiveQuery().CountAsync()
+                : await ActiveQuery().CountAsync(predicate);
         }
 
-        public virtual async Task<(IEnumerable<T> Items, int TotalCount)> GetPagedAsync(
+        public virtual async Task<PagedResult<T>> GetPagedAsync(
             Expression<Func<T, bool>>? predicate,
             int page,
             int pageSize,
             Expression<Func<T, object>>? orderBy = null,
-            bool ascending = true)
+            bool ascending = true,
+            CancellationToken cancellationToken = default)
         {
-            IQueryable<T> query = _dbSet;
+            IQueryable<T> query = ActiveQuery();
 
             if (predicate != null)
             {
                 query = query.Where(predicate);
             }
 
-            var totalCount = await query.CountAsync();
+            var totalCount = await query.CountAsync(cancellationToken);
 
             if (orderBy != null)
             {
@@ -78,9 +80,9 @@ namespace InfrastructureLayer.Repositories
             var items = await query
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
-            return (items, totalCount);
+            return new PagedResult<T>(items, totalCount);
         }
 
         public virtual async Task AddAsync(T entity)
@@ -137,5 +139,10 @@ namespace InfrastructureLayer.Repositories
         {
             return await _context.SaveChangesAsync();
         }
+
+        protected IQueryable<T> ActiveQuery()
+            => typeof(ISoftDelete).IsAssignableFrom(typeof(T))
+                ? _dbSet.Where(entity => !EF.Property<bool>(entity, nameof(ISoftDelete.IsDeleted)))
+                : _dbSet;
     }
 }

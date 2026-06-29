@@ -1,3 +1,4 @@
+using DomainLayer.Common;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
 using InfrastructureLayer.Data;
@@ -9,7 +10,7 @@ public class BoothLocationRepository : GenericRepository<BoothLocation>, IBoothL
 {
     public BoothLocationRepository(SNMDbContext context) : base(context) { }
 
-    public async Task<(IReadOnlyCollection<BoothLocation> Items, int TotalCount)> GetPagedByLayoutAsync(
+    public async Task<PagedResult<BoothLocation>> GetPagedByLayoutAsync(
         Guid layoutId, Guid? zoneId, int page, int pageSize, CancellationToken cancellationToken = default)
     {
         var query = _dbSet.AsNoTracking().Where(x => x.LayoutId == layoutId && !x.IsDeleted);
@@ -17,7 +18,7 @@ public class BoothLocationRepository : GenericRepository<BoothLocation>, IBoothL
         var total = await query.CountAsync(cancellationToken);
         var items = await query.Include(x => x.Booth).Include(x => x.LayoutNode)
             .OrderBy(x => x.SlotNumber).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
-        return (items, total);
+        return new PagedResult<BoothLocation>(items, total);
     }
 
     public Task<BoothLocation?> GetCurrentByBoothAsync(Guid boothId, CancellationToken cancellationToken = default)

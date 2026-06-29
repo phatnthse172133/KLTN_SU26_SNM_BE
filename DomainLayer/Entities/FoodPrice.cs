@@ -1,11 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
 
+using DomainLayer.Common;
+
 namespace DomainLayer.Entities;
 
 
 // Bảng giá theo thời điểm - override giá mặc định của FoodItem
-public partial class FoodPrice
+public partial class FoodPrice : ISoftDelete
 {
     public Guid Id { get; set; }
 
@@ -16,6 +18,8 @@ public partial class FoodPrice
     public DateTime? StartDate { get; set; }
 
     public DateTime? EndDate { get; set; }
+
+    public bool IsDeleted { get; set; }
 
     public DateTime CreatedAt { get; set; }
 

@@ -1,3 +1,4 @@
+using DomainLayer.Common;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
 using InfrastructureLayer.Data;
@@ -11,19 +12,23 @@ public class FoodCategoryRepository : GenericRepository<FoodCategory>, IFoodCate
     {
     }
 
-    public async Task<(IEnumerable<FoodCategory> Items, int TotalCount)> GetActivePagedByBoothAsync(Guid boothId, int page, int pageSize)
+    public async Task<PagedResult<FoodCategory>> GetActivePagedByBoothAsync(
+        Guid boothId,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default)
     {
         var query = _dbSet
             .Where(category => category.BoothId == boothId && !category.IsDeleted)
             .OrderBy(category => category.Name);
 
-        var total = await query.CountAsync();
+        var total = await query.CountAsync(cancellationToken);
         var items = await query
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
-        return (items, total);
+        return new PagedResult<FoodCategory>(items, total);
     }
 
     public async Task<FoodCategory?> GetActiveByBoothAsync(Guid boothId, Guid categoryId)

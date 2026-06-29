@@ -2,6 +2,7 @@ using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
+using ApplicationLayer.Mappings;
 using AutoMapper;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
@@ -21,14 +22,11 @@ public class PackageService : IPackageService
 
     public async Task<ApiResponse<PaginationResp<PackageResponse>>> GetAllAsync(PaginationReq pagination, CancellationToken cancellationToken = default)
     {
-        var (items, total) = await _packages.GetPagedAsync(null, pagination.Page, pagination.PageSize, package => package.CreatedAt, ascending: false);
-        return ApiResponse<PaginationResp<PackageResponse>>.SuccessResponse(new PaginationResp<PackageResponse>
-        {
-            Items = _mapper.Map<List<PackageResponse>>(items),
-            Page = pagination.Page,
-            PageSize = pagination.PageSize,
-            Total = total
-        });
+        var page = await _packages.GetPagedAsync(
+            null, pagination.Page, pagination.PageSize, package => package.CreatedAt,
+            ascending: false, cancellationToken);
+        return ApiResponse<PaginationResp<PackageResponse>>.SuccessResponse(
+            _mapper.MapPage<Package, PackageResponse>(page, pagination));
     }
 
     public async Task<ApiResponse<PackageResponse>> GetByIdAsync(Guid packageId, CancellationToken cancellationToken = default)
@@ -78,6 +76,7 @@ public class PackageService : IPackageService
         if (package is null)
             throw AppException.NotFound("Package was not found.");
 
+        package.UpdatedAt = DateTime.UtcNow;
         _packages.Delete(package);
         await _packages.SaveChangesAsync();
 

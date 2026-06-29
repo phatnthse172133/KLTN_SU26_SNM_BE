@@ -1,3 +1,4 @@
+using DomainLayer.Common;
 using DomainLayer.Entities;
 using static DomainLayer.Enums.GeneralEnum;
 
@@ -5,7 +6,7 @@ namespace DomainLayer.InterfaceRepository;
 
 public interface IMarketLayoutRepository : IGenericRepository<MarketLayout>
 {
-    Task<(IReadOnlyCollection<MarketLayout> Items, int TotalCount)> GetActivePagedAsync(
+    Task<PagedResult<MarketLayout>> GetActivePagedAsync(
         Guid nightMarketId,
         string? keyword,
         MarketLayoutStatus? status,

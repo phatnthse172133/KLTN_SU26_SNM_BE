@@ -2,6 +2,7 @@ using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
+using ApplicationLayer.Mappings;
 using AutoMapper;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
@@ -13,17 +14,17 @@ public class PriceService : IPriceService
 {
     private readonly IBoothRepository _booths;
     private readonly IFoodItemRepository _foodItems;
-    private readonly IGenericRepository<FoodPrice> _foodPrices;
+    private readonly IFoodPriceRepository _foodPrices;
     private readonly IGenericRepository<Package> _packages;
-    private readonly IGenericRepository<PackagePrice> _packagePrices;
+    private readonly IPackagePriceRepository _packagePrices;
     private readonly IMapper _mapper;
 
     public PriceService(
         IBoothRepository booths,
         IFoodItemRepository foodItems,
-        IGenericRepository<FoodPrice> foodPrices,
+        IFoodPriceRepository foodPrices,
         IGenericRepository<Package> packages,
-        IGenericRepository<PackagePrice> packagePrices,
+        IPackagePriceRepository packagePrices,
         IMapper mapper)
     {
         _booths = booths;
@@ -34,12 +35,18 @@ public class PriceService : IPriceService
         _mapper = mapper;
     }
 
-    public async Task<ApiResponse<IReadOnlyCollection<FoodPriceResponse>>> GetFoodPricesAsync(Guid ownerId, Guid boothId, Guid foodItemId, CancellationToken cancellationToken = default)
+    public async Task<ApiResponse<PaginationResp<FoodPriceResponse>>> GetFoodPricesAsync(
+        Guid ownerId,
+        Guid boothId,
+        Guid foodItemId,
+        PaginationReq pagination,
+        CancellationToken cancellationToken = default)
     {
         await EnsureFoodItemAccessAsync(ownerId, boothId, foodItemId, requireManageableBooth: false);
-        var prices = await _foodPrices.FindAsync(price => price.FoodItemId == foodItemId);
-
-        return ApiResponse<IReadOnlyCollection<FoodPriceResponse>>.SuccessResponse(_mapper.Map<List<FoodPriceResponse>>(prices.OrderByDescending(price => price.CreatedAt)));
+        var page = await _foodPrices.GetByFoodItemPagedAsync(
+            foodItemId, pagination.Page, pagination.PageSize, cancellationToken);
+        return ApiResponse<PaginationResp<FoodPriceResponse>>.SuccessResponse(
+            _mapper.MapPage<FoodPrice, FoodPriceResponse>(page, pagination));
     }
 
     public async Task<ApiResponse<FoodPriceResponse>> CreateFoodPriceAsync(Guid ownerId, Guid boothId, Guid foodItemId, CreatePriceRequest request, CancellationToken cancellationToken = default)
@@ -86,17 +93,23 @@ public class PriceService : IPriceService
         if (foodPrice is null)
             throw AppException.NotFound("Food price was not found.");
 
+        foodPrice.UpdatedAt = DateTime.UtcNow;
         _foodPrices.Delete(foodPrice);
         await _foodPrices.SaveChangesAsync();
 
         return ApiResponse<object>.SuccessResponse(new { foodPrice.Id }, "Food price deleted successfully.");
     }
 
-    public async Task<ApiResponse<IReadOnlyCollection<PackagePriceResponse>>> GetPackagePricesAsync(Guid packageId, CancellationToken cancellationToken = default)
+    public async Task<ApiResponse<PaginationResp<PackagePriceResponse>>> GetPackagePricesAsync(
+        Guid packageId,
+        PaginationReq pagination,
+        CancellationToken cancellationToken = default)
     {
         await EnsurePackageExistsAsync(packageId);
-        var prices = await _packagePrices.FindAsync(price => price.PackageId == packageId);
-        return ApiResponse<IReadOnlyCollection<PackagePriceResponse>>.SuccessResponse(_mapper.Map<List<PackagePriceResponse>>(prices.OrderByDescending(price => price.CreatedAt)));
+        var page = await _packagePrices.GetByPackagePagedAsync(
+            packageId, pagination.Page, pagination.PageSize, cancellationToken);
+        return ApiResponse<PaginationResp<PackagePriceResponse>>.SuccessResponse(
+            _mapper.MapPage<PackagePrice, PackagePriceResponse>(page, pagination));
     }
 
     public async Task<ApiResponse<PackagePriceResponse>> CreatePackagePriceAsync(Guid packageId, CreatePriceRequest request, CancellationToken cancellationToken = default)
@@ -143,6 +156,7 @@ public class PriceService : IPriceService
         if (packagePrice is null)
             throw AppException.NotFound("Package price was not found.");
 
+        packagePrice.UpdatedAt = DateTime.UtcNow;
         _packagePrices.Delete(packagePrice);
         await _packagePrices.SaveChangesAsync();
 

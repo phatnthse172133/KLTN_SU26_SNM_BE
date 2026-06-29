@@ -1,3 +1,4 @@
+using DomainLayer.Common;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
 using InfrastructureLayer.Data;
@@ -12,7 +13,7 @@ public class NightMarketRepository : GenericRepository<NightMarket>, INightMarke
     {
     }
 
-    public async Task<(IReadOnlyCollection<NightMarket> Items, int TotalCount)> GetActivePagedAsync(
+    public async Task<PagedResult<NightMarket>> GetActivePagedAsync(
         string? keyword,
         NightMarketStatus? status,
         int page,
@@ -42,7 +43,7 @@ public class NightMarketRepository : GenericRepository<NightMarket>, INightMarke
             .Take(pageSize)
             .ToListAsync(cancellationToken);
 
-        return (items, totalCount);
+        return new PagedResult<NightMarket>(items, totalCount);
     }
 
     public async Task<NightMarket?> GetActiveByIdAsync(Guid id, CancellationToken cancellationToken = default)

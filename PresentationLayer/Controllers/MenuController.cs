@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using ApplicationLayer.DTOs.Requests;
+using ApplicationLayer.Helppers;
 using ApplicationLayer.Services.Menus;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -18,8 +19,12 @@ public class MenuController : ControllerBase
     private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
     [HttpGet]
-    public async Task<IActionResult> GetMyBoothMenu(Guid boothId, CancellationToken cancellationToken)
-        => Ok(await _service.GetMyBoothMenuAsync(CurrentUserId, boothId, cancellationToken));
+    public async Task<IActionResult> GetMyBoothMenu(
+        Guid boothId,
+        [FromQuery] PaginationReq pagination,
+        CancellationToken cancellationToken)
+        => Ok(await _service.GetMyBoothMenuAsync(
+            CurrentUserId, boothId, pagination, cancellationToken));
 
     [HttpPost]
     public async Task<IActionResult> CreateFoodItem(Guid boothId, CreateFoodItemRequest request, CancellationToken cancellationToken)

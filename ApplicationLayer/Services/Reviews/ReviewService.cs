@@ -2,6 +2,7 @@ using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
+using ApplicationLayer.Mappings;
 using AutoMapper;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
@@ -55,20 +56,26 @@ public class ReviewService : IReviewService
         if (await _booths.GetByIdAsync(boothId) is null)
             throw AppException.NotFound("Booth was not found.");
 
-        var (items, total) = await _reviews.GetPagedVisibleByBoothWithReplyAsync(boothId, pagination.Page, pagination.PageSize);
-        return ApiResponse<PaginationResp<ReviewResponse>>.SuccessResponse(ToPagedResponse(items, total, pagination));
+        var page = await _reviews.GetPagedVisibleByBoothWithReplyAsync(
+            boothId, pagination.Page, pagination.PageSize, cancellationToken);
+        return ApiResponse<PaginationResp<ReviewResponse>>.SuccessResponse(
+            _mapper.MapPage<Review, ReviewResponse>(page, pagination));
     }
 
     public async Task<ApiResponse<PaginationResp<ReviewResponse>>> GetMineAsync(Guid customerId, PaginationReq pagination, CancellationToken cancellationToken = default)
     {
-        var (items, total) = await _reviews.GetPagedByCustomerWithReplyAsync(customerId, pagination.Page, pagination.PageSize);
-        return ApiResponse<PaginationResp<ReviewResponse>>.SuccessResponse(ToPagedResponse(items, total, pagination));
+        var page = await _reviews.GetPagedByCustomerWithReplyAsync(
+            customerId, pagination.Page, pagination.PageSize, cancellationToken);
+        return ApiResponse<PaginationResp<ReviewResponse>>.SuccessResponse(
+            _mapper.MapPage<Review, ReviewResponse>(page, pagination));
     }
 
     public async Task<ApiResponse<PaginationResp<ReviewResponse>>> GetAllAsync(PaginationReq pagination, CancellationToken cancellationToken = default)
     {
-        var (items, total) = await _reviews.GetPagedWithReplyAsync(pagination.Page, pagination.PageSize);
-        return ApiResponse<PaginationResp<ReviewResponse>>.SuccessResponse(ToPagedResponse(items, total, pagination));
+        var page = await _reviews.GetPagedWithReplyAsync(
+            pagination.Page, pagination.PageSize, cancellationToken);
+        return ApiResponse<PaginationResp<ReviewResponse>>.SuccessResponse(
+            _mapper.MapPage<Review, ReviewResponse>(page, pagination));
     }
 
     public async Task<ApiResponse<ReviewResponse>> UpdateVisibilityAsync(Guid reviewId, UpdateReviewVisibilityRequest request, CancellationToken cancellationToken = default)
@@ -122,15 +129,6 @@ public class ReviewService : IReviewService
         if (!await _orders.ContainsBoothItemsAsync(orderId, boothId))
             throw AppException.BadRequest("Order does not contain items from this booth.");
     }
-
-    private PaginationResp<ReviewResponse> ToPagedResponse(IEnumerable<Review> items, int total, PaginationReq pagination)
-        => new()
-        {
-            Items = _mapper.Map<List<ReviewResponse>>(items),
-            Page = pagination.Page,
-            PageSize = pagination.PageSize,
-            Total = total
-        };
 
     private ReviewResponse ToResponse(Review review)
         => _mapper.Map<ReviewResponse>(review);

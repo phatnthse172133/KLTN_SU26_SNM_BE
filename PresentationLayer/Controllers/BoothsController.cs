@@ -17,7 +17,10 @@ public class BoothsController : ControllerBase
 
     [Authorize(Roles = "BoothOwner")]
     [HttpGet("mine")]
-    public async Task<IActionResult> GetMine(CancellationToken cancellationToken) => Ok(await _service.GetMyBoothsAsync(CurrentUserId, cancellationToken));
+    public async Task<IActionResult> GetMine(
+        [FromQuery] PaginationReq pagination,
+        CancellationToken cancellationToken)
+        => Ok(await _service.GetMyBoothsAsync(CurrentUserId, pagination, cancellationToken));
 
     [Authorize(Roles = "BoothOwner")]
     [HttpPut("mine/{boothId:guid}")]

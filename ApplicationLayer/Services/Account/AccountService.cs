@@ -88,13 +88,12 @@ public class AccountService : IAccountService
 
     public async Task<ApiResponse<PaginationResp<ManagedUserResponse>>> GetUsersAsync(PaginationReq pagination, CancellationToken cancellationToken = default)
     {
-        var (items, total) = await _users.GetPagedAsync(null, pagination.Page, pagination.PageSize, u => u.CreatedAt, false);
+        var page = await _users.GetPagedAsync(
+            null, pagination.Page, pagination.PageSize, u => u.CreatedAt, false, cancellationToken);
         var responses = new List<ManagedUserResponse>();
-        foreach (var user in items) responses.Add(await ToManagedUserResponseAsync(user));
-        return ApiResponse<PaginationResp<ManagedUserResponse>>.SuccessResponse(new PaginationResp<ManagedUserResponse>
-        {
-            Items = responses, Page = pagination.Page, PageSize = pagination.PageSize, Total = total
-        });
+        foreach (var user in page.Items) responses.Add(await ToManagedUserResponseAsync(user));
+        return ApiResponse<PaginationResp<ManagedUserResponse>>.SuccessResponse(
+            PaginationResp<ManagedUserResponse>.Create(responses, page.TotalCount, pagination));
     }
 
     public async Task<ApiResponse<ManagedUserResponse>> GetUserAsync(Guid userId, CancellationToken cancellationToken = default)

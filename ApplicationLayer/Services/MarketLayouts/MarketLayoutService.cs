@@ -2,6 +2,7 @@ using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
+using ApplicationLayer.Mappings;
 using AutoMapper;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
@@ -32,18 +33,13 @@ public class MarketLayoutService : IMarketLayoutService
         Guid nightMarketId, MarketLayoutListRequest request, CancellationToken cancellationToken = default)
     {
         await EnsureNightMarketExistsAsync(nightMarketId, cancellationToken);
-        var (items, total) = await _layouts.GetActivePagedAsync(
+        var page = await _layouts.GetActivePagedAsync(
             nightMarketId, request.Keyword, request.Status, request.Page, request.PageSize,
             request.SortBy, request.SortDirection.Equals("asc", StringComparison.OrdinalIgnoreCase),
             cancellationToken);
 
-        return ApiResponse<PaginationResp<MarketLayoutResponse>>.SuccessResponse(new PaginationResp<MarketLayoutResponse>
-        {
-            Items = _mapper.Map<List<MarketLayoutResponse>>(items),
-            Page = request.Page,
-            PageSize = request.PageSize,
-            Total = total
-        });
+        return ApiResponse<PaginationResp<MarketLayoutResponse>>.SuccessResponse(
+            _mapper.MapPage<MarketLayout, MarketLayoutResponse>(page, request));
     }
 
     public async Task<ApiResponse<MarketLayoutResponse>> GetByIdAsync(

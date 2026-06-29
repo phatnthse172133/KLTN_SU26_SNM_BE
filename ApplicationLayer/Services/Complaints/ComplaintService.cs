@@ -2,6 +2,7 @@ using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
+using ApplicationLayer.Mappings;
 using AutoMapper;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
@@ -71,14 +72,18 @@ public class ComplaintService : IComplaintService
 
     public async Task<ApiResponse<PaginationResp<ComplaintResponse>>> GetMineAsync(Guid customerId, PaginationReq pagination, CancellationToken cancellationToken = default)
     {
-        var (items, total) = await _complaints.GetPagedByCustomerWithImagesAsync(customerId, pagination.Page, pagination.PageSize);
-        return ApiResponse<PaginationResp<ComplaintResponse>>.SuccessResponse(ToPagedResponse(items, total, pagination));
+        var page = await _complaints.GetPagedByCustomerWithImagesAsync(
+            customerId, pagination.Page, pagination.PageSize, cancellationToken);
+        return ApiResponse<PaginationResp<ComplaintResponse>>.SuccessResponse(
+            _mapper.MapPage<Complaint, ComplaintResponse>(page, pagination));
     }
 
     public async Task<ApiResponse<PaginationResp<ComplaintResponse>>> GetAllAsync(PaginationReq pagination, CancellationToken cancellationToken = default)
     {
-        var (items, total) = await _complaints.GetPagedWithImagesAsync(pagination.Page, pagination.PageSize);
-        return ApiResponse<PaginationResp<ComplaintResponse>>.SuccessResponse(ToPagedResponse(items, total, pagination));
+        var page = await _complaints.GetPagedWithImagesAsync(
+            pagination.Page, pagination.PageSize, cancellationToken);
+        return ApiResponse<PaginationResp<ComplaintResponse>>.SuccessResponse(
+            _mapper.MapPage<Complaint, ComplaintResponse>(page, pagination));
     }
 
     public async Task<ApiResponse<PaginationResp<ComplaintResponse>>> GetByBoothAsync(Guid ownerId, Guid boothId, PaginationReq pagination, CancellationToken cancellationToken = default)
@@ -90,8 +95,10 @@ public class ComplaintService : IComplaintService
         if (booth.BoothOwnerId != ownerId)
             throw AppException.Forbidden("You do not have permission to view this booth's complaints.");
 
-        var (items, total) = await _complaints.GetPagedByBoothWithImagesAsync(boothId, pagination.Page, pagination.PageSize);
-        return ApiResponse<PaginationResp<ComplaintResponse>>.SuccessResponse(ToPagedResponse(items, total, pagination));
+        var page = await _complaints.GetPagedByBoothWithImagesAsync(
+            boothId, pagination.Page, pagination.PageSize, cancellationToken);
+        return ApiResponse<PaginationResp<ComplaintResponse>>.SuccessResponse(
+            _mapper.MapPage<Complaint, ComplaintResponse>(page, pagination));
     }
 
     public async Task<ApiResponse<ComplaintResponse>> UpdateStatusAsync(Guid complaintId, UpdateComplaintStatusRequest request, CancellationToken cancellationToken = default)
@@ -213,15 +220,6 @@ public class ComplaintService : IComplaintService
             _booths.Update(booth);
         }
     }
-
-    private PaginationResp<ComplaintResponse> ToPagedResponse(IEnumerable<Complaint> items, int total, PaginationReq pagination)
-        => new()
-        {
-            Items = _mapper.Map<List<ComplaintResponse>>(items),
-            Page = pagination.Page,
-            PageSize = pagination.PageSize,
-            Total = total
-        };
 
     private ComplaintResponse ToResponse(Complaint complaint)
         => _mapper.Map<ComplaintResponse>(complaint);

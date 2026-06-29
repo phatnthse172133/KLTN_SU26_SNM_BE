@@ -1,3 +1,4 @@
+using DomainLayer.Common;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
 using InfrastructureLayer.Data;
@@ -11,14 +12,26 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
     {
     }
 
-    public async Task<IReadOnlyCollection<FoodItem>> GetMenuByBoothAsync(Guid boothId)
-        => await _dbSet
+    public async Task<PagedResult<FoodItem>> GetMenuByBoothPagedAsync(
+        Guid boothId,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        var query = _dbSet
             .Include(item => item.Category)
-            .Where(item => item.BoothId == boothId && !item.IsDeleted)
+            .Where(item => item.BoothId == boothId && !item.IsDeleted);
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query
             .OrderByDescending(item => item.IsFeatured)
             .ThenByDescending(item => item.IsAvailable)
             .ThenBy(item => item.Name)
-            .ToListAsync();
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return new PagedResult<FoodItem>(items, totalCount);
+    }
 
     public async Task<FoodItem?> GetByBoothAsync(Guid boothId, Guid foodItemId)
         => await _dbSet

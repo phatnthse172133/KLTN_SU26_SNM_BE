@@ -2,6 +2,7 @@ using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
+using ApplicationLayer.Mappings;
 using AutoMapper;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
@@ -28,14 +29,20 @@ public class MenuService : IMenuService
         _mapper = mapper;
     }
 
-    public async Task<ApiResponse<IReadOnlyCollection<FoodItemResponse>>> GetMyBoothMenuAsync(Guid ownerId, Guid boothId, CancellationToken cancellationToken = default)
+    public async Task<ApiResponse<PaginationResp<FoodItemResponse>>> GetMyBoothMenuAsync(
+        Guid ownerId,
+        Guid boothId,
+        PaginationReq pagination,
+        CancellationToken cancellationToken = default)
     {
         var ownershipError = await ValidateBoothOwnershipAsync(ownerId, boothId);
         if (ownershipError is not null) 
             throw ToBoothAccessException(ownershipError);
 
-        var items = await _foodItems.GetMenuByBoothAsync(boothId);
-        return ApiResponse<IReadOnlyCollection<FoodItemResponse>>.SuccessResponse(_mapper.Map<List<FoodItemResponse>>(items));
+        var page = await _foodItems.GetMenuByBoothPagedAsync(
+            boothId, pagination.Page, pagination.PageSize, cancellationToken);
+        return ApiResponse<PaginationResp<FoodItemResponse>>.SuccessResponse(
+            _mapper.MapPage<FoodItem, FoodItemResponse>(page, pagination));
     }
 
     public async Task<ApiResponse<FoodItemResponse>> CreateFoodItemAsync(Guid ownerId, Guid boothId, CreateFoodItemRequest request, CancellationToken cancellationToken = default)

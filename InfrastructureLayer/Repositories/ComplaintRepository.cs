@@ -1,3 +1,4 @@
+using DomainLayer.Common;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
 using InfrastructureLayer.Data;
@@ -26,29 +27,33 @@ public class ComplaintRepository : GenericRepository<Complaint>, IComplaintRepos
         => await QueryWithImages()
             .FirstOrDefaultAsync(complaint => complaint.Id == complaintId);
 
-    public async Task<(IEnumerable<Complaint> Items, int TotalCount)> GetPagedWithImagesAsync(int page, int pageSize)
-        => await ToPagedAsync(QueryWithImages(), page, pageSize);
+    public async Task<PagedResult<Complaint>> GetPagedWithImagesAsync(int page, int pageSize, CancellationToken cancellationToken = default)
+        => await ToPagedAsync(QueryWithImages(), page, pageSize, cancellationToken);
 
-    public async Task<(IEnumerable<Complaint> Items, int TotalCount)> GetPagedByCustomerWithImagesAsync(Guid customerId, int page, int pageSize)
-        => await ToPagedAsync(QueryWithImages().Where(complaint => complaint.CustomerId == customerId), page, pageSize);
+    public async Task<PagedResult<Complaint>> GetPagedByCustomerWithImagesAsync(Guid customerId, int page, int pageSize, CancellationToken cancellationToken = default)
+        => await ToPagedAsync(QueryWithImages().Where(complaint => complaint.CustomerId == customerId), page, pageSize, cancellationToken);
 
-    public async Task<(IEnumerable<Complaint> Items, int TotalCount)> GetPagedByBoothWithImagesAsync(Guid boothId, int page, int pageSize)
-        => await ToPagedAsync(QueryWithImages().Where(complaint => complaint.BoothId == boothId), page, pageSize);
+    public async Task<PagedResult<Complaint>> GetPagedByBoothWithImagesAsync(Guid boothId, int page, int pageSize, CancellationToken cancellationToken = default)
+        => await ToPagedAsync(QueryWithImages().Where(complaint => complaint.BoothId == boothId), page, pageSize, cancellationToken);
 
     private IQueryable<Complaint> QueryWithImages()
         => _dbSet
             .Include(complaint => complaint.ComplaintImages)
             .AsSplitQuery();
 
-    private static async Task<(IEnumerable<Complaint> Items, int TotalCount)> ToPagedAsync(IQueryable<Complaint> query, int page, int pageSize)
+    private static async Task<PagedResult<Complaint>> ToPagedAsync(
+        IQueryable<Complaint> query,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
     {
-        var totalCount = await query.CountAsync();
+        var totalCount = await query.CountAsync(cancellationToken);
         var items = await query
             .OrderByDescending(complaint => complaint.CreatedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
-        return (items, totalCount);
+        return new PagedResult<Complaint>(items, totalCount);
     }
 }

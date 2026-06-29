@@ -2,6 +2,7 @@ using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
+using ApplicationLayer.Mappings;
 using AutoMapper;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
@@ -26,23 +27,19 @@ public class BoothLocationService : IBoothLocationService
     {
         await EnsureLayoutAsync(layoutId, cancellationToken);
         await ValidateZoneFilterAsync(layoutId, zoneId, cancellationToken);
-        var (items, total) = await _locations.GetPagedByLayoutAsync(layoutId, zoneId, request.Page, request.PageSize, cancellationToken);
-        return ApiResponse<PaginationResp<BoothLocationResponse>>.SuccessResponse(new()
-        {
-            Items = _mapper.Map<List<BoothLocationResponse>>(items), Page = request.Page, PageSize = request.PageSize, Total = total
-        });
+        var page = await _locations.GetPagedByLayoutAsync(layoutId, zoneId, request.Page, request.PageSize, cancellationToken);
+        return ApiResponse<PaginationResp<BoothLocationResponse>>.SuccessResponse(
+            _mapper.MapPage<BoothLocation, BoothLocationResponse>(page, request));
     }
 
     public async Task<ApiResponse<PaginationResp<LayoutNodeResponse>>> GetAvailableAsync(Guid layoutId, Guid? zoneId, PaginationReq request, CancellationToken cancellationToken = default)
     {
         await EnsureLayoutAsync(layoutId, cancellationToken);
         await ValidateZoneFilterAsync(layoutId, zoneId, cancellationToken);
-        var (page, total) = await _nodes.GetAvailableBoothAccessPagedAsync(
+        var page = await _nodes.GetAvailableBoothAccessPagedAsync(
             layoutId, zoneId, request.Page, request.PageSize, cancellationToken);
-        return ApiResponse<PaginationResp<LayoutNodeResponse>>.SuccessResponse(new()
-        {
-            Items = _mapper.Map<List<LayoutNodeResponse>>(page), Page = request.Page, PageSize = request.PageSize, Total = total
-        });
+        return ApiResponse<PaginationResp<LayoutNodeResponse>>.SuccessResponse(
+            _mapper.MapPage<LayoutNode, LayoutNodeResponse>(page, request));
     }
 
     public async Task<ApiResponse<BoothLocationResponse>> GetByBoothAsync(Guid boothId, CancellationToken cancellationToken = default)

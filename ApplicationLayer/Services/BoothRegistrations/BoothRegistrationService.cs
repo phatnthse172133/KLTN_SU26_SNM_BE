@@ -63,17 +63,30 @@ public class BoothRegistrationService : IBoothRegistrationService
         return ApiResponse<BoothRegistrationResponse>.SuccessResponse(ToResponse(registration, documents), "Booth registration submitted successfully.");
     }
 
-    public async Task<ApiResponse<object>> GetMineAsync(Guid ownerId, CancellationToken cancellationToken = default)
-        => ApiResponse<object>.SuccessResponse(await ToResponsesAsync(await _registrations.GetByOwnerAsync(ownerId, cancellationToken)));
+    public async Task<ApiResponse<PaginationResp<BoothRegistrationResponse>>> GetMineAsync(
+        Guid ownerId,
+        PaginationReq pagination,
+        CancellationToken cancellationToken = default)
+    {
+        var page = await _registrations.GetByOwnerPagedAsync(
+            ownerId, pagination.Page, pagination.PageSize, cancellationToken);
+        return ApiResponse<PaginationResp<BoothRegistrationResponse>>.SuccessResponse(
+            PaginationResp<BoothRegistrationResponse>.Create(
+                await ToResponsesAsync(page.Items),
+                page.TotalCount,
+                pagination));
+    }
 
     public async Task<ApiResponse<PaginationResp<BoothRegistrationResponse>>> GetPendingAsync(PaginationReq pagination, CancellationToken cancellationToken = default)
     {
-        var (items, total) = await _registrations.GetPendingPagedAsync(pagination.Page, pagination.PageSize, cancellationToken);
+        var page = await _registrations.GetPendingPagedAsync(
+            pagination.Page, pagination.PageSize, cancellationToken);
 
-        return ApiResponse<PaginationResp<BoothRegistrationResponse>>.SuccessResponse(new PaginationResp<BoothRegistrationResponse>
-        {
-            Items = await ToResponsesAsync(items), Page = pagination.Page, PageSize = pagination.PageSize, Total = total
-        });
+        return ApiResponse<PaginationResp<BoothRegistrationResponse>>.SuccessResponse(
+            PaginationResp<BoothRegistrationResponse>.Create(
+                await ToResponsesAsync(page.Items),
+                page.TotalCount,
+                pagination));
     }
 
     public async Task<ApiResponse<BoothRegistrationResponse>> ReviewAsync(Guid registrationId, ReviewBoothRegistrationRequest request, CancellationToken cancellationToken = default)

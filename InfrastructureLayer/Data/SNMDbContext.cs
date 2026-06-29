@@ -420,6 +420,7 @@ namespace InfrastructureLayer.Data
                 entity.ToTable("FoodPrice", tb => tb.HasComment("Bảng giá theo ngày trong tuần - override giá mặc định của FoodItem"));
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.IsDeleted).HasDefaultValue(false);
                 entity.Property(e => e.Price).HasPrecision(12, 2);
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
 
@@ -713,6 +714,7 @@ namespace InfrastructureLayer.Data
                 entity.ToTable("Package");
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.IsDeleted).HasDefaultValue(false);
                 entity.Property(e => e.PackageName).HasMaxLength(100);
                 entity.Property(e => e.Price).HasPrecision(12, 2);
                 entity.Property(e => e.Status)
@@ -730,6 +732,7 @@ namespace InfrastructureLayer.Data
                 entity.ToTable("PackagePrice");
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.IsDeleted).HasDefaultValue(false);
                 entity.Property(e => e.Price).HasPrecision(12, 2);
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");

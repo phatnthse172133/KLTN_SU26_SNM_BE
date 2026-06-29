@@ -51,6 +51,8 @@ namespace InfrastructureLayer
             services.AddScoped<IBoothRegistrationRepository, BoothRegistrationRepository>();
             services.AddScoped<IFoodCategoryRepository, FoodCategoryRepository>();
             services.AddScoped<IFoodItemRepository, FoodItemRepository>();
+            services.AddScoped<IFoodPriceRepository, FoodPriceRepository>();
+            services.AddScoped<IPackagePriceRepository, PackagePriceRepository>();
             services.AddScoped<IOrderRepository, OrderRepository>();
             services.AddScoped<IComplaintRepository, ComplaintRepository>();
             services.AddScoped<IReviewRepository, ReviewRepository>();

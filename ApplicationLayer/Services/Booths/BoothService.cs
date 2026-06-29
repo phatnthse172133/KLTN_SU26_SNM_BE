@@ -3,6 +3,7 @@ using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
+using ApplicationLayer.Mappings;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
 
@@ -22,8 +23,16 @@ public class BoothService : IBoothService
         _locations = locations;
     }
 
-    public async Task<ApiResponse<object>> GetMyBoothsAsync(Guid ownerId, CancellationToken cancellationToken = default)
-        => ApiResponse<object>.SuccessResponse(_mapper.Map<List<BoothResponse>>(await _booths.FindAsync(b => b.BoothOwnerId == ownerId)));
+    public async Task<ApiResponse<PaginationResp<BoothResponse>>> GetMyBoothsAsync(
+        Guid ownerId,
+        PaginationReq pagination,
+        CancellationToken cancellationToken = default)
+    {
+        var page = await _booths.GetOwnedPagedAsync(
+            ownerId, pagination.Page, pagination.PageSize, cancellationToken);
+        return ApiResponse<PaginationResp<BoothResponse>>.SuccessResponse(
+            _mapper.MapPage<Booth, BoothResponse>(page, pagination));
+    }
 
     public async Task<ApiResponse<BoothResponse>> UpdateMyBoothAsync(Guid ownerId, Guid boothId, UpdateMyBoothRequest request, CancellationToken cancellationToken = default)
     {
@@ -45,11 +54,10 @@ public class BoothService : IBoothService
 
     public async Task<ApiResponse<PaginationResp<BoothResponse>>> GetAllAsync(PaginationReq pagination, CancellationToken cancellationToken = default)
     {
-        var (items, total) = await _booths.GetPagedAsync(null, pagination.Page, pagination.PageSize, b => b.CreatedAt, false);
-        return ApiResponse<PaginationResp<BoothResponse>>.SuccessResponse(new PaginationResp<BoothResponse>
-        {
-            Items = _mapper.Map<List<BoothResponse>>(items), Page = pagination.Page, PageSize = pagination.PageSize, Total = total
-        });
+        var page = await _booths.GetPagedAsync(
+            null, pagination.Page, pagination.PageSize, b => b.CreatedAt, false, cancellationToken);
+        return ApiResponse<PaginationResp<BoothResponse>>.SuccessResponse(
+            _mapper.MapPage<Booth, BoothResponse>(page, pagination));
     }
 
     public async Task<ApiResponse<BoothResponse>> UpdateByAdminAsync(Guid boothId, AdminUpdateBoothRequest request, CancellationToken cancellationToken = default)

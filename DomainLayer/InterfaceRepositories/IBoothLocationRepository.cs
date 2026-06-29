@@ -1,10 +1,11 @@
+using DomainLayer.Common;
 using DomainLayer.Entities;
 
 namespace DomainLayer.InterfaceRepository;
 
 public interface IBoothLocationRepository : IGenericRepository<BoothLocation>
 {
-    Task<(IReadOnlyCollection<BoothLocation> Items, int TotalCount)> GetPagedByLayoutAsync(
+    Task<PagedResult<BoothLocation>> GetPagedByLayoutAsync(
         Guid layoutId, Guid? zoneId, int page, int pageSize, CancellationToken cancellationToken = default);
     Task<BoothLocation?> GetCurrentByBoothAsync(Guid boothId, CancellationToken cancellationToken = default);
     Task<BoothLocation?> GetCurrentByNodeAsync(Guid nodeId, CancellationToken cancellationToken = default);

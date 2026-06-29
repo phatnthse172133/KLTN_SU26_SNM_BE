@@ -35,5 +35,7 @@ public partial class MarketLayout : ISoftDelete
 
     public virtual ICollection<LayoutNode> LayoutNodes { get; set; } = new List<LayoutNode>();
 
+    public virtual ICollection<LayoutEdge> LayoutEdges { get; set; } = new List<LayoutEdge>();
+
     public virtual NightMarket NightMarket { get; set; } = null!;
 }

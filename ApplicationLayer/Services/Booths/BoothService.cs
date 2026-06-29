@@ -10,14 +10,16 @@ namespace ApplicationLayer.Services.Booths;
 
 public class BoothService : IBoothService
 {
-    private readonly IGenericRepository<Booth> _booths;
-    private readonly IGenericRepository<Zone> _zones;
+    private readonly IBoothRepository _booths;
+    private readonly IZoneRepository _zones;
     private readonly IMapper _mapper;
-    public BoothService(IGenericRepository<Booth> booths, IGenericRepository<Zone> zones, IMapper mapper)
+    private readonly IBoothLocationRepository _locations;
+    public BoothService(IBoothRepository booths, IZoneRepository zones, IMapper mapper, IBoothLocationRepository locations)
     {
         _booths = booths;
         _zones = zones;
         _mapper = mapper;
+        _locations = locations;
     }
 
     public async Task<ApiResponse<object>> GetMyBoothsAsync(Guid ownerId, CancellationToken cancellationToken = default)
@@ -36,6 +38,8 @@ public class BoothService : IBoothService
         booth.BoothName = booth.BoothName.Trim(); booth.UpdatedAt = DateTime.UtcNow;
 
         _booths.Update(booth); await _booths.SaveChangesAsync();
+        if (booth.Status == DomainLayer.Enums.GeneralEnum.BoothStatus.Closed)
+            await _locations.ReleaseAsync(booth.Id, DateTime.UtcNow, cancellationToken);
         return ApiResponse<BoothResponse>.SuccessResponse(_mapper.Map<BoothResponse>(booth), "Booth updated successfully.");
     }
 
@@ -54,13 +58,15 @@ public class BoothService : IBoothService
         if (booth is null) 
             throw AppException.NotFound("Booth was not found.");
 
-        if (request.ZoneId.HasValue && (await _zones.GetByIdAsync(request.ZoneId.Value))?.NightMarketId != booth.NightMarketId)
+        if (request.ZoneId.HasValue && (await _zones.GetActiveByIdAsync(request.ZoneId.Value))?.NightMarketId != booth.NightMarketId)
             throw AppException.BadRequest("The assigned zone does not belong to this booth's night market.");
 
         _mapper.Map(request, booth);
         booth.BoothName = booth.BoothName.Trim(); booth.UpdatedAt = DateTime.UtcNow;
 
         _booths.Update(booth); await _booths.SaveChangesAsync();
+        if (booth.Status == DomainLayer.Enums.GeneralEnum.BoothStatus.Closed)
+            await _locations.ReleaseAsync(booth.Id, DateTime.UtcNow, cancellationToken);
         return ApiResponse<BoothResponse>.SuccessResponse(_mapper.Map<BoothResponse>(booth), "Booth updated successfully by the administrator.");
     }
 }

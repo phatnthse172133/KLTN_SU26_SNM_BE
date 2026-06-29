@@ -19,4 +19,6 @@ public partial class Zone : ISoftDelete
 
     public virtual NightMarket NightMarket { get; set; } = null!;
     public virtual ICollection<BoothRegistration> BoothRegistrations { get; set; } = new List<BoothRegistration>();
+    public virtual ICollection<BoothLocation> BoothLocations { get; set; } = new List<BoothLocation>();
+    public virtual ICollection<LayoutNode> LayoutNodes { get; set; } = new List<LayoutNode>();
 }

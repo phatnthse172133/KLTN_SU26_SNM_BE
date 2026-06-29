@@ -37,7 +37,7 @@ public class MarketLayoutsController : ControllerBase
 
     [HttpPut("api/layouts/{layoutId:guid}/image")]
     public async Task<IActionResult> UpdateImage(
-        Guid layoutId, UpdateMarketLayoutImageRequest request, CancellationToken cancellationToken)
+        Guid layoutId, [FromForm] UpdateMarketLayoutImageRequest request, CancellationToken cancellationToken)
         => Ok(await _service.UpdateImageAsync(layoutId, request, cancellationToken));
 
     [HttpGet("api/layouts/{layoutId:guid}/editor-data")]

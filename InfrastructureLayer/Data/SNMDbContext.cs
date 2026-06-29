@@ -214,7 +214,7 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.Status)
                     .HasConversion<string>()
                     .HasMaxLength(20)
-                    .HasDefaultValueSql("'Active'::character varying");
+                    .HasDefaultValueSql("'Draft'::character varying");
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
 
                 entity.HasOne(d => d.Booth).WithMany(p => p.BoothPaymentInfos)
@@ -503,8 +503,11 @@ namespace InfrastructureLayer.Data
                 entity.ToTable("NightMarket", tb => tb.HasComment("Thông tin các chợ đêm - đơn vị quản lý cấp cao nhất, chứa nhiều Booth"));
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
-                entity.Property(e => e.Address).HasMaxLength(255);
+                entity.HasIndex(e => new { e.IsDeleted, e.Status, e.CreatedAt }, "idx_nightmarket_active_status_created");
+
+                entity.Property(e => e.Address).HasMaxLength(500);
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+                entity.Property(e => e.IsDeleted).HasDefaultValue(false);
                 entity.Property(e => e.Latitude).HasPrecision(10, 7);
                 entity.Property(e => e.Longitude).HasPrecision(10, 7);
                 entity.Property(e => e.Name).HasMaxLength(200);

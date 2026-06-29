@@ -23,20 +23,3 @@ public class AdminUpdateBoothRequest : UpdateMyBoothRequest
     public BoothStatus Status { get; set; }
     public bool IsFeatured { get; set; }
 }
-
-public class CreateNightMarketRequest
-{
-    [Required, StringLength(200)] public string Name { get; set; } = string.Empty;
-    [StringLength(2000)] public string? Description { get; set; }
-    [Required, StringLength(500)] public string Address { get; set; } = string.Empty;
-    public decimal? Latitude { get; set; }
-    public decimal? Longitude { get; set; }
-    public TimeOnly? OpeningHours { get; set; }
-    public TimeOnly? ClosingHours { get; set; }
-    public int? MapWidth { get; set; }
-    public int? MapHeight { get; set; }
-    [Url, StringLength(500)] public string? ThumbnailUrl { get; set; }
-    public NightMarketStatus Status { get; set; } = NightMarketStatus.Draft;
-}
-
-public class UpdateNightMarketRequest : CreateNightMarketRequest { }

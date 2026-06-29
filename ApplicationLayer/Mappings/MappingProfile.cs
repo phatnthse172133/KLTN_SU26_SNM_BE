@@ -68,12 +68,52 @@ namespace ApplicationLayer.Mappings
             CreateMap<Booth, BoothResponse>().ForMember(d => d.Status, o => o.MapFrom(s => s.Status.ToString()));
 
             CreateMap<CreateNightMarketRequest, NightMarket>()
-                .ForMember(d => d.Id, o => o.Ignore()).ForMember(d => d.TotalBooth, o => o.Ignore())
-                .ForMember(d => d.CreatedAt, o => o.Ignore()).ForMember(d => d.UpdatedAt, o => o.Ignore());
+                .ForMember(d => d.Id, o => o.Ignore())
+                .ForMember(d => d.Name, o => o.MapFrom(s => s.Name.Trim()))
+                .ForMember(d => d.Description, o => o.MapFrom(s => ApplicationLayer.Helppers.TextHelper.NormalizeOptionalText(s.Description)))
+                .ForMember(d => d.Address, o => o.MapFrom(s => s.Address.Trim()))
+                .ForMember(d => d.ThumbnailUrl, o => o.MapFrom(s => ApplicationLayer.Helppers.TextHelper.NormalizeOptionalText(s.ThumbnailUrl)))
+                .ForMember(d => d.TotalBooth, o => o.Ignore())
+                .ForMember(d => d.IsDeleted, o => o.Ignore())
+                .ForMember(d => d.CreatedAt, o => o.Ignore())
+                .ForMember(d => d.UpdatedAt, o => o.Ignore())
+                .ForMember(d => d.Booths, o => o.Ignore())
+                .ForMember(d => d.MarketLayouts, o => o.Ignore())
+                .ForMember(d => d.Zones, o => o.Ignore())
+                .ForMember(d => d.BoothRegistrations, o => o.Ignore());
             CreateMap<UpdateNightMarketRequest, NightMarket>()
-                .ForMember(d => d.Id, o => o.Ignore()).ForMember(d => d.TotalBooth, o => o.Ignore())
-                .ForMember(d => d.CreatedAt, o => o.Ignore()).ForMember(d => d.UpdatedAt, o => o.Ignore());
-            CreateMap<NightMarket, NightMarketResponse>().ForMember(d => d.Status, o => o.MapFrom(s => s.Status.ToString()));
+                .IncludeBase<CreateNightMarketRequest, NightMarket>();
+            CreateMap<UpdateNightMarketGeographicLocationRequest, NightMarket>()
+                .ForMember(d => d.Id, o => o.Ignore())
+                .ForMember(d => d.Name, o => o.Ignore())
+                .ForMember(d => d.Description, o => o.Ignore())
+                .ForMember(d => d.Address, o => o.MapFrom(s => s.Address.Trim()))
+                .ForMember(d => d.OpeningHours, o => o.Ignore())
+                .ForMember(d => d.ClosingHours, o => o.Ignore())
+                .ForMember(d => d.TotalBooth, o => o.Ignore())
+                .ForMember(d => d.ThumbnailUrl, o => o.Ignore())
+                .ForMember(d => d.Status, o => o.Ignore())
+                .ForMember(d => d.IsDeleted, o => o.Ignore())
+                .ForMember(d => d.CreatedAt, o => o.Ignore())
+                .ForMember(d => d.UpdatedAt, o => o.Ignore())
+                .ForMember(d => d.Booths, o => o.Ignore())
+                .ForMember(d => d.MarketLayouts, o => o.Ignore())
+                .ForMember(d => d.Zones, o => o.Ignore())
+                .ForMember(d => d.BoothRegistrations, o => o.Ignore());
+            CreateMap<NightMarket, NightMarketResponse>()
+                .ForMember(d => d.Status, o => o.MapFrom(s => s.Status.ToString()));
+            CreateMap<NightMarket, NightMarketNavigationInfoResponse>()
+                .ForMember(d => d.NightMarketId, o => o.MapFrom(s => s.Id))
+                .ForMember(d => d.Destination, o => o.MapFrom(s => new GeographicCoordinateResponse
+                {
+                    Latitude = s.Latitude!.Value,
+                    Longitude = s.Longitude!.Value
+                }))
+                .ForMember(d => d.Boundary, o => o.MapFrom(s => new GeographicBoundaryResponse
+                {
+                    WidthMeters = s.BoundaryWidthMeters!.Value,
+                    HeightMeters = s.BoundaryHeightMeters!.Value
+                }));
 
             CreateMap<CreateFoodCategoryRequest, FoodCategory>()
                 .ForMember(d => d.Id, o => o.Ignore())

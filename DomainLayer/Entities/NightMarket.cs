@@ -1,12 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
+using DomainLayer.Common;
 using static DomainLayer.Enums.GeneralEnum;
 
 namespace DomainLayer.Entities;
 
 
 // Thông tin các chợ đêm - đơn vị quản lý cấp cao nhất, chứa nhiều Booth
-public partial class NightMarket
+public partial class NightMarket : ISoftDelete
 {
     public Guid Id { get; set; }
 
@@ -27,13 +28,15 @@ public partial class NightMarket
     // Số lượng gian hàng - giá trị cache, đồng bộ qua trigger hoặc job định kỳ
     public int TotalBooth { get; set; }
 
-    public int? MapWidth { get; set; }
+    public int? BoundaryWidthMeters { get; set; }
 
-    public int? MapHeight { get; set; }
+    public int? BoundaryHeightMeters { get; set; }
 
     public string? ThumbnailUrl { get; set; }
 
     public NightMarketStatus Status { get; set; }
+
+    public bool IsDeleted { get; set; }
 
     public DateTime CreatedAt { get; set; }
 

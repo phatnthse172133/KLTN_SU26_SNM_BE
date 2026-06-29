@@ -12,11 +12,10 @@ using static DomainLayer.Enums.GeneralEnum;
 
 var builder = WebApplication.CreateBuilder(args);
 
-<<<<<<< HEAD
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 builder.Logging.AddDebug();
-=======
+
 // Load .env file (environment variables override appsettings.json)
 var envPath = Path.Combine(AppContext.BaseDirectory, ".env");
 if (!File.Exists(envPath))
@@ -26,11 +25,10 @@ if (File.Exists(envPath))
 
 // Re-add environment variables so .env values take effect
 builder.Configuration.AddEnvironmentVariables();
->>>>>>> 118c40fd746a41d0b68e283cc564c1b98e1b487c
 
 var jwtSettings = builder.Configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>() ?? new JwtSettings();
 if (string.IsNullOrWhiteSpace(jwtSettings.SecretKey) || jwtSettings.SecretKey.Length < 32)
-    throw new InvalidOperationException("JWT secret is missing. Set Jwt:SecretKey in PresentationLayer/appsettings.json (minimum 32 characters).");
+    throw new InvalidOperationException("JWT secret is missing. Set Jwt__SecretKey in PresentationLayer/.env or Jwt:SecretKey in appsettings.json (minimum 32 characters).");
 
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddControllers();

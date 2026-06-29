@@ -15,9 +15,9 @@ public class NightMarketsController : ControllerBase
 
     [AllowAnonymous]
     [HttpGet]
-    public async Task<IActionResult> GetAll([FromQuery] PaginationReq pagination, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> GetAll([FromQuery] NightMarketListRequest request, CancellationToken cancellationToken = default)
     {
-        return Ok(await _service.GetAllAsync(pagination, cancellationToken));
+        return Ok(await _service.GetAllAsync(request, cancellationToken));
     }
 
     [AllowAnonymous]
@@ -42,5 +42,29 @@ public class NightMarketsController : ControllerBase
     {
         var response = await _service.UpdateAsync(id, request, cancellationToken);
         return response.Success ? Ok(response) : NotFound(response);
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpPut("{id:guid}/geographic-location")]
+    public async Task<IActionResult> UpdateGeographicLocation(
+        Guid id,
+        UpdateNightMarketGeographicLocationRequest request,
+        CancellationToken cancellationToken)
+    {
+        return Ok(await _service.UpdateGeographicLocationAsync(id, request, cancellationToken));
+    }
+
+    [AllowAnonymous]
+    [HttpGet("{id:guid}/navigation-info")]
+    public async Task<IActionResult> GetNavigationInfo(Guid id, CancellationToken cancellationToken)
+    {
+        return Ok(await _service.GetNavigationInfoAsync(id, cancellationToken));
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
+    {
+        return Ok(await _service.DeleteAsync(id, cancellationToken));
     }
 }

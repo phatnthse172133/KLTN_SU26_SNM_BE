@@ -48,6 +48,7 @@ namespace InfrastructureLayer
             services.AddScoped<IOrderRepository, OrderRepository>();
             services.AddScoped<IComplaintRepository, ComplaintRepository>();
             services.AddScoped<IReviewRepository, ReviewRepository>();
+            services.AddScoped<INightMarketRepository, NightMarketRepository>();
             services.Configure<JwtSettings>(configuration.GetSection(JwtSettings.SectionName));
             services.AddScoped<IJwtService, JWTService>();
             services.AddScoped<IPasswordHasher, PasswordHasher>();

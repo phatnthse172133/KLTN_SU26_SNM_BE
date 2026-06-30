@@ -6,9 +6,10 @@ namespace ApplicationLayer.Services.Zones;
 
 public interface IZoneService
 {
-    Task<ApiResponse<PaginationResp<ZoneResponse>>> GetAllAsync(PaginationReq pagination, Guid? nightMarketId = null, CancellationToken cancellationToken = default);
+    Task<ApiResponse<PaginationResp<ZoneResponse>>> GetAllAsync(Guid nightMarketId, ZoneListRequest request, CancellationToken cancellationToken = default);
     Task<ApiResponse<ZoneResponse>> GetByIdAsync(Guid zoneId, CancellationToken cancellationToken = default);
-    Task<ApiResponse<ZoneResponse>> CreateAsync(CreateZoneRequest request, CancellationToken cancellationToken = default);
+    Task<ApiResponse<ZoneResponse>> CreateAsync(Guid nightMarketId, CreateZoneRequest request, CancellationToken cancellationToken = default);
     Task<ApiResponse<ZoneResponse>> UpdateAsync(Guid zoneId, UpdateZoneRequest request, CancellationToken cancellationToken = default);
+    Task<ApiResponse<ZoneResponse>> UpdateStatusAsync(Guid zoneId, UpdateZoneStatusRequest request, CancellationToken cancellationToken = default);
     Task<ApiResponse<object>> DeleteAsync(Guid zoneId, CancellationToken cancellationToken = default);
 }

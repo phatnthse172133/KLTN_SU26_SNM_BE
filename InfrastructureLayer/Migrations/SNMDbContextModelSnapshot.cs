@@ -17,7 +17,7 @@ namespace InfrastructureLayer.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "8.0.11")
+                .HasAnnotation("ProductVersion", "8.0.28")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "uuid-ossp");
@@ -257,8 +257,23 @@ namespace InfrastructureLayer.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("now()");
 
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<Guid>("LayoutId")
                         .HasColumnType("uuid");
+
+                    b.Property<Guid>("LayoutNodeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ReleasedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SlotNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<DateTime>("UpdatedAt")
                         .ValueGeneratedOnAdd()
@@ -275,13 +290,23 @@ namespace InfrastructureLayer.Migrations
                         .HasColumnType("numeric(10,2)")
                         .HasColumnName("YCoordinate");
 
+                    b.Property<Guid?>("ZoneId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id")
                         .HasName("BoothLocations_pkey");
 
                     b.HasIndex("LayoutId");
 
-                    b.HasIndex(new[] { "BoothId" }, "BoothLocations_BoothId_key")
-                        .IsUnique();
+                    b.HasIndex("ZoneId");
+
+                    b.HasIndex(new[] { "BoothId" }, "ux_boothlocation_active_booth")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
+
+                    b.HasIndex(new[] { "LayoutNodeId" }, "ux_boothlocation_active_node")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
 
                     b.ToTable("BoothLocations", t =>
                         {
@@ -336,7 +361,7 @@ namespace InfrastructureLayer.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
-                        .HasDefaultValueSql("'Active'::character varying");
+                        .HasDefaultValueSql("'Draft'::character varying");
 
                     b.Property<DateTime>("UpdatedAt")
                         .ValueGeneratedOnAdd()
@@ -781,6 +806,11 @@ namespace InfrastructureLayer.Migrations
                     b.Property<Guid>("FoodItemId")
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<decimal>("Price")
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)");
@@ -823,6 +853,24 @@ namespace InfrastructureLayer.Migrations
                     b.Property<Guid>("FromNodeId")
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("IsAccessible")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsBidirectional")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<Guid>("LayoutId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("ToNodeId")
                         .HasColumnType("uuid");
 
@@ -833,6 +881,14 @@ namespace InfrastructureLayer.Migrations
 
                     b.HasKey("Id")
                         .HasName("LayoutEdges_pkey");
+
+                    b.HasIndex("FromNodeId");
+
+                    b.HasIndex("ToNodeId");
+
+                    b.HasIndex(new[] { "LayoutId", "FromNodeId", "ToNodeId" }, "ux_layoutedge_active")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
 
                     b.ToTable("LayoutEdges", t =>
                         {
@@ -852,12 +908,34 @@ namespace InfrastructureLayer.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("now()");
 
+                    b.Property<bool>("IsAccessible")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsStartingPoint")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<Guid>("LayoutId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("NodeName")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<string>("NodeType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValueSql("'Junction'::character varying");
 
                     b.Property<DateTime>("UpdatedAt")
                         .ValueGeneratedOnAdd()
@@ -874,10 +952,15 @@ namespace InfrastructureLayer.Migrations
                         .HasColumnType("numeric(10,2)")
                         .HasColumnName("YCoordinate");
 
+                    b.Property<Guid?>("ZoneId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id")
                         .HasName("LayoutNodes_pkey");
 
                     b.HasIndex("LayoutId");
+
+                    b.HasIndex("ZoneId");
 
                     b.ToTable("LayoutNodes", t =>
                         {
@@ -900,17 +983,39 @@ namespace InfrastructureLayer.Migrations
                     b.Property<int>("Height")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<string>("LayoutImageUrl")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<string>("LayoutName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
                     b.Property<Guid>("NightMarketId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValueSql("'Draft'::character varying");
 
                     b.Property<DateTime>("UpdatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("now()");
+
+                    b.Property<int>("Version")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
 
                     b.Property<int>("Width")
                         .HasColumnType("integer");
@@ -918,7 +1023,17 @@ namespace InfrastructureLayer.Migrations
                     b.HasKey("Id")
                         .HasName("MarketLayouts_pkey");
 
-                    b.HasIndex("NightMarketId");
+                    b.HasIndex(new[] { "NightMarketId", "LayoutName" }, "ux_marketlayout_market_name_active")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
+
+                    b.HasIndex(new[] { "NightMarketId", "Version" }, "ux_marketlayout_market_version_active")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
+
+                    b.HasIndex(new[] { "NightMarketId" }, "ux_marketlayout_one_active_per_market")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false AND \"Status\" = 'Active'");
 
                     b.ToTable("MarketLayouts", t =>
                         {
@@ -994,8 +1109,14 @@ namespace InfrastructureLayer.Migrations
 
                     b.Property<string>("Address")
                         .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int?>("BoundaryHeightMeters")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("BoundaryWidthMeters")
+                        .HasColumnType("integer");
 
                     b.Property<TimeOnly?>("ClosingHours")
                         .HasColumnType("time without time zone");
@@ -1008,6 +1129,11 @@ namespace InfrastructureLayer.Migrations
                     b.Property<string>("Description")
                         .HasColumnType("text");
 
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<decimal?>("Latitude")
                         .HasPrecision(10, 7)
                         .HasColumnType("numeric(10,7)");
@@ -1015,12 +1141,6 @@ namespace InfrastructureLayer.Migrations
                     b.Property<decimal?>("Longitude")
                         .HasPrecision(10, 7)
                         .HasColumnType("numeric(10,7)");
-
-                    b.Property<int?>("MapHeight")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("MapWidth")
-                        .HasColumnType("integer");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -1054,6 +1174,8 @@ namespace InfrastructureLayer.Migrations
 
                     b.HasKey("Id")
                         .HasName("NightMarket_pkey");
+
+                    b.HasIndex(new[] { "IsDeleted", "Status", "CreatedAt" }, "idx_nightmarket_active_status_created");
 
                     b.ToTable("NightMarket", null, t =>
                         {
@@ -1246,6 +1368,11 @@ namespace InfrastructureLayer.Migrations
                     b.Property<int>("DurationDays")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<string>("PackageName")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -1287,6 +1414,11 @@ namespace InfrastructureLayer.Migrations
 
                     b.Property<DateTime?>("EndDate")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
 
                     b.Property<Guid>("PackageId")
                         .HasColumnType("uuid");
@@ -1776,6 +1908,11 @@ namespace InfrastructureLayer.Migrations
                     b.Property<string>("Description")
                         .HasColumnType("text");
 
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<Guid>("NightMarketId")
                         .HasColumnType("uuid");
 
@@ -1799,7 +1936,9 @@ namespace InfrastructureLayer.Migrations
                     b.HasKey("Id")
                         .HasName("Zones_pkey");
 
-                    b.HasIndex("NightMarketId");
+                    b.HasIndex(new[] { "NightMarketId", "ZoneName" }, "ux_zone_market_name_active")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
 
                     b.ToTable("Zones");
                 });
@@ -1869,8 +2008,8 @@ namespace InfrastructureLayer.Migrations
             modelBuilder.Entity("DomainLayer.Entities.BoothLocation", b =>
                 {
                     b.HasOne("DomainLayer.Entities.Booth", "Booth")
-                        .WithOne("BoothLocation")
-                        .HasForeignKey("DomainLayer.Entities.BoothLocation", "BoothId")
+                        .WithMany("BoothLocations")
+                        .HasForeignKey("BoothId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("BoothLocations_BoothId_fkey");
@@ -1882,9 +2021,26 @@ namespace InfrastructureLayer.Migrations
                         .IsRequired()
                         .HasConstraintName("BoothLocations_LayoutId_fkey");
 
+                    b.HasOne("DomainLayer.Entities.LayoutNode", "LayoutNode")
+                        .WithMany("BoothLocations")
+                        .HasForeignKey("LayoutNodeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("BoothLocations_LayoutNodeId_fkey");
+
+                    b.HasOne("DomainLayer.Entities.Zone", "Zone")
+                        .WithMany("BoothLocations")
+                        .HasForeignKey("ZoneId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("BoothLocations_ZoneId_fkey");
+
                     b.Navigation("Booth");
 
                     b.Navigation("Layout");
+
+                    b.Navigation("LayoutNode");
+
+                    b.Navigation("Zone");
                 });
 
             modelBuilder.Entity("DomainLayer.Entities.BoothPaymentInfo", b =>
@@ -2064,6 +2220,36 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("FoodItem");
                 });
 
+            modelBuilder.Entity("DomainLayer.Entities.LayoutEdge", b =>
+                {
+                    b.HasOne("DomainLayer.Entities.LayoutNode", "FromNode")
+                        .WithMany("OutgoingEdges")
+                        .HasForeignKey("FromNodeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("LayoutEdges_FromNodeId_fkey");
+
+                    b.HasOne("DomainLayer.Entities.MarketLayout", "Layout")
+                        .WithMany("LayoutEdges")
+                        .HasForeignKey("LayoutId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("LayoutEdges_LayoutId_fkey");
+
+                    b.HasOne("DomainLayer.Entities.LayoutNode", "ToNode")
+                        .WithMany("IncomingEdges")
+                        .HasForeignKey("ToNodeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("LayoutEdges_ToNodeId_fkey");
+
+                    b.Navigation("FromNode");
+
+                    b.Navigation("Layout");
+
+                    b.Navigation("ToNode");
+                });
+
             modelBuilder.Entity("DomainLayer.Entities.LayoutNode", b =>
                 {
                     b.HasOne("DomainLayer.Entities.MarketLayout", "Layout")
@@ -2073,7 +2259,15 @@ namespace InfrastructureLayer.Migrations
                         .IsRequired()
                         .HasConstraintName("LayoutNodes_LayoutId_fkey");
 
+                    b.HasOne("DomainLayer.Entities.Zone", "Zone")
+                        .WithMany("LayoutNodes")
+                        .HasForeignKey("ZoneId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("LayoutNodes_ZoneId_fkey");
+
                     b.Navigation("Layout");
+
+                    b.Navigation("Zone");
                 });
 
             modelBuilder.Entity("DomainLayer.Entities.MarketLayout", b =>
@@ -2309,7 +2503,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.Navigation("BoothImages");
 
-                    b.Navigation("BoothLocation");
+                    b.Navigation("BoothLocations");
 
                     b.Navigation("BoothPaymentInfos");
 
@@ -2359,9 +2553,20 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("OrderDetails");
                 });
 
+            modelBuilder.Entity("DomainLayer.Entities.LayoutNode", b =>
+                {
+                    b.Navigation("BoothLocations");
+
+                    b.Navigation("IncomingEdges");
+
+                    b.Navigation("OutgoingEdges");
+                });
+
             modelBuilder.Entity("DomainLayer.Entities.MarketLayout", b =>
                 {
                     b.Navigation("BoothLocations");
+
+                    b.Navigation("LayoutEdges");
 
                     b.Navigation("LayoutNodes");
                 });
@@ -2439,7 +2644,11 @@ namespace InfrastructureLayer.Migrations
 
             modelBuilder.Entity("DomainLayer.Entities.Zone", b =>
                 {
+                    b.Navigation("BoothLocations");
+
                     b.Navigation("BoothRegistrations");
+
+                    b.Navigation("LayoutNodes");
                 });
 #pragma warning restore 612, 618
         }

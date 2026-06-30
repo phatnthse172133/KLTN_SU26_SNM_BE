@@ -28,7 +28,7 @@ builder.Configuration.AddEnvironmentVariables();
 
 var jwtSettings = builder.Configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>() ?? new JwtSettings();
 if (string.IsNullOrWhiteSpace(jwtSettings.SecretKey) || jwtSettings.SecretKey.Length < 32)
-    throw new InvalidOperationException("JWT secret is missing. Set Jwt:SecretKey in PresentationLayer/appsettings.json (minimum 32 characters).");
+    throw new InvalidOperationException("JWT secret is missing. Set Jwt__SecretKey in PresentationLayer/.env or Jwt:SecretKey in appsettings.json (minimum 32 characters).");
 
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddControllers();

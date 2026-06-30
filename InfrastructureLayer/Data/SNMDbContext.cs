@@ -172,11 +172,14 @@ namespace InfrastructureLayer.Data
 
                 entity.ToTable(tb => tb.HasComment("Vị trí cụ thể (tọa độ) của 1 gian hàng trên 1 sơ đồ mặt bằng"));
 
-                entity.HasIndex(e => e.BoothId, "BoothLocations_BoothId_key").IsUnique();
+                entity.HasIndex(e => e.BoothId, "ux_boothlocation_active_booth").IsUnique().HasFilter("\"IsDeleted\" = false");
+                entity.HasIndex(e => e.LayoutNodeId, "ux_boothlocation_active_node").IsUnique().HasFilter("\"IsDeleted\" = false");
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+                entity.Property(e => e.IsDeleted).HasDefaultValue(false);
+                entity.Property(e => e.SlotNumber).HasMaxLength(50);
                 entity.Property(e => e.Xcoordinate)
                     .HasPrecision(10, 2)
                     .HasColumnName("XCoordinate");
@@ -184,13 +187,23 @@ namespace InfrastructureLayer.Data
                     .HasPrecision(10, 2)
                     .HasColumnName("YCoordinate");
 
-                entity.HasOne(d => d.Booth).WithOne(p => p.BoothLocation)
-                    .HasForeignKey<BoothLocation>(d => d.BoothId)
+                entity.HasOne(d => d.Booth).WithMany(p => p.BoothLocations)
+                    .HasForeignKey(d => d.BoothId)
                     .HasConstraintName("BoothLocations_BoothId_fkey");
 
                 entity.HasOne(d => d.Layout).WithMany(p => p.BoothLocations)
                     .HasForeignKey(d => d.LayoutId)
                     .HasConstraintName("BoothLocations_LayoutId_fkey");
+
+                entity.HasOne(d => d.LayoutNode).WithMany(p => p.BoothLocations)
+                    .HasForeignKey(d => d.LayoutNodeId)
+                    .OnDelete(DeleteBehavior.Restrict)
+                    .HasConstraintName("BoothLocations_LayoutNodeId_fkey");
+
+                entity.HasOne(d => d.Zone).WithMany(p => p.BoothLocations)
+                    .HasForeignKey(d => d.ZoneId)
+                    .OnDelete(DeleteBehavior.SetNull)
+                    .HasConstraintName("BoothLocations_ZoneId_fkey");
             });
 
             modelBuilder.Entity<BoothPaymentInfo>(entity =>
@@ -214,7 +227,7 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.Status)
                     .HasConversion<string>()
                     .HasMaxLength(20)
-                    .HasDefaultValueSql("'Active'::character varying");
+                    .HasDefaultValueSql("'Draft'::character varying");
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
 
                 entity.HasOne(d => d.Booth).WithMany(p => p.BoothPaymentInfos)
@@ -407,6 +420,7 @@ namespace InfrastructureLayer.Data
                 entity.ToTable("FoodPrice", tb => tb.HasComment("Bảng giá theo ngày trong tuần - override giá mặc định của FoodItem"));
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.IsDeleted).HasDefaultValue(false);
                 entity.Property(e => e.Price).HasPrecision(12, 2);
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
 
@@ -424,7 +438,26 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
                 entity.Property(e => e.Distance).HasPrecision(10, 2);
+                entity.Property(e => e.IsBidirectional).HasDefaultValue(true);
+                entity.Property(e => e.IsAccessible).HasDefaultValue(true);
+                entity.Property(e => e.IsDeleted).HasDefaultValue(false);
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+
+                entity.HasIndex(e => new { e.LayoutId, e.FromNodeId, e.ToNodeId }, "ux_layoutedge_active")
+                    .IsUnique()
+                    .HasFilter("\"IsDeleted\" = false");
+
+                entity.HasOne(d => d.Layout).WithMany(p => p.LayoutEdges)
+                    .HasForeignKey(d => d.LayoutId)
+                    .HasConstraintName("LayoutEdges_LayoutId_fkey");
+                entity.HasOne(d => d.FromNode).WithMany(p => p.OutgoingEdges)
+                    .HasForeignKey(d => d.FromNodeId)
+                    .OnDelete(DeleteBehavior.Restrict)
+                    .HasConstraintName("LayoutEdges_FromNodeId_fkey");
+                entity.HasOne(d => d.ToNode).WithMany(p => p.IncomingEdges)
+                    .HasForeignKey(d => d.ToNodeId)
+                    .OnDelete(DeleteBehavior.Restrict)
+                    .HasConstraintName("LayoutEdges_ToNodeId_fkey");
             });
 
             modelBuilder.Entity<LayoutNode>(entity =>
@@ -436,6 +469,13 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
                 entity.Property(e => e.NodeName).HasMaxLength(100);
+                entity.Property(e => e.NodeType)
+                    .HasConversion<string>()
+                    .HasMaxLength(20)
+                    .HasDefaultValueSql("'Junction'::character varying");
+                entity.Property(e => e.IsAccessible).HasDefaultValue(true);
+                entity.Property(e => e.IsStartingPoint).HasDefaultValue(false);
+                entity.Property(e => e.IsDeleted).HasDefaultValue(false);
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
                 entity.Property(e => e.Xcoordinate)
                     .HasPrecision(10, 2)
@@ -447,6 +487,11 @@ namespace InfrastructureLayer.Data
                 entity.HasOne(d => d.Layout).WithMany(p => p.LayoutNodes)
                     .HasForeignKey(d => d.LayoutId)
                     .HasConstraintName("LayoutNodes_LayoutId_fkey");
+
+                entity.HasOne(d => d.Zone).WithMany(p => p.LayoutNodes)
+                    .HasForeignKey(d => d.ZoneId)
+                    .OnDelete(DeleteBehavior.SetNull)
+                    .HasConstraintName("LayoutNodes_ZoneId_fkey");
             });
 
             modelBuilder.Entity<MarketLayout>(entity =>
@@ -457,8 +502,25 @@ namespace InfrastructureLayer.Data
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+                entity.Property(e => e.LayoutName).HasMaxLength(150);
                 entity.Property(e => e.LayoutImageUrl).HasMaxLength(500);
+                entity.Property(e => e.Version).HasDefaultValue(1);
+                entity.Property(e => e.Status)
+                    .HasConversion<string>()
+                    .HasMaxLength(20)
+                    .HasDefaultValueSql("'Draft'::character varying");
+                entity.Property(e => e.IsDeleted).HasDefaultValue(false);
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+
+                entity.HasIndex(e => new { e.NightMarketId, e.LayoutName }, "ux_marketlayout_market_name_active")
+                    .IsUnique()
+                    .HasFilter("\"IsDeleted\" = false");
+                entity.HasIndex(e => new { e.NightMarketId, e.Version }, "ux_marketlayout_market_version_active")
+                    .IsUnique()
+                    .HasFilter("\"IsDeleted\" = false");
+                entity.HasIndex(e => e.NightMarketId, "ux_marketlayout_one_active_per_market")
+                    .IsUnique()
+                    .HasFilter("\"IsDeleted\" = false AND \"Status\" = 'Active'");
 
                 entity.HasOne(d => d.NightMarket).WithMany(p => p.MarketLayouts)
                     .HasForeignKey(d => d.NightMarketId)
@@ -503,8 +565,11 @@ namespace InfrastructureLayer.Data
                 entity.ToTable("NightMarket", tb => tb.HasComment("Thông tin các chợ đêm - đơn vị quản lý cấp cao nhất, chứa nhiều Booth"));
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
-                entity.Property(e => e.Address).HasMaxLength(255);
+                entity.HasIndex(e => new { e.IsDeleted, e.Status, e.CreatedAt }, "idx_nightmarket_active_status_created");
+
+                entity.Property(e => e.Address).HasMaxLength(500);
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+                entity.Property(e => e.IsDeleted).HasDefaultValue(false);
                 entity.Property(e => e.Latitude).HasPrecision(10, 7);
                 entity.Property(e => e.Longitude).HasPrecision(10, 7);
                 entity.Property(e => e.Name).HasMaxLength(200);
@@ -649,6 +714,7 @@ namespace InfrastructureLayer.Data
                 entity.ToTable("Package");
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.IsDeleted).HasDefaultValue(false);
                 entity.Property(e => e.PackageName).HasMaxLength(100);
                 entity.Property(e => e.Price).HasPrecision(12, 2);
                 entity.Property(e => e.Status)
@@ -666,6 +732,7 @@ namespace InfrastructureLayer.Data
                 entity.ToTable("PackagePrice");
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.IsDeleted).HasDefaultValue(false);
                 entity.Property(e => e.Price).HasPrecision(12, 2);
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
@@ -851,8 +918,13 @@ namespace InfrastructureLayer.Data
                     .HasConversion<string>()
                     .HasMaxLength(20)
                     .HasDefaultValueSql("'Active'::character varying");
+                entity.Property(e => e.IsDeleted).HasDefaultValue(false);
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+
+                entity.HasIndex(e => new { e.NightMarketId, e.ZoneName }, "ux_zone_market_name_active")
+                    .IsUnique()
+                    .HasFilter("\"IsDeleted\" = false");
 
                 entity.HasOne(d => d.NightMarket).WithMany(p => p.Zones)
                     .HasForeignKey(d => d.NightMarketId)

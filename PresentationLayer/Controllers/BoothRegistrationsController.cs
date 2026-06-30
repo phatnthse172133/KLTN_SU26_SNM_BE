@@ -25,7 +25,10 @@ public class BoothRegistrationsController : ControllerBase
 
     [Authorize(Roles = "BoothOwner")]
     [HttpGet("mine")]
-    public async Task<IActionResult> GetMine(CancellationToken cancellationToken) => Ok(await _service.GetMineAsync(UserId, cancellationToken));
+    public async Task<IActionResult> GetMine(
+        [FromQuery] PaginationReq pagination,
+        CancellationToken cancellationToken)
+        => Ok(await _service.GetMineAsync(UserId, pagination, cancellationToken));
 
     [Authorize(Roles = "Admin")]
     [HttpGet("pending")]

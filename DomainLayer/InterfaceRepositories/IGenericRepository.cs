@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using DomainLayer.Common;
 using System.Linq.Expressions;
 using System.Text;
 using System.Threading.Tasks;
@@ -17,12 +18,13 @@ namespace DomainLayer.InterfaceRepository
         Task<int> CountAsync(Expression<Func<T, bool>>? predicate = null);
         
         // Pagination
-        Task<(IEnumerable<T> Items, int TotalCount)> GetPagedAsync(
+        Task<PagedResult<T>> GetPagedAsync(
             Expression<Func<T, bool>>? predicate,
             int page,
             int pageSize,
             Expression<Func<T, object>>? orderBy = null,
-            bool ascending = true);
+            bool ascending = true,
+            CancellationToken cancellationToken = default);
 
         Task AddAsync(T entity);
         Task AddRangeAsync(IEnumerable<T> entities);

@@ -2,6 +2,7 @@ using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
+using ApplicationLayer.Mappings;
 using AutoMapper;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
@@ -28,14 +29,10 @@ public class FoodCategoryService : IFoodCategoryService
         if (ownershipError is not null) 
             throw ToBoothAccessException(ownershipError);
 
-        var (items, total) = await _categories.GetActivePagedByBoothAsync(boothId, pagination.Page, pagination.PageSize);
-        return ApiResponse<PaginationResp<FoodCategoryResponse>>.SuccessResponse(new PaginationResp<FoodCategoryResponse>
-        {
-            Items = _mapper.Map<List<FoodCategoryResponse>>(items),
-            Page = pagination.Page,
-            PageSize = pagination.PageSize,
-            Total = total
-        });
+        var page = await _categories.GetActivePagedByBoothAsync(
+            boothId, pagination.Page, pagination.PageSize, cancellationToken);
+        return ApiResponse<PaginationResp<FoodCategoryResponse>>.SuccessResponse(
+            _mapper.MapPage<FoodCategory, FoodCategoryResponse>(page, pagination));
     }
 
     public async Task<ApiResponse<FoodCategoryResponse>> GetMyBoothCategoryAsync(Guid ownerId, Guid boothId, Guid categoryId, CancellationToken cancellationToken = default)

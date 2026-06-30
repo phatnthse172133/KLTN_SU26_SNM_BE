@@ -12,11 +12,10 @@ using static DomainLayer.Enums.GeneralEnum;
 
 var builder = WebApplication.CreateBuilder(args);
 
-<<<<<<< HEAD
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 builder.Logging.AddDebug();
-=======
+
 // Load .env file (environment variables override appsettings.json)
 var envPath = Path.Combine(AppContext.BaseDirectory, ".env");
 if (!File.Exists(envPath))
@@ -26,7 +25,6 @@ if (File.Exists(envPath))
 
 // Re-add environment variables so .env values take effect
 builder.Configuration.AddEnvironmentVariables();
->>>>>>> 118c40fd746a41d0b68e283cc564c1b98e1b487c
 
 var jwtSettings = builder.Configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>() ?? new JwtSettings();
 if (string.IsNullOrWhiteSpace(jwtSettings.SecretKey) || jwtSettings.SecretKey.Length < 32)
@@ -68,6 +66,17 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend",
+        policy =>
+        {
+            policy.WithOrigins("http://localhost:3000")
+                  .AllowAnyHeader()
+                  .AllowAnyMethod()
+                  .AllowCredentials();
+        });
+});
 builder.Services.AddAuthorization();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -94,6 +103,7 @@ if (app.Environment.IsDevelopment())
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 app.UseHttpsRedirection();
+app.UseCors("AllowFrontend");
 
 app.UseAuthentication();
 

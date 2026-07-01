@@ -1,5 +1,6 @@
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
+using Microsoft.EntityFrameworkCore;
 
 namespace PresentationLayer.Middlewares;
 
@@ -28,6 +29,15 @@ public class ExceptionHandlingMiddleware
         catch (AppException exception)
         {
             await WriteErrorAsync(context, exception, exception.StatusCode, exception.ErrorCode, exception.Message);
+        }
+        catch (DbUpdateException exception)
+        {
+            await WriteErrorAsync(
+                context,
+                exception,
+                StatusCodes.Status409Conflict,
+                "DATABASE_CONFLICT",
+                "The request conflicts with existing data.");
         }
         catch (Exception exception)
         {

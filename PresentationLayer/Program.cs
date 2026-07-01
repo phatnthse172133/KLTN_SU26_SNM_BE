@@ -1,7 +1,9 @@
 using InfrastructureLayer;
 using InfrastructureLayer.Cores.JWTs;
 using InfrastructureLayer.Data;
+using ApplicationLayer.Helppers;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -31,7 +33,28 @@ if (string.IsNullOrWhiteSpace(jwtSettings.SecretKey) || jwtSettings.SecretKey.Le
     throw new InvalidOperationException("JWT secret is missing. Set Jwt__SecretKey in PresentationLayer/.env or Jwt:SecretKey in appsettings.json (minimum 32 characters).");
 
 builder.Services.AddInfrastructure(builder.Configuration);
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        options.InvalidModelStateResponseFactory = context =>
+        {
+            var details = string.Join(
+                " ",
+                context.ModelState.Values
+                    .SelectMany(value => value.Errors)
+                    .Select(error => error.ErrorMessage)
+                    .Where(message => !string.IsNullOrWhiteSpace(message)));
+            var response = ApiResponse<ErrorResponse>.Failure(
+                "Request validation failed.",
+                new ErrorResponse
+                {
+                    TraceId = context.HttpContext.TraceIdentifier,
+                    ErrorCode = "VALIDATION_ERROR",
+                    Details = details
+                });
+            return new BadRequestObjectResult(response);
+        };
+    });
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -62,6 +85,33 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 var isActive = await dbContext.Users.AnyAsync(user => user.Id == userId && user.Status == UserStatus.Active);
 
                 if (!isActive) context.Fail("Account is not active.");
+            },
+            OnChallenge = async context =>
+            {
+                context.HandleResponse();
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                context.Response.ContentType = "application/json";
+                await context.Response.WriteAsJsonAsync(
+                    ApiResponse<ErrorResponse>.Failure(
+                        "Authentication is required.",
+                        new ErrorResponse
+                        {
+                            TraceId = context.HttpContext.TraceIdentifier,
+                            ErrorCode = "UNAUTHORIZED"
+                        }));
+            },
+            OnForbidden = async context =>
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                context.Response.ContentType = "application/json";
+                await context.Response.WriteAsJsonAsync(
+                    ApiResponse<ErrorResponse>.Failure(
+                        "You do not have permission to access this resource.",
+                        new ErrorResponse
+                        {
+                            TraceId = context.HttpContext.TraceIdentifier,
+                            ErrorCode = "FORBIDDEN"
+                        }));
             }
         };
     });
@@ -84,7 +134,11 @@ builder.Services.AddSwaggerGen(options =>
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment()) 
-{ 
+{
+    app.Services
+        .GetRequiredService<AutoMapper.IMapper>()
+        .ConfigurationProvider
+        .AssertConfigurationIsValid();
     app.UseSwagger(); 
     app.UseSwaggerUI(); 
 }

@@ -102,10 +102,31 @@ namespace DomainLayer.Enums
 
         public enum PromotionStatus
         {
-            Draft = 0,
+            Scheduled = 0,
             Active = 1,
-            Expired = 2,
-            Suspended = 3
+            Inactive = 2,
+            Expired = 3,
+            Suspended = 4
+        }
+
+        public enum DiscountType
+        {
+            Percentage = 0,
+            FixedAmount = 1
+        }
+
+        public enum PromotionScope
+        {
+            EntireBoothOrder = 0,
+            SpecificFoodItems = 1,
+            SpecificCategories = 2
+        }
+
+        public enum PromotionUsageStatus
+        {
+            Reserved = 0,
+            Consumed = 1,
+            Released = 2
         }
 
         public enum ComplaintStatus

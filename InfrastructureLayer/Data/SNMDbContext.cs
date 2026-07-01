@@ -71,6 +71,10 @@ namespace InfrastructureLayer.Data
 
         public virtual DbSet<Promotion> Promotions { get; set; }
 
+        public virtual DbSet<PromotionCategory> PromotionCategories { get; set; }
+
+        public virtual DbSet<PromotionFoodItem> PromotionFoodItems { get; set; }
+
         public virtual DbSet<PromotionUsage> PromotionUsages { get; set; }
 
         public virtual DbSet<Review> Reviews { get; set; }
@@ -802,16 +806,29 @@ namespace InfrastructureLayer.Data
 
                 entity.ToTable("Promotion", tb => tb.HasComment("Chương trình khuyến mãi/mã giảm giá do gian hàng tạo"));
 
+                entity.HasIndex(e => e.BoothId, "idx_promotion_booth");
+                entity.HasIndex(e => new { e.BoothId, e.PromotionCode }, "ux_promotion_active_code")
+                    .IsUnique()
+                    .HasFilter("\"PromotionCode\" IS NOT NULL AND \"IsDeleted\" = false");
+
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
                 entity.Property(e => e.DiscountType)
+                    .HasConversion<string>()
                     .HasMaxLength(20)
                     .HasComment("Percentage: giảm % | FixedAmount: giảm số tiền cố định");
                 entity.Property(e => e.DiscountValue).HasPrecision(12, 2);
+                entity.Property(e => e.Scope)
+                    .HasConversion<string>()
+                    .HasMaxLength(30);
+                entity.Property(e => e.MinimumOrderAmount).HasPrecision(12, 2);
+                entity.Property(e => e.MaximumDiscountAmount).HasPrecision(12, 2);
+                entity.Property(e => e.IsPublic).HasDefaultValue(false);
+                entity.Property(e => e.IsDeleted).HasDefaultValue(false);
                 entity.Property(e => e.Status)
                     .HasConversion<string>()
                     .HasMaxLength(20)
-                    .HasDefaultValueSql("'Active'::character varying");
+                    .HasDefaultValueSql("'Scheduled'::character varying");
                 entity.Property(e => e.PromotionCode).HasMaxLength(50);
                 entity.Property(e => e.Title).HasMaxLength(200);
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
@@ -819,6 +836,50 @@ namespace InfrastructureLayer.Data
                 entity.HasOne(d => d.Booth).WithMany(p => p.Promotions)
                     .HasForeignKey(d => d.BoothId)
                     .HasConstraintName("Promotion_BoothId_fkey");
+            });
+
+            modelBuilder.Entity<PromotionFoodItem>(entity =>
+            {
+                entity.HasKey(e => new { e.PromotionId, e.FoodItemId })
+                    .HasName("PromotionFoodItem_pkey");
+
+                entity.ToTable("PromotionFoodItem");
+
+                entity.HasIndex(e => e.FoodItemId, "idx_promotionfooditem_food");
+
+                entity.HasOne(d => d.Promotion)
+                    .WithMany(p => p.PromotionFoodItems)
+                    .HasForeignKey(d => d.PromotionId)
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("PromotionFoodItem_PromotionId_fkey");
+
+                entity.HasOne(d => d.FoodItem)
+                    .WithMany(p => p.PromotionFoodItems)
+                    .HasForeignKey(d => d.FoodItemId)
+                    .OnDelete(DeleteBehavior.Restrict)
+                    .HasConstraintName("PromotionFoodItem_FoodItemId_fkey");
+            });
+
+            modelBuilder.Entity<PromotionCategory>(entity =>
+            {
+                entity.HasKey(e => new { e.PromotionId, e.CategoryId })
+                    .HasName("PromotionCategory_pkey");
+
+                entity.ToTable("PromotionCategory");
+
+                entity.HasIndex(e => e.CategoryId, "idx_promotioncategory_category");
+
+                entity.HasOne(d => d.Promotion)
+                    .WithMany(p => p.PromotionCategories)
+                    .HasForeignKey(d => d.PromotionId)
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("PromotionCategory_PromotionId_fkey");
+
+                entity.HasOne(d => d.Category)
+                    .WithMany(p => p.PromotionCategories)
+                    .HasForeignKey(d => d.CategoryId)
+                    .OnDelete(DeleteBehavior.Restrict)
+                    .HasConstraintName("PromotionCategory_CategoryId_fkey");
             });
 
             modelBuilder.Entity<PromotionUsage>(entity =>
@@ -830,6 +891,12 @@ namespace InfrastructureLayer.Data
                 entity.HasIndex(e => new { e.PromotionId, e.OrderId }, "uq_promotionusage_order").IsUnique();
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.DiscountAmount).HasPrecision(12, 2);
+                entity.Property(e => e.Status)
+                    .HasConversion<string>()
+                    .HasMaxLength(20)
+                    .HasDefaultValueSql("'Reserved'::character varying");
+                entity.Property(e => e.AppliedAt).HasDefaultValueSql("now()");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
 

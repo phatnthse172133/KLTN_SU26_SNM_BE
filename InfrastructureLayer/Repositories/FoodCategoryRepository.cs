@@ -43,4 +43,12 @@ public class FoodCategoryRepository : GenericRepository<FoodCategory>, IFoodCate
 
     public async Task<IReadOnlyCollection<FoodCategory>> GetByIdsAsync(IReadOnlyCollection<Guid> ids)
         => await _dbSet.Where(category => ids.Contains(category.Id)).ToListAsync();
+
+    public async Task<IReadOnlyCollection<FoodCategory>> GetActiveByIdsAndBoothAsync(
+        Guid boothId,
+        IReadOnlyCollection<Guid> categoryIds,
+        CancellationToken cancellationToken = default)
+        => await ActiveQuery()
+            .Where(category => category.BoothId == boothId && categoryIds.Contains(category.Id))
+            .ToListAsync(cancellationToken);
 }

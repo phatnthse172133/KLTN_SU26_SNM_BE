@@ -9,4 +9,8 @@ public interface IFoodCategoryRepository : IGenericRepository<FoodCategory>
     Task<FoodCategory?> GetActiveByBoothAsync(Guid boothId, Guid categoryId);
     Task<bool> ActiveNameExistsAsync(Guid boothId, string name, Guid? excludeId = null);
     Task<IReadOnlyCollection<FoodCategory>> GetByIdsAsync(IReadOnlyCollection<Guid> ids);
+    Task<IReadOnlyCollection<FoodCategory>> GetActiveByIdsAndBoothAsync(
+        Guid boothId,
+        IReadOnlyCollection<Guid> categoryIds,
+        CancellationToken cancellationToken = default);
 }

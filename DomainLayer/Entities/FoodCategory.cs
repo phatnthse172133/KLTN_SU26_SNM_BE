@@ -25,4 +25,6 @@ public partial class FoodCategory : ISoftDelete
     public virtual Booth Booth { get; set; } = null!;
 
     public virtual ICollection<FoodItem> FoodItems { get; set; } = new List<FoodItem>();
+
+    public virtual ICollection<PromotionCategory> PromotionCategories { get; set; } = new List<PromotionCategory>();
 }

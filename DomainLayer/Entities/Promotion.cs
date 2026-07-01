@@ -1,34 +1,43 @@
-﻿using System;
-using System.Collections.Generic;
+using DomainLayer.Common;
 using static DomainLayer.Enums.GeneralEnum;
 
 namespace DomainLayer.Entities;
 
-
-// Chương trình khuyến mãi / mã giảm giá (voucher) do gian hàng tạo
-public partial class Promotion
+public partial class Promotion : ISoftDelete
 {
     public Guid Id { get; set; }
 
     public Guid BoothId { get; set; }
 
-    // Mã khuyến mãi / mã voucher (ví dụ: GIAM20K, FREESHIP)
     public string? PromotionCode { get; set; }
 
     public string Title { get; set; } = null!;
 
     public string? Description { get; set; }
 
-    // Percentage: giảm % | FixedAmount: giảm số tiền cố định
-    public string DiscountType { get; set; } = null!;
+    public DiscountType DiscountType { get; set; }
+
+    public PromotionScope Scope { get; set; }
 
     public decimal DiscountValue { get; set; }
+
+    public decimal? MinimumOrderAmount { get; set; }
+
+    public decimal? MaximumDiscountAmount { get; set; }
+
+    public int? TotalUsageLimit { get; set; }
+
+    public int? UsageLimitPerCustomer { get; set; }
+
+    public bool IsPublic { get; set; }
 
     public DateTime StartDate { get; set; }
 
     public DateTime EndDate { get; set; }
 
     public PromotionStatus Status { get; set; }
+
+    public bool IsDeleted { get; set; }
 
     public DateTime CreatedAt { get; set; }
 
@@ -37,4 +46,8 @@ public partial class Promotion
     public virtual Booth Booth { get; set; } = null!;
 
     public virtual ICollection<PromotionUsage> PromotionUsages { get; set; } = new List<PromotionUsage>();
+
+    public virtual ICollection<PromotionFoodItem> PromotionFoodItems { get; set; } = new List<PromotionFoodItem>();
+
+    public virtual ICollection<PromotionCategory> PromotionCategories { get; set; } = new List<PromotionCategory>();
 }

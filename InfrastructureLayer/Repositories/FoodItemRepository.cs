@@ -46,4 +46,12 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
             .Include(item => item.Category)
             .Include(item => item.FoodPrices)
             .FirstOrDefaultAsync(item => item.Id == foodItemId, cancellationToken);
+
+    public async Task<IReadOnlyCollection<FoodItem>> GetActiveByIdsAndBoothAsync(
+        Guid boothId,
+        IReadOnlyCollection<Guid> foodItemIds,
+        CancellationToken cancellationToken = default)
+        => await ActiveQuery()
+            .Where(item => item.BoothId == boothId && foodItemIds.Contains(item.Id))
+            .ToListAsync(cancellationToken);
 }

@@ -20,13 +20,7 @@ public class AuthService : IAuthService
     private readonly IEmailService _emailService;
     private readonly IGoogleTokenValidator _googleTokenValidator;
 
-    public AuthService(
-        IGenericRepository<User> userRepository,
-        IGenericRepository<Role> roleRepository,
-        IPasswordHasher passwordHasher,
-        IJwtService jwtService,
-        IEmailService emailService,
-        IGoogleTokenValidator googleTokenValidator)
+    public AuthService( IGenericRepository<User> userRepository, IGenericRepository<Role> roleRepository, IPasswordHasher passwordHasher, IJwtService jwtService, IEmailService emailService, IGoogleTokenValidator googleTokenValidator)
     {
         _userRepository = userRepository;
         _roleRepository = roleRepository;

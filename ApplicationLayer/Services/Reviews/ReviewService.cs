@@ -17,11 +17,7 @@ public class ReviewService : IReviewService
     private readonly IOrderRepository _orders;
     private readonly IMapper _mapper;
 
-    public ReviewService(
-        IReviewRepository reviews,
-        IBoothRepository booths,
-        IOrderRepository orders,
-        IMapper mapper)
+    public ReviewService(IReviewRepository reviews, IBoothRepository booths, IOrderRepository orders, IMapper mapper)
     {
         _reviews = reviews;
         _booths = booths;

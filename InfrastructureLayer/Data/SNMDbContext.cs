@@ -29,6 +29,10 @@ namespace InfrastructureLayer.Data
 
         public virtual DbSet<BoothSubscription> BoothSubscriptions { get; set; }
 
+        public virtual DbSet<Cart> Carts { get; set; }
+
+        public virtual DbSet<CartItem> CartItems { get; set; }
+
         public virtual DbSet<Complaint> Complaints { get; set; }
 
         public virtual DbSet<ComplaintImage> ComplaintImages { get; set; }
@@ -84,6 +88,56 @@ namespace InfrastructureLayer.Data
             base.OnModelCreating(modelBuilder);
             // Apply all configurations from the current assembly
             modelBuilder.HasPostgresExtension("uuid-ossp");
+
+            modelBuilder.Entity<Cart>(entity =>
+            {
+                entity.HasKey(e => e.Id).HasName("Cart_pkey");
+
+                entity.ToTable("Cart", tb => tb.HasComment("Giỏ hàng hiện tại của khách hàng"));
+
+                entity.HasIndex(e => e.CustomerId, "ux_cart_active_customer")
+                    .IsUnique()
+                    .HasFilter("\"IsDeleted\" = false");
+
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.IsDeleted).HasDefaultValue(false);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+
+                entity.HasOne(d => d.Customer).WithMany(p => p.Carts)
+                    .HasForeignKey(d => d.CustomerId)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("Cart_CustomerId_fkey");
+            });
+
+            modelBuilder.Entity<CartItem>(entity =>
+            {
+                entity.HasKey(e => e.Id).HasName("CartItem_pkey");
+
+                entity.ToTable("CartItem", tb => tb.HasComment("Món ăn trong giỏ hàng"));
+
+                entity.HasIndex(e => e.CartId, "idx_cartitem_cart");
+                entity.HasIndex(e => e.FoodItemId, "idx_cartitem_fooditem");
+                entity.HasIndex(e => new { e.CartId, e.FoodItemId }, "ux_cartitem_active_food")
+                    .IsUnique()
+                    .HasFilter("\"IsDeleted\" = false");
+
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.Quantity);
+                entity.Property(e => e.IsDeleted).HasDefaultValue(false);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+
+                entity.HasOne(d => d.Cart).WithMany(p => p.CartItems)
+                    .HasForeignKey(d => d.CartId)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("CartItem_CartId_fkey");
+
+                entity.HasOne(d => d.FoodItem).WithMany(p => p.CartItems)
+                    .HasForeignKey(d => d.FoodItemId)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("CartItem_FoodItemId_fkey");
+            });
 
             modelBuilder.Entity<Booth>(entity =>
             {

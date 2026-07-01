@@ -12,7 +12,11 @@ namespace PresentationLayer.Controllers;
 public class BoothRegistrationsController : ControllerBase
 {
     private readonly IBoothRegistrationService _service;
-    public BoothRegistrationsController(IBoothRegistrationService service) => _service = service;
+    public BoothRegistrationsController(IBoothRegistrationService service)
+    {
+        _service = service;
+    }
+
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
     [Authorize(Roles = "BoothOwner")]

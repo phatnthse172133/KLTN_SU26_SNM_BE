@@ -11,7 +11,10 @@ namespace PresentationLayer.Controllers;
 public class NightMarketsController : ControllerBase
 {
     private readonly INightMarketService _service;
-    public NightMarketsController(INightMarketService service) => _service = service;
+    public NightMarketsController(INightMarketService service)
+    {
+        _service = service;
+    }
 
     [AllowAnonymous]
     [HttpGet]
@@ -46,10 +49,7 @@ public class NightMarketsController : ControllerBase
 
     [Authorize(Roles = "Admin")]
     [HttpPut("{id:guid}/geographic-location")]
-    public async Task<IActionResult> UpdateGeographicLocation(
-        Guid id,
-        UpdateNightMarketGeographicLocationRequest request,
-        CancellationToken cancellationToken)
+    public async Task<IActionResult> UpdateGeographicLocation(Guid id, UpdateNightMarketGeographicLocationRequest request, CancellationToken cancellationToken)
     {
         return Ok(await _service.UpdateGeographicLocationAsync(id, request, cancellationToken));
     }

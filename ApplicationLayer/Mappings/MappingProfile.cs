@@ -20,6 +20,18 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.CreatedAt, o => o.Ignore())
                 .ForMember(d => d.UpdatedAt, o => o.Ignore());
 
+            CreateMap<CartItem, CartItemResponse>()
+                .ForMember(d => d.CartItemId, o => o.MapFrom(s => s.Id))
+                .ForMember(d => d.FoodName, o => o.MapFrom(s => s.FoodItem.Name))
+                .ForMember(d => d.ThumbnailUrl, o => o.MapFrom(s => s.FoodItem.ThumbnailUrl))
+                .ForMember(d => d.IsAvailable, o => o.MapFrom(s =>
+                    s.FoodItem.IsAvailable
+                    && !s.FoodItem.IsDeleted
+                    && !s.FoodItem.Category.IsDeleted
+                    && s.FoodItem.Booth.Status == DomainLayer.Enums.GeneralEnum.BoothStatus.Active))
+                .ForMember(d => d.CurrentUnitPrice, o => o.Ignore())
+                .ForMember(d => d.LineTotal, o => o.Ignore());
+
             CreateMap<User, ManagedUserResponse>()
                 .ForMember(d => d.Role, o => o.Ignore())
                 .ForMember(d => d.Status, o => o.MapFrom(s => s.Status.ToString()));
@@ -141,6 +153,7 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.CreatedAt, o => o.Ignore())
                 .ForMember(d => d.UpdatedAt, o => o.Ignore())
                 .ForMember(d => d.Booth, o => o.Ignore())
+                .ForMember(d => d.CartItems, o => o.Ignore())
                 .ForMember(d => d.Category, o => o.Ignore())
                 .ForMember(d => d.FoodImages, o => o.Ignore())
                 .ForMember(d => d.FoodPrices, o => o.Ignore())

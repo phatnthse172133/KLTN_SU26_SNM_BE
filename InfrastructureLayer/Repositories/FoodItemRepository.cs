@@ -37,4 +37,13 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
         => await _dbSet
             .Include(item => item.Category)
             .FirstOrDefaultAsync(item => item.Id == foodItemId && item.BoothId == boothId && !item.IsDeleted);
+
+    public Task<FoodItem?> GetForCartAsync(
+        Guid foodItemId,
+        CancellationToken cancellationToken = default)
+        => ActiveQuery()
+            .Include(item => item.Booth)
+            .Include(item => item.Category)
+            .Include(item => item.FoodPrices)
+            .FirstOrDefaultAsync(item => item.Id == foodItemId, cancellationToken);
 }

@@ -6,8 +6,7 @@ namespace ApplicationLayer.Services.Menus;
 
 public interface IMenuService
 {
-    Task<ApiResponse<PaginationResp<FoodItemResponse>>> GetMyBoothMenuAsync(
-        Guid ownerId, Guid boothId, PaginationReq pagination, CancellationToken cancellationToken = default);
+    Task<ApiResponse<PaginationResp<FoodItemResponse>>> GetMyBoothMenuAsync(Guid ownerId, Guid boothId, PaginationReq pagination, CancellationToken cancellationToken = default);
     Task<ApiResponse<FoodItemResponse>> CreateFoodItemAsync(Guid ownerId, Guid boothId, CreateFoodItemRequest request, CancellationToken cancellationToken = default);
     Task<ApiResponse<FoodItemResponse>> UpdateFoodItemAsync(Guid ownerId, Guid boothId, Guid foodItemId, UpdateFoodItemRequest request, CancellationToken cancellationToken = default);
     Task<ApiResponse<FoodItemResponse>> UpdateAvailabilityAsync(Guid ownerId, Guid boothId, Guid foodItemId, UpdateFoodAvailabilityRequest request, CancellationToken cancellationToken = default);

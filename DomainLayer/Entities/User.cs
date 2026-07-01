@@ -60,6 +60,8 @@ public partial class User
 
     public virtual ICollection<Booth> Booths { get; set; } = new List<Booth>();
 
+    public virtual ICollection<Cart> Carts { get; set; } = new List<Cart>();
+
     public virtual ICollection<Complaint> Complaints { get; set; } = new List<Complaint>();
 
     public virtual ICollection<Conversation> Conversations { get; set; } = new List<Conversation>();

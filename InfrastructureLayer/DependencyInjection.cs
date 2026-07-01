@@ -21,6 +21,7 @@ using ApplicationLayer.Services.BoothLocations;
 using ApplicationLayer.Services.MapNavigation;
 using ApplicationLayer.Services.Packages;
 using ApplicationLayer.Services.Prices;
+using ApplicationLayer.Services.Carts;
 using ApplicationLayer.Mappings;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceCore.Email;
@@ -62,6 +63,8 @@ namespace InfrastructureLayer
             services.AddScoped<ILayoutNodeRepository, LayoutNodeRepository>();
             services.AddScoped<ILayoutEdgeRepository, LayoutEdgeRepository>();
             services.AddScoped<IBoothLocationRepository, BoothLocationRepository>();
+            services.AddScoped<ICartRepository, CartRepository>();
+            services.AddScoped<ICartItemRepository, CartItemRepository>();
             services.Configure<JwtSettings>(configuration.GetSection(JwtSettings.SectionName));
             services.AddScoped<IJwtService, JWTService>();
             services.AddScoped<IPasswordHasher, PasswordHasher>();
@@ -88,6 +91,7 @@ namespace InfrastructureLayer
             services.AddScoped<IMapNavigationService, MapNavigationService>();
             services.AddScoped<IPackageService, PackageService>();
             services.AddScoped<IPriceService, PriceService>();
+            services.AddScoped<ICartService, CartService>();
             
             services.AddAutoMapper(_ => { }, typeof(MappingProfile).Assembly);
 

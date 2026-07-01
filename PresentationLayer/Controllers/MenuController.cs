@@ -14,15 +14,15 @@ public class MenuController : ControllerBase
 {
     private readonly IMenuService _service;
 
-    public MenuController(IMenuService service) => _service = service;
+    public MenuController(IMenuService service)
+    {
+        _service = service;
+    }
 
     private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
     [HttpGet]
-    public async Task<IActionResult> GetMyBoothMenu(
-        Guid boothId,
-        [FromQuery] PaginationReq pagination,
-        CancellationToken cancellationToken)
+    public async Task<IActionResult> GetMyBoothMenu(Guid boothId, [FromQuery] PaginationReq pagination, CancellationToken cancellationToken)
         => Ok(await _service.GetMyBoothMenuAsync(
             CurrentUserId, boothId, pagination, cancellationToken));
 

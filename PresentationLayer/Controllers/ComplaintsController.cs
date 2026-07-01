@@ -12,7 +12,11 @@ namespace PresentationLayer.Controllers;
 public class ComplaintsController : ControllerBase
 {
     private readonly IComplaintService _service;
-    public ComplaintsController(IComplaintService service) => _service = service;
+    public ComplaintsController(IComplaintService service)
+    {
+        _service = service;
+    }
+
     private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
     [Authorize(Roles = "Customer")]

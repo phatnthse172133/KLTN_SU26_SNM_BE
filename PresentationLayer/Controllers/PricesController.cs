@@ -12,19 +12,17 @@ public class PricesController : ControllerBase
 {
     private readonly IPriceService _service;
 
-    public PricesController(IPriceService service) => _service = service;
+    public PricesController(IPriceService service)
+    {
+        _service = service;
+    }
 
     private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
     [Authorize(Roles = "BoothOwner")]
     [HttpGet("api/booths/mine/{boothId:guid}/menu/{foodItemId:guid}/prices")]
-    public async Task<IActionResult> GetFoodPrices(
-        Guid boothId,
-        Guid foodItemId,
-        [FromQuery] PaginationReq pagination,
-        CancellationToken cancellationToken)
-        => Ok(await _service.GetFoodPricesAsync(
-            CurrentUserId, boothId, foodItemId, pagination, cancellationToken));
+    public async Task<IActionResult> GetFoodPrices(Guid boothId, Guid foodItemId, [FromQuery] PaginationReq pagination, CancellationToken cancellationToken)
+        => Ok(await _service.GetFoodPricesAsync(CurrentUserId, boothId, foodItemId, pagination, cancellationToken));
 
     [Authorize(Roles = "BoothOwner")]
     [HttpPost("api/booths/mine/{boothId:guid}/menu/{foodItemId:guid}/prices")]
@@ -43,10 +41,7 @@ public class PricesController : ControllerBase
 
     [Authorize(Roles = "Admin")]
     [HttpGet("api/admin/packages/{packageId:guid}/prices")]
-    public async Task<IActionResult> GetPackagePrices(
-        Guid packageId,
-        [FromQuery] PaginationReq pagination,
-        CancellationToken cancellationToken)
+    public async Task<IActionResult> GetPackagePrices(Guid packageId, [FromQuery] PaginationReq pagination, CancellationToken cancellationToken)
         => Ok(await _service.GetPackagePricesAsync(packageId, pagination, cancellationToken));
 
     [Authorize(Roles = "Admin")]

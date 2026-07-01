@@ -12,14 +12,16 @@ namespace PresentationLayer.Controllers;
 public class BoothsController : ControllerBase
 {
     private readonly IBoothService _service;
-    public BoothsController(IBoothService service) => _service = service;
+    public BoothsController(IBoothService service)
+    {
+        _service = service;
+    }
+
     private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
     [Authorize(Roles = "BoothOwner")]
     [HttpGet("mine")]
-    public async Task<IActionResult> GetMine(
-        [FromQuery] PaginationReq pagination,
-        CancellationToken cancellationToken)
+    public async Task<IActionResult> GetMine([FromQuery] PaginationReq pagination, CancellationToken cancellationToken)
         => Ok(await _service.GetMyBoothsAsync(CurrentUserId, pagination, cancellationToken));
 
     [Authorize(Roles = "BoothOwner")]

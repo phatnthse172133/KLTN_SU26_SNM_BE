@@ -12,7 +12,11 @@ namespace PresentationLayer.Controllers;
 public class ReviewsController : ControllerBase
 {
     private readonly IReviewService _service;
-    public ReviewsController(IReviewService service) => _service = service;
+    public ReviewsController(IReviewService service)
+    {
+        _service = service;
+    }
+
     private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
     [Authorize(Roles = "Customer")]

@@ -13,7 +13,10 @@ public class PackagesController : ControllerBase
 {
     private readonly IPackageService _service;
 
-    public PackagesController(IPackageService service) => _service = service;
+    public PackagesController(IPackageService service)
+    {
+        _service = service;
+    }
 
     [HttpGet]
     public async Task<IActionResult> GetAll([FromQuery] PaginationReq pagination, CancellationToken cancellationToken = default)

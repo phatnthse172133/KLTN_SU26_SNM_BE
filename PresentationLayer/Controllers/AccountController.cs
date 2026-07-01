@@ -13,7 +13,11 @@ namespace PresentationLayer.Controllers;
 public class AccountController : ControllerBase
 {
     private readonly IAccountService _service;
-    public AccountController(IAccountService service) => _service = service;
+    public AccountController(IAccountService service)
+    {
+        _service = service;
+    }
+
     private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
     [HttpGet]

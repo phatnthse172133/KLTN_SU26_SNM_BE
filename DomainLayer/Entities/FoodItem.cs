@@ -36,6 +36,8 @@ public partial class FoodItem : ISoftDelete
 
     public virtual Booth Booth { get; set; } = null!;
 
+    public virtual ICollection<CartItem> CartItems { get; set; } = new List<CartItem>();
+
     public virtual FoodCategory Category { get; set; } = null!;
 
     public virtual ICollection<FoodImage> FoodImages { get; set; } = new List<FoodImage>();

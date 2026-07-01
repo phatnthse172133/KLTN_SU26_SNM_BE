@@ -14,7 +14,10 @@ public class FoodCategoriesController : ControllerBase
 {
     private readonly IFoodCategoryService _service;
 
-    public FoodCategoriesController(IFoodCategoryService service) => _service = service;
+    public FoodCategoriesController(IFoodCategoryService service)
+    {
+        _service = service;
+    }
 
     private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 

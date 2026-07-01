@@ -10,12 +10,13 @@ namespace PresentationLayer.Controllers;
 public class MarketLayoutsController : ControllerBase
 {
     private readonly IMarketLayoutService _service;
-    public MarketLayoutsController(IMarketLayoutService service) => _service = service;
+    public MarketLayoutsController(IMarketLayoutService service)
+    {
+        _service = service;
+    }
 
     [HttpGet("api/night-markets/{nightMarketId:guid}/layouts")]
-    public async Task<IActionResult> GetAll(
-        Guid nightMarketId, [FromQuery] MarketLayoutListRequest request,
-        CancellationToken cancellationToken = default)
+    public async Task<IActionResult> GetAll(Guid nightMarketId, [FromQuery] MarketLayoutListRequest request, CancellationToken cancellationToken = default)
         => Ok(await _service.GetAllAsync(nightMarketId, request, cancellationToken));
 
     [HttpGet("api/layouts/{layoutId:guid}")]
@@ -23,21 +24,18 @@ public class MarketLayoutsController : ControllerBase
         => Ok(await _service.GetByIdAsync(layoutId, cancellationToken));
 
     [HttpPost("api/night-markets/{nightMarketId:guid}/layouts")]
-    public async Task<IActionResult> Create(
-        Guid nightMarketId, CreateMarketLayoutRequest request, CancellationToken cancellationToken)
+    public async Task<IActionResult> Create(Guid nightMarketId, CreateMarketLayoutRequest request, CancellationToken cancellationToken)
     {
         var response = await _service.CreateAsync(nightMarketId, request, cancellationToken);
         return CreatedAtAction(nameof(Get), new { layoutId = response.Data!.Id }, response);
     }
 
     [HttpPut("api/layouts/{layoutId:guid}")]
-    public async Task<IActionResult> Update(
-        Guid layoutId, UpdateMarketLayoutRequest request, CancellationToken cancellationToken)
+    public async Task<IActionResult> Update( Guid layoutId, UpdateMarketLayoutRequest request, CancellationToken cancellationToken)
         => Ok(await _service.UpdateAsync(layoutId, request, cancellationToken));
 
     [HttpPut("api/layouts/{layoutId:guid}/image")]
-    public async Task<IActionResult> UpdateImage(
-        Guid layoutId, [FromForm] UpdateMarketLayoutImageRequest request, CancellationToken cancellationToken)
+    public async Task<IActionResult> UpdateImage(Guid layoutId, [FromForm] UpdateMarketLayoutImageRequest request, CancellationToken cancellationToken)
         => Ok(await _service.UpdateImageAsync(layoutId, request, cancellationToken));
 
     [HttpGet("api/layouts/{layoutId:guid}/editor-data")]

@@ -31,33 +31,19 @@ public class UserResponse
 {
     public Guid Id { get; set; }
 
-    public string UserName { get; set; }
+    public string UserName { get; set; } = string.Empty;
 
-    public string FullName { get; set; }
+    public string FullName { get; set; } = string.Empty;
 
-    public string Email { get; set; }
+    public string Email { get; set; } = string.Empty;
 
-    public string Role { get; set; }
+    public string? Phone { get; set; }
 
-    public string Status { get; set; }
+    public string? Address { get; set; }
+
+    public string Role { get; set; } = string.Empty;
+
+    public string Status { get; set; } = string.Empty;
 
     public string? AvatarUrl { get; set; }
-
-    public UserResponse(
-        Guid id,
-        string userName,
-        string fullName,
-        string email,
-        string role,
-        string status,
-        string? avatarUrl)
-    {
-        Id = id;
-        UserName = userName;
-        FullName = fullName;
-        Email = email;
-        Role = role;
-        Status = status;
-        AvatarUrl = avatarUrl;
-    }
 }

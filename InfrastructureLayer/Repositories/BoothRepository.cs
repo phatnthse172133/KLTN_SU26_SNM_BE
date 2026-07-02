@@ -12,23 +12,16 @@ public class BoothRepository : GenericRepository<Booth>, IBoothRepository
     {
     }
 
+    public Task<Booth?> GetByOwnerIdAsync(
+        Guid ownerId, CancellationToken cancellationToken = default)
+        => _dbSet.AsNoTracking().FirstOrDefaultAsync(
+            booth => booth.BoothOwnerId == ownerId, cancellationToken);
+
+    public Task<bool> ExistsByOwnerIdAsync(
+        Guid ownerId, CancellationToken cancellationToken = default)
+        => _dbSet.AnyAsync(
+            booth => booth.BoothOwnerId == ownerId, cancellationToken);
+
     public async Task<Booth?> GetOwnedBoothAsync(Guid ownerId, Guid boothId)
         => await _dbSet.FirstOrDefaultAsync(booth => booth.Id == boothId && booth.BoothOwnerId == ownerId);
-
-    public async Task<PagedResult<Booth>> GetOwnedPagedAsync(
-        Guid ownerId,
-        int page,
-        int pageSize,
-        CancellationToken cancellationToken = default)
-    {
-        var query = _dbSet.AsNoTracking().Where(booth => booth.BoothOwnerId == ownerId);
-        var totalCount = await query.CountAsync(cancellationToken);
-        var items = await query
-            .OrderByDescending(booth => booth.CreatedAt)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .ToListAsync(cancellationToken);
-
-        return new PagedResult<Booth>(items, totalCount);
-    }
 }

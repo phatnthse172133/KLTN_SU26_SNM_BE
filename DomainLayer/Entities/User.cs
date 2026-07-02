@@ -58,7 +58,7 @@ public partial class User
 
     public DateTime UpdatedAt { get; set; }
 
-    public virtual ICollection<Booth> Booths { get; set; } = new List<Booth>();
+    public virtual Booth? Booth { get; set; }
 
     public virtual ICollection<Cart> Carts { get; set; } = new List<Cart>();
 

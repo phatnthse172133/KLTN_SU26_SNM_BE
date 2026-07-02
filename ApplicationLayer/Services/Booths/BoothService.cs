@@ -23,25 +23,26 @@ public class BoothService : IBoothService
         _locations = locations;
     }
 
-    public async Task<ApiResponse<PaginationResp<BoothResponse>>> GetMyBoothsAsync(
+    public async Task<ApiResponse<BoothResponse>> GetMyBoothAsync(
         Guid ownerId,
-        PaginationReq pagination,
         CancellationToken cancellationToken = default)
     {
-        var page = await _booths.GetOwnedPagedAsync(
-            ownerId, pagination.Page, pagination.PageSize, cancellationToken);
-        return ApiResponse<PaginationResp<BoothResponse>>.SuccessResponse(
-            _mapper.MapPage<Booth, BoothResponse>(page, pagination));
+        var booth = await _booths.GetByOwnerIdAsync(ownerId, cancellationToken);
+        if (booth is null)
+            throw AppException.NotFound("You do not have a booth.");
+
+        return ApiResponse<BoothResponse>.SuccessResponse(
+            _mapper.Map<BoothResponse>(booth));
     }
 
-    public async Task<ApiResponse<BoothResponse>> UpdateMyBoothAsync(Guid ownerId, Guid boothId, UpdateMyBoothRequest request, CancellationToken cancellationToken = default)
+    public async Task<ApiResponse<BoothResponse>> UpdateMyBoothAsync(
+        Guid ownerId,
+        UpdateMyBoothRequest request,
+        CancellationToken cancellationToken = default)
     {
-        var booth = await _booths.GetByIdAsync(boothId);
-        if (booth is null) 
-            throw AppException.NotFound("Booth was not found.");
-
-        if (booth.BoothOwnerId != ownerId) 
-            throw AppException.Forbidden("You do not have permission to manage this booth.");
+        var booth = await _booths.GetByOwnerIdAsync(ownerId, cancellationToken);
+        if (booth is null)
+            throw AppException.NotFound("You do not have a booth.");
 
         _mapper.Map(request, booth);
         booth.BoothName = booth.BoothName.Trim(); booth.UpdatedAt = DateTime.UtcNow;

@@ -1,3 +1,4 @@
+using AutoMapper;
 using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
@@ -20,8 +21,17 @@ public class AuthService : IAuthService
     private readonly IEmailService _emailService;
     private readonly IGoogleTokenValidator _googleTokenValidator;
     private readonly IUserDeviceTokenRepository _deviceTokens;
+    private readonly IMapper _mapper;
 
-    public AuthService( IGenericRepository<User> userRepository, IGenericRepository<Role> roleRepository, IPasswordHasher passwordHasher, IJwtService jwtService, IEmailService emailService, IGoogleTokenValidator googleTokenValidator, IUserDeviceTokenRepository deviceTokens)
+    public AuthService(
+        IGenericRepository<User> userRepository,
+        IGenericRepository<Role> roleRepository,
+        IPasswordHasher passwordHasher,
+        IJwtService jwtService,
+        IEmailService emailService,
+        IGoogleTokenValidator googleTokenValidator,
+        IUserDeviceTokenRepository deviceTokens,
+        IMapper mapper)
     {
         _userRepository = userRepository;
         _roleRepository = roleRepository;
@@ -30,6 +40,7 @@ public class AuthService : IAuthService
         _emailService = emailService;
         _googleTokenValidator = googleTokenValidator;
         _deviceTokens = deviceTokens;
+        _mapper = mapper;
     }
 
     public Task<ApiResponse<object>> RegisterCustomerAsync(
@@ -382,12 +393,15 @@ public class AuthService : IAuthService
             throw AppException.BadRequest("Account has no valid assigned role.");
         }
 
+        var userResponse = _mapper.Map<UserResponse>(user);
+        userResponse.Role = role.RoleName;
+
         var response = new AuthResponse(
             _jwtService.GenerateAccessToken(user.Id, user.Email, role.RoleName),
             refreshToken,
             _jwtService.GetAccessTokenExpiry(),
             role.RoleName,
-            new UserResponse(user.Id, user.UserName, user.FullName, user.Email, role.RoleName, user.Status.ToString(), user.AvatarUrl));
+            userResponse);
 
         return ApiResponse<AuthResponse>.SuccessResponse(response, "Signed in successfully.");
     }

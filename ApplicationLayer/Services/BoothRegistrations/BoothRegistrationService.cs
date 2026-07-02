@@ -15,7 +15,7 @@ public class BoothRegistrationService : IBoothRegistrationService
 {
     private readonly IBoothRegistrationRepository _registrations;
     private readonly IGenericRepository<BoothDocument> _documents;
-    private readonly IGenericRepository<Booth> _booths;
+    private readonly IBoothRepository _booths;
     private readonly INightMarketRepository _markets;
     private readonly IZoneRepository _zones;
     private readonly ILayoutNodeRepository _nodes;
@@ -26,7 +26,7 @@ public class BoothRegistrationService : IBoothRegistrationService
     private readonly IMapper _mapper;
     private readonly INotificationService _notifications;
 
-    public BoothRegistrationService(IBoothRegistrationRepository registrations, IGenericRepository<BoothDocument> documents, IGenericRepository<Booth> booths, INightMarketRepository markets, IZoneRepository zones, ILayoutNodeRepository nodes, IMarketLayoutRepository layouts, IBoothLocationRepository locations, IGenericRepository<User> users, IGenericRepository<Role> roles, IMapper mapper, INotificationService notifications)
+    public BoothRegistrationService(IBoothRegistrationRepository registrations, IGenericRepository<BoothDocument> documents, IBoothRepository booths, INightMarketRepository markets, IZoneRepository zones, ILayoutNodeRepository nodes, IMarketLayoutRepository layouts, IBoothLocationRepository locations, IGenericRepository<User> users, IGenericRepository<Role> roles, IMapper mapper, INotificationService notifications)
     {
         _registrations = registrations;
         _documents = documents;
@@ -47,6 +47,9 @@ public class BoothRegistrationService : IBoothRegistrationService
         if (!await IsBoothOwnerAsync(ownerId))
             throw AppException.Forbidden("Only accounts registered as BoothOwner can submit a booth registration.");
 
+        if (await _booths.ExistsByOwnerIdAsync(ownerId, cancellationToken))
+            throw AppException.Conflict("This BoothOwner account already has a booth.");
+
         var validationError = await ValidateRequestAsync(request);
         if (validationError is not null) 
             throw AppException.BadRequest(validationError);
@@ -56,8 +59,11 @@ public class BoothRegistrationService : IBoothRegistrationService
 
         var now = DateTime.UtcNow;
         var registration = _mapper.Map<BoothRegistration>(request);
-        registration.Id = Guid.NewGuid(); registration.OwnerId = ownerId; registration.Status = BoothRegistrationStatus.PendingReview;
-        registration.CreatedAt = now; registration.UpdatedAt = now;
+        registration.Id = Guid.NewGuid();
+        registration.OwnerId = ownerId;
+        registration.Status = BoothRegistrationStatus.PendingReview;
+        registration.CreatedAt = now;
+        registration.UpdatedAt = now;
         await _registrations.AddAsync(registration);
 
         var documents = CreateDocuments(registration.Id, request.Documents, now);
@@ -122,6 +128,9 @@ public class BoothRegistrationService : IBoothRegistrationService
 
         if (request.Approved && !await IsBoothOwnerAsync(registration.OwnerId))
             throw AppException.Conflict("The registration owner is not a BoothOwner account and cannot be approved.");
+
+        if (request.Approved && await _booths.ExistsByOwnerIdAsync(registration.OwnerId, cancellationToken))
+            throw AppException.Conflict("This BoothOwner account already has a booth.");
 
         if (request.Approved && registration.PreferredLayoutNodeId.HasValue &&
             await _locations.GetCurrentByNodeAsync(registration.PreferredLayoutNodeId.Value, cancellationToken) is not null)

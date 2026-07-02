@@ -143,9 +143,12 @@ public class AccountService : IAccountService
     private async Task<ApiResponse<UserResponse>> ToMyAccountResponseAsync(User user, string message = "Success")
     {
         var role = await _roles.GetByIdAsync(user.RoleId);
-        return role is null
-            ? throw AppException.BadRequest("Account has no valid assigned role.")
-            : ApiResponse<UserResponse>.SuccessResponse(new UserResponse(user.Id, user.UserName, user.FullName, user.Email, role.RoleName, user.Status.ToString(), user.AvatarUrl), message);
+        if (role is null)
+            throw AppException.BadRequest("Account has no valid assigned role.");
+
+        var response = _mapper.Map<UserResponse>(user);
+        response.Role = role.RoleName;
+        return ApiResponse<UserResponse>.SuccessResponse(response, message);
     }
 
     private async Task<ManagedUserResponse> ToManagedUserResponseAsync(User user)

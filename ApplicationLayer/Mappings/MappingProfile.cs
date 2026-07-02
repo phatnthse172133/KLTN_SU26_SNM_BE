@@ -29,7 +29,7 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.PasswordResetOtpExpiresAt, o => o.Ignore())
                 .ForMember(d => d.PasswordResetTokenHash, o => o.Ignore())
                 .ForMember(d => d.PasswordResetTokenExpiresAt, o => o.Ignore())
-                .ForMember(d => d.Booths, o => o.Ignore())
+                .ForMember(d => d.Booth, o => o.Ignore())
                 .ForMember(d => d.Carts, o => o.Ignore())
                 .ForMember(d => d.Complaints, o => o.Ignore())
                 .ForMember(d => d.Conversations, o => o.Ignore())
@@ -92,6 +92,10 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.Categories, o => o.MapFrom(s => s.PromotionCategories));
 
             CreateMap<User, ManagedUserResponse>()
+                .ForMember(d => d.Role, o => o.Ignore())
+                .ForMember(d => d.Status, o => o.MapFrom(s => s.Status.ToString()));
+
+            CreateMap<User, UserResponse>()
                 .ForMember(d => d.Role, o => o.Ignore())
                 .ForMember(d => d.Status, o => o.MapFrom(s => s.Status.ToString()));
 

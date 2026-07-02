@@ -21,14 +21,14 @@ public class BoothsController : ControllerBase
 
     [Authorize(Roles = "BoothOwner")]
     [HttpGet("mine")]
-    public async Task<IActionResult> GetMine([FromQuery] PaginationReq pagination, CancellationToken cancellationToken)
-        => Ok(await _service.GetMyBoothsAsync(CurrentUserId, pagination, cancellationToken));
+    public async Task<IActionResult> GetMine(CancellationToken cancellationToken)
+        => Ok(await _service.GetMyBoothAsync(CurrentUserId, cancellationToken));
 
     [Authorize(Roles = "BoothOwner")]
-    [HttpPut("mine/{boothId:guid}")]
-    public async Task<IActionResult> UpdateMine(Guid boothId, UpdateMyBoothRequest request, CancellationToken cancellationToken)
+    [HttpPut("mine")]
+    public async Task<IActionResult> UpdateMine(UpdateMyBoothRequest request, CancellationToken cancellationToken)
     {
-        var response = await _service.UpdateMyBoothAsync(CurrentUserId, boothId, request, cancellationToken);
+        var response = await _service.UpdateMyBoothAsync(CurrentUserId, request, cancellationToken);
         return response.Success ? Ok(response) : BadRequest(response);
     }
 

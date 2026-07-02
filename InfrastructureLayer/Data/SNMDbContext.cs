@@ -153,7 +153,7 @@ namespace InfrastructureLayer.Data
 
                 entity.HasIndex(e => e.NightMarketId, "idx_booth_nightmarket");
 
-                entity.HasIndex(e => e.BoothOwnerId, "idx_booth_owner");
+                entity.HasIndex(e => e.BoothOwnerId, "uq_booth_owner").IsUnique();
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.AverageRating)
@@ -178,14 +178,21 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.ThumbnailUrl).HasMaxLength(500);
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
 
-                entity.HasOne(d => d.BoothOwner).WithMany(p => p.Booths)
-                    .HasForeignKey(d => d.BoothOwnerId)
+                entity.HasOne(d => d.BoothOwner).WithOne(p => p.Booth)
+                    .HasForeignKey<Booth>(d => d.BoothOwnerId)
                     .OnDelete(DeleteBehavior.ClientSetNull)
                     .HasConstraintName("Booth_BoothOwnerId_fkey");
 
                 entity.HasOne(d => d.NightMarket).WithMany(p => p.Booths)
                     .HasForeignKey(d => d.NightMarketId)
                     .HasConstraintName("Booth_NightMarketId_fkey");
+            });
+
+            modelBuilder.Entity<BoothRegistration>(entity =>
+            {
+                entity.HasIndex(e => e.OwnerId, "uq_pending_booth_registration_owner")
+                    .IsUnique()
+                    .HasFilter("\"Status\" = 1");
             });
 
             modelBuilder.Entity<BoothDocument>(entity =>

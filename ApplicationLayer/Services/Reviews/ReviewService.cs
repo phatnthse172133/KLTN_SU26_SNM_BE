@@ -7,6 +7,8 @@ using AutoMapper;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
 using static DomainLayer.Enums.GeneralEnum;
+using ApplicationLayer.Services.Notifications;
+using System.Text.Json;
 
 namespace ApplicationLayer.Services.Reviews;
 
@@ -16,13 +18,15 @@ public class ReviewService : IReviewService
     private readonly IBoothRepository _booths;
     private readonly IOrderRepository _orders;
     private readonly IMapper _mapper;
+    private readonly INotificationService _notifications;
 
-    public ReviewService(IReviewRepository reviews, IBoothRepository booths, IOrderRepository orders, IMapper mapper)
+    public ReviewService(IReviewRepository reviews, IBoothRepository booths, IOrderRepository orders, IMapper mapper, INotificationService notifications)
     {
         _reviews = reviews;
         _booths = booths;
         _orders = orders;
         _mapper = mapper;
+        _notifications = notifications;
     }
 
     public async Task<ApiResponse<ReviewResponse>> CreateAsync(Guid customerId, CreateReviewRequest request, CancellationToken cancellationToken = default)
@@ -43,6 +47,23 @@ public class ReviewService : IReviewService
         await _reviews.AddAsync(review);
         await _reviews.SaveChangesAsync();
         await _reviews.RefreshBoothAverageRatingAsync(request.BoothId);
+        var booth = await _booths.GetByIdAsync(request.BoothId);
+        if (booth is not null)
+        {
+            await _notifications.NotifyAsync(new NotificationMessage(
+                booth.BoothOwnerId,
+                NotificationType.NewReview,
+                "New booth review",
+                $"Your booth received a {review.Rating}-star review.",
+                booth.Id,
+                "Review",
+                review.Id,
+                JsonSerializer.Serialize(new
+                {
+                    reviewId = review.Id,
+                    boothId = booth.Id
+                })), cancellationToken);
+        }
 
         return ApiResponse<ReviewResponse>.SuccessResponse(ToResponse(review), "Review created successfully.");
     }
@@ -105,6 +126,19 @@ public class ReviewService : IReviewService
 
         await _reviews.UpsertReplyAsync(reviewId, ownerId, request.Content.Trim());
         await _reviews.SaveChangesAsync();
+        await _notifications.NotifyAsync(new NotificationMessage(
+            review.CustomerId,
+            NotificationType.ReviewReplied,
+            "Booth replied to your review",
+            request.Content.Trim(),
+            review.BoothId,
+            "Review",
+            review.Id,
+            JsonSerializer.Serialize(new
+            {
+                reviewId = review.Id,
+                boothId = review.BoothId
+            })), cancellationToken);
 
         var response = await _reviews.GetWithReplyByIdAsync(review.Id);
         return ApiResponse<ReviewResponse>.SuccessResponse(ToResponse(response!), "Review reply saved successfully.");

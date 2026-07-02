@@ -19,8 +19,9 @@ public class AuthService : IAuthService
     private readonly IJwtService _jwtService;
     private readonly IEmailService _emailService;
     private readonly IGoogleTokenValidator _googleTokenValidator;
+    private readonly IUserDeviceTokenRepository _deviceTokens;
 
-    public AuthService( IGenericRepository<User> userRepository, IGenericRepository<Role> roleRepository, IPasswordHasher passwordHasher, IJwtService jwtService, IEmailService emailService, IGoogleTokenValidator googleTokenValidator)
+    public AuthService( IGenericRepository<User> userRepository, IGenericRepository<Role> roleRepository, IPasswordHasher passwordHasher, IJwtService jwtService, IEmailService emailService, IGoogleTokenValidator googleTokenValidator, IUserDeviceTokenRepository deviceTokens)
     {
         _userRepository = userRepository;
         _roleRepository = roleRepository;
@@ -28,6 +29,7 @@ public class AuthService : IAuthService
         _jwtService = jwtService;
         _emailService = emailService;
         _googleTokenValidator = googleTokenValidator;
+        _deviceTokens = deviceTokens;
     }
 
     public Task<ApiResponse<object>> RegisterCustomerAsync(
@@ -331,6 +333,20 @@ public class AuthService : IAuthService
             ClearRefreshToken(user);
             user.UpdatedAt = DateTime.UtcNow;
             _userRepository.Update(user);
+            if (!string.IsNullOrWhiteSpace(request.DeviceToken))
+            {
+                var tokens = await _deviceTokens.GetByUserAndSelectionAsync(
+                    user.Id,
+                    request.DeviceToken.Trim(),
+                    null,
+                    cancellationToken);
+                foreach (var deviceToken in tokens)
+                {
+                    deviceToken.IsActive = false;
+                    deviceToken.UpdatedAt = DateTime.UtcNow;
+                    _deviceTokens.Delete(deviceToken);
+                }
+            }
             await _userRepository.SaveChangesAsync();
         }
 

@@ -53,6 +53,9 @@ public class LogoutRequest
 {
     [Required]
     public string RefreshToken { get; set; } = string.Empty;
+
+    [StringLength(4096)]
+    public string? DeviceToken { get; set; }
 }
 
 public class ResendVerificationRequest

@@ -85,6 +85,8 @@ namespace InfrastructureLayer.Data
 
         public virtual DbSet<User> Users { get; set; }
 
+        public virtual DbSet<UserDeviceToken> UserDeviceTokens { get; set; }
+
         public virtual DbSet<Zone> Zones { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -653,6 +655,9 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.BoothId).HasComment("NULL khi thông báo không gắn với gian hàng cụ thể (VD: thông báo hệ thống)");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+                entity.Property(e => e.IsDeleted).HasDefaultValue(false);
+                entity.Property(e => e.IsRead).HasDefaultValue(false);
+                entity.Property(e => e.ReferenceType).HasMaxLength(100);
                 entity.Property(e => e.Title).HasMaxLength(200);
                 entity.Property(e => e.Type)
                     .HasConversion<string>()
@@ -662,12 +667,38 @@ namespace InfrastructureLayer.Data
 
                 entity.HasOne(d => d.Booth).WithMany(p => p.Notifications)
                     .HasForeignKey(d => d.BoothId)
-                    .OnDelete(DeleteBehavior.Cascade)
+                    .OnDelete(DeleteBehavior.SetNull)
                     .HasConstraintName("Notification_BoothId_fkey");
 
                 entity.HasOne(d => d.User).WithMany(p => p.Notifications)
                     .HasForeignKey(d => d.UserId)
                     .HasConstraintName("Notification_UserId_fkey");
+            });
+
+            modelBuilder.Entity<UserDeviceToken>(entity =>
+            {
+                entity.HasKey(e => e.Id).HasName("UserDeviceToken_pkey");
+                entity.ToTable("UserDeviceToken", tb => tb.HasComment("FCM device tokens registered by users"));
+
+                entity.HasIndex(e => e.Token, "UserDeviceToken_Token_key").IsUnique();
+                entity.HasIndex(e => new { e.UserId, e.IsActive }, "idx_device_token_user_active");
+
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.Token).HasMaxLength(4096);
+                entity.Property(e => e.DeviceId).HasMaxLength(200);
+                entity.Property(e => e.Platform)
+                    .HasConversion<string>()
+                    .HasMaxLength(20);
+                entity.Property(e => e.IsActive).HasDefaultValue(true);
+                entity.Property(e => e.IsDeleted).HasDefaultValue(false);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+
+                entity.HasOne(e => e.User)
+                    .WithMany(user => user.DeviceTokens)
+                    .HasForeignKey(e => e.UserId)
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("UserDeviceToken_UserId_fkey");
             });
 
             modelBuilder.Entity<Order>(entity =>

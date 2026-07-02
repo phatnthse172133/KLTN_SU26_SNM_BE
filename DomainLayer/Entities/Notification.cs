@@ -1,11 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using DomainLayer.Common;
 using static DomainLayer.Enums.GeneralEnum;
 
 namespace DomainLayer.Entities;
 
 // Thông báo đẩy (push notification qua FCM) cho người dùng
-public partial class Notification
+public partial class Notification : ISoftDelete
 {
     public Guid Id { get; set; }
 
@@ -19,6 +20,18 @@ public partial class Notification
     public string Title { get; set; } = null!;
 
     public string Content { get; set; } = null!;
+
+    public bool IsRead { get; set; }
+
+    public DateTime? ReadAt { get; set; }
+
+    public string? ReferenceType { get; set; }
+
+    public Guid? ReferenceId { get; set; }
+
+    public string? DataJson { get; set; }
+
+    public bool IsDeleted { get; set; }
 
     public DateTime CreatedAt { get; set; }
 

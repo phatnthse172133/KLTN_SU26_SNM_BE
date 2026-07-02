@@ -7,6 +7,7 @@ using DomainLayer.Entities;
 using DomainLayer.InterfaceCore.JWT;
 using DomainLayer.InterfaceRepository;
 using static DomainLayer.Enums.GeneralEnum;
+using ApplicationLayer.Services.Notifications;
 
 namespace ApplicationLayer.Services.Account;
 
@@ -16,13 +17,15 @@ public class AccountService : IAccountService
     private readonly IGenericRepository<Role> _roles;
     private readonly IPasswordHasher _passwordHasher;
     private readonly IMapper _mapper;
+    private readonly INotificationService _notifications;
 
-    public AccountService(IGenericRepository<User> users, IGenericRepository<Role> roles, IPasswordHasher passwordHasher, IMapper mapper)
+    public AccountService(IGenericRepository<User> users, IGenericRepository<Role> roles, IPasswordHasher passwordHasher, IMapper mapper, INotificationService notifications)
     {
         _users = users;
         _roles = roles;
         _passwordHasher = passwordHasher;
         _mapper = mapper;
+        _notifications = notifications;
     }
 
     public async Task<ApiResponse<UserResponse>> GetMyAccountAsync(Guid userId, CancellationToken cancellationToken = default)
@@ -122,6 +125,18 @@ public class AccountService : IAccountService
         _users.Update(user);
 
         await _users.SaveChangesAsync();
+        if (request.Status is UserStatus.Suspended or UserStatus.Banned)
+        {
+            await _notifications.NotifyAsync(new NotificationMessage(
+                user.Id,
+                NotificationType.AccountSuspended,
+                "Account access restricted",
+                request.Status == UserStatus.Banned
+                    ? "Your account has been banned by an administrator."
+                    : "Your account has been suspended by an administrator.",
+                ReferenceType: "Account",
+                ReferenceId: user.Id), cancellationToken);
+        }
         return ApiResponse<ManagedUserResponse>.SuccessResponse(await ToManagedUserResponseAsync(user), "Account status updated successfully.");
     }
 

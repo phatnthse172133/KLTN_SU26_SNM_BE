@@ -35,6 +35,7 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.Conversations, o => o.Ignore())
                 .ForMember(d => d.Messages, o => o.Ignore())
                 .ForMember(d => d.Notifications, o => o.Ignore())
+                .ForMember(d => d.DeviceTokens, o => o.Ignore())
                 .ForMember(d => d.Orders, o => o.Ignore())
                 .ForMember(d => d.Payments, o => o.Ignore())
                 .ForMember(d => d.PromotionUsages, o => o.Ignore())
@@ -396,6 +397,13 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.Package, o => o.Ignore());
             CreateMap<UpdatePriceRequest, PackagePrice>().IncludeBase<CreatePriceRequest, PackagePrice>();
             CreateMap<PackagePrice, PackagePriceResponse>();
+
+            CreateMap<Notification, NotificationListItemResponse>()
+                .ForMember(d => d.Type, o => o.MapFrom(s => s.Type.ToString()));
+            CreateMap<Notification, NotificationDetailResponse>()
+                .IncludeBase<Notification, NotificationListItemResponse>();
+            CreateMap<UserDeviceToken, DeviceTokenResponse>()
+                .ForMember(d => d.Platform, o => o.MapFrom(s => s.Platform.ToString()));
         }
     }
 }

@@ -7,6 +7,8 @@ using AutoMapper;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
 using static DomainLayer.Enums.GeneralEnum;
+using ApplicationLayer.Services.Notifications;
+using System.Text.Json;
 
 namespace ApplicationLayer.Services.Complaints;
 
@@ -16,17 +18,20 @@ public class ComplaintService : IComplaintService
     private readonly IBoothRepository _booths;
     private readonly IOrderRepository _orders;
     private readonly IMapper _mapper;
+    private readonly INotificationService _notifications;
 
     public ComplaintService(
         IComplaintRepository complaints,
         IBoothRepository booths,
         IOrderRepository orders,
-        IMapper mapper)
+        IMapper mapper,
+        INotificationService notifications)
     {
         _complaints = complaints;
         _booths = booths;
         _orders = orders;
         _mapper = mapper;
+        _notifications = notifications;
     }
 
     public async Task<ApiResponse<ComplaintResponse>> CreateAsync(Guid customerId, CreateComplaintRequest request, CancellationToken cancellationToken = default)
@@ -64,6 +69,38 @@ public class ComplaintService : IComplaintService
         }
 
         await _complaints.SaveChangesAsync();
+        var booth = await _booths.GetByIdAsync(complaint.BoothId);
+        if (booth is not null)
+        {
+            await _notifications.NotifyAsync(new NotificationMessage(
+                booth.BoothOwnerId,
+                NotificationType.ComplaintSubmitted,
+                "New booth complaint",
+                complaint.Title,
+                booth.Id,
+                "Complaint",
+                complaint.Id,
+                JsonSerializer.Serialize(new
+                {
+                    complaintId = complaint.Id,
+                    boothId = booth.Id,
+                    orderId = complaint.OrderId
+                })), cancellationToken);
+        }
+        await _notifications.NotifyRoleAsync(new RoleNotificationMessage(
+            "Admin",
+            NotificationType.ComplaintSubmitted,
+            "New complaint submitted",
+            complaint.Title,
+            complaint.BoothId,
+            "Complaint",
+            complaint.Id,
+            JsonSerializer.Serialize(new
+            {
+                complaintId = complaint.Id,
+                boothId = complaint.BoothId,
+                orderId = complaint.OrderId
+            })), cancellationToken);
 
         var response = _mapper.Map<ComplaintResponse>(complaint);
         response.ImageUrls = images.Select(i => i.ImageUrl).ToList();
@@ -121,6 +158,45 @@ public class ComplaintService : IComplaintService
 
         _complaints.Update(complaint);
         await _complaints.SaveChangesAsync();
+        var notificationType = request.Status switch
+        {
+            ComplaintStatus.UnderInvestigation => NotificationType.ComplaintInReview,
+            ComplaintStatus.Resolved => NotificationType.ComplaintResolved,
+            ComplaintStatus.Rejected => NotificationType.ComplaintRejected,
+            _ => NotificationType.Complaint
+        };
+        await _notifications.NotifyAsync(new NotificationMessage(
+            complaint.CustomerId,
+            notificationType,
+            "Complaint status updated",
+            $"Your complaint is now {request.Status}.",
+            complaint.BoothId,
+            "Complaint",
+            complaint.Id,
+            JsonSerializer.Serialize(new
+            {
+                complaintId = complaint.Id,
+                boothId = complaint.BoothId,
+                status = request.Status.ToString()
+            })), cancellationToken);
+
+        if (request.Status == ComplaintStatus.Resolved
+            && request.ResolutionAction == ComplaintResolutionAction.SuspendBooth)
+        {
+            var booth = await _booths.GetByIdAsync(complaint.BoothId);
+            if (booth is not null)
+            {
+                await _notifications.NotifyAsync(new NotificationMessage(
+                    booth.BoothOwnerId,
+                    NotificationType.BoothSuspended,
+                    "Booth suspended",
+                    request.PolicyViolation?.Trim()
+                        ?? "Your booth was suspended following a complaint review.",
+                    booth.Id,
+                    "Booth",
+                    booth.Id), cancellationToken);
+            }
+        }
 
         var response = await _complaints.GetWithImagesByIdAsync(complaint.Id);
         return ApiResponse<ComplaintResponse>.SuccessResponse(ToResponse(response!), "Complaint status updated successfully.");

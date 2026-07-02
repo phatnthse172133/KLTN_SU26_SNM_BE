@@ -23,6 +23,7 @@ using ApplicationLayer.Services.Packages;
 using ApplicationLayer.Services.Prices;
 using ApplicationLayer.Services.Carts;
 using ApplicationLayer.Services.Promotions;
+using ApplicationLayer.Services.Notifications;
 using ApplicationLayer.Mappings;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceCore.Email;
@@ -32,6 +33,7 @@ using DomainLayer.InterfaceRepository;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using InfrastructureLayer.Cores.Notifications;
 
 namespace InfrastructureLayer
 {
@@ -68,6 +70,9 @@ namespace InfrastructureLayer
             services.AddScoped<ICartItemRepository, CartItemRepository>();
             services.AddScoped<IPromotionRepository, PromotionRepository>();
             services.AddScoped<IPromotionUsageRepository, PromotionUsageRepository>();
+            services.AddScoped<INotificationRepository, NotificationRepository>();
+            services.AddScoped<IUserDeviceTokenRepository, UserDeviceTokenRepository>();
+            services.AddScoped<IUserRepository, UserRepository>();
             services.Configure<JwtSettings>(configuration.GetSection(JwtSettings.SectionName));
             services.AddScoped<IJwtService, JWTService>();
             services.AddScoped<IPasswordHasher, PasswordHasher>();
@@ -97,6 +102,12 @@ namespace InfrastructureLayer
             services.AddScoped<ICartService, CartService>();
             services.AddScoped<IPromotionService, PromotionService>();
             services.AddScoped<IPromotionValidationService, PromotionValidationService>();
+            services.AddScoped<INotificationService, NotificationService>();
+            services.AddScoped<IDeviceTokenService, DeviceTokenService>();
+            services.AddSingleton<IOnlinePresenceService, OnlinePresenceService>();
+            services.Configure<FirebaseSettings>(
+                configuration.GetSection(FirebaseSettings.SectionName));
+            services.AddHttpClient<IPushNotificationService, FirebasePushNotificationService>();
             
             services.AddAutoMapper(_ => { }, typeof(MappingProfile).Assembly);
 

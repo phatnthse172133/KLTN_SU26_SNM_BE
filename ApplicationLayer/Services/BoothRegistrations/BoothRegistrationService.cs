@@ -6,6 +6,8 @@ using ApplicationLayer.Helppers;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
 using static DomainLayer.Enums.GeneralEnum;
+using ApplicationLayer.Services.Notifications;
+using System.Text.Json;
 
 namespace ApplicationLayer.Services.BoothRegistrations;
 
@@ -22,8 +24,9 @@ public class BoothRegistrationService : IBoothRegistrationService
     private readonly IGenericRepository<User> _users;
     private readonly IGenericRepository<Role> _roles;
     private readonly IMapper _mapper;
+    private readonly INotificationService _notifications;
 
-    public BoothRegistrationService(IBoothRegistrationRepository registrations, IGenericRepository<BoothDocument> documents, IGenericRepository<Booth> booths, INightMarketRepository markets, IZoneRepository zones, ILayoutNodeRepository nodes, IMarketLayoutRepository layouts, IBoothLocationRepository locations, IGenericRepository<User> users, IGenericRepository<Role> roles, IMapper mapper)
+    public BoothRegistrationService(IBoothRegistrationRepository registrations, IGenericRepository<BoothDocument> documents, IGenericRepository<Booth> booths, INightMarketRepository markets, IZoneRepository zones, ILayoutNodeRepository nodes, IMarketLayoutRepository layouts, IBoothLocationRepository locations, IGenericRepository<User> users, IGenericRepository<Role> roles, IMapper mapper, INotificationService notifications)
     {
         _registrations = registrations;
         _documents = documents;
@@ -36,6 +39,7 @@ public class BoothRegistrationService : IBoothRegistrationService
         _users = users;
         _roles = roles;
         _mapper = mapper;
+        _notifications = notifications;
     }
 
     public async Task<ApiResponse<BoothRegistrationResponse>> CreateAsync(Guid ownerId, CreateBoothRegistrationRequest request, CancellationToken cancellationToken = default)
@@ -60,6 +64,18 @@ public class BoothRegistrationService : IBoothRegistrationService
         await _documents.AddRangeAsync(documents);
 
         await _registrations.SaveChangesAsync();
+        await _notifications.NotifyRoleAsync(new RoleNotificationMessage(
+            "Admin",
+            NotificationType.RegistrationSubmitted,
+            "New booth registration",
+            $"{registration.BoothName} submitted a booth registration for review.",
+            ReferenceType: "BoothRegistration",
+            ReferenceId: registration.Id,
+            DataJson: JsonSerializer.Serialize(new
+            {
+                registrationId = registration.Id,
+                ownerId
+            })), cancellationToken);
         return ApiResponse<BoothRegistrationResponse>.SuccessResponse(ToResponse(registration, documents), "Booth registration submitted successfully.");
     }
 
@@ -131,6 +147,26 @@ public class BoothRegistrationService : IBoothRegistrationService
         _registrations.Update(registration);
 
         await _registrations.SaveChangesAsync();
+        await _notifications.NotifyAsync(new NotificationMessage(
+            registration.OwnerId,
+            request.Approved
+                ? NotificationType.RegistrationApproved
+                : NotificationType.RegistrationRejected,
+            request.Approved
+                ? "Booth registration approved"
+                : "Booth registration rejected",
+            request.Approved
+                ? $"{registration.BoothName} has been approved."
+                : registration.RejectReason!,
+            registration.Booth?.Id,
+            "BoothRegistration",
+            registration.Id,
+            JsonSerializer.Serialize(new
+            {
+                registrationId = registration.Id,
+                boothId = registration.Booth?.Id,
+                approved = request.Approved
+            })), cancellationToken);
         return ApiResponse<BoothRegistrationResponse>.SuccessResponse(ToResponse(registration, docs), request.Approved ? "Registration approved and booth created." : "Booth registration rejected.");
     }
 

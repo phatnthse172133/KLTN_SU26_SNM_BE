@@ -168,7 +168,49 @@ namespace DomainLayer.Enums
             Complaint = 3,
             Registration = 4,
             Subscription = 5,
-            System = 6
+            System = 6,
+            NewMessage = 7,
+            OrderCreated = 8,
+            PaymentProofUploaded = 9,
+            PaymentApproved = 10,
+            PaymentRejected = 11,
+            OrderPreparing = 12,
+            OrderReady = 13,
+            OrderCompleted = 14,
+            OrderCancelled = 15,
+            RefundPending = 16,
+            RefundCompleted = 17,
+            RegistrationSubmitted = 18,
+            RegistrationApproved = 19,
+            RegistrationRejected = 20,
+            NewReview = 21,
+            ReviewReplied = 22,
+            ComplaintSubmitted = 23,
+            ComplaintInReview = 24,
+            ComplaintResolved = 25,
+            ComplaintRejected = 26,
+            SubscriptionActivated = 27,
+            SubscriptionExpiring = 28,
+            SubscriptionExpired = 29,
+            PaymentSucceeded = 30,
+            PaymentFailed = 31,
+            SystemAnnouncement = 32,
+            AccountSuspended = 33,
+            BoothSuspended = 34
+        }
+
+        public enum DevicePlatform
+        {
+            Android = 0,
+            IOS = 1,
+            Web = 2
+        }
+
+        public enum NotificationTarget
+        {
+            AllUsers = 0,
+            Role = 1,
+            SpecificUser = 2
         }
 
         public enum BoothPaymentType

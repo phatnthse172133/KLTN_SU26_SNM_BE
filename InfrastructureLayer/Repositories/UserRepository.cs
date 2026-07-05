@@ -29,4 +29,7 @@ public class UserRepository : GenericRepository<User>, IUserRepository
 
         return await query.Select(user => user.Id).ToListAsync(cancellationToken);
     }
+
+    public async Task<bool> UserExistsAsync(Guid userId)
+        => await _dbSet.AnyAsync(u => u.Id == userId);
 }

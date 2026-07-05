@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using static DomainLayer.Enums.GeneralEnum;
 
@@ -11,6 +11,8 @@ public partial class Order
     public Guid Id { get; set; }
 
     public Guid CustomerId { get; set; }
+
+    public Guid BoothOwnerId { get; set; }
 
     public string OrderCode { get; set; } = null!;
 
@@ -34,6 +36,8 @@ public partial class Order
     public virtual ICollection<Complaint> Complaints { get; set; } = new List<Complaint>();
 
     public virtual User Customer { get; set; } = null!;
+
+    public virtual User BoothOwner { get; set; } = null!;
 
     public virtual ICollection<OrderDetail> OrderDetails { get; set; } = new List<OrderDetail>();
 

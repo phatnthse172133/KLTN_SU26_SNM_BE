@@ -225,12 +225,18 @@ namespace DomainLayer.Enums
             Inactive = 1
         }
 
+        //public enum PaymentType
+        //{
+        //    BankTransfer = 0,
+        //    Payos = 1,
+        //    VNPay = 2,
+        //    MoMo = 3
+        //}
+
         public enum PaymentType
         {
-            BankTransfer = 0,
-            Payos = 1,
-            VNPay = 2,
-            MoMo = 3
+            Cash = 0,       // Tiền mặt
+            PayOS = 1  // Tích hợp cổng thanh toán PayOS
         }
 
         public enum PaymentStatus
@@ -242,14 +248,25 @@ namespace DomainLayer.Enums
             Refunded = 4
         }
 
+        //public enum OrderStatus
+        //{
+        //    Pending = 0,      // Chờ thanh toán / xác nhận
+        //    Confirmed = 1,    // Đã thanh toán, quầy nhận đơn
+        //    Ready = 2,        // Món đã xong, chờ khách lấy
+        //    Completed = 3,    // Khách đã nhận món
+        //    Cancelled = 4,    // Đơn bị hủy
+        //    Expired = 5       // Quá thời gian nhận món
+        //}
+
         public enum OrderStatus
         {
-            Pending = 0,      // Chờ thanh toán / xác nhận
-            Confirmed = 1,    // Đã thanh toán, quầy nhận đơn
-            Ready = 2,        // Món đã xong, chờ khách lấy
-            Completed = 3,    // Khách đã nhận món
-            Cancelled = 4,    // Đơn bị hủy
-            Expired = 5       // Quá thời gian nhận món
+            PendingPayment = 0,      // Chờ thanh toán / xác nhận
+            Placed = 1,    // Đã thanh toán, quầy nhận đơn
+            Preparing = 2,        // Đang chuẩn bị món
+            ReadyForPickup = 3,    // Món đã xong, chờ khách lấy
+            Completed = 4,      //Hoàn thành
+            Cancelled = 5,    // Đơn bị hủy
+            Refunded = 6       // Đơn bị từ chối
         }
 
         public enum PayOrderStatus

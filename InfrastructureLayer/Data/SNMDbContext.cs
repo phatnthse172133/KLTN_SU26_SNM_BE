@@ -1,4 +1,4 @@
-﻿using DomainLayer.Entities;
+using DomainLayer.Entities;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
@@ -88,6 +88,8 @@ namespace InfrastructureLayer.Data
         public virtual DbSet<UserDeviceToken> UserDeviceTokens { get; set; }
 
         public virtual DbSet<Zone> Zones { get; set; }
+
+        public virtual DbSet<PaymentMethod> PaymentMethods { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -737,6 +739,11 @@ namespace InfrastructureLayer.Data
                     .HasForeignKey(d => d.CustomerId)
                     .OnDelete(DeleteBehavior.ClientSetNull)
                     .HasConstraintName("Order_CustomerId_fkey");
+
+                entity.HasOne(o => o.BoothOwner)
+                    .WithMany(bo => bo.Orders)
+                    .HasForeignKey(o => o.BoothOwnerId)
+                    .OnDelete(DeleteBehavior.Restrict);
             });
 
             modelBuilder.Entity<OrderDetail>(entity =>
@@ -1089,6 +1096,15 @@ namespace InfrastructureLayer.Data
                     .HasForeignKey(d => d.NightMarketId)
                     .HasConstraintName("Zones_NightMarketId_fkey");
             });
+
+            modelBuilder.Entity<PaymentMethod>(entity =>
+            {
+                entity.HasOne(pm => pm.User)
+                    .WithMany(u => u.PaymentMethods)
+                    .HasForeignKey(pm => pm.UserId)
+                    .OnDelete(DeleteBehavior.Cascade); // Nếu xóa User thì tự động xóa luôn PaymentMethod của người đó
+            });
+            
         }
     }
 }

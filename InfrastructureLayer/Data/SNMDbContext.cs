@@ -741,7 +741,7 @@ namespace InfrastructureLayer.Data
                     .HasConstraintName("Order_CustomerId_fkey");
 
                 entity.HasOne(o => o.BoothOwner)
-                    .WithMany(bo => bo.Orders)
+                    .WithMany()
                     .HasForeignKey(o => o.BoothOwnerId)
                     .OnDelete(DeleteBehavior.Restrict);
             });

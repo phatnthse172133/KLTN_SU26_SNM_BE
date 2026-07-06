@@ -1,6 +1,7 @@
 using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Helppers;
+using ApplicationLayer.Services.Notifications;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
 using PayOS;
@@ -19,11 +20,12 @@ namespace ApplicationLayer.Services.Orders
     {
         private readonly IOrderRepository _orderRepo;
         private readonly PayOSClient _payOSClient;
-
-        public OrderService(IOrderRepository orderRepo, PayOSClient payOSClient)
+        private readonly IRealtimeNotificationPublisher _notificationPublisher;
+        public OrderService(IOrderRepository orderRepo, PayOSClient payOSClient, IRealtimeNotificationPublisher notificationPublisher)
         {
             _orderRepo = orderRepo;
             _payOSClient = payOSClient;
+            _notificationPublisher = notificationPublisher;
         }
 
         public async Task<ApiResponse<OrderResponseDto>> CreateOrderAsync(CreateOrderDto dto)
@@ -119,6 +121,21 @@ namespace ApplicationLayer.Services.Orders
                 order.PayStatus = PayOrderStatus.Pending;
 
                 // TODO: Bắn SignalR tại đây báo cho App Chủ quầy (BoothOwnerId) biết có đơn tiền mặt mới!
+                var notificationPayload = new NotificationListItemResponse
+                {
+                    Id = Guid.NewGuid(),
+                    BoothId = order.BoothOwnerId, // Gán Id của quầy nhận đơn
+                    Type = "ORDER_NEW",           // Định nghĩa một mã Type riêng cho đơn mới để FE dễ xử lý logic
+                    Title = "Có đơn hàng mới! (Tiền mặt)",
+                    Content = $"Bạn có đơn hàng mới #{order.OrderCode} thanh toán bằng tiền mặt. Số tiền: {order.FinalAmount:N0}đ",
+                    IsRead = false,
+                    ReferenceType = "Order",      // Nói cho FE biết: "Cái ID đi kèm này là của bảng Order nhé"
+                    ReferenceId = order.Id,       // Truyền chính xác OrderId sang để FE làm Deep Link nhấn vào là mở đơn hàng
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                // Bắn đích danh đến phòng của Chủ quán
+                await _notificationPublisher.PublishAsync(order.BoothOwnerId, notificationPayload, unreadCount: 1);
             }
             else if (dto.PaymentMethod == "PayOS")
             {
@@ -212,6 +229,21 @@ namespace ApplicationLayer.Services.Orders
                 await _orderRepo.SaveChangesAsync();
 
                 // 7. TODO: Gọi SignalR bắn tin xuống cho BoothOwner tại đây!
+                var notificationPayload = new NotificationListItemResponse
+                {
+                    Id = Guid.NewGuid(),
+                    BoothId = order.BoothOwnerId,
+                    Type = "ORDER_PAID",          // Type dành cho đơn đã thanh toán online thành công
+                    Title = "Đơn hàng đã thanh toán!",
+                    Content = $"Đơn hàng #{order.OrderCode} đã được thanh toán thành công qua PayOS. Số tiền: {order.FinalAmount:N0}đ",
+                    IsRead = false,
+                    ReferenceType = "Order",      // Định danh kiểu tham chiếu
+                    ReferenceId = order.Id,       // Id của đơn hàng để FE click vào là xem được luôn
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                // Bắn đến máy của Chủ quán qua SignalR Group
+                await _notificationPublisher.PublishAsync(order.BoothOwnerId, notificationPayload, unreadCount: 1);
 
                 return true;
             }
@@ -221,5 +253,106 @@ namespace ApplicationLayer.Services.Orders
                 return false;
             }
         }
+
+        //public async Task<bool> RejectOrderAsync(RejectOrderDto dto)
+        //{
+        //    // 1. Tìm đơn hàng cần hủy trong Database
+        //    var order = await _orderRepo.GetByIdAsync(dto.OrderId);
+        //    if (order == null) throw new Exception("Không tìm thấy đơn hàng!");
+
+        //    // 2. Kiểm tra trạng thái: Chỉ được từ chối khi đơn hàng mới đặt (Placed hoặc PendingPayment)
+        //    if (order.Status == OrderStatus.Completed || order.Status == OrderStatus.Cancelled)
+        //    {
+        //        throw new Exception("Đơn hàng đã hoàn thành hoặc đã bị hủy trước đó, không thể từ chối!");
+        //    }
+
+        //    // 3. XỬ LÝ RẼ NHÁNH DÒNG TIỀN:
+
+        //    // TRƯỜNG HỢP 1: Khách đặt bằng TIỀN MẶT
+        //    if (order.PayStatus == PayOrderStatus.Pending)
+        //    {
+        //        order.Status = OrderStatus.Cancelled;
+        //        order.Note = dto.Reason; // Lưu vết lý do hủy
+        //        order.UpdatedAt = DateTime.UtcNow;
+        //        order.PayStatus = PayOrderStatus.Failed;
+
+        //        // Cập nhật bảng Payment sang trạng thái thất bại/hủy
+        //        var payment = order.Payments.FirstOrDefault(p => p.Status == PaymentStatus.Pending);
+        //        if (payment != null) payment.Status = PaymentStatus.Failed;
+        //    }
+        //    // TRƯỜNG HỢP 2: Khách đặt ONLINE và trạng thái đã báo ĐÃ THANH TOÁN (Paid = 1)
+        //    else if (order.PayStatus == PayOrderStatus.Paid)
+        //    {
+        //        // Bước A: Đổi trạng thái đơn hàng sang "Đang chờ hoàn tiền"
+        //        order.Status = OrderStatus.Cancelled;
+        //        order.PayStatus = PayOrderStatus.RefundPending; 
+        //        order.Note = dto.Reason;
+        //        order.UpdatedAt = DateTime.UtcNow;
+
+        //        // Tìm bản ghi lịch sử giao dịch thành công trước đó để lấy thông tin đối chiếu
+        //        var successPayment = order.Payments.FirstOrDefault(p => p.Status == PaymentStatus.Paid);
+
+        //        // Bước B: Gọi API kích hoạt lệnh hoàn tiền tự động sang phía PayOS
+        //        try
+        //        {
+        //            // Sinh mã đơn kiểu long phục vụ PayOS
+        //            long orderCodeLong = long.Parse(order.OrderCode);
+
+        //            // Khởi tạo Object cấu hình lệnh hoàn tiền theo SDK PayOS mới nhất
+        //            var refundRequest = new RefundRequest(
+        //                amount: (int)order.FinalAmount, // Số tiền cần trả lại cho khách
+        //                description: $"Hoan tien don #{order.OrderCode.Substring(0, 5)} do chu quay tu choi"
+        //            );
+
+        //            // Tiến hành gọi lệnh lên mây của PayOS
+        //            RefundResult refundResult = await _payOSClient.(orderCodeLong, refundRequest);
+
+        //            if (refundResult.Status == "REJECTED") // Phía ngân hàng/PayOS xử lý xong ngay lập tức
+        //            {
+        //                // Bước C: Hoàn tiền thành công mỹ mãn -> Đổi sang trạng thái Đã hoàn tiền
+        //                order.PayStatus = PayOrderStatus.Refunded; // Thuộc tính Refunded = 3 của bạn
+
+        //                if (successPayment != null)
+        //                {
+        //                    successPayment.Status = PaymentStatus.Refunded; // Lưu vết bảng lịch sử giao dịch
+        //                    successPayment.UpdatedAt = DateTime.UtcNow;
+        //                }
+        //            }
+        //        }
+        //        catch (Exception ex)
+        //        {
+        //            // Nếu có lỗi mạng hoặc lỗi từ phía PayOS, đơn hàng vẫn treo ở dạng "RefundPending" để Admin vào xử lý tay sau
+        //            await _orderRepo.UpdateOrderAsync(order);
+        //            await _orderRepo.SaveChangesAsync();
+        //            throw new Exception($"Chủ quầy từ chối đơn thành công, nhưng lệnh hoàn tiền tự động PayOS gặp sự cố: {ex.Message}");
+        //        }
+        //    }
+
+        //    // 4. Lưu toàn bộ thay đổi cập nhật trạng thái vào Database
+        //    await _orderRepo.UpdateOrderAsync(order);
+        //    await _orderRepo.SaveChangesAsync();
+
+        //    // 5. REAL-TIME (SỬ DỤNG KÉ KHUNG CỦA CHỦ NHÓM):
+        //    // Bắn thông báo ngược lại cho máy của KHÁCH HÀNG (order.CustomerId) để thông báo tin buồn đơn bị hủy
+        //    var notificationPayload = new NotificationListItemResponse
+        //    {
+        //        Id = Guid.NewGuid(),
+        //        BoothId = order.BoothOwnerId,
+        //        Type = "ORDER_REJECTED", // Mã riêng để FE xử lý đổi màu đỏ
+        //        Title = "Đơn hàng bị từ chối",
+        //        Content = order.PayStatus == PayOrderStatus.Refunded
+        //            ? $"Rất tiếc, quầy đã từ chối đơn #{order.OrderCode} của bạn do: {dto.Reason}. Tiền đã được hoàn lại ví của bạn!"
+        //            : $"Rất tiếc, quầy đã từ chối đơn #{order.OrderCode} của bạn do: {dto.Reason}.",
+        //        IsRead = false,
+        //        ReferenceType = "Order",
+        //        ReferenceId = order.Id,
+        //        CreatedAt = DateTime.UtcNow
+        //    };
+
+        //    // Bắn đích danh đến máy của Customer thông qua Realtime Publisher có sẵn của nhóm
+        //    await _notificationPublisher.PublishAsync(order.CustomerId, notificationPayload, unreadCount: 1);
+
+        //    return true;
+        //}
     }
 }

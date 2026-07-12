@@ -39,7 +39,7 @@ namespace ApplicationLayer.Services.Orders
                 Id = Guid.NewGuid(),
                 CustomerId = dto.CustomerId,
                 BoothOwnerId = dto.BoothOwnerId,
-                OrderCode = uniqueOrderCode.ToString(),
+                OrderCode = uniqueOrderCode,
                 Note = dto.Note,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow,
@@ -102,8 +102,6 @@ namespace ApplicationLayer.Services.Orders
                 Id = Guid.NewGuid(),
                 BoothOwnerId = dto.BoothOwnerId,
                 Amount = order.FinalAmount,
-                Currency = "VND",
-                Gateway = dto.PaymentMethod,
                 Type = dto.PaymentMethod == "Cash" ? PaymentType.Cash : PaymentType.PayOS,
                 Status = PaymentStatus.Pending, // Mặc định cả 2 đều chờ thu tiền
                 CreatedAt = DateTime.UtcNow,
@@ -118,7 +116,7 @@ namespace ApplicationLayer.Services.Orders
             {
                 // Nếu trả tiền mặt -> Đơn hàng có hiệu lực ngay lập tức
                 order.Status = OrderStatus.Placed;
-                order.PayStatus = PayOrderStatus.Pending;
+                //order.PayStatus = PayOrderStatus.Pending;
 
                 // TODO: Bắn SignalR tại đây báo cho App Chủ quầy (BoothOwnerId) biết có đơn tiền mặt mới!
                 var notificationPayload = new NotificationListItemResponse
@@ -140,8 +138,8 @@ namespace ApplicationLayer.Services.Orders
             else if (dto.PaymentMethod == "PayOS")
             {
                 // Nếu trả Online -> Đơn hàng treo ở trạng thái chờ quét mã
-                order.Status = OrderStatus.PendingPayment;
-                order.PayStatus = PayOrderStatus.Pending;
+                //order.Status = OrderStatus.PendingPayment;
+                //order.PayStatus = PayOrderStatus.Pending;
 
                 try
                 {
@@ -173,7 +171,7 @@ namespace ApplicationLayer.Services.Orders
                 new OrderResponseDto
                 {
                     OrderId = order.Id,
-                    OrderCode = order.OrderCode,
+                    //OrderCode = order.OrderCode,
                     Status = order.Status.ToString(),
                     PaymentUrl = paymentLink?.CheckoutUrl // Nếu trả tiền mặt thì PaymentUrl = null
                 },
@@ -181,78 +179,78 @@ namespace ApplicationLayer.Services.Orders
             );
         }
 
-        public async Task<bool> ProcessPaymentWebhookAsync(Webhook webhookBody)
-        {
-            try
-            {
-                // 1. Gọi hàm VerifyAsync để kiểm tra bảo mật Signature
-                // Nếu dữ liệu bị hacker sửa đổi, hàm này sẽ ném ra Exception hoặc thất bại
-                WebhookData verifiedData = await _payOSClient.Webhooks.VerifyAsync(webhookBody);
+        //public async Task<bool> ProcessPaymentWebhookAsync(Webhook webhookBody)
+        //{
+        //    try
+        //    {
+        //        // 1. Gọi hàm VerifyAsync để kiểm tra bảo mật Signature
+        //        // Nếu dữ liệu bị hacker sửa đổi, hàm này sẽ ném ra Exception hoặc thất bại
+        //        WebhookData verifiedData = await _payOSClient.Webhooks.VerifyAsync(webhookBody);
 
-                if (verifiedData == null)
-                {
-                    return false;
-                }
+        //        if (verifiedData == null)
+        //        {
+        //            return false;
+        //        }
 
-                // 2. Tìm Đơn hàng bằng OrderCode lấy từ verifiedData (Mã kiểu long sang string)
-                string orderCodeStr = verifiedData.OrderCode.ToString();
-                var order = await _orderRepo.GetOrderByCodeAsync(orderCodeStr);
+        //        // 2. Tìm Đơn hàng bằng OrderCode lấy từ verifiedData (Mã kiểu long sang string)
+        //        string orderCodeStr = verifiedData.OrderCode.ToString();
+        //        var order = await _orderRepo.GetOrderByCodeAsync(orderCodeStr);
 
-                if (order == null)
-                {
-                    return false;
-                }
+        //        if (order == null)
+        //        {
+        //            return false;
+        //        }
 
-                // 3. Nếu đơn này đã được xử lý từ trước, trả về true luôn để tránh lặp trùng
-                if (order.PayStatus == PayOrderStatus.Paid)
-                {
-                    return true;
-                }
+        //        // 3. Nếu đơn này đã được xử lý từ trước, trả về true luôn để tránh lặp trùng
+        //        if (order.PayStatus == PayOrderStatus.Paid)
+        //        {
+        //            return true;
+        //        }
 
-                // 4. CẬP NHẬT TRẠNG THÁI ĐƠN HÀNG 
-                order.Status = OrderStatus.Placed;       // Đơn chuyển sang trạng thái hợp lệ để chuẩn bị món
-                order.PayStatus = PayOrderStatus.Paid;   // Đơn đánh dấu đã thanh toán thành công
-                order.UpdatedAt = DateTime.UtcNow;
+        //        // 4. CẬP NHẬT TRẠNG THÁI ĐƠN HÀNG 
+        //        order.Status = OrderStatus.Placed;       // Đơn chuyển sang trạng thái hợp lệ để chuẩn bị món
+        //        order.PayStatus = PayOrderStatus.Paid;   // Đơn đánh dấu đã thanh toán thành công
+        //        order.UpdatedAt = DateTime.UtcNow;
 
-                // 5. CẬP NHẬT LỊCH SỬ BẢNG PAYMENT
-                var payment = order.Payments.FirstOrDefault(p => p.Status == PaymentStatus.Pending);
-                if (payment != null)
-                {
-                    payment.Status = PaymentStatus.Paid;
-                    payment.GatewayRef = verifiedData.Reference; // Mã đối chiếu ngân hàng (chữ R viết hoa)
-                    payment.PaidAt = DateTime.UtcNow;
-                    payment.UpdatedAt = DateTime.UtcNow;
-                }
+        //        // 5. CẬP NHẬT LỊCH SỬ BẢNG PAYMENT
+        //        var payment = order.Payments.FirstOrDefault(p => p.Status == PaymentStatus.Pending);
+        //        if (payment != null)
+        //        {
+        //            payment.Status = PaymentStatus.Paid;
+        //            payment.GatewayRef = verifiedData.Reference; // Mã đối chiếu ngân hàng (chữ R viết hoa)
+        //            payment.PaidAt = DateTime.UtcNow;
+        //            payment.UpdatedAt = DateTime.UtcNow;
+        //        }
 
-                // 6. Lưu xuống DB
-                _orderRepo.Update(order);
-                await _orderRepo.SaveChangesAsync();
+        //        // 6. Lưu xuống DB
+        //        _orderRepo.Update(order);
+        //        await _orderRepo.SaveChangesAsync();
 
-                // 7. TODO: Gọi SignalR bắn tin xuống cho BoothOwner tại đây!
-                var notificationPayload = new NotificationListItemResponse
-                {
-                    Id = Guid.NewGuid(),
-                    BoothId = order.BoothOwnerId,
-                    Type = "ORDER_PAID",          // Type dành cho đơn đã thanh toán online thành công
-                    Title = "Đơn hàng đã thanh toán!",
-                    Content = $"Đơn hàng #{order.OrderCode} đã được thanh toán thành công qua PayOS. Số tiền: {order.FinalAmount:N0}đ",
-                    IsRead = false,
-                    ReferenceType = "Order",      // Định danh kiểu tham chiếu
-                    ReferenceId = order.Id,       // Id của đơn hàng để FE click vào là xem được luôn
-                    CreatedAt = DateTime.UtcNow
-                };
+        //        // 7. TODO: Gọi SignalR bắn tin xuống cho BoothOwner tại đây!
+        //        var notificationPayload = new NotificationListItemResponse
+        //        {
+        //            Id = Guid.NewGuid(),
+        //            BoothId = order.BoothOwnerId,
+        //            Type = "ORDER_PAID",          // Type dành cho đơn đã thanh toán online thành công
+        //            Title = "Đơn hàng đã thanh toán!",
+        //            Content = $"Đơn hàng #{order.OrderCode} đã được thanh toán thành công qua PayOS. Số tiền: {order.FinalAmount:N0}đ",
+        //            IsRead = false,
+        //            ReferenceType = "Order",      // Định danh kiểu tham chiếu
+        //            ReferenceId = order.Id,       // Id của đơn hàng để FE click vào là xem được luôn
+        //            CreatedAt = DateTime.UtcNow
+        //        };
 
-                // Bắn đến máy của Chủ quán qua SignalR Group
-                await _notificationPublisher.PublishAsync(order.BoothOwnerId, notificationPayload, unreadCount: 1);
+        //        // Bắn đến máy của Chủ quán qua SignalR Group
+        //        await _notificationPublisher.PublishAsync(order.BoothOwnerId, notificationPayload, unreadCount: 1);
 
-                return true;
-            }
-            catch (Exception)
-            {
-                // Nếu quá trình giải mã VerifyAsync bị lỗi (hacker phá), code nhảy vào đây và từ chối xử lý
-                return false;
-            }
-        }
+        //        return true;
+        //    }
+        //    catch (Exception)
+        //    {
+        //        // Nếu quá trình giải mã VerifyAsync bị lỗi (hacker phá), code nhảy vào đây và từ chối xử lý
+        //        return false;
+        //    }
+        //}
 
         //public async Task<bool> RejectOrderAsync(RejectOrderDto dto)
         //{

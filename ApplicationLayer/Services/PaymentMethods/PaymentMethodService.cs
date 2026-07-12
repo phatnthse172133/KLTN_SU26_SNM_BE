@@ -40,7 +40,7 @@ namespace ApplicationLayer.Services.PaymentMethods
             var newMethod = new PaymentMethod
             {
                 UserId = userId,
-                MethodType = dto.MethodType,
+                //MethodType = dto.MethodType,
                 PaymentToken = dto.TokenFromGateway,
                 IsDefault = true
             };

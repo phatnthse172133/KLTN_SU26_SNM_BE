@@ -19,6 +19,6 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
             .Include(detail => detail.FoodItem)
             .AnyAsync(detail => detail.OrderId == orderId && detail.FoodItem.BoothId == boothId);
 
-    public async Task<Order?> GetOrderByCodeAsync(string orderCode)
+    public async Task<Order?> GetOrderByCodeAsync(long orderCode)
         => await _dbSet.FirstOrDefaultAsync(order => order.OrderCode == orderCode);
 }

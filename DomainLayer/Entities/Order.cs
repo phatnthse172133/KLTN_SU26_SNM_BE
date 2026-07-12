@@ -14,17 +14,17 @@ public partial class Order
 
     public Guid BoothOwnerId { get; set; }
 
-    public string OrderCode { get; set; } = null!;
+    public long OrderCode { get; set; }
 
-    public OrderStatus Status { get; set; }
+    public OrderStatus Status { get; set; } //Trạng thái làm món
 
-    public PayOrderStatus PayStatus { get; set; }
+    //public PayOrderStatus PayStatus { get; set; }
 
     public decimal TotalAmount { get; set; }
 
     public decimal DiscountAmount { get; set; }
 
-    // TotalAmount - DiscountAmount
+    // FinalAmount = TotalAmount - DiscountAmount
     public decimal FinalAmount { get; set; }
 
     public string? Note { get; set; }

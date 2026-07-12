@@ -32,17 +32,17 @@ namespace PresentationLayer.Controllers
         //}
 
         // POST api/<OrderController>
-        [HttpPost]
-        public async Task<IActionResult> CreateOrder([FromBody] CreateOrderDto dto)
-        {
-            if (dto == null || dto.Items.Count == 0)
-            {
-                return BadRequest(new { message = "Giỏ hàng không có sản phẩm nào!" });
-            }
+        //[HttpPost]
+        //public async Task<IActionResult> CreateOrder([FromBody] CreateOrderDto dto)
+        //{
+        //    if (dto == null || dto.Items.Count == 0)
+        //    {
+        //        return BadRequest(new { message = "Giỏ hàng không có sản phẩm nào!" });
+        //    }
 
-            var response = await _orderService.CreateOrderAsync(dto);
-            return response.Success ? Ok(response) : BadRequest(response);
-        }
+        //    var response = await _orderService.CreateOrderAsync(dto);
+        //    return response.Success ? Ok(response) : BadRequest(response);
+        //}
 
         //// PUT api/<OrderController>/5
         //[HttpPut("{id}")]

@@ -714,7 +714,7 @@ namespace InfrastructureLayer.Data
             {
                 entity.HasKey(e => e.Id).HasName("Order_pkey");
 
-                entity.ToTable("Order", tb => tb.HasComment("Đơn hàng của khách"));
+                entity.ToTable("Order", tb => tb.HasComment("Đơn hàng của khách (1 đơn chỉ thuộc về 1 quán)"));
 
                 entity.HasIndex(e => e.OrderCode, "Order_OrderCode_key").IsUnique();
 
@@ -726,12 +726,13 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.FinalAmount)
                     .HasPrecision(12, 2)
                     .HasComment("TotalAmount - DiscountAmount");
-                entity.Property(e => e.OrderCode).HasMaxLength(50);
+                entity.Property(e => e.OrderCode)
+                    .IsRequired();
                 entity.Property(e => e.Status)
                     .HasConversion<string>()
-                    .HasMaxLength(20)
-                    .HasDefaultValueSql("'Pending'::character varying")
-                    .HasComment("Pending | Confirmed | Preparing | Completed | Cancelled");
+                    .HasMaxLength(30)
+                    .HasDefaultValueSql("'Placed'::character varying")
+                    .HasComment("Placed | Preparing | ReadyForPickup | Completed | Cancelled");
                 entity.Property(e => e.TotalAmount).HasPrecision(12, 2);
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
 
@@ -743,7 +744,8 @@ namespace InfrastructureLayer.Data
                 entity.HasOne(o => o.BoothOwner)
                     .WithMany()
                     .HasForeignKey(o => o.BoothOwnerId)
-                    .OnDelete(DeleteBehavior.Restrict);
+                    .OnDelete(DeleteBehavior.Restrict)
+                    .HasConstraintName("Order_BoothOwnerId_fkey");
             });
 
             modelBuilder.Entity<OrderDetail>(entity =>
@@ -783,13 +785,22 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.Amount).HasPrecision(12, 2);
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
-                entity.Property(e => e.Currency)
-                    .HasMaxLength(10)
-                    .HasDefaultValueSql("'VND'::character varying");
-                entity.Property(e => e.Gateway).HasMaxLength(20);
+                //entity.Property(e => e.Currency)
+                //    .HasMaxLength(10)
+                //    .HasDefaultValueSql("'VND'::character varying");
+                //entity.Property(e => e.Gateway).HasMaxLength(20);
+                entity.Property(e => e.CheckoutUrl)
+                    .HasMaxLength(2000)
+                    .HasComment("Đường link thanh toán VietQR động ngắn hạn do PayOS trả về");
+                entity.Property(e => e.PaymentLinkId)
+                    .HasMaxLength(255)
+                    .HasComment("ID quản lý liên kết link thanh toán của hệ thống PayOS");
                 entity.Property(e => e.GatewayRef)
                     .HasMaxLength(255)
-                    .HasComment("Mã tham chiếu từ cổng thanh toán bên thứ 3 - dùng để tra soát/khiếu nại");
+                    .HasComment("Mã tra soát thực tế của ngân hàng (Ví dụ mã giao dịch của BIDV...)");
+                entity.Property(e => e.RefundReason)
+                    .HasMaxLength(500)
+                    .HasComment("Lý do hoàn tiền (Nếu có)");
                 entity.Property(e => e.Status)
                     .HasConversion<string>()
                     .HasMaxLength(20)
@@ -797,8 +808,12 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.Type)
                     .HasConversion<string>()
                     .HasMaxLength(20)
-                    .HasComment("Payment: thu tiền | Refund: hoàn tiền");
+                    .HasComment("Tiền mặt hoặc PayOS");
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+
+                entity.Property(e => e.PaidAt)
+                    .IsRequired(false) // Xác định rõ ràng đây là trường Nullable (được phép trống)
+                    .HasComment("Thời điểm dòng tiền thực tế được khách hàng quét mã và bắn về hệ thống thành công");
 
                 entity.HasOne(d => d.BoothOwner).WithMany(p => p.Payments)
                     .HasForeignKey(d => d.BoothOwnerId)
@@ -807,6 +822,7 @@ namespace InfrastructureLayer.Data
 
                 entity.HasOne(d => d.Order).WithMany(p => p.Payments)
                     .HasForeignKey(d => d.OrderId)
+                    .OnDelete(DeleteBehavior.Cascade)
                     .HasConstraintName("Payments_OrderId_fkey");
             });
 
@@ -1099,6 +1115,20 @@ namespace InfrastructureLayer.Data
 
             modelBuilder.Entity<PaymentMethod>(entity =>
             {
+                entity.HasKey(e => e.Id);
+                entity.ToTable("PaymentMethod", tb => tb.HasComment("Cấu hình phương thức thanh toán ưu tiên của người dùng"));
+
+                // Ép kiểu Enum thành string để đồng bộ với cách lưu của bảng Order và Payment
+                entity.Property(e => e.MethodType)
+                    .HasConversion<string>()
+                    .HasMaxLength(20)
+                    .IsRequired();
+
+                // Trường Token cho phép null nếu khách chỉ chọn phương thức Cash (Tiền mặt)
+                entity.Property(e => e.PaymentToken)
+                    .IsRequired(false)
+                    .HasMaxLength(500);
+
                 entity.HasOne(pm => pm.User)
                     .WithMany(u => u.PaymentMethods)
                     .HasForeignKey(pm => pm.UserId)

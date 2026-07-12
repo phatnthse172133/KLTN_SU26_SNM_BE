@@ -15,4 +15,5 @@ public interface IFoodItemRepository : IGenericRepository<FoodItem>
         Guid boothId,
         IReadOnlyCollection<Guid> foodItemIds,
         CancellationToken cancellationToken = default);
+    Task<List<FoodItem>> GetAllFoodItemsByIdsAsync(List<Guid> foodItemIds, CancellationToken cancellationToken = default);
 }

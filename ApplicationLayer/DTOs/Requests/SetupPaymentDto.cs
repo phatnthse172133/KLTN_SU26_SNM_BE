@@ -3,12 +3,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using static DomainLayer.Enums.GeneralEnum;
 
 namespace ApplicationLayer.DTOs.Requests
 {
     public class SetupPaymentDto
     {
-        public string MethodType { get; set; }
+        public PaymentType MethodType { get; set; }
         public string TokenFromGateway { get; set; }
     }
 }

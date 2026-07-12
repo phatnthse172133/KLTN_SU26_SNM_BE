@@ -32,25 +32,25 @@ namespace PresentationLayer.Controllers
         //}
 
         // POST api/<WebhookController>
-        //[HttpPost("payos")]
-        //public async Task<IActionResult> ReceivePayOSWebhook([FromBody] Webhook bodyReceived)
-        //{
-        //    if (bodyReceived == null)
-        //    {
-        //        return BadRequest();
-        //    }
+        [HttpPost("payos")]
+        public async Task<IActionResult> ReceivePayOSWebhook([FromBody] Webhook bodyReceived)
+        {
+            if (bodyReceived == null)
+            {
+                return BadRequest();
+            }
 
-        //    // Truyền nguyên cái object body nhận được xuống tầng Application để xác thực và xử lý
-        //    bool isSuccess = await _orderService.ProcessPaymentWebhookAsync(bodyReceived);
+            // Truyền nguyên cái object body nhận được xuống tầng Application để xác thực và xử lý
+            bool isSuccess = await _orderService.ProcessPaymentWebhookAsync(bodyReceived);
 
-        //    if (!isSuccess)
-        //    {
-        //        return BadRequest(new { error = -1, message = "Xác thực thất bại hoặc đơn hàng không hợp lệ." });
-        //    }
+            if (!isSuccess)
+            {
+                return BadRequest(new { error = -1, message = "Xác thực thất bại hoặc đơn hàng không hợp lệ." });
+            }
 
-        //    // Trả về kết quả báo cho PayOS biết Server đã xử lý xong, đừng bắn lại nữa
-        //    return Ok(new { error = 0, message = "Webhook handled successfully" });
-        //}
+            // Trả về kết quả báo cho PayOS biết Server đã xử lý xong, đừng bắn lại nữa
+            return Ok(new { error = 0, message = "Webhook handled successfully" });
+        }
 
         // PUT api/<WebhookController>/5
         //[HttpPut("{id}")]

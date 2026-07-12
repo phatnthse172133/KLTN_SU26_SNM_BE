@@ -1134,7 +1134,15 @@ namespace InfrastructureLayer.Data
                     .HasForeignKey(pm => pm.UserId)
                     .OnDelete(DeleteBehavior.Cascade); // Nếu xóa User thì tự động xóa luôn PaymentMethod của người đó
             });
-            
+
+            modelBuilder.Entity<User>().HasData(new User
+            {
+                Id = Guid.Parse("00000000-0000-0000-0000-000000000001"),
+                FullName = "Khách Vãng Lai",
+                Email = "walkincustomer@system.local",
+                CreatedAt = DateTime.UtcNow
+            });
+
         }
     }
 }

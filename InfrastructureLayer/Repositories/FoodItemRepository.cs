@@ -54,4 +54,9 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
         => await ActiveQuery()
             .Where(item => item.BoothId == boothId && foodItemIds.Contains(item.Id))
             .ToListAsync(cancellationToken);
+
+    public async Task<List<FoodItem>> GetAllFoodItemsByIdsAsync(List<Guid> foodItemIds, CancellationToken cancellationToken = default)
+        => await ActiveQuery()
+            .Where(item => foodItemIds.Contains(item.Id))
+            .ToListAsync(cancellationToken);
 }

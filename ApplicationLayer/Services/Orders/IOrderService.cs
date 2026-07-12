@@ -12,7 +12,8 @@ namespace ApplicationLayer.Services.Orders
 {
     public interface IOrderService
     {
-        //Task<ApiResponse<OrderResponseDto>> CreateOrderAsync(CreateOrderDto dto);
-        //Task<bool> ProcessPaymentWebhookAsync(Webhook webhookBody);
+        Task<ApiResponse<OrderResponseDto>> CreateOrderAsync(CreateOrderDto dto);
+        Task<bool> ProcessPaymentWebhookAsync(Webhook webhookBody);
+        Task<ApiResponse<bool>> UpdateOrderStatusByBoothOwnerAsync(Guid boothOwnerId, UpdateOrderStatusDto dto);
     }
 }

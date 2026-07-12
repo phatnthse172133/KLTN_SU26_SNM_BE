@@ -42,7 +42,8 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.ReviewReplies, o => o.Ignore())
                 .ForMember(d => d.Reviews, o => o.Ignore())
                 .ForMember(d => d.Role, o => o.Ignore())
-                .ForMember(d => d.BoothRegistrations, o => o.Ignore());
+                .ForMember(d => d.BoothRegistrations, o => o.Ignore())
+                .ForMember(d => d.PaymentMethods, o => o.Ignore());
 
             CreateMap<CartItem, CartItemResponse>()
                 .ForMember(d => d.CartItemId, o => o.MapFrom(s => s.Id))

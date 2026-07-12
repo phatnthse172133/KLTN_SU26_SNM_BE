@@ -44,7 +44,7 @@ var payOSClient = new PayOSClient(
 
 builder.Services.AddSingleton(payOSClient); // Đăng ký PayOS vào hệ thống
 
-await payOSClient.Webhooks.ConfirmAsync("https://your-url.com/payos-webhook");
+//await payOSClient.Webhooks.ConfirmAsync("https://your-url.com/payos-webhook");
 
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddControllers()

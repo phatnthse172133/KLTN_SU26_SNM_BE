@@ -44,6 +44,8 @@ public partial class NightMarket : ISoftDelete
 
     public virtual ICollection<Booth> Booths { get; set; } = new List<Booth>();
 
+    public virtual ICollection<AIRecommendationLog> AIRecommendationLogs { get; set; } = new List<AIRecommendationLog>();
+
     public virtual ICollection<MarketLayout> MarketLayouts { get; set; } = new List<MarketLayout>();
 
     public virtual ICollection<Zone> Zones { get; set; } = new List<Zone>();

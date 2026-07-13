@@ -13,6 +13,7 @@ using System.Text;
 using static DomainLayer.Enums.GeneralEnum;
 using ApplicationLayer.Services.Notifications;
 using PresentationLayer.Hubs;
+using InfrastructureLayer.Data.Seeders;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -33,6 +34,29 @@ builder.Configuration.AddEnvironmentVariables();
 var jwtSettings = builder.Configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>() ?? new JwtSettings();
 if (string.IsNullOrWhiteSpace(jwtSettings.SecretKey) || jwtSettings.SecretKey.Length < 32)
     throw new InvalidOperationException("JWT secret is missing. Set Jwt__SecretKey in PresentationLayer/.env or Jwt:SecretKey in appsettings.json (minimum 32 characters).");
+
+const string CustomerAppCorsPolicy = "CustomerAppCorsPolicy";
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(CustomerAppCorsPolicy, policy =>
+    {
+        policy
+            .WithOrigins(
+                "http://localhost:8081",
+                "http://localhost:8082",
+                "http://localhost:8083",
+                "http://localhost:8084",
+                "http://localhost:19006",
+                "http://127.0.0.1:8081",
+                "http://127.0.0.1:8082",
+                "http://127.0.0.1:8083",
+                "http://127.0.0.1:8084",
+                "http://127.0.0.1:19006")
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    });
+});
 
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddControllers()
@@ -148,6 +172,8 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 
+await AISeedData.SeedAsync(app.Services);
+
 if (app.Environment.IsDevelopment()) 
 {
     app.Services
@@ -160,7 +186,12 @@ if (app.Environment.IsDevelopment())
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
-app.UseHttpsRedirection();
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
+
+app.UseCors(CustomerAppCorsPolicy);
 
 app.UseAuthentication();
 

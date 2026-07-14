@@ -15,6 +15,8 @@ namespace InfrastructureLayer.Data
         }
 
         // DbSets
+        public virtual DbSet<AIRecommendationLog> AIRecommendationLogs { get; set; }
+
         public virtual DbSet<Booth> Booths { get; set; }
 
         public virtual DbSet<BoothDocument> BoothDocuments { get; set; }
@@ -39,13 +41,19 @@ namespace InfrastructureLayer.Data
 
         public virtual DbSet<Conversation> Conversations { get; set; }
 
+        public virtual DbSet<CustomerPreference> CustomerPreferences { get; set; }
+
         public virtual DbSet<FoodCategory> FoodCategories { get; set; }
 
         public virtual DbSet<FoodImage> FoodImages { get; set; }
 
         public virtual DbSet<FoodItem> FoodItems { get; set; }
 
+        public virtual DbSet<FoodItemTag> FoodItemTags { get; set; }
+
         public virtual DbSet<FoodPrice> FoodPrices { get; set; }
+
+        public virtual DbSet<FoodTag> FoodTags { get; set; }
 
         public virtual DbSet<LayoutEdge> LayoutEdges { get; set; }
 
@@ -96,6 +104,38 @@ namespace InfrastructureLayer.Data
             base.OnModelCreating(modelBuilder);
             // Apply all configurations from the current assembly
             modelBuilder.HasPostgresExtension("uuid-ossp");
+
+            modelBuilder.Entity<AIRecommendationLog>(entity =>
+            {
+                entity.HasKey(e => e.Id).HasName("AIRecommendationLog_pkey");
+
+                entity.ToTable("AIRecommendationLog", tb => tb.HasComment("Log tối giản cho các lần AI recommendation để debug/demo"));
+
+                entity.HasIndex(e => e.CustomerId, "idx_airecommendationlog_customer");
+                entity.HasIndex(e => e.NightMarketId, "idx_airecommendationlog_nightmarket");
+                entity.HasIndex(e => new { e.RecommendationType, e.CreatedAt }, "idx_airecommendationlog_type_created");
+
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.RecommendationType)
+                    .HasConversion<string>()
+                    .HasMaxLength(30);
+                entity.Property(e => e.InputJson).HasColumnType("jsonb");
+                entity.Property(e => e.ParsedIntentJson).HasColumnType("jsonb");
+                entity.Property(e => e.ResultJson).HasColumnType("jsonb");
+                entity.Property(e => e.SelectedOptionId).HasMaxLength(100);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+
+                entity.HasOne(d => d.Customer).WithMany(p => p.AIRecommendationLogs)
+                    .HasForeignKey(d => d.CustomerId)
+                    .OnDelete(DeleteBehavior.SetNull)
+                    .HasConstraintName("AIRecommendationLog_CustomerId_fkey");
+
+                entity.HasOne(d => d.NightMarket).WithMany(p => p.AIRecommendationLogs)
+                    .HasForeignKey(d => d.NightMarketId)
+                    .OnDelete(DeleteBehavior.SetNull)
+                    .HasConstraintName("AIRecommendationLog_NightMarketId_fkey");
+            });
 
             modelBuilder.Entity<Cart>(entity =>
             {
@@ -407,6 +447,38 @@ namespace InfrastructureLayer.Data
                     .HasConstraintName("Conversations_CustomerId_fkey");
             });
 
+            modelBuilder.Entity<CustomerPreference>(entity =>
+            {
+                entity.HasKey(e => e.Id).HasName("CustomerPreference_pkey");
+
+                entity.ToTable("CustomerPreference", tb => tb.HasComment("Sở thích rõ ràng của khách hàng theo FoodTag: Like/Avoid"));
+
+                entity.HasIndex(e => e.CustomerId, "idx_customerpreference_customer");
+                entity.HasIndex(e => e.FoodTagId, "idx_customerpreference_foodtag");
+                entity.HasIndex(e => new { e.CustomerId, e.FoodTagId, e.PreferenceKind }, "ux_customerpreference_tag_kind")
+                    .IsUnique();
+
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.PreferenceKind)
+                    .HasConversion<string>()
+                    .HasMaxLength(20);
+                entity.Property(e => e.PreferenceSource)
+                    .HasConversion<string>()
+                    .HasMaxLength(30);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+
+                entity.HasOne(d => d.Customer).WithMany(p => p.CustomerPreferences)
+                    .HasForeignKey(d => d.CustomerId)
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("CustomerPreference_CustomerId_fkey");
+
+                entity.HasOne(d => d.FoodTag).WithMany(p => p.CustomerPreferences)
+                    .HasForeignKey(d => d.FoodTagId)
+                    .OnDelete(DeleteBehavior.Restrict)
+                    .HasConstraintName("CustomerPreference_FoodTagId_fkey");
+            });
+
             modelBuilder.Entity<FoodCategory>(entity =>
             {
                 entity.HasKey(e => e.Id).HasName("FoodCategories_pkey");
@@ -482,6 +554,28 @@ namespace InfrastructureLayer.Data
 
             });
 
+            modelBuilder.Entity<FoodItemTag>(entity =>
+            {
+                entity.HasKey(e => new { e.FoodItemId, e.FoodTagId })
+                    .HasName("FoodItemTag_pkey");
+
+                entity.ToTable("FoodItemTag", tb => tb.HasComment("Bảng nối gắn tag ngữ nghĩa vào món ăn"));
+
+                entity.HasIndex(e => e.FoodTagId, "idx_fooditemtag_foodtag");
+
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+
+                entity.HasOne(d => d.FoodItem).WithMany(p => p.FoodItemTags)
+                    .HasForeignKey(d => d.FoodItemId)
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("FoodItemTag_FoodItemId_fkey");
+
+                entity.HasOne(d => d.FoodTag).WithMany(p => p.FoodItemTags)
+                    .HasForeignKey(d => d.FoodTagId)
+                    .OnDelete(DeleteBehavior.Restrict)
+                    .HasConstraintName("FoodItemTag_FoodTagId_fkey");
+            });
+
             modelBuilder.Entity<FoodPrice>(entity =>
             {
                 entity.HasKey(e => e.Id).HasName("FoodPrice_pkey");
@@ -496,6 +590,34 @@ namespace InfrastructureLayer.Data
                 entity.HasOne(d => d.FoodItem).WithMany(p => p.FoodPrices)
                     .HasForeignKey(d => d.FoodItemId)
                     .HasConstraintName("FoodPrice_FoodItemId_fkey");
+            });
+
+            modelBuilder.Entity<FoodTag>(entity =>
+            {
+                entity.HasKey(e => e.Id).HasName("FoodTag_pkey");
+
+                entity.ToTable("FoodTag", tb => tb.HasComment("Danh sách tag chuẩn mô tả ngữ nghĩa món ăn cho AI/recommendation"));
+
+                entity.HasIndex(e => e.Code, "ux_foodtag_code_active")
+                    .IsUnique()
+                    .HasFilter("\"IsDeleted\" = false");
+                entity.HasIndex(e => e.Name, "ux_foodtag_name_active")
+                    .IsUnique()
+                    .HasFilter("\"IsDeleted\" = false");
+
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.Name).HasMaxLength(100);
+                entity.Property(e => e.Code).HasMaxLength(100);
+                entity.Property(e => e.TagGroup)
+                    .HasConversion<string>()
+                    .HasMaxLength(30);
+                entity.Property(e => e.Status)
+                    .HasConversion<string>()
+                    .HasMaxLength(20)
+                    .HasDefaultValueSql("'Active'::character varying");
+                entity.Property(e => e.IsDeleted).HasDefaultValue(false);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
             });
 
             modelBuilder.Entity<LayoutEdge>(entity =>

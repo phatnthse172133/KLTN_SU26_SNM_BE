@@ -41,6 +41,8 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.PromotionUsages, o => o.Ignore())
                 .ForMember(d => d.ReviewReplies, o => o.Ignore())
                 .ForMember(d => d.Reviews, o => o.Ignore())
+                .ForMember(d => d.CustomerPreferences, o => o.Ignore())
+                .ForMember(d => d.AIRecommendationLogs, o => o.Ignore())
                 .ForMember(d => d.Role, o => o.Ignore())
                 .ForMember(d => d.BoothRegistrations, o => o.Ignore())
                 .ForMember(d => d.PaymentMethods, o => o.Ignore());
@@ -179,6 +181,7 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.Booths, o => o.Ignore())
                 .ForMember(d => d.MarketLayouts, o => o.Ignore())
                 .ForMember(d => d.Zones, o => o.Ignore())
+                .ForMember(d => d.AIRecommendationLogs, o => o.Ignore())
                 .ForMember(d => d.BoothRegistrations, o => o.Ignore());
             CreateMap<UpdateNightMarketRequest, NightMarket>()
                 .IncludeBase<CreateNightMarketRequest, NightMarket>();
@@ -198,6 +201,7 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.Booths, o => o.Ignore())
                 .ForMember(d => d.MarketLayouts, o => o.Ignore())
                 .ForMember(d => d.Zones, o => o.Ignore())
+                .ForMember(d => d.AIRecommendationLogs, o => o.Ignore())
                 .ForMember(d => d.BoothRegistrations, o => o.Ignore());
             CreateMap<NightMarket, NightMarketResponse>()
                 .ForMember(d => d.Status, o => o.MapFrom(s => s.Status.ToString()));
@@ -244,6 +248,7 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.CartItems, o => o.Ignore())
                 .ForMember(d => d.Category, o => o.Ignore())
                 .ForMember(d => d.FoodImages, o => o.Ignore())
+                .ForMember(d => d.FoodItemTags, o => o.Ignore())
                 .ForMember(d => d.FoodPrices, o => o.Ignore())
                 .ForMember(d => d.OrderDetails, o => o.Ignore())
                 .ForMember(d => d.PromotionFoodItems, o => o.Ignore());

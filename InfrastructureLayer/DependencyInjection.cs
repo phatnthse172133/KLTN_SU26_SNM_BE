@@ -37,6 +37,8 @@ using InfrastructureLayer.Cores.Notifications;
 using DomainLayer.InterfaceRepositories;
 using ApplicationLayer.Services.PaymentMethods;
 using ApplicationLayer.Services.Orders;
+using InfrastructureLayer.Cores.AI;
+using ApplicationLayer.AI.Services;
 
 namespace InfrastructureLayer
 {
@@ -77,6 +79,9 @@ namespace InfrastructureLayer
             services.AddScoped<IUserDeviceTokenRepository, UserDeviceTokenRepository>();
             services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<IPaymentMethodRepository, PaymentMethodRepository>();
+            services.AddScoped<IFoodTagRepository, FoodTagRepository>();
+            services.AddScoped<ICustomerPreferenceRepository, CustomerPreferenceRepository>();
+            services.AddScoped<IAIRecommendationLogRepository, AIRecommendationLogRepository>();
             services.Configure<JwtSettings>(configuration.GetSection(JwtSettings.SectionName));
             services.AddScoped<IJwtService, JWTService>();
             services.AddScoped<IPasswordHasher, PasswordHasher>();
@@ -110,7 +115,13 @@ namespace InfrastructureLayer
             services.AddScoped<IPromotionValidationService, PromotionValidationService>();
             services.AddScoped<INotificationService, NotificationService>();
             services.AddScoped<IDeviceTokenService, DeviceTokenService>();
+            services.AddScoped<IFoodTagService, FoodTagService>();
+            services.AddScoped<ICustomerPreferenceService, CustomerPreferenceService>();
+            services.AddScoped<IAIRecommendationService, AIRecommendationService>();
             services.AddSingleton<IOnlinePresenceService, OnlinePresenceService>();
+            services.Configure<AIProviderSettings>(
+                configuration.GetSection(AIProviderSettings.SectionName));
+            services.AddHttpClient<IAIProviderService, GeminiAIProviderService>();
             services.Configure<FirebaseSettings>(
                 configuration.GetSection(FirebaseSettings.SectionName));
             services.AddHttpClient<IPushNotificationService, FirebasePushNotificationService>();

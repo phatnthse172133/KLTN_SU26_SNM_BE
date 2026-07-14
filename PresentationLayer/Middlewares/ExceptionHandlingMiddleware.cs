@@ -58,7 +58,19 @@ public class ExceptionHandlingMiddleware
         string message)
     {
         var traceId = context.TraceIdentifier;
-        _logger.LogError(exception, "Request failed with trace id {TraceId}", traceId);
+        if (statusCode >= StatusCodes.Status500InternalServerError)
+        {
+            _logger.LogError(exception, "Request failed with trace id {TraceId}", traceId);
+        }
+        else
+        {
+            _logger.LogInformation(
+                "Request returned {StatusCode} ({ErrorCode}) with trace id {TraceId}: {Message}",
+                statusCode,
+                errorCode,
+                traceId,
+                message);
+        }
 
         if (context.Response.HasStarted)
         {

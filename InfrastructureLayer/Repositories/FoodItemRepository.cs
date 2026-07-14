@@ -3,6 +3,7 @@ using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
 using InfrastructureLayer.Data;
 using Microsoft.EntityFrameworkCore;
+using static DomainLayer.Enums.GeneralEnum;
 
 namespace InfrastructureLayer.Repositories;
 
@@ -47,6 +48,14 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
             .Include(item => item.FoodPrices)
             .FirstOrDefaultAsync(item => item.Id == foodItemId, cancellationToken);
 
+    public Task<FoodItem?> GetWithTagsAsync(
+        Guid foodItemId,
+        CancellationToken cancellationToken = default)
+        => ActiveQuery()
+            .Include(item => item.Booth)
+            .Include(item => item.FoodItemTags)
+            .FirstOrDefaultAsync(item => item.Id == foodItemId, cancellationToken);
+
     public async Task<IReadOnlyCollection<FoodItem>> GetActiveByIdsAndBoothAsync(
         Guid boothId,
         IReadOnlyCollection<Guid> foodItemIds,
@@ -55,8 +64,29 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
             .Where(item => item.BoothId == boothId && foodItemIds.Contains(item.Id))
             .ToListAsync(cancellationToken);
 
-    public async Task<List<FoodItem>> GetAllFoodItemsByIdsAsync(List<Guid> foodItemIds, CancellationToken cancellationToken = default)
-        => await ActiveQuery()
-            .Where(item => foodItemIds.Contains(item.Id))
-            .ToListAsync(cancellationToken);
+    public async Task<IReadOnlyCollection<FoodItem>> GetAiCandidatesAsync(
+        Guid? nightMarketId,
+        CancellationToken cancellationToken = default)
+    {
+        var query = ActiveQuery()
+            .Include(item => item.Category)
+            .Include(item => item.FoodItemTags)
+                .ThenInclude(foodItemTag => foodItemTag.FoodTag)
+            .Include(item => item.Booth)
+                .ThenInclude(booth => booth.NightMarket)
+            .Include(item => item.Booth)
+                .ThenInclude(booth => booth.Zone)
+            .Where(item =>
+                item.IsAvailable
+                && item.Booth.Status == BoothStatus.Active
+                && item.Booth.NightMarket.Status == NightMarketStatus.Open
+                && !item.Booth.NightMarket.IsDeleted);
+
+        if (nightMarketId.HasValue)
+        {
+            query = query.Where(item => item.Booth.NightMarketId == nightMarketId.Value);
+        }
+
+        return await query.ToListAsync(cancellationToken);
+    }
 }

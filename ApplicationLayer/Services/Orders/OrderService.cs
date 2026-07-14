@@ -7,6 +7,7 @@ using DomainLayer.InterfaceRepository;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using PayOS;
+using PayOS.Models.V1.Payouts.Batch;
 using PayOS.Models.V2.PaymentRequests;
 using PayOS.Models.Webhooks;
 using System;
@@ -70,15 +71,21 @@ namespace ApplicationLayer.Services.Orders
             // 3. Duyệt danh sách món ăn + Topping để lưu chi tiết và tính tổng tiền thực tế
             decimal calculatedTotalAmount = 0;
 
-            var foodIds = dto.Items.Select(i => i.FoodItemId).ToList();
-            var foodItemsFromDb = await _foodItemRepo.GetAllFoodItemsByIdsAsync(foodIds);
+            //REAL
+            //var foodIds = dto.Items.Select(i => i.FoodItemId).ToList();
+            //var foodItemsFromDb = await _foodItemRepo.GetAllFoodItemsByIdsAsync(foodIds);
+
+            //TEST (tạm thời comment 2 dòng trên và 4 dòng dưới để test PayOS, tránh lỗi null ref khi chưa có món ăn thực tế trong DB)
+
 
             foreach (var itemDto in dto.Items)
             {
-                var dbFoodItem = foodItemsFromDb.FirstOrDefault(f => f.Id == itemDto.FoodItemId);
-                if (dbFoodItem == null) return ApiResponse<OrderResponseDto>.Failure("Món ăn không tồn tại hoặc đã bị xóa khỏi thực đơn!");
+                //var dbFoodItem = foodItemsFromDb.FirstOrDefault(f => f.Id == itemDto.FoodItemId);
+                //if (dbFoodItem == null) return ApiResponse<OrderResponseDto>.Failure("Món ăn không tồn tại hoặc đã bị xóa khỏi thực đơn!");
 
-                decimal realUnitPrice = dbFoodItem.Price;
+                //decimal realUnitPrice = dbFoodItem.Price;
+                //decimal itemTotalPrice = realUnitPrice * itemDto.Quantity;
+                decimal realUnitPrice = itemDto.UnitPrice;
                 decimal itemTotalPrice = realUnitPrice * itemDto.Quantity;
 
                 var orderDetail = new OrderDetail
@@ -169,8 +176,8 @@ namespace ApplicationLayer.Services.Orders
                     {
                         OrderCode = uniqueOrderCode,// Truyền mã đơn kiểu long
                         Amount = (int)order.FinalAmount,// Ép về kiểu int theo cấu trúc PayOS
-                        Description = $"Thanh toan SNM {uniqueOrderCode}",
-                        ReturnUrl = "https://your-snm-app/success", // Link FE xử lý khi khách thanh toán xong trên web PayOS
+                        Description = $"Process {uniqueOrderCode}",
+                        ReturnUrl = "https://your-snm-app/cancel", // Link FE xử lý khi khách thanh toán xong trên web PayOS
                         CancelUrl = "https://your-snm-app/cancel"  // Link FE xử lý khi khách bấm hủy trên web PayOS
                     };
 
@@ -204,16 +211,17 @@ namespace ApplicationLayer.Services.Orders
 
         public async Task<bool> ProcessPaymentWebhookAsync(Webhook webhookBody)
         {
+
             try
             {
                 // 1. Gọi hàm VerifyAsync để kiểm tra bảo mật Signature
                 // Nếu dữ liệu bị hacker sửa đổi, hàm này sẽ ném ra Exception hoặc thất bại
                 WebhookData verifiedData = await _payOSClient.Webhooks.VerifyAsync(webhookBody);
-
+                NotificationListItemResponse? notificationPayload = null;
                 if (verifiedData == null)
                 {
                     _logger.LogWarning("Webhook nhận được dữ liệu không hợp lệ hoặc chữ ký giả mạo.");
-                    return false;
+                    return true;
                 }
 
                 // 2. Tìm Đơn hàng bằng OrderCode lấy từ verifiedData
@@ -222,7 +230,7 @@ namespace ApplicationLayer.Services.Orders
                 if (order == null)
                 {
                     _logger.LogWarning($"Không tìm thấy đơn hàng nào khớp với OrderCode: {verifiedData.OrderCode} từ Webhook.");
-                    return false;
+                    return true;
                 }
 
                 // 3. Nếu đơn này đã được xử lý từ trước, trả về true luôn để tránh lặp trùng
@@ -231,6 +239,38 @@ namespace ApplicationLayer.Services.Orders
                     _logger.LogInformation($"Đơn hàng #{order.OrderCode} đã được xử lý trước đó (Trạng thái hiện tại: {order.Status}). Bỏ qua xử lý trùng lặp.");
                     return true;
                 }
+
+                // KIỂM TRA CHỐNG HACK TIỀN: So sánh số tiền PayOS nhận được với giá trị đơn hàng
+                if (verifiedData.Amount < order.FinalAmount)
+                {
+                    // Cập nhật status đơn hàng sang Underpaid (thanh toán thiếu)
+                    order.Status = OrderStatus.Underpaid;
+                    order.UpdatedAt = DateTime.UtcNow;
+
+                    _orderRepo.Update(order);
+                    await _orderRepo.SaveChangesAsync();
+
+                    // Bắn tin nhắn báo cho chủ quầy biết có gian lận hoặc lỗi dòng tiền
+                    string warningGroup = $"notification:{order.BoothOwnerId}";
+
+                    notificationPayload = new NotificationListItemResponse
+                    {
+                        Id = Guid.NewGuid(),
+                        BoothId = order.BoothOwnerId,
+                        Type = "ORDER_UNDERPAID",
+                        Title = "Đơn hàng bị trả thiếu tiền!",
+                        Content = $"Đơn hàng {order.OrderCode} đối soát phát hiện thanh toán thiếu. Yêu cầu: {order.FinalAmount:N0}đ, Thực nhận: {verifiedData.Amount:N0}đ",
+                        IsRead = false,
+                        ReferenceType = "Order",
+                        ReferenceId = order.Id,
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                    await _notificationPublisher.PublishAsync(order.BoothOwnerId, notificationPayload, unreadCount: 1);
+
+                    return true;
+                }
+
                 // 4. CẬP NHẬT LỊCH SỬ BẢNG PAYMENT
                 var payment = order.Payments.FirstOrDefault(p => p.PaymentLinkId == verifiedData.PaymentLinkId);
 
@@ -262,7 +302,7 @@ namespace ApplicationLayer.Services.Orders
                 await _orderRepo.SaveChangesAsync();
 
                 // 7. Gọi SignalR bắn tin xuống cho BoothOwner tại đây!
-                var notificationPayload = new NotificationListItemResponse
+                notificationPayload = new NotificationListItemResponse
                 {
                     Id = Guid.NewGuid(),
                     BoothId = order.BoothOwnerId,
@@ -468,5 +508,246 @@ namespace ApplicationLayer.Services.Orders
 
             return ApiResponse<bool>.SuccessResponse(true, "Cập nhật trạng thái đơn hàng thành công!");
         }
+
+        //Khách chủ động hủy đơn hàng trước khi quầy nhận đơn (Chỉ áp dụng cho khách đặt qua App, không áp dụng cho khách vãng lai)
+        public async Task<ApiResponse<bool>> CancelOrder(long orderCode)
+        {
+            var order = await _orderRepo.GetOrderByCodeAsync(orderCode);
+            if (order == null) return ApiResponse<bool>.Failure("Đơn hàng không tồn tại", false);
+
+            // Chỉ cho phép hủy khi đơn đang ở trạng thái chờ thanh toán (Pending)
+            
+            if (order.Status != OrderStatus.Placed)
+            {
+                return ApiResponse<bool>.Failure($"Đơn hàng không thể hủy ở trạng thái {order.Status}", false);
+            }
+
+            var payment = order.Payments
+                               .OrderByDescending(p => p.CreatedAt)
+                               .FirstOrDefault(p => p.Status == PaymentStatus.Pending); // Vừa lọc Pending vừa lấy cái đầu tiên
+
+            try
+            {
+                // 1. GỌI SANG PAYOS ĐỂ HỦY LINK THANH TOÁN (Chặn không cho quét QR nữa)
+                // Hàm này bắt buộc truyền OrderCode (kiểu long/int) và lý do hủy tùy ý
+                if (payment != null)
+                {
+                    await _payOSClient.PaymentRequests.CancelAsync(order.OrderCode);
+                    
+                    // 2. Cập nhật Database
+                    payment.Status = PaymentStatus.Cancelled;
+                    payment.UpdatedAt = DateTime.UtcNow;
+                }
+
+                order.Status = OrderStatus.Cancelled;
+                order.UpdatedAt = DateTime.UtcNow;
+
+                _orderRepo.Update(order);
+                await _orderRepo.SaveChangesAsync();
+
+                return ApiResponse<bool>.SuccessResponse(true, "Hủy đơn hàng thành công");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Lỗi xảy ra khi hủy đơn hàng #{orderCode}");
+                return ApiResponse<bool>.Failure($"Lỗi khi đồng bộ hủy đơn với PayOS. Lỗi: {ex.Message}", false);
+            }
+        }
+
+        //Tình huống khách đặt món payos, trả tiền, nhưng mạng lỗi và webhook không về kịp, khách bấm nút "Tôi đã thanh toán" trên FE để xác nhận, thì gọi API này để kiểm tra trạng thái thực tế từ PayOS
+        public async Task<ApiResponse<bool>> ActiveCheckPaymentStatus(long orderCode)
+        {
+            var order = await _orderRepo.GetOrderByCodeAsync(orderCode);
+            if (order == null) return ApiResponse<bool>.Failure("Đơn hàng không tồn tại", false);
+
+            // Nếu đơn đã xử lý thành công trước đó rồi thì thôi
+            if (order.Status != OrderStatus.Placed && 
+                order.Status != OrderStatus.Underpaid && 
+                order.Status != OrderStatus.Cancelled) //order có status từ preparing, ready, completed thì coi như đã thanh toán thành công rồi
+                return ApiResponse<bool>.SuccessResponse(true, "Đơn đã được thanh toán và đang xử lý.");
+
+            try
+            {
+                // 1. CHỦ ĐỘNG GỌI SANG PAYOS ĐỂ KIỂM TRA (Không đợi Webhook)
+                var paymentInfo = await _payOSClient.PaymentRequests.GetAsync(orderCode);
+
+                // 2. Nếu bên PayOS báo đã nhận được tiền (PAID)
+                if (paymentInfo.Status == PaymentLinkStatus.Paid)
+                {
+                    if (paymentInfo.AmountPaid < order.FinalAmount)
+                    {
+                        order.Status = OrderStatus.Underpaid;
+                        order.UpdatedAt = DateTime.UtcNow;
+                        _orderRepo.Update(order);
+                        await _orderRepo.SaveChangesAsync();
+
+                        // Bắn tin nhắn cảnh báo thiếu tiền cho chủ quầy
+                        var warningPayload = new NotificationListItemResponse
+                        {
+                            Id = Guid.NewGuid(),
+                            BoothId = order.BoothOwnerId,
+                            Type = "ORDER_UNDERPAID",
+                            Title = "Đơn hàng bị trả thiếu tiền!",
+                            Content = $"Đơn hàng {order.OrderCode} đối soát phát hiện thanh toán thiếu. Yêu cầu: {order.FinalAmount:N0}đ, Thực nhận: {paymentInfo.AmountPaid:N0}đ",
+                            IsRead = false,
+                            ReferenceType = "Order",
+                            ReferenceId = order.Id,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        await _notificationPublisher.PublishAsync(order.BoothOwnerId, warningPayload, unreadCount: 1);
+
+                        return ApiResponse<bool>.Failure("Bạn đã thanh toán thiếu số tiền yêu cầu. Vui lòng liên hệ quầy để xử lý.", false);
+                    }
+
+                    var previousStatus = order.Status;
+
+                    // Thực hiện các bước cập nhật DB và bắn SignalR y hệt như luồng Webhook thành công
+                    order.Status = OrderStatus.Preparing;
+                    order.UpdatedAt = DateTime.UtcNow;
+
+                    // Tìm và cập nhật payment
+                    var payment = order.Payments
+                                       .OrderByDescending(p => p.CreatedAt)
+                                       .FirstOrDefault(p => p.Status == PaymentStatus.Pending);
+                    if (payment != null)
+                    {
+                        payment.Status = PaymentStatus.Paid;
+                        payment.GatewayRef = paymentInfo.Transactions?.FirstOrDefault()?.Reference;
+                        payment.PaidAt = DateTime.UtcNow;
+                        payment.UpdatedAt = DateTime.UtcNow;
+                    }
+
+                    _orderRepo.Update(order);
+                    await _orderRepo.SaveChangesAsync();
+
+                    // 4. Chuẩn bị nội dung thông báo SignalR thông minh
+                    string notificationTitle = previousStatus == OrderStatus.Cancelled
+                        ? "Đơn đã hủy được thanh toán trễ!"
+                        : "Đơn hàng đã thanh toán!";
+
+                    string notificationContent = previousStatus == OrderStatus.Cancelled
+                        ? $"Đơn hàng #{order.OrderCode} (từng bị hủy do quá hạn) vừa được đối soát thanh toán thành công qua PayOS. Số tiền: {order.FinalAmount:N0}đ"
+                        : $"Đơn hàng #{order.OrderCode} đã được thanh toán thành công qua PayOS. Số tiền: {order.FinalAmount:N0}đ";
+
+                    // Bắn SignalR báo cho chủ quầy "Ting Ting"
+                    var notificationPayload = new NotificationListItemResponse
+                    {
+                        Id = Guid.NewGuid(),
+                        BoothId = order.BoothOwnerId,
+                        Type = "ORDER_PAID",          // Type dành cho đơn đã thanh toán online thành công
+                        Title = notificationTitle,
+                        Content = notificationContent,
+                        IsRead = false,
+                        ReferenceType = "Order",      // Định danh kiểu tham chiếu
+                        ReferenceId = order.Id,       // Id của đơn hàng để FE click vào là xem được luôn
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                    await _notificationPublisher.PublishAsync(order.BoothOwnerId, notificationPayload, unreadCount: 1);
+
+                    return ApiResponse<bool>.SuccessResponse(true, "Bạn đã thanh toán thành công! Chủ quán đang chuẩn bị đơn hàng.");
+                }
+
+                return ApiResponse<bool>.Failure("Thanh toán chưa được ghi nhận trên hệ thống PayOS", false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Lỗi xảy ra khi đối soát đơn hàng #{orderCode}");
+                return ApiResponse<bool>.Failure($"Lỗi khi đối soát với PayOS: {ex.Message}", false);
+            }
+        }
+
+        public async Task<ApiResponse<bool>> RefundOrderAsync(long orderCode, 
+                                                              string reason, 
+                                                              string customerBankBin,  //Mã BIN ngân hàng (6 số đầu) của khách để PayOS đối chiếu, nếu có
+                                                              string customerAccountNumber) //Số tài khoản ngân hàng của khách để PayOS đối chiếu, nếu có
+        {
+            // 1. Tìm đơn hàng kèm danh sách thanh toán
+            var order = await _orderRepo.GetOrderByCodeAsync(orderCode);
+            if (order == null) return ApiResponse<bool>.Failure("Đơn hàng không tồn tại", false);
+
+            // 2. Kiểm tra trạng thái đơn hàng: Chỉ cho hoàn tiền khi đơn đã thanh toán thành công và quầy chưa hoàn tất phục vụ món (Chưa giao hàng)
+            if (order.Status != OrderStatus.Preparing &&
+                order.Status != OrderStatus.ReadyForPickup &&
+                order.Status != OrderStatus.Underpaid) // khách trả thiếu cũng cần hoàn
+            {
+                return ApiResponse<bool>.Failure($"Đơn hàng ở trạng thái '{order.Status}' không thỏa mãn điều kiện để hoàn tiền.", false);
+            }
+
+            // 3. Tìm bản ghi Payment đã thanh toán thành công (Paid) để hoàn lại
+            var paidPayment = order.Payments
+                                   .OrderByDescending(p => p.CreatedAt)
+                                   .FirstOrDefault(p => p.Status == PaymentStatus.Paid);
+
+            if (paidPayment == null)
+            {
+                return ApiResponse<bool>.Failure("Không tìm thấy giao dịch đã thanh toán thành công của đơn hàng này để thực hiện hoàn tiền.", false);
+            }
+
+            try
+            {
+                // 4. LOGIC XỬ LÝ HOÀN TIỀN
+
+                var referenceId = $"refund_{order.OrderCode}";
+
+                var payoutRequest = new PayoutBatchRequest
+                {
+                    ReferenceId = referenceId,
+                    Category = new List<string> { "refund" }, // Đổi category thành refund cho đúng nghiệp vụ
+                    ValidateDestination = true,               // Yêu cầu PayOS check xem tài khoản đích có thật không
+                    Payouts = new List<PayoutBatchItem>
+                    {
+                        new PayoutBatchItem
+                        {
+                            ReferenceId = $"{referenceId}_item",
+                            Amount = (long)order.FinalAmount, // Số tiền hoàn bằng đúng số tiền đơn hàng đã trả
+                            Description = $"Hoan tien don hang #{order.OrderCode}", // Viết không dấu để tránh lỗi font ngân hàng
+                            ToBin = customerBankBin,           // Truyền mã BIN ngân hàng khách
+                            ToAccountNumber = customerAccountNumber // Số tài khoản khách
+                        }
+                    }
+                };
+
+                // Gọi lệnh Payout thực sự sang PayOS
+                var payoutResult = await _payOSClient.Payouts.Batch.CreateAsync(payoutRequest);
+                _logger.LogInformation($"Yêu cầu Payout hoàn tiền thành công cho đơn #{order.OrderCode}. Payout ID: {payoutResult.Id}");
+
+                // Cập nhật trạng thái bảng thanh toán con sang Refunded (Đã hoàn tiền)
+                paidPayment.Status = PaymentStatus.Refunded;
+                paidPayment.UpdatedAt = DateTime.UtcNow;
+
+                // Cập nhật trạng thái đơn hàng cha sang Refunded
+                order.Status = OrderStatus.Refunded;
+                order.UpdatedAt = DateTime.UtcNow;
+
+                _orderRepo.Update(order);
+                await _orderRepo.SaveChangesAsync();
+
+                // 5. Bắn thông báo SignalR xuống Client (Cả chủ quán và khách hàng để họ nhận thông tin)
+                var notificationPayload = new NotificationListItemResponse
+                {
+                    Id = Guid.NewGuid(),
+                    BoothId = order.BoothOwnerId,
+                    Type = "ORDER_REFUNDED",
+                    Title = "Đơn hàng đã được hoàn tiền!",
+                    Content = $"Đơn hàng #{order.OrderCode} đã được hoàn tiền thành công. Số tiền hoàn: {order.FinalAmount:N0}đ. Lý do: {reason}",
+                    IsRead = false,
+                    ReferenceType = "Order",
+                    ReferenceId = order.Id,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                // Báo cho chủ quầy qua SignalR
+                await _notificationPublisher.PublishAsync(order.BoothOwnerId, notificationPayload, unreadCount: 1);
+
+                return ApiResponse<bool>.SuccessResponse(true, "Yêu cầu hoàn tiền đã được xử lý và cập nhật thành công.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Lỗi xảy ra khi thực hiện hoàn tiền cho đơn hàng #{orderCode}");
+                return ApiResponse<bool>.Failure($"Lỗi hệ thống khi hoàn tiền: {ex.Message}", false);
+            }
+        }
+
     }
 }

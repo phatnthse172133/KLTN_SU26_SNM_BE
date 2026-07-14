@@ -19,7 +19,9 @@ namespace PresentationLayer.Controllers
             _orderService = orderService;
         }
 
-        private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        //private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        //TEST, khi nào chạy thật lấy dòng trên, còn khi test thì dùng dòng dưới
+        private Guid CurrentUserId => Guid.Parse("22222222-2222-2222-2222-222222222222");
 
         // POST api/<OrderController>
         [HttpPost]
@@ -35,7 +37,7 @@ namespace PresentationLayer.Controllers
         }
 
         [HttpPut("update-status/{orderCode}")]
-        public async Task<IActionResult> UpdateOrderStatus([FromBody] UpdateOrderStatusDto dto)
+        public async Task<IActionResult> UpdateOrderStatus([FromRoute] long orderCode, [FromBody] UpdateOrderStatusDto dto)
         {
             if (dto == null)
             {
@@ -46,6 +48,19 @@ namespace PresentationLayer.Controllers
             return response.Success ? Ok(response) : BadRequest(response);
         }
 
-        
+        [HttpPut("orders/{orderCode}/cancel")]
+        public async Task<IActionResult> CancelOrder([FromRoute] long orderCode)
+        {
+            var response = await _orderService.CancelOrder(orderCode);
+            return response.Success ? Ok(response) : BadRequest(response);
+        }
+
+        [HttpGet("orders/{orderCode}/check-payment-status")]
+        public async Task<IActionResult> CheckPaymentStatus([FromRoute] long orderCode)
+        {
+            var response = await _orderService.ActiveCheckPaymentStatus(orderCode);
+            return response.Success ? Ok(response) : BadRequest(response);
+        }
+
     }
 }

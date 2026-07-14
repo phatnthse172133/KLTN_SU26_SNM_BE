@@ -275,7 +275,9 @@ namespace DomainLayer.Enums
             Preparing = 1,       // Quầy đang chuẩn bị món
             ReadyForPickup = 2,  // Món đã xong, chờ khách đến lấy
             Completed = 3,       // Khách đã lấy món -> Hoàn thành đơn
-            Cancelled = 4        // Đơn bị hủy (Do khách hủy hoặc quầy hết nguyên liệu)
+            Cancelled = 4,        // Đơn bị hủy (Do khách hủy hoặc quầy hết nguyên liệu)
+            Underpaid = 5,        // Thanh toán thiếu (Phát hiện gian lận hoặc lỗi dòng tiền)
+            Refunded = 6,         // Đơn đã được hoàn tiền cho khách
         }
 
         //public enum PayOrderStatus

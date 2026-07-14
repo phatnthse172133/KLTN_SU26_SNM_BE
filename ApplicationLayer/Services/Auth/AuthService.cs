@@ -86,14 +86,14 @@ public class AuthService : IAuthService
             Email = email,
             PasswordHash = _passwordHasher.HashPassword(request.Password),
             AuthProvider = "Local",
-            Status = UserStatus.PendingVerification,
+            Status = UserStatus.Active,
             CreatedAt = now,
             UpdatedAt = now
         };
 
         await _userRepository.AddAsync(user);
         await _userRepository.SaveChangesAsync();
-        await CreateAndSendVerificationTokenAsync(user, cancellationToken);
+        //await CreateAndSendVerificationTokenAsync(user, cancellationToken);
 
         return ApiResponse<object>.SuccessResponse(
             new { user.Id, user.Email, Role = role.RoleName },

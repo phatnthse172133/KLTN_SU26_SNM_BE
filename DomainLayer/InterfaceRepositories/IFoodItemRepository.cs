@@ -22,4 +22,6 @@ public interface IFoodItemRepository : IGenericRepository<FoodItem>
     Task<IReadOnlyCollection<FoodItem>> GetAiCandidatesAsync(
         Guid? nightMarketId,
         CancellationToken cancellationToken = default);
+
+    Task<List<FoodItem>> GetAllFoodItemsByIdsAsync(List<Guid> foodItemIds);
 }

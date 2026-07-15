@@ -89,4 +89,9 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
 
         return await query.ToListAsync(cancellationToken);
     }
+
+    public async Task<List<FoodItem>> GetAllFoodItemsByIdsAsync(List<Guid> foodItemIds)
+    {
+        return await _dbSet.Where(fi => foodItemIds.Contains(fi.Id)).ToListAsync();
+    }
 }

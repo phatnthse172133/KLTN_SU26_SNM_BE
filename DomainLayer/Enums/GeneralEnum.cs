@@ -225,41 +225,69 @@ namespace DomainLayer.Enums
             Inactive = 1
         }
 
+        //public enum PaymentType
+        //{
+        //    BankTransfer = 0,
+        //    Payos = 1,
+        //    VNPay = 2,
+        //    MoMo = 3
+        //}
+
+        //public enum OrderStatus
+        //{
+        //    Pending = 0,      // Chờ thanh toán / xác nhận
+        //    Confirmed = 1,    // Đã thanh toán, quầy nhận đơn
+        //    Ready = 2,        // Món đã xong, chờ khách lấy
+        //    Completed = 3,    // Khách đã nhận món
+        //    Cancelled = 4,    // Đơn bị hủy
+        //    Expired = 5       // Quá thời gian nhận món
+        //}
+
+        //public enum OrderStatus
+        //{
+        //    PendingPayment = 0,      // Chờ thanh toán / xác nhận
+        //    Placed = 1,    // Đã thanh toán, quầy nhận đơn
+        //    Preparing = 2,        // Đang chuẩn bị món
+        //    ReadyForPickup = 3,    // Món đã xong, chờ khách lấy
+        //    Completed = 4,      //Hoàn thành
+        //    Cancelled = 5,    // Đơn bị hủy
+        //    Refunded = 6       // Đơn bị từ chối
+        //}
+
         public enum PaymentType
         {
-            BankTransfer = 0,
-            Payos = 1,
-            VNPay = 2,
-            MoMo = 3
+            Cash = 0,       // Tiền mặt
+            PayOS = 1  // Tích hợp cổng thanh toán PayOS
         }
 
         public enum PaymentStatus
         {
-            Pending = 0,
-            Paid = 1,
-            Failed = 2,
-            Cancelled = 3,
-            Refunded = 4
+            Pending = 0, // Chưa thanh toán (Mặc định khi tạo đơn PayOS)
+            Paid = 1, // Đã thu tiền thành công (Cập nhật khi Webhook Ting Ting)
+            Failed = 2, // Thanh toán thất bại
+            Refunded = 3, // Đã hoàn tiền cho khách
+            Cancelled = 4,
         }
 
         public enum OrderStatus
         {
-            Pending = 0,      // Chờ thanh toán / xác nhận
-            Confirmed = 1,    // Đã thanh toán, quầy nhận đơn
-            Ready = 2,        // Món đã xong, chờ khách lấy
-            Completed = 3,    // Khách đã nhận món
-            Cancelled = 4,    // Đơn bị hủy
-            Expired = 5       // Quá thời gian nhận món
+            Placed = 0,          // Đơn hàng mới đã được hệ thống ghi nhận
+            Preparing = 1,       // Quầy đang chuẩn bị món
+            ReadyForPickup = 2,  // Món đã xong, chờ khách đến lấy
+            Completed = 3,       // Khách đã lấy món -> Hoàn thành đơn
+            Cancelled = 4,        // Đơn bị hủy (Do khách hủy hoặc quầy hết nguyên liệu)
+            Underpaid = 5,        // Thanh toán thiếu (Phát hiện gian lận hoặc lỗi dòng tiền)
+            Refunded = 6,         // Đơn đã được hoàn tiền cho khách
         }
 
-        public enum PayOrderStatus
-        {
-            Pending = 0,
-            Paid = 1,
-            RefundPending = 2,
-            Refunded = 3,
-            Failed = 4
-        }
+        //public enum PayOrderStatus
+        //{
+        //    Pending = 0,
+        //    Paid = 1,
+        //    RefundPending = 2,
+        //    Refunded = 3,
+        //    Failed = 4
+        //}
 
         public enum FoodTagGroup
         {

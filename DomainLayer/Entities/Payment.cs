@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using static DomainLayer.Enums.GeneralEnum;
 
@@ -15,17 +15,19 @@ public partial class Payment
     // FK tới User – chủ gian hàng nhận tiền
     public Guid BoothOwnerId { get; set; }
 
-    public PaymentType Type { get; set; }
+    public PaymentType Type { get; set; } //Cash hoặc PayOS
 
-    public string Gateway { get; set; } = null!;
+    //public string Gateway { get; set; } = null!;
 
     public decimal Amount { get; set; }
 
-    public string Currency { get; set; } = null!;
+    //public string Currency { get; set; } = null!;
 
     public PaymentStatus Status { get; set; }
 
-    // Mã tham chiếu từ cổng thanh toán bên thứ 3 - dùng để tra soát/khiếu nại
+    // Cổng PayOS cần các trường này để lưu link thanh toán
+    public string? CheckoutUrl { get; set; }
+    public string? PaymentLinkId { get; set; }
     public string? GatewayRef { get; set; }
 
     public string? RefundReason { get; set; }

@@ -3,6 +3,7 @@ using System;
 using InfrastructureLayer.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace InfrastructureLayer.Migrations
 {
     [DbContext(typeof(SNMDbContext))]
-    partial class SNMDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260712101701_EditForPaymentAndOrder")]
+    partial class EditForPaymentAndOrder
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -22,64 +25,6 @@ namespace InfrastructureLayer.Migrations
 
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "uuid-ossp");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
-
-            modelBuilder.Entity("DomainLayer.Entities.AIRecommendationLog", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasDefaultValueSql("uuid_generate_v4()");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<Guid?>("CustomerId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("InputJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
-                    b.Property<Guid?>("NightMarketId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ParsedIntentJson")
-                        .HasColumnType("jsonb");
-
-                    b.Property<string>("RecommendationType")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
-
-                    b.Property<string>("ResultJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
-                    b.Property<string>("SelectedOptionId")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("now()");
-
-                    b.HasKey("Id")
-                        .HasName("AIRecommendationLog_pkey");
-
-                    b.HasIndex(new[] { "CustomerId" }, "idx_airecommendationlog_customer");
-
-                    b.HasIndex(new[] { "NightMarketId" }, "idx_airecommendationlog_nightmarket");
-
-                    b.HasIndex(new[] { "RecommendationType", "CreatedAt" }, "idx_airecommendationlog_type_created");
-
-                    b.ToTable("AIRecommendationLog", null, t =>
-                        {
-                            t.HasComment("Log tối giản cho các lần AI recommendation để debug/demo");
-                        });
-                });
 
             modelBuilder.Entity("DomainLayer.Entities.Booth", b =>
                 {
@@ -779,55 +724,6 @@ namespace InfrastructureLayer.Migrations
                         });
                 });
 
-            modelBuilder.Entity("DomainLayer.Entities.CustomerPreference", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasDefaultValueSql("uuid_generate_v4()");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<Guid>("CustomerId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("FoodTagId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("PreferenceKind")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<string>("PreferenceSource")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("now()");
-
-                    b.HasKey("Id")
-                        .HasName("CustomerPreference_pkey");
-
-                    b.HasIndex(new[] { "CustomerId" }, "idx_customerpreference_customer");
-
-                    b.HasIndex(new[] { "FoodTagId" }, "idx_customerpreference_foodtag");
-
-                    b.HasIndex(new[] { "CustomerId", "FoodTagId", "PreferenceKind" }, "ux_customerpreference_tag_kind")
-                        .IsUnique();
-
-                    b.ToTable("CustomerPreference", null, t =>
-                        {
-                            t.HasComment("Sở thích rõ ràng của khách hàng theo FoodTag: Like/Avoid");
-                        });
-                });
-
             modelBuilder.Entity("DomainLayer.Entities.FoodCategory", b =>
                 {
                     b.Property<Guid>("Id")
@@ -986,30 +882,6 @@ namespace InfrastructureLayer.Migrations
                         });
                 });
 
-            modelBuilder.Entity("DomainLayer.Entities.FoodItemTag", b =>
-                {
-                    b.Property<Guid>("FoodItemId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("FoodTagId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("now()");
-
-                    b.HasKey("FoodItemId", "FoodTagId")
-                        .HasName("FoodItemTag_pkey");
-
-                    b.HasIndex(new[] { "FoodTagId" }, "idx_fooditemtag_foodtag");
-
-                    b.ToTable("FoodItemTag", null, t =>
-                        {
-                            t.HasComment("Bảng nối gắn tag ngữ nghĩa vào món ăn");
-                        });
-                });
-
             modelBuilder.Entity("DomainLayer.Entities.FoodPrice", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1051,70 +923,6 @@ namespace InfrastructureLayer.Migrations
                     b.ToTable("FoodPrice", null, t =>
                         {
                             t.HasComment("Bảng giá theo ngày trong tuần - override giá mặc định của FoodItem");
-                        });
-                });
-
-            modelBuilder.Entity("DomainLayer.Entities.FoodTag", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasDefaultValueSql("uuid_generate_v4()");
-
-                    b.Property<string>("Code")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<string>("Description")
-                        .HasColumnType("text");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasDefaultValueSql("'Active'::character varying");
-
-                    b.Property<string>("TagGroup")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("now()");
-
-                    b.HasKey("Id")
-                        .HasName("FoodTag_pkey");
-
-                    b.HasIndex(new[] { "Code" }, "ux_foodtag_code_active")
-                        .IsUnique()
-                        .HasFilter("\"IsDeleted\" = false");
-
-                    b.HasIndex(new[] { "Name" }, "ux_foodtag_name_active")
-                        .IsUnique()
-                        .HasFilter("\"IsDeleted\" = false");
-
-                    b.ToTable("FoodTag", null, t =>
-                        {
-                            t.HasComment("Danh sách tag chuẩn mô tả ngữ nghĩa món ăn cho AI/recommendation");
                         });
                 });
 
@@ -2427,25 +2235,6 @@ namespace InfrastructureLayer.Migrations
                     b.ToTable("Zones");
                 });
 
-            modelBuilder.Entity("DomainLayer.Entities.AIRecommendationLog", b =>
-                {
-                    b.HasOne("DomainLayer.Entities.User", "Customer")
-                        .WithMany("AIRecommendationLogs")
-                        .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("AIRecommendationLog_CustomerId_fkey");
-
-                    b.HasOne("DomainLayer.Entities.NightMarket", "NightMarket")
-                        .WithMany("AIRecommendationLogs")
-                        .HasForeignKey("NightMarketId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("AIRecommendationLog_NightMarketId_fkey");
-
-                    b.Navigation("Customer");
-
-                    b.Navigation("NightMarket");
-                });
-
             modelBuilder.Entity("DomainLayer.Entities.Booth", b =>
                 {
                     b.HasOne("DomainLayer.Entities.User", "BoothOwner")
@@ -2697,27 +2486,6 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("Customer");
                 });
 
-            modelBuilder.Entity("DomainLayer.Entities.CustomerPreference", b =>
-                {
-                    b.HasOne("DomainLayer.Entities.User", "Customer")
-                        .WithMany("CustomerPreferences")
-                        .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("CustomerPreference_CustomerId_fkey");
-
-                    b.HasOne("DomainLayer.Entities.FoodTag", "FoodTag")
-                        .WithMany("CustomerPreferences")
-                        .HasForeignKey("FoodTagId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("CustomerPreference_FoodTagId_fkey");
-
-                    b.Navigation("Customer");
-
-                    b.Navigation("FoodTag");
-                });
-
             modelBuilder.Entity("DomainLayer.Entities.FoodCategory", b =>
                 {
                     b.HasOne("DomainLayer.Entities.Booth", "Booth")
@@ -2760,27 +2528,6 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("Booth");
 
                     b.Navigation("Category");
-                });
-
-            modelBuilder.Entity("DomainLayer.Entities.FoodItemTag", b =>
-                {
-                    b.HasOne("DomainLayer.Entities.FoodItem", "FoodItem")
-                        .WithMany("FoodItemTags")
-                        .HasForeignKey("FoodItemId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("FoodItemTag_FoodItemId_fkey");
-
-                    b.HasOne("DomainLayer.Entities.FoodTag", "FoodTag")
-                        .WithMany("FoodItemTags")
-                        .HasForeignKey("FoodTagId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("FoodItemTag_FoodTagId_fkey");
-
-                    b.Navigation("FoodItem");
-
-                    b.Navigation("FoodTag");
                 });
 
             modelBuilder.Entity("DomainLayer.Entities.FoodPrice", b =>
@@ -3206,20 +2953,11 @@ namespace InfrastructureLayer.Migrations
 
                     b.Navigation("FoodImages");
 
-                    b.Navigation("FoodItemTags");
-
                     b.Navigation("FoodPrices");
 
                     b.Navigation("OrderDetails");
 
                     b.Navigation("PromotionFoodItems");
-                });
-
-            modelBuilder.Entity("DomainLayer.Entities.FoodTag", b =>
-                {
-                    b.Navigation("CustomerPreferences");
-
-                    b.Navigation("FoodItemTags");
                 });
 
             modelBuilder.Entity("DomainLayer.Entities.LayoutNode", b =>
@@ -3242,8 +2980,6 @@ namespace InfrastructureLayer.Migrations
 
             modelBuilder.Entity("DomainLayer.Entities.NightMarket", b =>
                 {
-                    b.Navigation("AIRecommendationLogs");
-
                     b.Navigation("BoothRegistrations");
 
                     b.Navigation("Booths");
@@ -3294,8 +3030,6 @@ namespace InfrastructureLayer.Migrations
 
             modelBuilder.Entity("DomainLayer.Entities.User", b =>
                 {
-                    b.Navigation("AIRecommendationLogs");
-
                     b.Navigation("Booth");
 
                     b.Navigation("BoothRegistrations");
@@ -3305,8 +3039,6 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("Complaints");
 
                     b.Navigation("Conversations");
-
-                    b.Navigation("CustomerPreferences");
 
                     b.Navigation("DeviceTokens");
 

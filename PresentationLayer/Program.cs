@@ -13,6 +13,7 @@ using System.Text;
 using static DomainLayer.Enums.GeneralEnum;
 using ApplicationLayer.Services.Notifications;
 using PresentationLayer.Hubs;
+using PayOS;
 using InfrastructureLayer.Data.Seeders;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -34,6 +35,17 @@ builder.Configuration.AddEnvironmentVariables();
 var jwtSettings = builder.Configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>() ?? new JwtSettings();
 if (string.IsNullOrWhiteSpace(jwtSettings.SecretKey) || jwtSettings.SecretKey.Length < 32)
     throw new InvalidOperationException("JWT secret is missing. Set Jwt__SecretKey in PresentationLayer/.env or Jwt:SecretKey in appsettings.json (minimum 32 characters).");
+
+var payOSSettings = builder.Configuration.GetSection("PayOS");
+var payOSClient = new PayOSClient(
+    payOSSettings["ClientId"],
+    payOSSettings["ApiKey"],
+    payOSSettings["ChecksumKey"]
+);
+
+builder.Services.AddSingleton(payOSClient); // Đăng ký PayOS vào hệ thống
+
+//await payOSClient.Webhooks.ConfirmAsync("https://your-url.com/payos-webhook");
 
 const string CustomerAppCorsPolicy = "CustomerAppCorsPolicy";
 

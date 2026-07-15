@@ -934,7 +934,7 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
 
                 entity.Property(e => e.PaidAt)
-                    .IsRequired(false) // Xác định rõ ràng đây là trường Nullable (được phép trống)
+                    .IsRequired(false) // đây là trường Nullable (được phép trống)
                     .HasComment("Thời điểm dòng tiền thực tế được khách hàng quét mã và bắn về hệ thống thành công");
 
                 entity.HasOne(d => d.BoothOwner).WithMany(p => p.Payments)

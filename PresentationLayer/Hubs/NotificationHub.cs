@@ -5,7 +5,7 @@ using ApplicationLayer.Services.Notifications;
 
 namespace PresentationLayer.Hubs;
 
-//[Authorize]
+[Authorize]
 public class NotificationHub : Hub
 {
     private readonly IOnlinePresenceService _presence;
@@ -17,15 +17,15 @@ public class NotificationHub : Hub
 
     public override async Task OnConnectedAsync()
     {
-        var userId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        //var userId = Guid.Parse("11111111-1111-1111-1111-111111111111");
 
         //TEST , khi nào chạy thật lấy dòng dưới, còn khi test thì dùng dòng trên
-        //var value = Context.User?.FindFirstValue(ClaimTypes.NameIdentifier);
-        //if (!Guid.TryParse(value, out var userId))
-        //{
-        //    Context.Abort();
-        //    return;
-        //}
+        var value = Context.User?.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!Guid.TryParse(value, out var userId))
+        {
+            Context.Abort();
+            return;
+        }
 
         await Groups.AddToGroupAsync(
             Context.ConnectionId,
@@ -36,12 +36,12 @@ public class NotificationHub : Hub
 
     public override Task OnDisconnectedAsync(Exception? exception)
     {
-        var userId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        //var userId = Guid.Parse("11111111-1111-1111-1111-111111111111");
         //TEST , khi nào chạy thật lấy dòng dưới, còn khi test thì dùng dòng trên
-        //var value = Context.User?.FindFirstValue(ClaimTypes.NameIdentifier);
+        var value = Context.User?.FindFirstValue(ClaimTypes.NameIdentifier);
 
-        //if (Guid.TryParse(value, out var userId))
-        //    _presence.Disconnected(userId);
+        if (Guid.TryParse(value, out var userId))
+            _presence.Disconnected(userId);
 
         return base.OnDisconnectedAsync(exception);
     }

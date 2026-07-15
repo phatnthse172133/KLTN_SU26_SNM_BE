@@ -93,7 +93,7 @@ public class AuthService : IAuthService
 
         await _userRepository.AddAsync(user);
         await _userRepository.SaveChangesAsync();
-        //await CreateAndSendVerificationTokenAsync(user, cancellationToken);
+        await CreateAndSendVerificationTokenAsync(user, cancellationToken);
 
         return ApiResponse<object>.SuccessResponse(
             new { user.Id, user.Email, Role = role.RoleName },

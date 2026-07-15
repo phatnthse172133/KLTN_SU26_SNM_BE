@@ -19,9 +19,9 @@ namespace PresentationLayer.Controllers
             _orderService = orderService;
         }
 
-        //private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         //TEST, khi nào chạy thật lấy dòng trên, còn khi test thì dùng dòng dưới
-        private Guid CurrentUserId => Guid.Parse("22222222-2222-2222-2222-222222222222");
+        //private Guid CurrentUserId => Guid.Parse("22222222-2222-2222-2222-222222222222");
 
         // POST api/<OrderController>
         [HttpPost]

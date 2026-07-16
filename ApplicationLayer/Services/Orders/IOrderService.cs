@@ -15,7 +15,7 @@ namespace ApplicationLayer.Services.Orders
         Task<ApiResponse<OrderResponseDto>> CreateOrderAsync(CreateOrderDto dto);
         Task<bool> ProcessPaymentWebhookAsync(Webhook webhookBody);
         Task<ApiResponse<bool>> UpdateOrderStatusByBoothOwnerAsync(Guid boothOwnerId, UpdateOrderStatusDto dto);
-        Task<ApiResponse<bool>> CancelOrder(long orderCode);
+        Task<ApiResponse<bool>> CancelOrderByCustomer(long orderCode);
         Task<ApiResponse<bool>> ActiveCheckPaymentStatus(long orderCode);
 
     }

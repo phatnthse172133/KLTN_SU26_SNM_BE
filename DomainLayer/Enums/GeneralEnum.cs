@@ -264,7 +264,7 @@ namespace DomainLayer.Enums
         {
             Pending = 0, // Chưa thanh toán (Mặc định khi tạo đơn PayOS)
             Paid = 1, // Đã thu tiền thành công (Cập nhật khi Webhook Ting Ting)
-            Failed = 2, // Thanh toán thất bại
+            Failed = 2, // Thanh toán thất bại, chủ quán không nhận được tiền
             Refunded = 3, // Đã hoàn tiền cho khách
             Cancelled = 4,
         }
@@ -273,11 +273,12 @@ namespace DomainLayer.Enums
         {
             Placed = 0,          // Đơn hàng mới đã được hệ thống ghi nhận
             Preparing = 1,       // Quầy đang chuẩn bị món
-            ReadyForPickup = 2,  // Món đã xong, chờ khách đến lấy
-            Completed = 3,       // Khách đã lấy món -> Hoàn thành đơn
+            ReadyForPickup = 2,  // Món đã xong, chờ khách đến lấy (hoàn thành món nhưng chưa trả tiền cho quầy nếu customer chọn
+                                 // Cash)
+            Completed = 3,       // Khách đã lấy món -> Hoàn thành đơn (đã trả tiền cho quầy nếu customer chọn Cash)
             Cancelled = 4,        // Đơn bị hủy (Do khách hủy hoặc quầy hết nguyên liệu)
             Underpaid = 5,        // Thanh toán thiếu (Phát hiện gian lận hoặc lỗi dòng tiền)
-            Refunded = 6,         // Đơn đã được hoàn tiền cho khách
+            //Refunded = 6,         // Đơn đã được hoàn tiền cho khách
         }
 
         //public enum PayOrderStatus

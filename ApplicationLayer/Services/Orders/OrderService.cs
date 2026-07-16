@@ -81,7 +81,7 @@ namespace ApplicationLayer.Services.Orders
             foreach (var itemDto in dto.Items)
             {
                 var dbFoodItem = foodItemsFromDb.FirstOrDefault(f => f.Id == itemDto.FoodItemId);
-                if (dbFoodItem == null) return ApiResponse<OrderResponseDto>.Failure("Món ăn không tồn tại hoặc đã bị xóa khỏi thực đơn!");
+                if (dbFoodItem == null) return ApiResponse<OrderResponseDto>.Failure($"Món ăn {itemDto.FoodItemId} không tồn tại hoặc đã bị xóa khỏi thực đơn!");
 
                 decimal realUnitPrice = dbFoodItem.Price;
                 decimal itemTotalPrice = realUnitPrice * itemDto.Quantity;
@@ -155,7 +155,7 @@ namespace ApplicationLayer.Services.Orders
                 {
                     Id = Guid.NewGuid(),
                     BoothId = order.BoothOwnerId, // Gán Id của quầy nhận đơn
-                    Type = "ORDER_NEW",           // Định nghĩa một mã Type riêng cho đơn mới để FE dễ xử lý logic
+                    Type = "ORDER_CASH_NEW",           // Định nghĩa một mã Type riêng cho đơn mới để FE dễ xử lý logic
                     Title = "Có đơn hàng mới! (Tiền mặt)",
                     Content = $"Bạn có đơn hàng mới #{order.OrderCode} thanh toán bằng tiền mặt. Số tiền: {order.FinalAmount:N0}đ",
                     IsRead = false,
@@ -306,8 +306,8 @@ namespace ApplicationLayer.Services.Orders
                 {
                     Id = Guid.NewGuid(),
                     BoothId = order.BoothOwnerId,
-                    Type = "ORDER_PAID",          // Type dành cho đơn đã thanh toán online thành công
-                    Title = "Đơn hàng đã thanh toán!",
+                    Type = "ORDER_PAYOS_NEW",          // Type dành cho đơn đã thanh toán online thành công
+                    Title = "Có đơn hàng mới! (Đã thanh toán thành công)",
                     Content = $"Đơn hàng #{order.OrderCode} đã được thanh toán thành công qua PayOS. Số tiền: {order.FinalAmount:N0}đ",
                     IsRead = false,
                     ReferenceType = "Order",      // Định danh kiểu tham chiếu
@@ -441,14 +441,26 @@ namespace ApplicationLayer.Services.Orders
                 return ApiResponse<bool>.Failure("Bạn không có quyền chỉnh sửa đơn hàng của quầy khác!");
             }
 
-            // 3. Chống gian lận tiền bạc
-            if (dto.NewStatus == OrderStatus.Completed)
+            //Xử lý dựa trên loại thanh toán: Nếu là tiền mặt thì khi quầy bấm "Hoàn thành" thì tự động cập nhật Payment sang Paid, nếu là PayOS thì phải chờ Webhook từ PayOS về mới được phép hoàn thành
+            var payment = order.Payments.OrderByDescending(p => p.CreatedAt)
+                                            .FirstOrDefault();
+            if (payment != null && payment.Type == PaymentType.Cash && dto.NewStatus == OrderStatus.Completed)
             {
-                // Kiểm tra xem đơn này có bản ghi thanh toán thành công nào chưa
-                bool isPaid = order.Payments.Any(p => p.Status == PaymentStatus.Paid);
-                if (!isPaid)
+                //Đối với trường hợp customer trả tiền mặt (Cash)
+                payment.Status = PaymentStatus.Paid;
+                payment.UpdatedAt = DateTime.UtcNow;
+            }
+            else
+            {
+                // 3. Chống gian lận tiền bạc
+                if (dto.NewStatus == OrderStatus.Completed)
                 {
-                    return ApiResponse<bool>.Failure("Không thể hoàn thành đơn hàng chưa được thanh toán thành công!");
+                    // Kiểm tra xem đơn này có bản ghi thanh toán thành công nào chưa
+                    bool isPaid = order.Payments.Any(p => p.Status == PaymentStatus.Paid);
+                    if (!isPaid)
+                    {
+                        return ApiResponse<bool>.Failure("Không thể hoàn thành đơn hàng chưa được thanh toán thành công!");
+                    }
                 }
             }
 
@@ -510,7 +522,7 @@ namespace ApplicationLayer.Services.Orders
         }
 
         //Khách chủ động hủy đơn hàng trước khi quầy nhận đơn (Chỉ áp dụng cho khách đặt qua App, không áp dụng cho khách vãng lai)
-        public async Task<ApiResponse<bool>> CancelOrder(long orderCode)
+        public async Task<ApiResponse<bool>> CancelOrderByCustomer(long orderCode)
         {
             var order = await _orderRepo.GetOrderByCodeAsync(orderCode);
             if (order == null) return ApiResponse<bool>.Failure("Đơn hàng không tồn tại", false);
@@ -524,20 +536,32 @@ namespace ApplicationLayer.Services.Orders
 
             var payment = order.Payments
                                .OrderByDescending(p => p.CreatedAt)
-                               .FirstOrDefault(p => p.Status == PaymentStatus.Pending); // Vừa lọc Pending vừa lấy cái đầu tiên
+                               .FirstOrDefault(); // lấy cái đầu tiên
+
+            if (payment == null)
+            {
+                return ApiResponse<bool>.Failure("Không tìm thấy bản ghi thanh toán Pending để hủy đơn", false);
+            }
+
+            if (payment.Type == PaymentType.PayOS)
+            {
+                try
+                {
+                    // Chủ động gọi PayOS đóng link thanh toán, chặn không cho quét QR nữa
+                    await _payOSClient.PaymentRequests.CancelAsync(order.OrderCode, "Khách hàng chủ động hủy đơn hàng");
+                }
+                catch (Exception ex)
+                {
+                    // Ghi log lỗi nhưng KHÔNG chặn tiến trình cập nhật Database nội bộ
+                    _logger.LogWarning(ex, $"Không thể đóng link thanh toán trên PayOS cho đơn #{orderCode}. Có thể link đã hết hạn hoặc không tồn tại.");
+                }
+            }
 
             try
             {
-                // 1. GỌI SANG PAYOS ĐỂ HỦY LINK THANH TOÁN (Chặn không cho quét QR nữa)
-                // Hàm này bắt buộc truyền OrderCode (kiểu long/int) và lý do hủy tùy ý
-                if (payment != null)
-                {
-                    await _payOSClient.PaymentRequests.CancelAsync(order.OrderCode);
-                    
-                    // 2. Cập nhật Database
-                    payment.Status = PaymentStatus.Cancelled;
-                    payment.UpdatedAt = DateTime.UtcNow;
-                }
+                // Cập nhật Database
+                payment.Status = PaymentStatus.Cancelled;
+                payment.UpdatedAt = DateTime.UtcNow;
 
                 order.Status = OrderStatus.Cancelled;
                 order.UpdatedAt = DateTime.UtcNow;
@@ -549,8 +573,8 @@ namespace ApplicationLayer.Services.Orders
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Lỗi xảy ra khi hủy đơn hàng #{orderCode}");
-                return ApiResponse<bool>.Failure($"Lỗi khi đồng bộ hủy đơn với PayOS. Lỗi: {ex.Message}", false);
+                _logger.LogError(ex, $"Lỗi xảy ra khi cập nhật DB hủy đơn hàng #{orderCode}");
+                return ApiResponse<bool>.Failure($"Lỗi hệ thống khi cập nhật trạng thái hủy đơn. Lỗi: {ex.Message}", false);
             }
         }
 

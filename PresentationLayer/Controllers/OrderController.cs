@@ -49,9 +49,9 @@ namespace PresentationLayer.Controllers
         }
 
         [HttpPut("orders/{orderCode}/cancel")]
-        public async Task<IActionResult> CancelOrder([FromRoute] long orderCode)
+        public async Task<IActionResult> CancelOrderByCustomer([FromRoute] long orderCode)
         {
-            var response = await _orderService.CancelOrder(orderCode);
+            var response = await _orderService.CancelOrderByCustomer(orderCode);
             return response.Success ? Ok(response) : BadRequest(response);
         }
 

@@ -30,7 +30,7 @@ public partial class User
     public string? AvatarUrl { get; set; }
 
     // Local | Google | Local,Google
-    public string AuthProvider { get; set; } = "Local";
+    public AuthProvider AuthProvider { get; set; }
 
     public string? GoogleId { get; set; }
 

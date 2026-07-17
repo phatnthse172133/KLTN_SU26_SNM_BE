@@ -17,7 +17,7 @@ public partial class Payment
 
     public PaymentType Type { get; set; } //Cash hoặc PayOS
 
-    //public string Gateway { get; set; } = null!;
+    public PaymentGateway Gateway { get; set; }
 
     public decimal Amount { get; set; }
 

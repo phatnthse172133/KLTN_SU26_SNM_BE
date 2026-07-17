@@ -3,6 +3,7 @@ using System;
 using InfrastructureLayer.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace InfrastructureLayer.Migrations
 {
     [DbContext(typeof(SNMDbContext))]
-    partial class SNMDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260717063023_AddChatRealtimeFields")]
+    partial class AddChatRealtimeFields
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1577,9 +1580,6 @@ namespace InfrastructureLayer.Migrations
                         .HasColumnType("uuid")
                         .HasDefaultValueSql("uuid_generate_v4()");
 
-                    b.Property<Guid>("BoothOwnerId")
-                        .HasColumnType("uuid");
-
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -1600,16 +1600,21 @@ namespace InfrastructureLayer.Migrations
                     b.Property<string>("Note")
                         .HasColumnType("text");
 
-                    b.Property<long>("OrderCode")
-                        .HasColumnType("bigint");
+                    b.Property<string>("OrderCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int>("PayStatus")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasDefaultValueSql("'Placed'::character varying")
-                        .HasComment("Placed | Preparing | ReadyForPickup | Completed | Cancelled");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValueSql("'Pending'::character varying")
+                        .HasComment("Pending | Confirmed | Preparing | Completed | Cancelled");
 
                     b.Property<decimal>("TotalAmount")
                         .HasPrecision(12, 2)
@@ -1623,8 +1628,6 @@ namespace InfrastructureLayer.Migrations
                     b.HasKey("Id")
                         .HasName("Order_pkey");
 
-                    b.HasIndex("BoothOwnerId");
-
                     b.HasIndex(new[] { "OrderCode" }, "Order_OrderCode_key")
                         .IsUnique();
 
@@ -1632,7 +1635,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("Order", null, t =>
                         {
-                            t.HasComment("Đơn hàng của khách (1 đơn chỉ thuộc về 1 quán)");
+                            t.HasComment("Đơn hàng của khách");
                         });
                 });
 
@@ -1791,37 +1794,36 @@ namespace InfrastructureLayer.Migrations
                     b.Property<Guid>("BoothOwnerId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("CheckoutUrl")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)")
-                        .HasComment("Đường link thanh toán VietQR động ngắn hạn do PayOS trả về");
-
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("now()");
 
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasDefaultValueSql("'VND'::character varying");
+
+                    b.Property<string>("Gateway")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<string>("GatewayRef")
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)")
-                        .HasComment("Mã tra soát thực tế của ngân hàng (Ví dụ mã giao dịch của BIDV...)");
+                        .HasComment("Mã tham chiếu từ cổng thanh toán bên thứ 3 - dùng để tra soát/khiếu nại");
 
                     b.Property<Guid>("OrderId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime?>("PaidAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasComment("Thời điểm dòng tiền thực tế được khách hàng quét mã và bắn về hệ thống thành công");
-
-                    b.Property<string>("PaymentLinkId")
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)")
-                        .HasComment("ID quản lý liên kết link thanh toán của hệ thống PayOS");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("RefundReason")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasComment("Lý do hoàn tiền (Nếu có)");
+                        .HasColumnType("text");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -1834,7 +1836,7 @@ namespace InfrastructureLayer.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
-                        .HasComment("Tiền mặt hoặc PayOS");
+                        .HasComment("Payment: thu tiền | Refund: hoàn tiền");
 
                     b.Property<DateTime>("UpdatedAt")
                         .ValueGeneratedOnAdd()
@@ -1851,37 +1853,6 @@ namespace InfrastructureLayer.Migrations
                     b.ToTable("Payments", t =>
                         {
                             t.HasComment("Lịch sử giao dịch thanh toán/hoàn tiền - tích hợp đa cổng VNPay/ZaloPay/MoMo/Payos");
-                        });
-                });
-
-            modelBuilder.Entity("DomainLayer.Entities.PaymentMethod", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("IsDefault")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("MethodType")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<string>("PaymentToken")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("PaymentMethod", null, t =>
-                        {
-                            t.HasComment("Cấu hình phương thức thanh toán ưu tiên của người dùng");
                         });
                 });
 
@@ -2934,20 +2905,11 @@ namespace InfrastructureLayer.Migrations
 
             modelBuilder.Entity("DomainLayer.Entities.Order", b =>
                 {
-                    b.HasOne("DomainLayer.Entities.User", "BoothOwner")
-                        .WithMany()
-                        .HasForeignKey("BoothOwnerId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("Order_BoothOwnerId_fkey");
-
                     b.HasOne("DomainLayer.Entities.User", "Customer")
                         .WithMany("Orders")
                         .HasForeignKey("CustomerId")
                         .IsRequired()
                         .HasConstraintName("Order_CustomerId_fkey");
-
-                    b.Navigation("BoothOwner");
 
                     b.Navigation("Customer");
                 });
@@ -3002,17 +2964,6 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("BoothOwner");
 
                     b.Navigation("Order");
-                });
-
-            modelBuilder.Entity("DomainLayer.Entities.PaymentMethod", b =>
-                {
-                    b.HasOne("DomainLayer.Entities.User", "User")
-                        .WithMany("PaymentMethods")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("DomainLayer.Entities.Promotion", b =>
@@ -3350,8 +3301,6 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("Notifications");
 
                     b.Navigation("Orders");
-
-                    b.Navigation("PaymentMethods");
 
                     b.Navigation("Payments");
 

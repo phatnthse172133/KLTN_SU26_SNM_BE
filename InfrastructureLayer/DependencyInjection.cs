@@ -24,6 +24,7 @@ using ApplicationLayer.Services.Prices;
 using ApplicationLayer.Services.Carts;
 using ApplicationLayer.Services.Promotions;
 using ApplicationLayer.Services.Notifications;
+using ApplicationLayer.Services.Chats;
 using ApplicationLayer.Mappings;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceCore.Email;
@@ -76,6 +77,8 @@ namespace InfrastructureLayer
             services.AddScoped<IPromotionRepository, PromotionRepository>();
             services.AddScoped<IPromotionUsageRepository, PromotionUsageRepository>();
             services.AddScoped<INotificationRepository, NotificationRepository>();
+            services.AddScoped<IConversationRepository, ConversationRepository>();
+            services.AddScoped<IMessageRepository, MessageRepository>();
             services.AddScoped<IUserDeviceTokenRepository, UserDeviceTokenRepository>();
             services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<IPaymentMethodRepository, PaymentMethodRepository>();
@@ -114,6 +117,7 @@ namespace InfrastructureLayer
             services.AddScoped<IPromotionService, PromotionService>();
             services.AddScoped<IPromotionValidationService, PromotionValidationService>();
             services.AddScoped<INotificationService, NotificationService>();
+            services.AddScoped<IChatService, ChatService>();
             services.AddScoped<IDeviceTokenService, DeviceTokenService>();
             services.AddScoped<IFoodTagService, FoodTagService>();
             services.AddScoped<ICustomerPreferenceService, CustomerPreferenceService>();

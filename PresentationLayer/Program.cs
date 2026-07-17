@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using PresentationLayer.Middlewares;
+using PresentationLayer.Filters;
 using System.Security.Claims;
 using System.Text;
 using static DomainLayer.Enums.GeneralEnum;
@@ -71,7 +72,11 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddInfrastructure(builder.Configuration);
-builder.Services.AddControllers()
+builder.Services.AddScoped<EnumValidationFilter>();
+builder.Services.AddControllers(options =>
+    {
+        options.Filters.Add<EnumValidationFilter>();
+    })
     .ConfigureApiBehaviorOptions(options =>
     {
         options.InvalidModelStateResponseFactory = context =>
@@ -115,7 +120,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             {
                 var accessToken = context.Request.Query["access_token"];
                 if (!string.IsNullOrEmpty(accessToken)
-                    && context.HttpContext.Request.Path.StartsWithSegments("/hubs/notifications"))
+                    && (context.HttpContext.Request.Path.StartsWithSegments("/hubs/notifications")
+                        || context.HttpContext.Request.Path.StartsWithSegments("/hubs/chats")))
                 {
                     context.Token = accessToken;
                 }
@@ -179,6 +185,7 @@ builder.Services.AddCors(options =>
 builder.Services.AddAuthorization();
 builder.Services.AddSignalR();
 builder.Services.AddScoped<IRealtimeNotificationPublisher, SignalRNotificationPublisher>();
+builder.Services.AddScoped<ApplicationLayer.Services.Chats.IRealtimeChatPublisher, SignalRChatPublisher>();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -222,5 +229,6 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<NotificationHub>("/hubs/notifications");
+app.MapHub<ChatHub>("/hubs/chats");
 
 app.Run();

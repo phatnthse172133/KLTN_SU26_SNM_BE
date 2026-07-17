@@ -146,10 +146,26 @@ namespace DomainLayer.Enums
             CloseBooth = 3
         }
 
+        public enum AuthProvider
+        {
+            Local = 0,
+            Google = 1,
+            LocalGoogle = 2
+        }
+
         public enum ConversationStatus
         {
             Active = 0,
             Closed = 1
+        }
+
+        public enum ConversationParticipantRole
+        {
+            Customer = 0,
+            BoothOwner = 1,
+            MarketOwner = 2,
+            Admin = 3,
+            System = 4
         }
 
         public enum MessageType
@@ -258,6 +274,15 @@ namespace DomainLayer.Enums
         {
             Cash = 0,       // Tiền mặt
             PayOS = 1  // Tích hợp cổng thanh toán PayOS
+        }
+
+        public enum PaymentGateway
+        {
+            BankTransfer = 0,
+            Payos = 1,
+            VNPay = 2,
+            MoMo = 3,
+            ZaloPay = 4
         }
 
         public enum PaymentStatus

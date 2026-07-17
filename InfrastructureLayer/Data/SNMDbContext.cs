@@ -97,6 +97,10 @@ namespace InfrastructureLayer.Data
 
         public virtual DbSet<Zone> Zones { get; set; }
 
+        public virtual DbSet<UserStatusHistory> UserStatusHistories { get; set; }
+
+        public virtual DbSet<EmailOutbox> EmailOutboxes { get; set; }
+
         public virtual DbSet<PaymentMethod> PaymentMethods { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -920,9 +924,6 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.Amount).HasPrecision(12, 2);
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
-                entity.Property(e => e.Currency)
-                    .HasMaxLength(10)
-                    .HasDefaultValueSql("'VND'::character varying");
                 entity.Property(e => e.Gateway)
                     .HasConversion<string>()
                     .HasMaxLength(20);
@@ -1255,6 +1256,48 @@ namespace InfrastructureLayer.Data
                 entity.HasOne(d => d.NightMarket).WithMany(p => p.Zones)
                     .HasForeignKey(d => d.NightMarketId)
                     .HasConstraintName("Zones_NightMarketId_fkey");
+            });
+
+            modelBuilder.Entity<UserStatusHistory>(entity =>
+            {
+                entity.ToTable("UserStatusHistories");
+                entity.HasKey(e => e.Id);
+
+                entity.Property(e => e.UserId).IsRequired();
+                entity.Property(e => e.ChangedByAdminId).IsRequired();
+                entity.Property(e => e.PreviousStatus)
+                    .IsRequired()
+                    .HasConversion<string>()
+                    .HasMaxLength(20);
+                entity.Property(e => e.NewStatus)
+                    .IsRequired()
+                    .HasConversion<string>()
+                    .HasMaxLength(20);
+                entity.Property(e => e.Reason).IsRequired().HasMaxLength(1000);
+                entity.Property(e => e.CreatedAt).IsRequired().HasColumnType("timestamp with time zone");
+
+                entity.HasIndex(e => new { e.UserId, e.CreatedAt });
+                entity.HasIndex(e => e.ChangedByAdminId);
+
+                entity.HasOne(e => e.User)
+                    .WithMany()
+                    .HasForeignKey(e => e.UserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.ChangedByAdmin)
+                    .WithMany()
+                    .HasForeignKey(e => e.ChangedByAdminId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<EmailOutbox>(entity =>
+            {
+                entity.ToTable("EmailOutbox");
+                entity.HasKey(e => e.Id);
+                entity.HasIndex(e => new { e.ReferenceId, e.EmailType }).IsUnique();
+                entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone");
+                entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
+                entity.Property(e => e.NextRetryAt).HasColumnType("timestamp with time zone");
+                entity.Property(e => e.SentAt).HasColumnType("timestamp with time zone");
             });
 
             modelBuilder.Entity<PaymentMethod>(entity =>

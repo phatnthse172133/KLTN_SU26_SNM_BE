@@ -50,9 +50,9 @@ public class AccountController : ControllerBase
 
     [Authorize(Roles = "Admin")]
     [HttpGet("users")]
-    public async Task<IActionResult> GetUsers([FromQuery] PaginationReq pagination, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> GetUsers([FromQuery] UserListQuery query, CancellationToken cancellationToken = default)
     {
-        return Ok(await _service.GetUsersAsync(pagination, cancellationToken));
+        return Ok(await _service.GetUsersAsync(query, cancellationToken));
     }
 
     [Authorize(Roles = "Admin")]
@@ -69,5 +69,13 @@ public class AccountController : ControllerBase
     {
         var response = await _service.ChangeUserStatusAsync(CurrentUserId, userId, request, cancellationToken);
         return response.Success ? Ok(response) : BadRequest(response);
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpGet("users/{userId:guid}/status-history")]
+    public async Task<IActionResult> GetUserStatusHistory(Guid userId, [FromQuery] PaginationReq pagination, CancellationToken cancellationToken = default)
+    {
+        var response = await _service.GetUserStatusHistoryAsync(userId, pagination, cancellationToken);
+        return response.Success ? Ok(response) : NotFound(response);
     }
 }

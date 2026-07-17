@@ -4,6 +4,7 @@ using InfrastructureLayer.Cores.External;
 using InfrastructureLayer.Cores.Helppers;
 using InfrastructureLayer.Cores.JWTs;
 using InfrastructureLayer.Repositories;
+using InfrastructureLayer.Workers;
 using ApplicationLayer.Services.Auth;
 using ApplicationLayer.Services.Account;
 using ApplicationLayer.Services.BoothRegistrations;
@@ -135,6 +136,7 @@ namespace InfrastructureLayer
             // Add HttpContextAccessor
             services.AddHttpContextAccessor();
 
+            services.AddHostedService<EmailOutboxWorker>();
 
             return services;
         }

@@ -10,4 +10,13 @@ namespace ApplicationLayer.Helppers
         [Range(1, 100)]
         public int PageSize { get; set; } = 10;
     }
+
+    public class UserListQuery : PaginationReq
+    {
+        public string? Keyword { get; set; }
+        public string? Role { get; set; }
+        public string? Status { get; set; }
+        public string? SortBy { get; set; }
+        public string? SortDirection { get; set; }
+    }
 }

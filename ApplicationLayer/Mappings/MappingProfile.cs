@@ -118,6 +118,7 @@ namespace ApplicationLayer.Mappings
             CreateMap<BoothDocumentRequest, BoothDocument>()
                 .ForMember(d => d.Id, o => o.Ignore())
                 .ForMember(d => d.RegistrationId, o => o.Ignore())
+                .ForMember(d => d.DocumentType, o => o.MapFrom(s => s.DocumentType!.Value))
                 .ForMember(d => d.DocumentUrl, o => o.MapFrom(s => s.FileUrl))
                 .ForMember(d => d.VerificationStatus, o => o.Ignore())
                 .ForMember(d => d.CreatedAt, o => o.Ignore())
@@ -413,6 +414,16 @@ namespace ApplicationLayer.Mappings
                 .IncludeBase<Notification, NotificationListItemResponse>();
             CreateMap<UserDeviceToken, DeviceTokenResponse>()
                 .ForMember(d => d.Platform, o => o.MapFrom(s => s.Platform.ToString()));
+
+            CreateMap<User, ConversationUserResponse>()
+                .ForMember(d => d.UserId, o => o.MapFrom(s => s.Id));
+            CreateMap<Message, MessageResponse>()
+                .ForMember(d => d.SenderName, o => o.MapFrom(s => s.Sender.FullName))
+                .ForMember(d => d.SenderAvatarUrl, o => o.MapFrom(s => s.Sender.AvatarUrl));
+            CreateMap<Conversation, ConversationResponse>()
+                .ForMember(d => d.Customer, o => o.MapFrom(s => s.Customer))
+                .ForMember(d => d.BoothOwner, o => o.MapFrom(s => s.BoothOwner))
+                .ForMember(d => d.UnreadCount, o => o.Ignore());
         }
     }
 }

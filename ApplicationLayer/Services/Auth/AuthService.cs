@@ -85,7 +85,7 @@ public class AuthService : IAuthService
             FullName = request.FullName.Trim(),
             Email = email,
             PasswordHash = _passwordHasher.HashPassword(request.Password),
-            AuthProvider = "Local",
+            AuthProvider = AuthProvider.Local,
             Status = UserStatus.PendingVerification,
             CreatedAt = now,
             UpdatedAt = now
@@ -110,7 +110,7 @@ public class AuthService : IAuthService
             throw AppException.Unauthorized("Email/username or password is incorrect.");
         }
 
-        if (user.AuthProvider == "Google")
+        if (user.AuthProvider == AuthProvider.Google)
         {
             throw AppException.BadRequest("This account uses Google sign-in. Please continue with Google.");
         }
@@ -156,7 +156,7 @@ public class AuthService : IAuthService
                 PasswordHash = _passwordHasher.HashPassword(_jwtService.GenerateSecureToken()),
                 AvatarUrl = googleUser.AvatarUrl,
                 GoogleId = googleUser.GoogleId,
-                AuthProvider = "Google",
+                AuthProvider = AuthProvider.Google,
                 Status = UserStatus.Active,
                 CreatedAt = now,
                 UpdatedAt = now
@@ -168,9 +168,9 @@ public class AuthService : IAuthService
         else if (string.IsNullOrWhiteSpace(user.GoogleId))
         {
             user.GoogleId = googleUser.GoogleId;
-            user.AuthProvider = string.Equals(user.AuthProvider, "Local", StringComparison.OrdinalIgnoreCase)
-                ? "Local,Google"
-                : "Google";
+            user.AuthProvider = user.AuthProvider == AuthProvider.Local
+                ? AuthProvider.LocalGoogle
+                : AuthProvider.Google;
             user.AvatarUrl ??= googleUser.AvatarUrl;
             user.UpdatedAt = DateTime.UtcNow;
             _userRepository.Update(user);

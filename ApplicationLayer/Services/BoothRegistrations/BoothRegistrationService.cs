@@ -50,6 +50,9 @@ public class BoothRegistrationService : IBoothRegistrationService
         if (await _booths.ExistsByOwnerIdAsync(ownerId, cancellationToken))
             throw AppException.Conflict("This BoothOwner account already has a booth.");
 
+        if (request.Documents.Count == 0)
+            throw AppException.BadRequest("At least one booth document is required.");
+
         var validationError = await ValidateRequestAsync(request);
         if (validationError is not null) 
             throw AppException.BadRequest(validationError);

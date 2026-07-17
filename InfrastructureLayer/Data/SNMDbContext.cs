@@ -243,7 +243,9 @@ namespace InfrastructureLayer.Data
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
-                entity.Property(e => e.DocumentType);
+                entity.Property(e => e.DocumentType)
+                    .HasConversion<string>()
+                    .HasMaxLength(50);
                 entity.Property(e => e.FileUrl).HasMaxLength(500);
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
                 entity.Property(e => e.VerificationStatus)
@@ -426,12 +428,14 @@ namespace InfrastructureLayer.Data
                 entity.ToTable(tb => tb.HasComment("Cuộc trò chuyện giữa 1 khách hàng và 1 gian hàng - dùng SignalR để realtime"));
 
                 entity.HasIndex(e => new { e.CustomerId, e.BoothOwnerId }, "uq_conversation_customer_boothowner").IsUnique();
+                entity.HasIndex(e => e.LastMessageAt, "idx_conversation_last_message");
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
                 entity.Property(e => e.Status)
+                    .HasConversion<string>()
                     .HasMaxLength(20)
-                    .HasDefaultValueSql("'Active'::character varying");
+                    .HasDefaultValue(DomainLayer.Enums.GeneralEnum.ConversationStatus.Active);
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
 
                 entity.HasOne(d => d.BoothOwner).WithMany()
@@ -443,6 +447,11 @@ namespace InfrastructureLayer.Data
                     .HasForeignKey(d => d.CustomerId)
                     .OnDelete(DeleteBehavior.ClientSetNull)
                     .HasConstraintName("Conversations_CustomerId_fkey");
+
+                entity.HasOne(d => d.LastMessage).WithMany()
+                    .HasForeignKey(d => d.LastMessageId)
+                    .OnDelete(DeleteBehavior.SetNull)
+                    .HasConstraintName("Conversations_LastMessageId_fkey");
             });
 
             modelBuilder.Entity<CustomerPreference>(entity =>
@@ -723,6 +732,9 @@ namespace InfrastructureLayer.Data
                 entity.ToTable("Message", tb => tb.HasComment("Tin nhắn trong cuộc trò chuyện - truyền tải qua SignalR Hub"));
 
                 entity.HasIndex(e => new { e.ConversationId, e.CreatedAt }, "idx_message_conversation");
+                entity.HasIndex(e => new { e.SenderId, e.ClientMessageId }, "ux_message_sender_client_message")
+                    .IsUnique()
+                    .HasFilter("\"ClientMessageId\" IS NOT NULL");
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
@@ -733,6 +745,7 @@ namespace InfrastructureLayer.Data
                     .HasDefaultValueSql("'Text'::character varying")
                     .HasComment("Text | Image | System");
                 entity.Property(e => e.SenderRole)
+                    .HasConversion<string>()
                     .HasMaxLength(20)
                     .HasComment("Snapshot vai trò người gửi: Customer | BoothOwner");
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
@@ -901,7 +914,9 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.Currency)
                     .HasMaxLength(10)
                     .HasDefaultValueSql("'VND'::character varying");
-                entity.Property(e => e.Gateway).HasMaxLength(20);
+                entity.Property(e => e.Gateway)
+                    .HasConversion<string>()
+                    .HasMaxLength(20);
                 entity.Property(e => e.GatewayRef)
                     .HasMaxLength(255)
                     .HasComment("Mã tham chiếu từ cổng thanh toán bên thứ 3 - dùng để tra soát/khiếu nại");
@@ -1154,7 +1169,10 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.Address).HasMaxLength(255);
                 entity.Property(e => e.AvatarUrl).HasMaxLength(500);
-                entity.Property(e => e.AuthProvider).HasMaxLength(30).HasDefaultValue("Local");
+                entity.Property(e => e.AuthProvider)
+                    .HasConversion<string>()
+                    .HasMaxLength(30)
+                    .HasDefaultValue(DomainLayer.Enums.GeneralEnum.AuthProvider.Local);
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
                 entity.Property(e => e.Email).HasMaxLength(150);
                 entity.Property(e => e.EmailVerificationTokenHash).HasMaxLength(64);

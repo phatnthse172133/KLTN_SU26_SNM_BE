@@ -87,6 +87,8 @@ public class AuthService : IAuthService
             PasswordHash = _passwordHasher.HashPassword(request.Password),
             AuthProvider = AuthProvider.Local,
             Status = UserStatus.PendingVerification,
+            AuthProvider = "Local",
+            Status = UserStatus.Active,
             CreatedAt = now,
             UpdatedAt = now
         };

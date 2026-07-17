@@ -17,6 +17,9 @@ public class NotificationHub : Hub
 
     public override async Task OnConnectedAsync()
     {
+        //var userId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+
+        //TEST , khi nào chạy thật lấy dòng dưới, còn khi test thì dùng dòng trên
         var value = Context.User?.FindFirstValue(ClaimTypes.NameIdentifier);
         if (!Guid.TryParse(value, out var userId))
         {
@@ -33,7 +36,10 @@ public class NotificationHub : Hub
 
     public override Task OnDisconnectedAsync(Exception? exception)
     {
+        //var userId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        //TEST , khi nào chạy thật lấy dòng dưới, còn khi test thì dùng dòng trên
         var value = Context.User?.FindFirstValue(ClaimTypes.NameIdentifier);
+
         if (Guid.TryParse(value, out var userId))
             _presence.Disconnected(userId);
 

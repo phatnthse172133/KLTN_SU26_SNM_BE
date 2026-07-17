@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using static DomainLayer.Enums.GeneralEnum;
 
@@ -89,4 +89,6 @@ public partial class User
     public virtual Role Role { get; set; } = null!;
 
     public virtual ICollection<BoothRegistration> BoothRegistrations { get; set; } = new List<BoothRegistration>();
+
+    public virtual ICollection<PaymentMethod> PaymentMethods { get; set; } = new List<PaymentMethod>();
 }

@@ -35,6 +35,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using InfrastructureLayer.Cores.Notifications;
+using DomainLayer.InterfaceRepositories;
+using ApplicationLayer.Services.PaymentMethods;
+using ApplicationLayer.Services.Orders;
 using InfrastructureLayer.Cores.AI;
 using ApplicationLayer.AI.Services;
 
@@ -78,6 +81,7 @@ namespace InfrastructureLayer
             services.AddScoped<IMessageRepository, MessageRepository>();
             services.AddScoped<IUserDeviceTokenRepository, UserDeviceTokenRepository>();
             services.AddScoped<IUserRepository, UserRepository>();
+            services.AddScoped<IPaymentMethodRepository, PaymentMethodRepository>();
             services.AddScoped<IFoodTagRepository, FoodTagRepository>();
             services.AddScoped<ICustomerPreferenceRepository, CustomerPreferenceRepository>();
             services.AddScoped<IAIRecommendationLogRepository, AIRecommendationLogRepository>();
@@ -91,7 +95,9 @@ namespace InfrastructureLayer
             
             services.AddScoped<IBoothRegistrationService, BoothRegistrationService>();
             services.AddScoped<IBoothService, BoothService>();
-            
+
+            services.AddScoped<IOrderService, OrderService>();
+
             services.AddScoped<IFoodCategoryService, FoodCategoryService>();
             services.AddScoped<IMenuService, MenuService>();
             
@@ -123,7 +129,7 @@ namespace InfrastructureLayer
             services.Configure<FirebaseSettings>(
                 configuration.GetSection(FirebaseSettings.SectionName));
             services.AddHttpClient<IPushNotificationService, FirebasePushNotificationService>();
-            
+            services.AddScoped<IPaymentMethodService, PaymentMethodService>();
             services.AddAutoMapper(_ => { }, typeof(MappingProfile).Assembly);
 
             // Add HttpContextAccessor

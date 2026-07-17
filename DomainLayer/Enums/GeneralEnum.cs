@@ -12,9 +12,7 @@ namespace DomainLayer.Enums
         {
             PendingVerification = 0, // vừa đăng ký
             Active = 1,              // hoạt động
-            Suspended = 2,           // khóa tạm thời
-            Banned = 3,              // khóa vĩnh viễn
-            Inactive = 4             // tự ngưng sử dụng
+            Inactive = 2             // bị Admin khóa
         }
 
         public enum BoothRegistrationStatus
@@ -212,7 +210,9 @@ namespace DomainLayer.Enums
             PaymentFailed = 31,
             SystemAnnouncement = 32,
             AccountSuspended = 33,
-            BoothSuspended = 34
+            BoothSuspended = 34,
+            AccountDeactivated = 35,
+            AccountReactivated = 36
         }
 
         public enum DevicePlatform

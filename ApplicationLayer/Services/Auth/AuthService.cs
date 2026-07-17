@@ -87,8 +87,6 @@ public class AuthService : IAuthService
             PasswordHash = _passwordHasher.HashPassword(request.Password),
             AuthProvider = AuthProvider.Local,
             Status = UserStatus.PendingVerification,
-            AuthProvider = "Local",
-            Status = UserStatus.Active,
             CreatedAt = now,
             UpdatedAt = now
         };
@@ -109,7 +107,7 @@ public class AuthService : IAuthService
 
         if (user is null || !_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
         {
-            throw AppException.Unauthorized("Email/username or password is incorrect.");
+            throw AppException.Unauthorized("Email/username or password is incorrect.", "INVALID_CREDENTIALS");
         }
 
         if (user.AuthProvider == AuthProvider.Google)

@@ -17,4 +17,8 @@ public interface IUserRepository : IGenericRepository<User>
     Task RollbackTransactionAsync();
     Task<int> UpdateStatusWithConcurrencyAsync(Guid userId, UserStatus expectedPreviousStatus, UserStatus newStatus, DateTime updatedAt);
     Task ReloadAsync(User entity);
+
+    Task<Dictionary<Guid, string>> GetUserNamesByIdsAsync(
+        List<Guid> userIds,
+        CancellationToken cancellationToken = default);
 }

@@ -1556,6 +1556,9 @@ namespace InfrastructureLayer.Migrations
                         .HasColumnType("uuid")
                         .HasDefaultValueSql("uuid_generate_v4()");
 
+                    b.Property<Guid?>("BatchId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid?>("BoothId")
                         .HasColumnType("uuid")
                         .HasComment("NULL khi thông báo không gắn với gian hàng cụ thể (VD: thông báo hệ thống)");
@@ -1568,6 +1571,9 @@ namespace InfrastructureLayer.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("now()");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("DataJson")
                         .HasColumnType("text");
@@ -1591,6 +1597,13 @@ namespace InfrastructureLayer.Migrations
                     b.Property<string>("ReferenceType")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<int?>("Target")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TargetRole")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<string>("Title")
                         .IsRequired()

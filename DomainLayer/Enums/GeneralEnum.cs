@@ -267,6 +267,7 @@ namespace DomainLayer.Enums
             Failed = 2, // Thanh toán thất bại, chủ quán không nhận được tiền
             Refunded = 3, // Đã hoàn tiền cho khách
             Cancelled = 4,
+            RefundProcessing = 5 // Đang xử lý hoàn tiền
         }
 
         public enum OrderStatus

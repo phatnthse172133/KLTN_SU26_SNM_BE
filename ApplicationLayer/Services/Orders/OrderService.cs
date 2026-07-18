@@ -328,6 +328,72 @@ namespace ApplicationLayer.Services.Orders
             }
         }
 
+        public async Task<bool> ProcessPayoutWebhookAsync(Webhook webhookBody)
+        {
+            // 1. Kiểm tra tính hợp lệ của Webhook (Verify chữ ký/checksum của PayOS để tránh hacker giả lập)
+            WebhookData verifiedData = await _payOSClient.Webhooks.VerifyAsync(webhookBody);
+            if (verifiedData == null)
+            {
+                _logger.LogWarning("Webhook nhận được dữ liệu không hợp lệ hoặc chữ ký giả mạo.");
+                return true;
+            }
+
+            // 2. Trích xuất thông tin mã đơn hàng từ referenceId 
+            // referenceId dạng: "refund_123456_ticks" -> tách chuỗi lấy 123456
+            if (string.IsNullOrEmpty(verifiedData.Reference))
+            {
+                _logger.LogWarning("Webhook Payout không chứa thông tin reference.");
+                return true;
+            }
+
+            var parts = verifiedData.Reference.Split('_');
+            if (parts.Length < 2 || !long.TryParse(parts[1], out long orderCode))
+            {
+                _logger.LogWarning($"Webhook Payout nhận được referenceId không hợp lệ: {verifiedData.Reference}");
+                return true;
+            }
+
+            var order = await _orderRepo.GetOrderByCodeAsync(orderCode);
+            if (order == null)
+            {
+                _logger.LogWarning($"Không tìm thấy đơn hàng nào khớp với OrderCode: {orderCode} từ Webhook Payout.");
+                return true;
+            }
+
+            var payment = order.Payments
+                               .OrderByDescending(p => p.CreatedAt)
+                               .FirstOrDefault(p => p.Status == PaymentStatus.RefundProcessing);
+
+            if (payment != null)
+            {
+                // 3. Nếu PayOS báo lệnh Payout thành công -> Chuyển sang Refunded
+                if (verifiedData.Description != null && verifiedData.Description.ToLower() == "success")
+                {
+                    payment.Status = PaymentStatus.Refunded;
+                    payment.UpdatedAt = DateTime.UtcNow;
+
+                    _logger.LogInformation($"Webhook: Đơn hàng #{orderCode} đã được hoàn tiền THÀNH CÔNG.");
+                }
+                // Nếu PayOS báo lệnh Payout thất bại (ví dụ tài khoản đích bị khóa ngầm)
+                else
+                {
+                    payment.Status = PaymentStatus.Paid; // Trả về Paid vì thực tế tiền vẫn đang ở ví của quán, chưa đi được
+                    payment.UpdatedAt = DateTime.UtcNow;
+
+                    _logger.LogError($"Webhook: Lỗi hoàn tiền đơn #{orderCode}");
+                }
+
+                _orderRepo.Update(order);
+                await _orderRepo.SaveChangesAsync();
+            }
+            else
+            {
+                _logger.LogWarning($"Tìm thấy đơn #{orderCode} nhưng không có bản ghi thanh toán nào ở trạng thái chờ hoàn tiền.");
+            }
+
+            return true; // Trả về 200 để báo cho PayOS biết hệ thống đã nhận được dữ liệu
+        }
+
         //public async Task<bool> RejectOrderAsync(RejectOrderDto dto)
         //{
         //    // 1. Tìm đơn hàng cần hủy trong Database
@@ -577,6 +643,135 @@ namespace ApplicationLayer.Services.Orders
                 return ApiResponse<bool>.Failure($"Lỗi hệ thống khi cập nhật trạng thái hủy đơn. Lỗi: {ex.Message}", false);
             }
         }
+
+        //Chủ quán hủy đơn hàng (Chỉ áp dụng cho quầy, không áp dụng cho khách đặt qua App)
+        //Có 2 trường hợp :
+        //1) Nếu khách trả tiền mặt thì quầy hủy là xong,
+        //2) Nếu khách trả online thì quầy hủy phải chạy luồng hoàn tiền sang PayOS
+        public async Task<ApiResponse<bool>> CancelOrderByBoothOwnerAsync(long orderCode, RefundQRRequest request)
+        {
+            // 1. Kiểm tra request hợp lệ ngay từ đầu
+            if (request == null) return ApiResponse<bool>.Failure("Dữ liệu yêu cầu không hợp lệ.", false);
+
+            var order = await _orderRepo.GetOrderByCodeAsync(orderCode);
+            if (order == null) return ApiResponse<bool>.Failure("Đơn hàng không tồn tại", false);
+
+            // Chủ quán KHÔNG được hủy đơn đã hoàn thành hoặc đã hủy
+            if (order.Status == OrderStatus.Completed || order.Status == OrderStatus.Cancelled)
+            {
+                return ApiResponse<bool>.Failure("Đơn hàng đã hoàn tất hoặc đã được hủy trước đó.", false);
+            }
+
+            // Tìm bản ghi thanh toán thành công (nếu có)
+            var paidPayment = order.Payments
+                                   .OrderByDescending(p => p.CreatedAt)
+                                   .FirstOrDefault(p => p.Status == PaymentStatus.Paid);
+
+            // LUỒNG 1: ĐƠN HÀNG ĐÃ THANH TOÁN ONLINE -> KHỞI TẠO HOÀN TIỀN
+            if (paidPayment != null)
+            {
+                if (string.IsNullOrEmpty(request.AccountNumber) || string.IsNullOrEmpty(request.BankBin))
+                {
+                    return ApiResponse<bool>.Failure("Đơn hàng đã thanh toán. Vui lòng cung cấp đầy đủ Số tài khoản và Mã ngân hàng để hoàn tiền.", false);
+                }
+
+                try
+                {
+                    var referenceId = $"refund_{order.OrderCode}_{DateTime.UtcNow.Ticks}"; // Thêm Ticks để tránh trùng ID khi gọi lại nếu lỗi
+                    var payoutRequest = new PayoutBatchRequest
+                    {
+                        ReferenceId = referenceId,
+                        Category = new List<string> { "refund" },
+                        ValidateDestination = true,
+                        Payouts = new List<PayoutBatchItem>
+                        {
+                            new PayoutBatchItem
+                            {
+                                ReferenceId = $"{referenceId}_item",
+                                Amount = (long)order.FinalAmount,
+                                Description = $"Hoan tien don hang #{order.OrderCode}",
+                                ToBin = request.BankBin,
+                                ToAccountNumber = request.AccountNumber
+                            }
+                        }
+                    };
+
+                    // Gọi lệnh Payout sang PayOS
+                    var payoutResult = await _payOSClient.Payouts.Batch.CreateAsync(payoutRequest);
+                    _logger.LogInformation($"Yêu cầu Payout hoàn tiền đã được gửi lên PayOS cho đơn #{order.OrderCode}. Payout ID: {payoutResult.Id}");
+
+                    // CHÚ Ý: Lúc này tiền chưa về tài khoản khách ngay, trạng thái đúng phải là RefundProcessing
+                    paidPayment.Status = PaymentStatus.RefundProcessing;
+                    paidPayment.RefundReason = request.RefundReason;
+                    paidPayment.UpdatedAt = DateTime.UtcNow;
+
+                    // Đơn hàng vật lý thì có thể chuyển sang Cancelled ngay lập tức để nhà bếp giải phóng đơn
+                    order.Status = OrderStatus.Cancelled;
+                    //order.Note = $"Chủ quán hủy đơn. Lý do: {request.RefundReason}. Đang chờ PayOS xử lý hoàn tiền.";
+                    order.UpdatedAt = DateTime.UtcNow;
+
+                    _orderRepo.Update(order);
+                    await _orderRepo.SaveChangesAsync();
+
+                    // Gửi thông báo cho khách hàng
+                    var notificationPayload = new NotificationListItemResponse
+                    {
+                        Id = Guid.NewGuid(),
+                        BoothId = order.BoothOwnerId,
+                        Type = "ORDER_CANCELLED",
+                        Title = "Đơn hàng đã bị hủy & Đang hoàn tiền",
+                        Content = $"Đơn hàng #{order.OrderCode} đã bị hủy. Lệnh hoàn tiền {order.FinalAmount:N0}đ đang được xử lý. Lý do: {request.RefundReason}",
+                        IsRead = false,
+                        ReferenceType = "Order",
+                        ReferenceId = order.Id,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    await _notificationPublisher.PublishAsync(order.CustomerId, notificationPayload, unreadCount: 1);
+
+                    return ApiResponse<bool>.SuccessResponse(true, "Chủ quán hủy đơn thành công. Hệ thống đang tiến hành hoàn tiền qua PayOS.");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"Lỗi khi gọi API hoàn tiền PayOS cho đơn #{order.OrderCode}");
+                    return ApiResponse<bool>.Failure($"Gọi lệnh hoàn tiền sang PayOS thất bại. Vui lòng kiểm tra lại số tài khoản khách hoặc số dư ví PayOS. Lỗi: {ex.Message}", false);
+                }
+            }
+
+            // LUỒNG 2: ĐƠN HÀNG CHƯA THANH TOÁN (CASH HOẶC PAYOS CHƯA QUÉT MÃ)
+            // Cập nhật tất cả các bản ghi thanh toán chưa thành công thành Cancelled
+            var unPaidPayments = order.Payments.Where(p => p.Status == PaymentStatus.Pending).ToList();
+            foreach (var p in unPaidPayments)
+            {
+                p.Status = PaymentStatus.Cancelled;
+                p.RefundReason = request.RefundReason;
+                p.UpdatedAt = DateTime.UtcNow;
+            }
+
+            order.Status = OrderStatus.Cancelled;
+            //order.Note = $"Chủ quán hủy đơn chưa thanh toán. Lý do: {request.RefundReason}";
+            order.UpdatedAt = DateTime.UtcNow;
+
+            _orderRepo.Update(order);
+            await _orderRepo.SaveChangesAsync();
+
+            // Gửi thông báo cho khách hàng
+            var cashNotificationPayload = new NotificationListItemResponse
+            {
+                Id = Guid.NewGuid(),
+                BoothId = order.BoothOwnerId,
+                Type = "ORDER_CANCELLED",
+                Title = "Đơn hàng đã bị hủy",
+                Content = $"Đơn hàng #{order.OrderCode} đã bị hủy bởi chủ quán. Lý do: {request.RefundReason}",
+                IsRead = false,
+                ReferenceType = "Order",
+                ReferenceId = order.Id,
+                CreatedAt = DateTime.UtcNow
+            };
+            await _notificationPublisher.PublishAsync(order.CustomerId, cashNotificationPayload, unreadCount: 1);
+
+            return ApiResponse<bool>.SuccessResponse(true, "Đơn hàng đã được hủy thành công.");
+        }
+
 
         //Tình huống khách đặt món payos, trả tiền, nhưng mạng lỗi và webhook không về kịp, khách bấm nút "Tôi đã thanh toán" trên FE để xác nhận, thì gọi API này để kiểm tra trạng thái thực tế từ PayOS
         public async Task<ApiResponse<bool>> ActiveCheckPaymentStatus(long orderCode)

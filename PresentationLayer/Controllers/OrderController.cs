@@ -48,14 +48,21 @@ namespace PresentationLayer.Controllers
             return response.Success ? Ok(response) : BadRequest(response);
         }
 
-        [HttpPut("orders/{orderCode}/cancel")]
+        [HttpPut("{orderCode}/Customer/Cancel")]
         public async Task<IActionResult> CancelOrderByCustomer([FromRoute] long orderCode)
         {
             var response = await _orderService.CancelOrderByCustomer(orderCode);
             return response.Success ? Ok(response) : BadRequest(response);
         }
 
-        [HttpGet("orders/{orderCode}/check-payment-status")]
+        [HttpPut("{orderCode}/BoothOwner/Cancel")]
+        public async Task<IActionResult> CancelOrderByBoothOwner([FromRoute] long orderCode, [FromBody] RefundQRRequest request)
+        {
+            var response = await _orderService.CancelOrderByBoothOwnerAsync(orderCode, request);
+            return response.Success ? Ok(response) : BadRequest(response);
+        }
+
+        [HttpGet("{orderCode}/check-payment-status")]
         public async Task<IActionResult> CheckPaymentStatus([FromRoute] long orderCode)
         {
             var response = await _orderService.ActiveCheckPaymentStatus(orderCode);

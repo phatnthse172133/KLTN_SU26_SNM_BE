@@ -267,7 +267,8 @@ namespace DomainLayer.Enums
             Failed = 2, // Thanh toán thất bại, chủ quán không nhận được tiền
             Refunded = 3, // Đã hoàn tiền cho khách
             Cancelled = 4,
-            RefundProcessing = 5 // Đang xử lý hoàn tiền
+            RefundProcessing = 5, // Đang xử lý hoàn tiền
+            Underpaid = 6 // Thanh toán thiếu (Phát hiện gian lận hoặc lỗi dòng tiền)
         }
 
         public enum OrderStatus
@@ -277,8 +278,8 @@ namespace DomainLayer.Enums
             ReadyForPickup = 2,  // Món đã xong, chờ khách đến lấy (hoàn thành món nhưng chưa trả tiền cho quầy nếu customer chọn
                                  // Cash)
             Completed = 3,       // Khách đã lấy món -> Hoàn thành đơn (đã trả tiền cho quầy nếu customer chọn Cash)
-            Cancelled = 4,        // Đơn bị hủy (Do khách hủy hoặc quầy hết nguyên liệu)
-            Underpaid = 5,        // Thanh toán thiếu (Phát hiện gian lận hoặc lỗi dòng tiền)
+            Cancelled = 4      // Đơn bị hủy (Do khách hủy hoặc quầy hết nguyên liệu)
+            //Underpaid = 5,        // Thanh toán thiếu (Phát hiện gian lận hoặc lỗi dòng tiền)
             //Refunded = 6,         // Đơn đã được hoàn tiền cho khách
         }
 

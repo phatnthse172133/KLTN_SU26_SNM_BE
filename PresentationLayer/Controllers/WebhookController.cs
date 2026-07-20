@@ -43,17 +43,17 @@ namespace PresentationLayer.Controllers
                 return BadRequest();
             }
 
-            var data = bodyReceived.Data;
+            //var data = bodyReceived.Data;
 
-            // Kiểm tra xem đây có phải là tín hiệu hoàn tiền hay không
-            if (!string.IsNullOrEmpty(data.Reference) && data.Reference.StartsWith("refund_"))
-            {
-                _logger.LogInformation($"[Webhook Payout] Nhận tín hiệu xử lý hoàn tiền cho ID: {data.Reference}");
+            //// Kiểm tra xem đây có phải là tín hiệu hoàn tiền hay không
+            //if (!string.IsNullOrEmpty(data.Reference) && data.Reference.StartsWith("refund_"))
+            //{
+            //    _logger.LogInformation($"[Webhook Payout] Nhận tín hiệu xử lý hoàn tiền cho ID: {data.Reference}");
 
-                // Gọi hàm xử lý cập nhật trạng thái sang Refunded/Paid (Hàm đã viết ở câu trước)
-                var result = await _orderService.ProcessPayoutWebhookAsync(bodyReceived);
-                return result ? Ok() : BadRequest("Xử lý webhook Payout thất bại");
-            }
+            //    // Gọi hàm xử lý cập nhật trạng thái sang Refunded/Paid (Hàm đã viết ở câu trước)
+            //    var result = await _orderService.ProcessPayoutWebhookAsync(bodyReceived);
+            //    return result ? Ok() : BadRequest("Xử lý webhook Payout thất bại");
+            //}
 
             // Nếu không phải tín hiệu hoàn tiền, thì đây là tín hiệu thanh toán
             bool isSuccess = await _orderService.ProcessPaymentWebhookAsync(bodyReceived);

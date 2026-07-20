@@ -36,14 +36,21 @@ var jwtSettings = builder.Configuration.GetSection(JwtSettings.SectionName).Get<
 if (string.IsNullOrWhiteSpace(jwtSettings.SecretKey) || jwtSettings.SecretKey.Length < 32)
     throw new InvalidOperationException("JWT secret is missing. Set Jwt__SecretKey in PresentationLayer/.env or Jwt:SecretKey in appsettings.json (minimum 32 characters).");
 
-var payOSSettings = builder.Configuration.GetSection("PayOS");
-var payOSClient = new PayOSClient(
-    payOSSettings["ClientId"],
-    payOSSettings["ApiKey"],
-    payOSSettings["ChecksumKey"]
-);
+// Đăng ký PayIn Client với Key là "PayIn"
+builder.Services.AddKeyedSingleton<PayOSClient>("PayIn", (sp, key) =>
+{
+    var config = sp.GetRequiredService<IConfiguration>();
+    var settings = config.GetSection("PayOS:PayIn");
+    return new PayOSClient(settings["ClientId"], settings["ApiKey"], settings["ChecksumKey"]);
+});
 
-builder.Services.AddSingleton(payOSClient); // Đăng ký PayOS vào hệ thống
+// Đăng ký PayOut Client với Key là "PayOut"
+builder.Services.AddKeyedSingleton<PayOSClient>("PayOut", (sp, key) =>
+{
+    var config = sp.GetRequiredService<IConfiguration>();
+    var settings = config.GetSection("PayOS:PayOut");
+    return new PayOSClient(settings["ClientId"], settings["ApiKey"], settings["ChecksumKey"]);
+});
 
 //await payOSClient.Webhooks.ConfirmAsync("https://your-url.com/payos-webhook");
 

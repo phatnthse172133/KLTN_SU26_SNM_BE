@@ -62,12 +62,12 @@ namespace PresentationLayer.Controllers
             return response.Success ? Ok(response) : BadRequest(response);
         }
 
-        [HttpGet("{orderCode}/check-payment-status")]
-        public async Task<IActionResult> CheckPaymentStatus([FromRoute] long orderCode)
-        {
-            var response = await _orderService.ActiveCheckPaymentStatus(orderCode);
-            return response.Success ? Ok(response) : BadRequest(response);
-        }
+        //[HttpGet("{orderCode}/check-payment-status")]
+        //public async Task<IActionResult> CheckPaymentStatus([FromRoute] long orderCode)
+        //{
+        //    var response = await _orderService.ActiveCheckPaymentStatus(orderCode);
+        //    return response.Success ? Ok(response) : BadRequest(response);
+        //}
 
     }
 }

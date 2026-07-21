@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -22,13 +22,13 @@ namespace InfrastructureLayer.Data
                 .AddEnvironmentVariables()
                 .Build();
 
-            var optionsBuilder = new DbContextOptionsBuilder<SNMDbContext>();
             var connectionString = configuration.GetConnectionString("DefaultConnection");
             if (string.IsNullOrWhiteSpace(connectionString))
             {
                 throw new InvalidOperationException("ConnectionStrings:DefaultConnection is missing. Set ConnectionStrings__DefaultConnection in PresentationLayer/.env.");
             }
 
+            var optionsBuilder = new DbContextOptionsBuilder<SNMDbContext>();
             optionsBuilder.UseNpgsql(connectionString);
 
             return new SNMDbContext(optionsBuilder.Options);

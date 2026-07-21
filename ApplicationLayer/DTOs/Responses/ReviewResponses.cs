@@ -4,8 +4,11 @@ public class ReviewResponse
 {
     public Guid Id { get; set; }
     public Guid BoothId { get; set; }
+    public string? BoothName { get; set; }
     public Guid CustomerId { get; set; }
+    public string? CustomerName { get; set; }
     public Guid OrderId { get; set; }
+    public string? OrderCode { get; set; }
     public short Rating { get; set; }
     public string? Content { get; set; }
     public string? ImageUrl { get; set; }

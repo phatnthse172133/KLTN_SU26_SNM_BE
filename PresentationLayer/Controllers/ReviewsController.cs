@@ -39,8 +39,8 @@ public class ReviewsController : ControllerBase
 
     [Authorize(Roles = "Admin")]
     [HttpGet]
-    public async Task<IActionResult> GetAll([FromQuery] PaginationReq pagination, CancellationToken cancellationToken)
-        => Ok(await _service.GetAllAsync(pagination, cancellationToken));
+    public async Task<IActionResult> GetAll([FromQuery] AdminReviewQueryRequest query, CancellationToken cancellationToken)
+        => Ok(await _service.GetAllFilteredAsync(query, cancellationToken));
 
     [Authorize(Roles = "Admin")]
     [HttpPatch("{reviewId:guid}/visibility")]

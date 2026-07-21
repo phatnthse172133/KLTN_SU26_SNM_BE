@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using DomainLayer.Common;
 using static DomainLayer.Enums.GeneralEnum;
@@ -10,6 +10,8 @@ namespace DomainLayer.Entities;
 public partial class NightMarket : ISoftDelete
 {
     public Guid Id { get; set; }
+
+    public Guid? MarketOwnerId { get; set; }
 
     public string Name { get; set; } = null!;
 
@@ -36,7 +38,12 @@ public partial class NightMarket : ISoftDelete
 
     public NightMarketStatus Status { get; set; }
 
+    public ModerationStatus ModerationStatus { get; set; }
+
     public bool IsDeleted { get; set; }
+    public DateTime? DeletedAt { get; set; }
+    public Guid? DeletedBy { get; set; }
+    public string? DeletionReason { get; set; }
 
     public DateTime CreatedAt { get; set; }
 
@@ -51,4 +58,6 @@ public partial class NightMarket : ISoftDelete
     public virtual ICollection<Zone> Zones { get; set; } = new List<Zone>();
 
     public virtual ICollection<BoothRegistration> BoothRegistrations { get; set; } = new List<BoothRegistration>();
+
+    public virtual User? MarketOwner { get; set; }
 }

@@ -10,25 +10,25 @@ namespace DomainLayer.Enums
     {
         public enum UserStatus
         {
-            PendingVerification = 0, // vừa đăng ký
-            Active = 1,              // hoạt động
-            Inactive = 2             // bị Admin khóa
+            PendingVerification = 0, // vá»«a Ä‘Äƒng kÃ½
+            Active = 1,              // hoáº¡t Ä‘á»™ng
+            Inactive = 2             // bá»‹ Admin khÃ³a
         }
 
         public enum BoothRegistrationStatus
         {
-            Draft = 0,              // chưa submit
-            PendingReview = 1,      // chờ duyệt
-            Approved = 2,           // duyệt
-            Rejected = 3,           // từ chối
-            Cancelled = 4           // owner hủy đơn
+            Draft = 0,              // chÆ°a submit
+            PendingReview = 1,      // chá» duyá»‡t
+            Approved = 2,           // duyá»‡t
+            Rejected = 3,           // tá»« chá»‘i
+            Cancelled = 4           // owner há»§y Ä‘Æ¡n
         }
 
         public enum BoothDocumentType
         {
-            BusinessLicense = 0,          // Giấy phép kinh doanh
+            BusinessLicense = 0,          // Giáº¥y phÃ©p kinh doanh
 
-            FoodSafetyCertificate = 1,    // Chứng nhận VSATTP
+            FoodSafetyCertificate = 1,    // Chá»©ng nháº­n VSATTP
 
             OwnerIdentification = 2,      // CCCD/CMND
 
@@ -44,11 +44,11 @@ namespace DomainLayer.Enums
 
         public enum BoothStatus
         {
-            PendingApproval = 0, // chờ duyệt
-            Active = 1,          // hoạt động
-            Inactive = 2,        // owner tạm đóng
-            Suspended = 3,       // admin khóa
-            Closed = 4           // ngừng kinh doanh
+            PendingApproval = 0, // chá» duyá»‡t
+            Active = 1,          // hoáº¡t Ä‘á»™ng
+            Inactive = 2,        // owner táº¡m Ä‘Ã³ng
+            Suspended = 3,       // admin khÃ³a
+            Closed = 4           // ngá»«ng kinh doanh
         }
 
         public enum ZoneStatus
@@ -68,11 +68,11 @@ namespace DomainLayer.Enums
 
         public enum LayoutNodeType
         {
-            Junction = 0,    // Điểm giao nhau hoặc điểm trung chuyển giữa các lối đi
-            Entrance = 1,    // Cổng vào của chợ, có thể dùng làm điểm bắt đầu tìm đường
-            Exit = 2,        // Cổng ra của chợ, có thể dùng làm điểm bắt đầu hoặc điểm đích
-            BoothAccess = 3, // Điểm tiếp cận một gian hàng, dùng để gán BoothLocation và tìm đường đến Booth
-            Landmark = 4     // Địa điểm nổi bật/dễ nhận biết như sân khấu, nhà vệ sinh hoặc khu check-in
+            Junction = 0,    // Äiá»ƒm giao nhau hoáº·c Ä‘iá»ƒm trung chuyá»ƒn giá»¯a cÃ¡c lá»‘i Ä‘i
+            Entrance = 1,    // Cá»•ng vÃ o cá»§a chá»£, cÃ³ thá»ƒ dÃ¹ng lÃ m Ä‘iá»ƒm báº¯t Ä‘áº§u tÃ¬m Ä‘Æ°á»ng
+            Exit = 2,        // Cá»•ng ra cá»§a chá»£, cÃ³ thá»ƒ dÃ¹ng lÃ m Ä‘iá»ƒm báº¯t Ä‘áº§u hoáº·c Ä‘iá»ƒm Ä‘Ã­ch
+            BoothAccess = 3, // Äiá»ƒm tiáº¿p cáº­n má»™t gian hÃ ng, dÃ¹ng Ä‘á»ƒ gÃ¡n BoothLocation vÃ  tÃ¬m Ä‘Æ°á»ng Ä‘áº¿n Booth
+            Landmark = 4     // Äá»‹a Ä‘iá»ƒm ná»•i báº­t/dá»… nháº­n biáº¿t nhÆ° sÃ¢n kháº¥u, nhÃ  vá»‡ sinh hoáº·c khu check-in
         }
 
         public enum NightMarketStatus
@@ -82,6 +82,18 @@ namespace DomainLayer.Enums
             Open = 2,
             Closed = 3,
             Cancelled = 4
+        }
+
+        public enum ModerationStatus
+        {
+            Active = 0,
+            Suspended = 1
+        }
+
+        public enum ModerationActionSource
+        {
+            DirectAdmin = 0,
+            Complaint = 1
         }
 
         public enum SubscriptionStatus
@@ -96,6 +108,12 @@ namespace DomainLayer.Enums
         {
             Active = 0,
             Inactive = 1
+        }
+
+        public enum PackageType
+        {
+            Booth = 0,
+            Market = 1
         }
 
         public enum PromotionStatus
@@ -129,11 +147,9 @@ namespace DomainLayer.Enums
 
         public enum ComplaintStatus
         {
-            Submitted = 0,
-            UnderInvestigation = 1,
-            Resolved = 2,
-            Rejected = 3,
-            Closed = 4
+            Pending = 0,
+            Resolved = 1,
+            Rejected = 2
         }
 
         public enum ComplaintResolutionAction
@@ -212,7 +228,8 @@ namespace DomainLayer.Enums
             AccountSuspended = 33,
             BoothSuspended = 34,
             AccountDeactivated = 35,
-            AccountReactivated = 36
+            AccountReactivated = 36,
+            SubscriptionRejected = 37
         }
 
         public enum DevicePlatform
@@ -251,29 +268,29 @@ namespace DomainLayer.Enums
 
         //public enum OrderStatus
         //{
-        //    Pending = 0,      // Chờ thanh toán / xác nhận
-        //    Confirmed = 1,    // Đã thanh toán, quầy nhận đơn
-        //    Ready = 2,        // Món đã xong, chờ khách lấy
-        //    Completed = 3,    // Khách đã nhận món
-        //    Cancelled = 4,    // Đơn bị hủy
-        //    Expired = 5       // Quá thời gian nhận món
+        //    Pending = 0,      // Chá» thanh toÃ¡n / xÃ¡c nháº­n
+        //    Confirmed = 1,    // ÄÃ£ thanh toÃ¡n, quáº§y nháº­n Ä‘Æ¡n
+        //    Ready = 2,        // MÃ³n Ä‘Ã£ xong, chá» khÃ¡ch láº¥y
+        //    Completed = 3,    // KhÃ¡ch Ä‘Ã£ nháº­n mÃ³n
+        //    Cancelled = 4,    // ÄÆ¡n bá»‹ há»§y
+        //    Expired = 5       // QuÃ¡ thá»i gian nháº­n mÃ³n
         //}
 
         //public enum OrderStatus
         //{
-        //    PendingPayment = 0,      // Chờ thanh toán / xác nhận
-        //    Placed = 1,    // Đã thanh toán, quầy nhận đơn
-        //    Preparing = 2,        // Đang chuẩn bị món
-        //    ReadyForPickup = 3,    // Món đã xong, chờ khách lấy
-        //    Completed = 4,      //Hoàn thành
-        //    Cancelled = 5,    // Đơn bị hủy
-        //    Refunded = 6       // Đơn bị từ chối
+        //    PendingPayment = 0,      // Chá» thanh toÃ¡n / xÃ¡c nháº­n
+        //    Placed = 1,    // ÄÃ£ thanh toÃ¡n, quáº§y nháº­n Ä‘Æ¡n
+        //    Preparing = 2,        // Äang chuáº©n bá»‹ mÃ³n
+        //    ReadyForPickup = 3,    // MÃ³n Ä‘Ã£ xong, chá» khÃ¡ch láº¥y
+        //    Completed = 4,      //HoÃ n thÃ nh
+        //    Cancelled = 5,    // ÄÆ¡n bá»‹ há»§y
+        //    Refunded = 6       // ÄÆ¡n bá»‹ tá»« chá»‘i
         //}
 
         public enum PaymentType
         {
-            Cash = 0,       // Tiền mặt
-            PayOS = 1  // Tích hợp cổng thanh toán PayOS
+            Cash = 0,       // Tiá»n máº·t
+            PayOS = 1  // TÃ­ch há»£p cá»•ng thanh toÃ¡n PayOS
         }
 
         public enum PaymentGateway
@@ -287,22 +304,22 @@ namespace DomainLayer.Enums
 
         public enum PaymentStatus
         {
-            Pending = 0, // Chưa thanh toán (Mặc định khi tạo đơn PayOS)
-            Paid = 1, // Đã thu tiền thành công (Cập nhật khi Webhook Ting Ting)
-            Failed = 2, // Thanh toán thất bại
-            Refunded = 3, // Đã hoàn tiền cho khách
+            Pending = 0, // ChÆ°a thanh toÃ¡n (Máº·c Ä‘á»‹nh khi táº¡o Ä‘Æ¡n PayOS)
+            Paid = 1, // ÄÃ£ thu tiá»n thÃ nh cÃ´ng (Cáº­p nháº­t khi Webhook Ting Ting)
+            Failed = 2, // Thanh toÃ¡n tháº¥t báº¡i
+            Refunded = 3, // ÄÃ£ hoÃ n tiá»n cho khÃ¡ch
             Cancelled = 4,
         }
 
         public enum OrderStatus
         {
-            Placed = 0,          // Đơn hàng mới đã được hệ thống ghi nhận
-            Preparing = 1,       // Quầy đang chuẩn bị món
-            ReadyForPickup = 2,  // Món đã xong, chờ khách đến lấy
-            Completed = 3,       // Khách đã lấy món -> Hoàn thành đơn
-            Cancelled = 4,        // Đơn bị hủy (Do khách hủy hoặc quầy hết nguyên liệu)
-            Underpaid = 5,        // Thanh toán thiếu (Phát hiện gian lận hoặc lỗi dòng tiền)
-            Refunded = 6,         // Đơn đã được hoàn tiền cho khách
+            Placed = 0,          // ÄÆ¡n hÃ ng má»›i Ä‘Ã£ Ä‘Æ°á»£c há»‡ thá»‘ng ghi nháº­n
+            Preparing = 1,       // Quáº§y Ä‘ang chuáº©n bá»‹ mÃ³n
+            ReadyForPickup = 2,  // MÃ³n Ä‘Ã£ xong, chá» khÃ¡ch Ä‘áº¿n láº¥y
+            Completed = 3,       // KhÃ¡ch Ä‘Ã£ láº¥y mÃ³n -> HoÃ n thÃ nh Ä‘Æ¡n
+            Cancelled = 4,        // ÄÆ¡n bá»‹ há»§y (Do khÃ¡ch há»§y hoáº·c quáº§y háº¿t nguyÃªn liá»‡u)
+            Underpaid = 5,        // Thanh toÃ¡n thiáº¿u (PhÃ¡t hiá»‡n gian láº­n hoáº·c lá»—i dÃ²ng tiá»n)
+            Refunded = 6,         // ÄÆ¡n Ä‘Ã£ Ä‘Æ°á»£c hoÃ n tiá»n cho khÃ¡ch
         }
 
         //public enum PayOrderStatus

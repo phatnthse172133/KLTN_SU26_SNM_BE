@@ -39,6 +39,15 @@ public class ExceptionHandlingMiddleware
                 "DATABASE_CONFLICT",
                 "The request conflicts with existing data.");
         }
+        catch (Npgsql.PostgresException exception)
+        {
+            await WriteErrorAsync(
+                context,
+                exception,
+                StatusCodes.Status500InternalServerError,
+                "DATABASE_SCHEMA_ERROR",
+                "A database configuration issue occurred. Please contact the system administrator.");
+        }
         catch (Exception exception)
         {
             await WriteErrorAsync(
@@ -83,6 +92,7 @@ public class ExceptionHandlingMiddleware
 
         var response = ApiResponse<ErrorResponse>.Failure(
             message,
+            errorCode,
             new ErrorResponse
         {
             TraceId = traceId,

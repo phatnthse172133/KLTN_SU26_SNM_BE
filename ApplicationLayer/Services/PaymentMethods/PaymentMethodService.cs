@@ -24,11 +24,11 @@ namespace ApplicationLayer.Services.PaymentMethods
 
         public async Task<ApiResponse<bool>> SetupPaymentMethodAsync(SetupPaymentDto dto, Guid userId)
         {
-            // 1. Logic nghiệp vụ: Kiểm tra User
+            // 1. Logic nghiá»‡p vá»¥: Kiá»ƒm tra User
             var userExists = await _userRepo.UserExistsAsync(userId);
-            if (!userExists) return ApiResponse<bool>.Failure("Không tìm thấy User trong hệ thống.", false);
+            if (!userExists) return ApiResponse<bool>.Failure("KhÃ´ng tÃ¬m tháº¥y User trong há»‡ thá»‘ng.", data: false);
 
-            // 2. Logic nghiệp vụ: Xử lý mặc định (Default toggling)
+            // 2. Logic nghiá»‡p vá»¥: Xá»­ lÃ½ máº·c Ä‘á»‹nh (Default toggling)
             var oldDefault = await _paymentMethodRepo.GetDefaultMethodByUserIdAsync(userId);
             if (oldDefault != null)
             {
@@ -36,7 +36,7 @@ namespace ApplicationLayer.Services.PaymentMethods
                 _paymentMethodRepo.Update(oldDefault);
             }
 
-            // 3. Tạo mới Payment Method
+            // 3. Táº¡o má»›i Payment Method
             var newMethod = new PaymentMethod
             {
                 UserId = userId,
@@ -47,10 +47,10 @@ namespace ApplicationLayer.Services.PaymentMethods
 
             await _paymentMethodRepo.AddAsync(newMethod);
 
-            // 4. Lưu tất cả thay đổi (Unit of Work)
+            // 4. LÆ°u táº¥t cáº£ thay Ä‘á»•i (Unit of Work)
             await _paymentMethodRepo.SaveChangesAsync();
 
-            return ApiResponse<bool>.SuccessResponse(true, "Liên kết phương thức thanh toán thành công!");
+            return ApiResponse<bool>.SuccessResponse(true, "LiÃªn káº¿t phÆ°Æ¡ng thá»©c thanh toÃ¡n thÃ nh cÃ´ng!");
         }
     }
 }

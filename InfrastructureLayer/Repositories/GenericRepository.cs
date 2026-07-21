@@ -140,7 +140,7 @@ namespace InfrastructureLayer.Repositories
             return await _context.SaveChangesAsync();
         }
 
-        protected IQueryable<T> ActiveQuery()
+        protected virtual IQueryable<T> ActiveQuery()
             => typeof(ISoftDelete).IsAssignableFrom(typeof(T))
                 ? _dbSet.Where(entity => !EF.Property<bool>(entity, nameof(ISoftDelete.IsDeleted)))
                 : _dbSet;

@@ -22,7 +22,7 @@ public class NightMarketRepository : GenericRepository<NightMarket>, INightMarke
         bool ascending,
         CancellationToken cancellationToken = default)
     {
-        var query = _dbSet.AsNoTracking().Where(market => !market.IsDeleted);
+        var query = _dbSet.AsNoTracking().Where(market => !market.IsDeleted && market.ModerationStatus != ModerationStatus.Suspended);
 
         if (!string.IsNullOrWhiteSpace(keyword))
         {
@@ -47,7 +47,7 @@ public class NightMarketRepository : GenericRepository<NightMarket>, INightMarke
     }
 
     public async Task<NightMarket?> GetActiveByIdAsync(Guid id, CancellationToken cancellationToken = default)
-        => await _dbSet.FirstOrDefaultAsync(market => market.Id == id && !market.IsDeleted, cancellationToken);
+        => await _dbSet.FirstOrDefaultAsync(market => market.Id == id && !market.IsDeleted && market.ModerationStatus != ModerationStatus.Suspended, cancellationToken);
 
     public async Task<bool> ActiveNameExistsAsync(
         string name,
@@ -57,10 +57,17 @@ public class NightMarketRepository : GenericRepository<NightMarket>, INightMarke
         var normalizedName = name.Trim().ToLower();
         return await _dbSet.AnyAsync(market =>
             !market.IsDeleted &&
+            market.ModerationStatus != ModerationStatus.Suspended &&
             market.Name.ToLower() == normalizedName &&
             (!excludeId.HasValue || market.Id != excludeId.Value),
             cancellationToken);
     }
+
+    public async Task<List<NightMarket>> GetByOwnerIdAsync(Guid marketOwnerId, CancellationToken cancellationToken = default)
+        => await _dbSet.AsNoTracking()
+            .Where(market => market.MarketOwnerId == marketOwnerId && !market.IsDeleted && market.ModerationStatus != ModerationStatus.Suspended)
+            .OrderByDescending(market => market.CreatedAt)
+            .ToListAsync(cancellationToken);
 
     private static IQueryable<NightMarket> ApplySorting(
         IQueryable<NightMarket> query,

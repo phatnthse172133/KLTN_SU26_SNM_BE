@@ -7,6 +7,7 @@ using AutoMapper;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
 using static DomainLayer.Enums.GeneralEnum;
+using System.Linq;
 
 namespace ApplicationLayer.Services.Prices;
 
@@ -105,22 +106,80 @@ public class PriceService : IPriceService
         PaginationReq pagination,
         CancellationToken cancellationToken = default)
     {
-        await EnsurePackageExistsAsync(packageId);
+        await EnsureAndGetPackageAsync(packageId);
         var page = await _packagePrices.GetByPackagePagedAsync(
             packageId, pagination.Page, pagination.PageSize, cancellationToken);
         return ApiResponse<PaginationResp<PackagePriceResponse>>.SuccessResponse(
             _mapper.MapPage<PackagePrice, PackagePriceResponse>(page, pagination));
     }
 
+    public async Task<ApiResponse<List<PublicPackagePriceResponse>>> GetPublicPackagePricesAsync(
+        Guid packageId,
+        CancellationToken cancellationToken = default)
+    {
+        var package = await _packages.FirstOrDefaultAsync(p => p.Id == packageId && !p.IsDeleted && p.Status == PackageStatus.Active);
+        if (package is null)
+            throw AppException.NotFound("Package was not found or is not active.");
+
+        var now = DateTime.UtcNow;
+        var allPrices = (await _packagePrices.FindAsync(
+            p => p.PackageId == packageId && !p.IsDeleted)).ToList();
+
+        var durations = allPrices.Select(p => p.DurationDays).Distinct().ToList();
+        if (!durations.Contains(package.DurationDays) && package.DurationDays > 0)
+            durations.Add(package.DurationDays);
+
+        var result = new List<PublicPackagePriceResponse>();
+
+        foreach (var duration in durations.OrderBy(d => d))
+        {
+            decimal basePrice;
+            if (duration == package.DurationDays)
+            {
+                basePrice = package.Price;
+            }
+            else
+            {
+                var alternativeBase = allPrices.FirstOrDefault(p => p.DurationDays == duration && !p.StartDate.HasValue && !p.EndDate.HasValue);
+                if (alternativeBase == null) continue;
+                basePrice = alternativeBase.Price;
+            }
+
+            var activePromotion = allPrices
+                .Where(p => p.DurationDays == duration && p.StartDate.HasValue && p.EndDate.HasValue)
+                .Where(p => p.StartDate <= now && p.EndDate >= now)
+                .OrderBy(p => p.Price)
+                .FirstOrDefault();
+
+            result.Add(new PublicPackagePriceResponse
+            {
+                DurationDays = duration,
+                BasePrice = basePrice,
+                EffectivePrice = activePromotion != null ? activePromotion.Price : basePrice,
+                HasPromotion = activePromotion != null,
+                PromotionEndDate = activePromotion?.EndDate
+            });
+        }
+
+        return ApiResponse<List<PublicPackagePriceResponse>>.SuccessResponse(result);
+    }
+
     public async Task<ApiResponse<PackagePriceResponse>> CreatePackagePriceAsync(Guid packageId, CreatePriceRequest request, CancellationToken cancellationToken = default)
     {
-        await EnsurePackageExistsAsync(packageId);
-        ValidatePriceRequest(request);
+        var package = await EnsureAndGetPackageAsync(packageId);
+
+        var duration = request.DurationDays ?? package.DurationDays;
+        var normalizedStart = NormalizeUtc(request.StartDate);
+        var normalizedEnd = NormalizeUtc(request.EndDate);
+        await PackagePriceValidator.ValidatePackagePriceAsync(_packagePrices, package, request.Price, duration, normalizedStart, normalizedEnd);
 
         var now = DateTime.UtcNow;
         var packagePrice = _mapper.Map<PackagePrice>(request);
         packagePrice.Id = Guid.NewGuid();
         packagePrice.PackageId = packageId;
+        packagePrice.DurationDays = duration;
+        packagePrice.StartDate = normalizedStart;
+        packagePrice.EndDate = normalizedEnd;
         packagePrice.CreatedAt = now;
         packagePrice.UpdatedAt = now;
 
@@ -132,14 +191,21 @@ public class PriceService : IPriceService
 
     public async Task<ApiResponse<PackagePriceResponse>> UpdatePackagePriceAsync(Guid packageId, Guid priceId, UpdatePriceRequest request, CancellationToken cancellationToken = default)
     {
-        await EnsurePackageExistsAsync(packageId);
-        ValidatePriceRequest(request);
+        var package = await EnsureAndGetPackageAsync(packageId);
+
+        var duration = request.DurationDays ?? package.DurationDays;
+        var normalizedStart = NormalizeUtc(request.StartDate);
+        var normalizedEnd = NormalizeUtc(request.EndDate);
+        await PackagePriceValidator.ValidatePackagePriceAsync(_packagePrices, package, request.Price, duration, normalizedStart, normalizedEnd, priceId);
 
         var packagePrice = await _packagePrices.FirstOrDefaultAsync(price => price.Id == priceId && price.PackageId == packageId);
         if (packagePrice is null)
             throw AppException.NotFound("Package price was not found.");
 
         _mapper.Map(request, packagePrice);
+        packagePrice.DurationDays = duration;
+        packagePrice.StartDate = normalizedStart;
+        packagePrice.EndDate = normalizedEnd;
         packagePrice.UpdatedAt = DateTime.UtcNow;
 
         _packagePrices.Update(packagePrice);
@@ -150,7 +216,7 @@ public class PriceService : IPriceService
 
     public async Task<ApiResponse<object>> DeletePackagePriceAsync(Guid packageId, Guid priceId, CancellationToken cancellationToken = default)
     {
-        await EnsurePackageExistsAsync(packageId);
+        await EnsureAndGetPackageAsync(packageId);
 
         var packagePrice = await _packagePrices.FirstOrDefaultAsync(price => price.Id == priceId && price.PackageId == packageId);
         if (packagePrice is null)
@@ -187,18 +253,30 @@ public class PriceService : IPriceService
             throw AppException.NotFound("Food item was not found.");
     }
 
-    private async Task EnsurePackageExistsAsync(Guid packageId)
+    private async Task<Package> EnsureAndGetPackageAsync(Guid packageId)
     {
-        if (!await _packages.AnyAsync(package => package.Id == packageId))
+        var package = await _packages.FirstOrDefaultAsync(package => package.Id == packageId);
+        if (package is null)
             throw AppException.NotFound("Package was not found.");
+        return package;
     }
+
+
 
     private static void ValidatePriceRequest(CreatePriceRequest request)
     {
         if (request.Price <= 0)
             throw AppException.BadRequest("Price must be greater than zero.");
 
-        if (request.StartDate.HasValue && request.EndDate.HasValue && request.StartDate.Value > request.EndDate.Value)
-            throw AppException.BadRequest("Start date must be earlier than or equal to end date.");
+        if (request.StartDate.HasValue && request.EndDate.HasValue && request.StartDate.Value >= request.EndDate.Value)
+            throw AppException.BadRequest("Start date must be earlier than end date.", "INVALID_DATE_RANGE");
+    }
+
+    private static DateTime? NormalizeUtc(DateTime? value)
+    {
+        if (!value.HasValue) return null;
+        return value.Value.Kind == DateTimeKind.Unspecified
+            ? DateTime.SpecifyKind(value.Value, DateTimeKind.Utc)
+            : value.Value.ToUniversalTime();
     }
 }

@@ -5,7 +5,7 @@ using static DomainLayer.Enums.GeneralEnum;
 namespace DomainLayer.Entities;
 
 
-// Tài khoản người dùng - dùng chung cho Customer, BoothOwner, Admin (phân biệt qua RoleId)
+// TÃ i khoáº£n ngÆ°á»i dÃ¹ng - dÃ¹ng chung cho Customer, BoothOwner, Admin (phÃ¢n biá»‡t qua RoleId)
 public partial class User
 {
     public Guid Id { get; set; }
@@ -14,7 +14,7 @@ public partial class User
 
     public string UserName { get; set; } = null!;
 
-    // Mật khẩu đã được mã hóa (hash), tuyệt đối không lưu plaintext
+    // Máº­t kháº©u Ä‘Ã£ Ä‘Æ°á»£c mÃ£ hÃ³a (hash), tuyá»‡t Ä‘á»‘i khÃ´ng lÆ°u plaintext
     public string PasswordHash { get; set; } = null!;
 
     public string FullName { get; set; } = null!;
@@ -63,6 +63,8 @@ public partial class User
     public virtual ICollection<Cart> Carts { get; set; } = new List<Cart>();
 
     public virtual ICollection<CustomerPreference> CustomerPreferences { get; set; } = new List<CustomerPreference>();
+
+    public virtual ICollection<MarketSubscription> MarketSubscriptions { get; set; } = new List<MarketSubscription>();
 
     public virtual ICollection<AIRecommendationLog> AIRecommendationLogs { get; set; } = new List<AIRecommendationLog>();
 

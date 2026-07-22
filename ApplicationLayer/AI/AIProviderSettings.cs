@@ -1,4 +1,4 @@
-namespace InfrastructureLayer.Cores.AI;
+namespace ApplicationLayer.AI;
 
 public class AIProviderSettings
 {

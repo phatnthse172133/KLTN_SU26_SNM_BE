@@ -1,7 +1,9 @@
 using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.DTOs.Responses;
+using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
 using ApplicationLayer.Services.Notifications;
+using ApplicationLayer.Services.Promotions;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
 using Microsoft.Extensions.Configuration;
@@ -23,6 +25,8 @@ namespace ApplicationLayer.Services.Orders
     public class OrderService : IOrderService
     {
         private readonly IOrderRepository _orderRepo;
+        private readonly IPromotionRepository _promotionRepo;
+        private readonly IPromotionValidationService _validation;
         private readonly PayOSClient _payInClient;
         private readonly PayOSClient _payOutClient;
         private readonly IRealtimeNotificationPublisher _notificationPublisher;
@@ -31,6 +35,8 @@ namespace ApplicationLayer.Services.Orders
         private readonly IConfiguration _config;
 
         public OrderService(IOrderRepository orderRepo,
+                            IPromotionRepository promotionRepo,
+                            IPromotionValidationService validation,
                             [FromKeyedServices("PayIn")] PayOSClient payInClient,
                             [FromKeyedServices("PayOut")] PayOSClient payOutClient,
                             IRealtimeNotificationPublisher notificationPublisher, 
@@ -39,6 +45,8 @@ namespace ApplicationLayer.Services.Orders
                             IConfiguration config)
         {
             _orderRepo = orderRepo;
+            _promotionRepo = promotionRepo;
+            _validation = validation;
             _payInClient = payInClient;
             _payOutClient = payOutClient;
             _notificationPublisher = notificationPublisher;
@@ -51,7 +59,7 @@ namespace ApplicationLayer.Services.Orders
         public async Task<ApiResponse<OrderResponseDto>> CreateOrderAsync(CreateOrderDto dto)
         {
             // 1. Sinh mã đơn hàng dạng Số nguyên (Duy nhất) vì PayOS ép buộc mã đơn là kiểu long/int
-            long uniqueOrderCode = long.Parse(DateTime.UtcNow.ToString("yyMMddHHmmss") + new Random().Next(100, 999)); ;
+            long uniqueOrderCode = long.Parse(DateTime.UtcNow.ToString("yyMMddHHmmssff") + Random.Shared.Next(10, 99));
 
             // XỬ LÝ KHÁCH HÀNG VÃNG LAI: Nếu chủ quầy đặt hộ và không có CustomerId cụ thể
             Guid? finalCustomerId = dto.CustomerId;
@@ -73,7 +81,6 @@ namespace ApplicationLayer.Services.Orders
                 Note = dto.Note,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow,
-                DiscountAmount = dto.DiscountAmount,
                 Status = OrderStatus.Placed
             };
 
@@ -111,15 +118,6 @@ namespace ApplicationLayer.Services.Orders
                 // Xử lý đống Topping đi kèm của món ăn đó (Nếu có)
                 //foreach (var toppingDto in itemDto.Toppings)
                 //{
-                //    var orderDetailTopping = new OrderDetailTopping
-                //    {
-                //        Id = Guid.NewGuid(),
-                //        ToppingItemId = toppingDto.ToppingItemId,
-                //        ToppingName = toppingDto.ToppingName,
-                //        UnitPrice = toppingDto.UnitPrice, // Snapshot giá topping
-                //    };
-
-                //    orderDetail.OrderDetailToppings.Add(orderDetailTopping);
 
                 //    // Cộng dồn tiền Topping vào tổng tiền của món (Nhân với số lượng món ăn đặt)
                 //    itemTotalPrice += (toppingDto.UnitPrice * itemDto.Quantity);
@@ -135,9 +133,62 @@ namespace ApplicationLayer.Services.Orders
                 order.OrderDetails.Add(orderDetail);
             }
 
+            // XỬ LÝ PROMOTION (VOUCHER) NẾU CÓ
+            decimal discountAmount = 0;
+            if (!string.IsNullOrEmpty(dto.PromotionCode))
+            {
+                var promotionDb = await _promotionRepo.GetByCodeAsync(dto.BoothId, dto.PromotionCode);
+                if (promotionDb == null)
+                    return ApiResponse<OrderResponseDto>.Failure("Voucher không tồn tại!");
+
+                try
+                {
+                    // 5.1. Dựng (Map) list CartItem giả lập từ DTO và dữ liệu DB để Validation Service hiểu được
+                    var validationItems = dto.Items.Select(itemDto =>
+                    {
+                        var dbFood = foodItemsFromDb.FirstOrDefault(f => f.Id == itemDto.FoodItemId);
+                        return new CartItem
+                        {
+                            FoodItemId = itemDto.FoodItemId,
+                            Quantity = itemDto.Quantity,
+                            FoodItem = dbFood! // Nhét nguyên object FoodItem lấy từ DB vào đây để service check Category & Price
+                        };
+                    }).ToList();
+
+                    // 5.2. GỌI SERVICE
+                    var validationResult = await _validation.ValidateAsync(
+                        (Guid)finalCustomerId,
+                        promotionDb,
+                        validationItems
+                                        // cancellationToken (truyền CancellationToken nếu hàm CreateOrder có param này)
+                    );
+
+                    // 5.3. Nhận kết quả tiền giảm giá
+                    discountAmount = validationResult.DiscountAmount;
+
+                    // 5.4. Ghi log sử dụng Voucher
+                    order.PromotionUsages.Add(new PromotionUsage
+                    {
+                        Id = Guid.NewGuid(),
+                        PromotionId = promotionDb.Id,
+                        OrderId = order.Id,
+                        CustomerId = (Guid)finalCustomerId,
+                        DiscountAmount = discountAmount,
+                        Status = PromotionUsageStatus.Reserved,
+                        AppliedAt = DateTime.UtcNow,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    });
+                }
+                catch (AppException ex)
+                {
+                    return ApiResponse<OrderResponseDto>.Failure($"Lỗi áp dụng Voucher: {ex.Message}");
+                }
+            }
+
             // 4. Áp đặt số tiền cuối cùng cho Đơn hàng
             order.TotalAmount = calculatedTotalAmount;
-            order.FinalAmount = calculatedTotalAmount - dto.DiscountAmount;
+            order.FinalAmount = Math.Max(0, calculatedTotalAmount - discountAmount); ;
             if (order.FinalAmount < 0) order.FinalAmount = 0; // Tránh tiền bị âm
 
             // 5. Khởi tạo bản ghi lịch sử giao dịch ở bảng Payment
@@ -180,11 +231,13 @@ namespace ApplicationLayer.Services.Orders
             {
                 try
                 {
+                    var expiredAt = DateTimeOffset.UtcNow.AddMinutes(15).ToUnixTimeSeconds();
                     // Tiến hành gọi API sang hệ thống PayOS để lấy Link mã QR
                     var paymentRequest = new CreatePaymentLinkRequest
                     {
+                        ExpiredAt = expiredAt, // Link QR chỉ tồn tại trong 15 phút 
                         OrderCode = uniqueOrderCode,// Truyền mã đơn kiểu long
-                        Amount = (int)order.FinalAmount,// Ép về kiểu int theo cấu trúc PayOS
+                        Amount = Convert.ToInt32(order.FinalAmount),// Ép về kiểu int theo cấu trúc PayOS
                         Description = $"Process {uniqueOrderCode}",
                         ReturnUrl = "https://your-snm-app/cancel", // Link FE xử lý khi khách thanh toán xong trên web PayOS
                         CancelUrl = "https://your-snm-app/cancel"  // Link FE xử lý khi khách bấm hủy trên web PayOS
@@ -243,9 +296,55 @@ namespace ApplicationLayer.Services.Orders
                 }
 
                 // 3. Nếu đơn này đã được xử lý từ trước, trả về true luôn để tránh lặp trùng
-                if (order.Status != OrderStatus.Placed)
+                if (order.Status == OrderStatus.Preparing || 
+                    order.Status == OrderStatus.ReadyForPickup || 
+                    order.Status == OrderStatus.Completed)
                 {
                     _logger.LogInformation($"Đơn hàng #{order.OrderCode} đã được xử lý trước đó (Trạng thái hiện tại: {order.Status}). Bỏ qua xử lý trùng lặp.");
+                    return true;
+                }
+
+                //Giải quyết vấn đề do mạng lag hoặc khách quét thanh toán chậm, nhưng quầy đã hủy đơn trước đó. Khi PayOS gửi Webhook về, hệ thống sẽ nhận ra đơn đã bị HỦY và cần cảnh báo Chủ quầy/Admin để xử lý hoàn tiền.
+                //Theo quy định link payos chỉ tồn tại trong 15 phút, sau đó sẽ tự hủy. Nếu khách quét thanh toán sau 15 phút, PayOS sẽ gửi Webhook về nhưng đơn hàng đã bị hủy trước đó. Hệ thống cần cảnh báo Chủ quầy/Admin để xử lý hoàn tiền.
+                if (order.Status == OrderStatus.Cancelled)
+                {
+                    _logger.LogWarning($"[Thanh toán muộn] Đơn hàng #{order.OrderCode} đã bị HỦY nhưng vừa nhận được Webhook thanh toán! Số tiền: {verifiedData.Amount:N0}đ");
+
+                    var cancelledPayment = order.Payments.OrderByDescending(p => p.CreatedAt)
+                                                         .FirstOrDefault(p => p.Status == PaymentStatus.Pending);
+                    if (cancelledPayment != null)
+                    {
+                        cancelledPayment.Status = PaymentStatus.RefundProcessing; // Đánh dấu cần hoàn tiền
+                        cancelledPayment.GatewayRef = verifiedData.Reference;
+                        cancelledPayment.Amount = verifiedData.Amount;
+                        cancelledPayment.RefundReason = "Đơn hàng đã bị hủy do khách thanh toán quá giờ, cần hoàn tiền!";
+                        cancelledPayment.UpdatedAt = DateTime.UtcNow;
+
+                        _orderRepo.Update(order);
+                        await _orderRepo.SaveChangesAsync();
+                    }
+
+                    // Bắn SignalR thông báo khẩn cho Chủ quầy/Admin biết để xử lý hoàn tiền
+                    notificationPayload = new NotificationListItemResponse
+                    {
+                        Id = Guid.NewGuid(),
+                        BoothId = order.BoothOwnerId,
+                        Type = "ORDER_PAID_BUT_CANCELLED",
+                        Title = "Cảnh báo: Nhận tiền từ đơn đã HỦY!",
+                        Content = $"Đơn #{order.OrderCode} đã bị hủy trước đó nhưng khách vừa quét trả thành công {verifiedData.Amount:N0}đ. Vui lòng kiểm tra đối soát!",
+                        IsRead = false,
+                        ReferenceType = "Order",
+                        ReferenceId = order.Id,
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                    await _notificationPublisher.PublishAsync(order.BoothOwnerId, notificationPayload, unreadCount: 1);
+                    return true;
+                }
+
+                if (order.Status != OrderStatus.Placed)
+                {
+                    _logger.LogWarning($"Đơn hàng #{order.OrderCode} đang thực thi.");
                     return true;
                 }
 

@@ -1,20 +1,22 @@
+using ApplicationLayer.Helppers;
+using ApplicationLayer.Services.Notifications;
 using InfrastructureLayer;
+using InfrastructureLayer.Backgrounds;
 using InfrastructureLayer.Cores.JWTs;
 using InfrastructureLayer.Data;
-using ApplicationLayer.Helppers;
+using InfrastructureLayer.Data.Seeders;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using PayOS;
+using PresentationLayer.Hubs;
 using PresentationLayer.Middlewares;
 using System.Security.Claims;
 using System.Text;
+using System.Threading.RateLimiting;
 using static DomainLayer.Enums.GeneralEnum;
-using ApplicationLayer.Services.Notifications;
-using PresentationLayer.Hubs;
-using PayOS;
-using InfrastructureLayer.Data.Seeders;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -53,6 +55,33 @@ builder.Services.AddKeyedSingleton<PayOSClient>("PayOut", (sp, key) =>
 });
 
 //await payOSClient.Webhooks.ConfirmAsync("https://your-url.com/payos-webhook");
+
+// Đăng ký Background Service dọn dẹp đơn hàng treo
+builder.Services.AddHostedService<OrderCleanupBackgroundService>();
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("OrderApiPolicy", httpContext =>
+    {
+        // Lấy UserId từ Token (nếu đã login)
+        var userId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                     ?? httpContext.User.FindFirst("sub")?.Value
+                     ?? "anonymous";
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: userId,
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 1,                     // Chỉ cho phép 1 request
+                Window = TimeSpan.FromSeconds(5),    // Trong cửa sổ 5 giây
+                QueueLimit = 0                       // Không xếp hàng, gọi thừa là REJECT ngay
+            });
+    });
+});
+
+
+
 
 const string CustomerAppCorsPolicy = "CustomerAppCorsPolicy";
 
@@ -227,7 +256,12 @@ app.UseAuthentication();
 
 app.UseAuthorization();
 
+// Thêm Middleware
+app.UseRateLimiter();
+
 app.MapControllers();
 app.MapHub<NotificationHub>("/hubs/notifications");
+
+
 
 app.Run();

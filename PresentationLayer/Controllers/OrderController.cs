@@ -2,6 +2,7 @@ using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Services.Orders;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using System.Security.Claims;
 
 // For more information on enabling Web API for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
@@ -25,6 +26,7 @@ namespace PresentationLayer.Controllers
 
         // POST api/<OrderController>
         [HttpPost]
+        [EnableRateLimiting("OrderApiPolicy")]
         public async Task<IActionResult> CreateOrder([FromBody] CreateOrderDto dto)
         {
             if (dto == null || dto.Items.Count == 0)

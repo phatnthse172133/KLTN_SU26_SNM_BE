@@ -231,6 +231,10 @@ namespace ApplicationLayer.Services.Orders
             {
                 try
                 {
+                    var baseUrl = _config["PayOSUrls:BaseUrl"];
+                    var returnPath = _config["PayOSUrls:ReturnPath"];
+                    var cancelPath = _config["PayOSUrls:CancelPath"];
+
                     var expiredAt = DateTimeOffset.UtcNow.AddMinutes(15).ToUnixTimeSeconds();
                     // Tiến hành gọi API sang hệ thống PayOS để lấy Link mã QR
                     var paymentRequest = new CreatePaymentLinkRequest
@@ -239,8 +243,8 @@ namespace ApplicationLayer.Services.Orders
                         OrderCode = uniqueOrderCode,// Truyền mã đơn kiểu long
                         Amount = Convert.ToInt32(order.FinalAmount),// Ép về kiểu int theo cấu trúc PayOS
                         Description = $"Process {uniqueOrderCode}",
-                        ReturnUrl = "https://your-snm-app/cancel", // Link FE xử lý khi khách thanh toán xong trên web PayOS
-                        CancelUrl = "https://your-snm-app/cancel"  // Link FE xử lý khi khách bấm hủy trên web PayOS
+                        ReturnUrl = $"{baseUrl}{returnPath}", // Link FE xử lý khi khách thanh toán xong trên web PayOS
+                        CancelUrl = $"{baseUrl}{cancelPath}"  // Link FE xử lý khi khách bấm hủy trên web PayOS
                     };
 
                     paymentLink = await _payInClient.PaymentRequests.CreateAsync(paymentRequest);

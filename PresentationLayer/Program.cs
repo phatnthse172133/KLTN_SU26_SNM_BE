@@ -57,7 +57,7 @@ builder.Services.AddKeyedSingleton<PayOSClient>("PayOut", (sp, key) =>
 //await payOSClient.Webhooks.ConfirmAsync("https://your-url.com/payos-webhook");
 
 // Đăng ký Background Service dọn dẹp đơn hàng treo
-builder.Services.AddHostedService<OrderCleanupBackgroundService>();
+//builder.Services.AddHostedService<OrderCleanupBackgroundService>();
 
 builder.Services.AddRateLimiter(options =>
 {

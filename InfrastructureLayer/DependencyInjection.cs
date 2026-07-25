@@ -31,8 +31,10 @@ using ApplicationLayer.Services.PayOS;
 using ApplicationLayer.Configuration;
 using ApplicationLayer.Services.Dashboard;
 using ApplicationLayer.Services.MarketOwnerDashboard;
+using ApplicationLayer.Services.AdminAILog;
 using ApplicationLayer.Services.AdminModeration;
 using ApplicationLayer.Mappings;
+using ApplicationLayer.AI;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceCore.Email;
 using DomainLayer.InterfaceCore.External;
@@ -130,6 +132,7 @@ namespace InfrastructureLayer
             services.AddScoped<ISubscriptionEntitlementService, SubscriptionEntitlementService>();
             services.AddScoped<IDashboardService, DashboardService>();
             services.AddScoped<IMarketOwnerDashboardService, MarketOwnerDashboardService>();
+            services.AddScoped<IAdminAILogService, AdminAILogService>();
             services.AddScoped<IPriceService, PriceService>();
             services.AddScoped<ICartService, CartService>();
             services.AddScoped<IPromotionService, PromotionService>();
@@ -140,6 +143,7 @@ namespace InfrastructureLayer
             services.AddScoped<IFoodTagService, FoodTagService>();
             services.AddScoped<ICustomerPreferenceService, CustomerPreferenceService>();
             services.AddScoped<IAIRecommendationService, AIRecommendationService>();
+            services.AddScoped<IAISettingsService, AISettingsService>();
             services.AddSingleton<IOnlinePresenceService, OnlinePresenceService>();
             services.Configure<AIProviderSettings>(
                 configuration.GetSection(AIProviderSettings.SectionName));

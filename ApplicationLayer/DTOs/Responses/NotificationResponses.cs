@@ -36,6 +36,41 @@ public class DeviceTokenResponse
 
 public class AdminNotificationResultResponse
 {
+    public Guid BatchId { get; set; }
     public int RecipientCount { get; set; }
     public int NotificationCount { get; set; }
+}
+
+public class AdminNotificationListItemResponse
+{
+    public Guid BatchId { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string ContentPreview { get; set; } = string.Empty;
+    public string Type { get; set; } = string.Empty;
+    public string Target { get; set; } = string.Empty;
+    public string? TargetRole { get; set; }
+    public string? SpecificUserName { get; set; }
+    public int RecipientCount { get; set; }
+    public string CreatedByName { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
+}
+
+public class AdminNotificationDetailResponse
+{
+    public Guid BatchId { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string Content { get; set; } = string.Empty;
+    public string Type { get; set; } = string.Empty;
+    public string Target { get; set; } = string.Empty;
+    public string? TargetRole { get; set; }
+    public AdminNotificationSpecificUserResponse? SpecificUser { get; set; }
+    public int RecipientCount { get; set; }
+    public string CreatedByName { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
+}
+
+public class AdminNotificationSpecificUserResponse
+{
+    public string FullName { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
 }

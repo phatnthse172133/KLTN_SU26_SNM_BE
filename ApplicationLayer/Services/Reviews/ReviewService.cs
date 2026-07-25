@@ -8,6 +8,7 @@ using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
 using static DomainLayer.Enums.GeneralEnum;
 using ApplicationLayer.Services.Notifications;
+using ApplicationLayer.Services.Subscriptions;
 using System.Text.Json;
 
 namespace ApplicationLayer.Services.Reviews;
@@ -19,14 +20,22 @@ public class ReviewService : IReviewService
     private readonly IOrderRepository _orders;
     private readonly IMapper _mapper;
     private readonly INotificationService _notifications;
+    private readonly ISubscriptionEntitlementService _entitlements;
 
-    public ReviewService(IReviewRepository reviews, IBoothRepository booths, IOrderRepository orders, IMapper mapper, INotificationService notifications)
+    public ReviewService(
+        IReviewRepository reviews,
+        IBoothRepository booths,
+        IOrderRepository orders,
+        IMapper mapper,
+        INotificationService notifications,
+        ISubscriptionEntitlementService entitlements)
     {
         _reviews = reviews;
         _booths = booths;
         _orders = orders;
         _mapper = mapper;
         _notifications = notifications;
+        _entitlements = entitlements;
     }
 
     public async Task<ApiResponse<ReviewResponse>> CreateAsync(Guid customerId, CreateReviewRequest request, CancellationToken cancellationToken = default)
@@ -95,10 +104,18 @@ public class ReviewService : IReviewService
             _mapper.MapPage<Review, ReviewResponse>(page, pagination));
     }
 
+    public async Task<ApiResponse<PaginationResp<ReviewResponse>>> GetAllFilteredAsync(AdminReviewQueryRequest query, CancellationToken cancellationToken = default)
+    {
+        var page = await _reviews.GetPagedWithReplyFilteredAsync(
+            query.Page, query.PageSize, query.Rating, query.IsVisible, query.BoothId, query.Keyword, cancellationToken);
+        return ApiResponse<PaginationResp<ReviewResponse>>.SuccessResponse(
+            _mapper.MapPage<Review, ReviewResponse>(page, new PaginationReq { Page = query.Page, PageSize = query.PageSize }));
+    }
+
     public async Task<ApiResponse<ReviewResponse>> UpdateVisibilityAsync(Guid reviewId, UpdateReviewVisibilityRequest request, CancellationToken cancellationToken = default)
     {
         var review = await _reviews.GetByIdAsync(reviewId);
-        if (review is null) 
+        if (review is null)
             throw AppException.NotFound("Review was not found.");
 
         review.IsVisible = request.IsVisible;
@@ -114,7 +131,7 @@ public class ReviewService : IReviewService
     public async Task<ApiResponse<ReviewResponse>> UpsertReplyAsync(Guid ownerId, Guid reviewId, UpsertReviewReplyRequest request, CancellationToken cancellationToken = default)
     {
         var review = await _reviews.GetByIdAsync(reviewId);
-        if (review is null) 
+        if (review is null)
             throw AppException.NotFound("Review was not found.");
 
         var booth = await _booths.GetByIdAsync(review.BoothId);
@@ -123,6 +140,12 @@ public class ReviewService : IReviewService
 
         if (booth.BoothOwnerId != ownerId)
             throw AppException.Forbidden("You do not have permission to reply to this review.");
+
+        await _entitlements.RequireBoothFeatureAsync(
+            booth.Id,
+            entitlement => entitlement.ReviewReply,
+            "Your current plan does not include review replies. Upgrade to Booth Boost or Booth Featured to reply.",
+            "REVIEW_REPLY_NOT_INCLUDED");
 
         await _reviews.UpsertReplyAsync(reviewId, ownerId, request.Content.Trim());
         await _reviews.SaveChangesAsync();

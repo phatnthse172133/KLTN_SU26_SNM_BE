@@ -16,7 +16,7 @@ public class NotificationService : INotificationService
 {
     private static readonly HashSet<string> AllowedRoles = new(StringComparer.OrdinalIgnoreCase)
     {
-        "Admin", "BoothOwner", "Customer"
+        "Admin", "BoothOwner", "MarketOwner", "Customer"
     };
 
     private readonly INotificationRepository _notifications;
@@ -118,18 +118,7 @@ public class NotificationService : INotificationService
             UnreadCount = await _notifications.CountUnreadAsync(userId, cancellationToken)
         });
 
-    public async Task DeleteAsync(
-        Guid userId,
-        Guid notificationId,
-        CancellationToken cancellationToken = default)
-    {
-        var notification = await GetOwnedAsync(userId, notificationId, cancellationToken);
-        notification.UpdatedAt = DateTime.UtcNow;
-        _notifications.Delete(notification);
-        await _notifications.SaveChangesAsync();
-        if (!notification.IsRead)
-            await PublishUnreadCountSafelyAsync(userId, cancellationToken);
-    }
+
 
     public async Task NotifyAsync(
         NotificationMessage message,
@@ -180,17 +169,30 @@ public class NotificationService : INotificationService
             await DeliverAsync(notification, cancellationToken);
     }
 
+    private string? CanonicalizeRole(string? role)
+    {
+        if (string.IsNullOrWhiteSpace(role)) return null;
+        var r = role.Trim();
+        if (r.Equals("Admin", StringComparison.OrdinalIgnoreCase)) return "Admin";
+        if (r.Equals("Customer", StringComparison.OrdinalIgnoreCase)) return "Customer";
+        if (r.Equals("BoothOwner", StringComparison.OrdinalIgnoreCase)) return "BoothOwner";
+        if (r.Equals("MarketOwner", StringComparison.OrdinalIgnoreCase)) return "MarketOwner";
+        return r;
+    }
+
     public async Task<ApiResponse<AdminNotificationResultResponse>> CreateByAdminAsync(
+        Guid currentAdminId,
         AdminCreateNotificationRequest request,
         CancellationToken cancellationToken = default)
     {
         ValidateAdminRequest(request);
+        var canonicalRole = CanonicalizeRole(request.Role);
         var recipientIds = request.Target switch
         {
             NotificationTarget.AllUsers => await _users.GetActiveRecipientIdsAsync(
                 null, null, cancellationToken),
             NotificationTarget.Role => await _users.GetActiveRecipientIdsAsync(
-                null, request.Role!.Trim(), cancellationToken),
+                null, canonicalRole, cancellationToken),
             NotificationTarget.SpecificUser => await _users.GetActiveRecipientIdsAsync(
                 request.UserId, null, cancellationToken),
             _ => throw AppException.BadRequest(
@@ -204,17 +206,27 @@ public class NotificationService : INotificationService
                 "NOTIFICATION_RECIPIENT_NOT_FOUND");
 
         var now = DateTime.UtcNow;
+        var batchId = Guid.NewGuid();
+
         var notifications = recipientIds
             .Distinct()
-            .Select(userId => CreateEntity(new NotificationMessage(
-                userId,
-                request.Type,
-                request.Title,
-                request.Content,
-                request.BoothId,
-                request.ReferenceType,
-                request.ReferenceId,
-                request.DataJson), now))
+            .Select(userId =>
+            {
+                var n = CreateEntity(new NotificationMessage(
+                    userId,
+                    NotificationType.SystemAnnouncement,
+                    request.Title,
+                    request.Content,
+                    null,
+                    null,
+                    null,
+                    null), now);
+                n.BatchId = batchId;
+                n.CreatedByUserId = currentAdminId;
+                n.Target = request.Target;
+                n.TargetRole = request.Target == NotificationTarget.Role ? canonicalRole : null;
+                return n;
+            })
             .ToList();
 
         await _notifications.AddRangeAsync(notifications);
@@ -225,9 +237,121 @@ public class NotificationService : INotificationService
 
         return ApiResponse<AdminNotificationResultResponse>.SuccessResponse(new()
         {
+            BatchId = batchId,
             RecipientCount = recipientIds.Count,
             NotificationCount = notifications.Count
         }, "Notification created successfully.");
+    }
+
+    public async Task<ApiResponse<PaginationResp<AdminNotificationListItemResponse>>> GetAdminNotificationsAsync(
+        AdminNotificationListRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (request.FromDate.HasValue && request.ToDate.HasValue && request.FromDate.Value > request.ToDate.Value)
+        {
+            throw AppException.BadRequest("FromDate cannot be greater than ToDate.", "INVALID_DATE_RANGE");
+        }
+
+        var page = await _notifications.GetAdminPagedBatchesAsync(
+            request.Keyword,
+            request.Target,
+            request.Role,
+            request.Type,
+            request.FromDate,
+            request.ToDate,
+            request.Page,
+            request.PageSize,
+            cancellationToken);
+
+        var batchIds = page.Items.Select(x => x.BatchId).Where(b => b.HasValue).Select(b => b!.Value).ToList();
+
+        // Count recipients per batch
+        var recipientCounts = new Dictionary<Guid, int>();
+        if (batchIds.Count > 0)
+        {
+            recipientCounts = await _notifications.GetBatchRecipientCountsAsync(batchIds, cancellationToken);
+        }
+
+        // Fetch admin names
+        var adminIds = page.Items.Where(x => x.CreatedByUserId.HasValue).Select(x => x.CreatedByUserId!.Value).Distinct().ToList();
+        var adminDict = new Dictionary<Guid, string>();
+        if (adminIds.Count > 0)
+        {
+            adminDict = await _users.GetUserNamesByIdsAsync(adminIds, cancellationToken);
+        }
+
+        // Fetch specific user names
+        var userIds = page.Items.Where(x => x.Target == NotificationTarget.SpecificUser).Select(x => x.UserId).Distinct().ToList();
+        var userDict = new Dictionary<Guid, string>();
+        if (userIds.Count > 0)
+        {
+            userDict = await _users.GetUserNamesByIdsAsync(userIds, cancellationToken);
+        }
+
+        var list = page.Items.Select(x => new AdminNotificationListItemResponse
+        {
+            BatchId = x.BatchId!.Value,
+            Title = x.Title,
+            ContentPreview = x.Content.Length > 100 ? x.Content.Substring(0, 97) + "..." : x.Content,
+            Type = x.Type.ToString(),
+            Target = x.Target.ToString() ?? "",
+            TargetRole = x.TargetRole,
+            SpecificUserName = x.Target == NotificationTarget.SpecificUser && userDict.ContainsKey(x.UserId) ? userDict[x.UserId] : null,
+            RecipientCount = recipientCounts.TryGetValue(x.BatchId.Value, out var c) ? c : 1,
+            CreatedByName = x.CreatedByUserId.HasValue && adminDict.ContainsKey(x.CreatedByUserId.Value) ? adminDict[x.CreatedByUserId.Value] : "Unknown",
+            CreatedAt = x.CreatedAt
+        }).ToList();
+
+        var pagedResp = PaginationResp<AdminNotificationListItemResponse>.Create(
+            list,
+            page.TotalCount,
+            request);
+
+        return ApiResponse<PaginationResp<AdminNotificationListItemResponse>>.SuccessResponse(pagedResp);
+    }
+
+    public async Task<ApiResponse<AdminNotificationDetailResponse>> GetAdminNotificationDetailAsync(
+        Guid batchId,
+        CancellationToken cancellationToken = default)
+    {
+        var n = await _notifications.GetAdminBatchDetailAsync(batchId, cancellationToken);
+        if (n == null)
+            throw AppException.NotFound("The notification could not be found.", "NOTIFICATION_NOT_FOUND");
+
+        var count = await _notifications.CountByBatchIdAsync(batchId, cancellationToken);
+
+        string adminName = "Unknown";
+        if (n.CreatedByUserId.HasValue)
+        {
+            var admin = await _users.GetByIdAsync(n.CreatedByUserId.Value);
+            if (admin != null) adminName = admin.FullName;
+        }
+
+        AdminNotificationSpecificUserResponse? specificUser = null;
+        if (n.Target == NotificationTarget.SpecificUser && n.User != null)
+        {
+            specificUser = new AdminNotificationSpecificUserResponse
+            {
+                FullName = n.User.FullName,
+                Email = n.User.Email
+            };
+        }
+
+        var resp = new AdminNotificationDetailResponse
+        {
+            BatchId = batchId,
+            Title = n.Title,
+            Content = n.Content,
+            Type = n.Type.ToString(),
+            Target = n.Target.ToString() ?? "",
+            TargetRole = n.TargetRole,
+            SpecificUser = specificUser,
+            RecipientCount = count,
+            CreatedByName = adminName,
+            CreatedAt = n.CreatedAt
+        };
+
+        return ApiResponse<AdminNotificationDetailResponse>.SuccessResponse(resp);
     }
 
     private async Task<Notification> GetOwnedAsync(
@@ -383,13 +507,13 @@ public class NotificationService : INotificationService
     {
         ValidateMessage(new NotificationMessage(
             request.UserId ?? Guid.NewGuid(),
-            request.Type,
+            NotificationType.SystemAnnouncement,
             request.Title,
             request.Content,
-            request.BoothId,
-            request.ReferenceType,
-            request.ReferenceId,
-            request.DataJson));
+            null,
+            null,
+            null,
+            null));
 
         if (request.Target == NotificationTarget.SpecificUser
             && (!request.UserId.HasValue || request.UserId == Guid.Empty))

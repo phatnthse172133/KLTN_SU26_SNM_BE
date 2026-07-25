@@ -48,6 +48,27 @@ public class ReviewRepository : GenericRepository<Review>, IReviewRepository
     public async Task<PagedResult<Review>> GetPagedWithReplyAsync(int page, int pageSize, CancellationToken cancellationToken = default)
         => await ToPagedAsync(QueryWithReply(), page, pageSize, cancellationToken);
 
+    public async Task<PagedResult<Review>> GetPagedWithReplyFilteredAsync(int page, int pageSize, short? rating, bool? isVisible, Guid? boothId, string? keyword, CancellationToken cancellationToken = default)
+    {
+        var query = QueryWithReply();
+        if (rating.HasValue)
+            query = query.Where(review => review.Rating == rating.Value);
+        if (isVisible.HasValue)
+            query = query.Where(review => review.IsVisible == isVisible.Value);
+        if (boothId.HasValue)
+            query = query.Where(review => review.BoothId == boothId.Value);
+        if (!string.IsNullOrWhiteSpace(keyword))
+        {
+            var pattern = $"%{keyword.Trim()}%";
+            query = query.Where(review =>
+                EF.Functions.ILike(review.Content ?? string.Empty, pattern) ||
+                EF.Functions.ILike(review.Customer.FullName, pattern) ||
+                EF.Functions.ILike(review.Customer.Email, pattern) ||
+                EF.Functions.ILike(review.Booth.BoothName, pattern));
+        }
+        return await ToPagedAsync(query, page, pageSize, cancellationToken);
+    }
+
     public async Task<PagedResult<Review>> GetPagedByCustomerWithReplyAsync(Guid customerId, int page, int pageSize, CancellationToken cancellationToken = default)
         => await ToPagedAsync(QueryWithReply().Where(review => review.CustomerId == customerId), page, pageSize, cancellationToken);
 
@@ -77,6 +98,9 @@ public class ReviewRepository : GenericRepository<Review>, IReviewRepository
     private IQueryable<Review> QueryWithReply()
         => _dbSet
             .Include(review => review.ReviewReply)
+            .Include(review => review.Customer)
+            .Include(review => review.Booth)
+            .Include(review => review.Order)
             .AsSplitQuery();
 
     private static async Task<PagedResult<Review>> ToPagedAsync(

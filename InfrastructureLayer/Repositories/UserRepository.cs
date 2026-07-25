@@ -32,7 +32,6 @@ public class UserRepository : GenericRepository<User>, IUserRepository
 
     public async Task<bool> UserExistsAsync(Guid userId)
         => await _dbSet.AnyAsync(u => u.Id == userId);
-
     public async Task BeginTransactionAsync()
     {
         if (_context.Database.CurrentTransaction == null)
@@ -78,5 +77,20 @@ public class UserRepository : GenericRepository<User>, IUserRepository
     public async Task ReloadAsync(User entity)
     {
         await _context.Entry(entity).ReloadAsync();
+    }
+    public async Task<Dictionary<Guid, string>> GetUserNamesByIdsAsync(
+        List<Guid> userIds,
+        CancellationToken cancellationToken = default)
+    {
+        if (userIds == null || userIds.Count == 0)
+            return new Dictionary<Guid, string>();
+
+        var names = await _dbSet
+            .AsNoTracking()
+            .Where(u => userIds.Contains(u.Id))
+            .Select(u => new { u.Id, u.FullName })
+            .ToDictionaryAsync(x => x.Id, x => x.FullName ?? string.Empty, cancellationToken);
+
+        return names;
     }
 }

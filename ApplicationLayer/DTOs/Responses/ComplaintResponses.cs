@@ -16,3 +16,11 @@ public class ComplaintResponse
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }
+
+public class ComplaintCountsResponse
+{
+    public int Pending { get; set; }
+    public int Resolved { get; set; }
+    public int Rejected { get; set; }
+    public int Total { get; set; }
+}

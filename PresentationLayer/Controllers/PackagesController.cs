@@ -22,6 +22,10 @@ public class PackagesController : ControllerBase
     public async Task<IActionResult> GetAll([FromQuery] PaginationReq pagination, CancellationToken cancellationToken = default)
         => Ok(await _service.GetAllAsync(pagination, cancellationToken));
 
+    [HttpGet("templates")]
+    public IActionResult GetTemplates()
+        => Ok(_service.GetTemplates());
+
     [HttpGet("{packageId:guid}")]
     public async Task<IActionResult> Get(Guid packageId, CancellationToken cancellationToken)
         => Ok(await _service.GetByIdAsync(packageId, cancellationToken));
@@ -40,4 +44,5 @@ public class PackagesController : ControllerBase
     [HttpDelete("{packageId:guid}")]
     public async Task<IActionResult> Delete(Guid packageId, CancellationToken cancellationToken)
         => Ok(await _service.DeleteAsync(packageId, cancellationToken));
+
 }

@@ -1,67 +1,62 @@
-using ApplicationLayer.Services.Orders;
+using ApplicationLayer.Services.PayOS;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore.Metadata.Conventions;
+using Microsoft.Extensions.Logging;
 using PayOS.Models.Webhooks;
-
-// For more information on enabling Web API for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
+using System;
+using System.Threading.Tasks;
 
 namespace PresentationLayer.Controllers
 {
-    [Route("api/[controller]")]
+    [Route("api/webhook")]
     [ApiController]
+    [Obsolete("Use /api/webhooks/payos instead. This endpoint is kept for backward compatibility.")]
     public class WebhookController : ControllerBase
     {
-        private readonly IOrderService _orderService;
+        private readonly IPayOSWebhookDispatcher _dispatcher;
+        private readonly ILogger<WebhookController> _logger;
 
-        public WebhookController(IOrderService orderService)
+        public WebhookController(IPayOSWebhookDispatcher dispatcher, ILogger<WebhookController> logger)
         {
-            _orderService = orderService;
+            _dispatcher = dispatcher;
+            _logger = logger;
         }
-        // GET: api/<WebhookController>
-        //[HttpGet]
-        //public IEnumerable<string> Get()
-        //{
-        //    return new string[] { "value1", "value2" };
-        //}
 
-        //// GET api/<WebhookController>/5
-        //[HttpGet("{id}")]
-        //public string Get(int id)
-        //{
-        //    return "value";
-        //}
-
-        // POST api/<WebhookController>
         [HttpPost("payos")]
-        public async Task<IActionResult> ReceivePayOSWebhook([FromBody] Webhook bodyReceived)
+        public async Task<IActionResult> ReceivePayOSWebhook([FromBody] Webhook body)
         {
-            if (bodyReceived == null)
+            var result = await _dispatcher.DispatchAsync(body);
+
+            switch (result)
             {
-                return BadRequest();
+                case WebhookDispatchResult.InvalidSignature:
+                    _logger.LogWarning("PayOS webhook (legacy): invalid signature.");
+                    return BadRequest(new { error = -1, message = "Invalid webhook signature." });
+
+                case WebhookDispatchResult.NotFound:
+                    _logger.LogWarning("PayOS webhook (legacy): order code not found or unknown prefix.");
+                    return Ok(new { error = 0, message = "Webhook acknowledged but no matching record found." });
+
+                case WebhookDispatchResult.NotSuccessful:
+                    _logger.LogInformation("PayOS webhook (legacy): payment not successful.");
+                    return Ok(new { error = 0, message = "Webhook acknowledged but payment not successful." });
+
+                case WebhookDispatchResult.AlreadyProcessed:
+                    _logger.LogInformation("PayOS webhook (legacy): already processed, skipping.");
+                    return Ok(new { error = 0, message = "Webhook already processed." });
+
+                case WebhookDispatchResult.Conflict:
+                    _logger.LogCritical("PayOS webhook (legacy): conflict -- order code {OrderCode} exists in multiple domains. Manual resolution required.", body?.Data?.OrderCode);
+                    return Ok(new { error = 0, message = "Webhook acknowledged. Conflict detected -- manual resolution required." });
+
+                case WebhookDispatchResult.SubscriptionHandled:
+                case WebhookDispatchResult.OrderHandled:
+                    _logger.LogInformation("PayOS webhook (legacy): handled successfully ({Result}).", result);
+                    return Ok(new { error = 0, message = "Webhook handled successfully." });
+
+                default:
+                    _logger.LogWarning("PayOS webhook (legacy): unknown result {Result}.", result);
+                    return Ok(new { error = 0, message = "Webhook acknowledged." });
             }
-
-            // Truyền nguyên cái object body nhận được xuống tầng Application để xác thực và xử lý
-            bool isSuccess = await _orderService.ProcessPaymentWebhookAsync(bodyReceived);
-
-            if (!isSuccess)
-            {
-                return BadRequest(new { error = -1, message = "Xác thực thất bại hoặc đơn hàng không hợp lệ." });
-            }
-
-            // Trả về kết quả báo cho PayOS biết Server đã xử lý xong, đừng bắn lại nữa
-            return Ok(new { error = 0, message = "Webhook handled successfully" });
         }
-
-        // PUT api/<WebhookController>/5
-        //[HttpPut("{id}")]
-        //public void Put(int id, [FromBody] string value)
-        //{
-        //}
-
-        //// DELETE api/<WebhookController>/5
-        //[HttpDelete("{id}")]
-        //public void Delete(int id)
-        //{
-        //}
     }
 }

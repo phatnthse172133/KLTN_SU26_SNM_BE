@@ -27,3 +27,13 @@ public class UpsertReviewReplyRequest
     [Required, StringLength(2000)]
     public string Content { get; set; } = string.Empty;
 }
+
+public class AdminReviewQueryRequest
+{
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 10;
+    public short? Rating { get; set; }
+    public bool? IsVisible { get; set; }
+    public Guid? BoothId { get; set; }
+    public string? Keyword { get; set; }
+}

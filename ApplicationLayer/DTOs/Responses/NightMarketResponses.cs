@@ -3,6 +3,7 @@ namespace ApplicationLayer.DTOs.Responses;
 public class NightMarketResponse
 {
     public Guid Id { get; set; }
+    public Guid? MarketOwnerId { get; set; }
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
     public string Address { get; set; } = string.Empty;
@@ -17,6 +18,13 @@ public class NightMarketResponse
     public string Status { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+}
+
+public class NightMarketOptionDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
 }
 
 public class NightMarketNavigationInfoResponse

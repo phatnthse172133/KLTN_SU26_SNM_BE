@@ -24,6 +24,23 @@ public class RegisterDeviceTokenRequest
     public string? DeviceId { get; set; }
 }
 
+public class AdminNotificationListRequest : PaginationReq
+{
+    public string? Keyword { get; set; }
+
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public NotificationTarget? Target { get; set; }
+
+    public string? Role { get; set; }
+
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public NotificationType? Type { get; set; }
+
+    public DateTime? FromDate { get; set; }
+
+    public DateTime? ToDate { get; set; }
+}
+
 public class AdminCreateNotificationRequest
 {
     [JsonConverter(typeof(JsonStringEnumConverter))]
@@ -34,22 +51,9 @@ public class AdminCreateNotificationRequest
     [StringLength(50)]
     public string? Role { get; set; }
 
-    [JsonConverter(typeof(JsonStringEnumConverter))]
-    public NotificationType Type { get; set; } = NotificationType.SystemAnnouncement;
-
     [Required, StringLength(200)]
     public string Title { get; set; } = string.Empty;
 
     [Required, StringLength(2000)]
     public string Content { get; set; } = string.Empty;
-
-    public Guid? BoothId { get; set; }
-
-    [StringLength(100)]
-    public string? ReferenceType { get; set; }
-
-    public Guid? ReferenceId { get; set; }
-
-    [StringLength(8000)]
-    public string? DataJson { get; set; }
 }

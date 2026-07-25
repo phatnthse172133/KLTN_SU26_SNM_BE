@@ -13,6 +13,9 @@ using System.Security.Claims;
 using System.Text;
 using static DomainLayer.Enums.GeneralEnum;
 using ApplicationLayer.Services.Notifications;
+using ApplicationLayer.Services.Chats;
+using ApplicationLayer.Services.Storage;
+using InfrastructureLayer.Storage;
 using PresentationLayer.Hubs;
 using PayOS;
 using InfrastructureLayer.Data.Seeders;
@@ -39,12 +42,12 @@ if (string.IsNullOrWhiteSpace(jwtSettings.SecretKey) || jwtSettings.SecretKey.Le
 
 var payOSSettings = builder.Configuration.GetSection("PayOS");
 var payOSClient = new PayOSClient(
-    payOSSettings["ClientId"],
-    payOSSettings["ApiKey"],
-    payOSSettings["ChecksumKey"]
+    payOSSettings["ClientId"] ?? string.Empty,
+    payOSSettings["ApiKey"] ?? string.Empty,
+    payOSSettings["ChecksumKey"] ?? string.Empty
 );
 
-builder.Services.AddSingleton(payOSClient); // Đăng ký PayOS vào hệ thống
+builder.Services.AddSingleton(payOSClient); // ÄÄƒng kÃ½ PayOS vÃ o há»‡ thá»‘ng
 
 //await payOSClient.Webhooks.ConfirmAsync("https://your-url.com/payos-webhook");
 
@@ -56,6 +59,10 @@ builder.Services.AddCors(options =>
     {
         policy
             .WithOrigins(
+                "http://localhost:3000",
+                "http://127.0.0.1:3000",
+                "http://localhost:3001",
+                "http://127.0.0.1:3001",
                 "http://localhost:8081",
                 "http://localhost:8082",
                 "http://localhost:8083",
@@ -89,6 +96,7 @@ builder.Services.AddControllers(options =>
                     .Where(message => !string.IsNullOrWhiteSpace(message)));
             var response = ApiResponse<ErrorResponse>.Failure(
                 "Request validation failed.",
+                "VALIDATION_ERROR",
                 new ErrorResponse
                 {
                     TraceId = context.HttpContext.TraceIdentifier,
@@ -131,10 +139,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             OnTokenValidated = async context =>
             {
                 var subject = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
-                if (!Guid.TryParse(subject, out var userId)) 
-                { 
-                    context.Fail("Invalid user claim."); 
-                    return; 
+                if (!Guid.TryParse(subject, out var userId))
+                {
+                    context.Fail("Invalid user claim.");
+                    return;
                 }
                 var dbContext = context.HttpContext.RequestServices.GetRequiredService<SNMDbContext>();
                 var isActive = await dbContext.Users.AnyAsync(user => user.Id == userId && user.Status == UserStatus.Active);
@@ -149,6 +157,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 await context.Response.WriteAsJsonAsync(
                     ApiResponse<ErrorResponse>.Failure(
                         "Authentication is required.",
+                        "UNAUTHORIZED",
                         new ErrorResponse
                         {
                             TraceId = context.HttpContext.TraceIdentifier,
@@ -162,6 +171,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 await context.Response.WriteAsJsonAsync(
                     ApiResponse<ErrorResponse>.Failure(
                         "You do not have permission to access this resource.",
+                        "FORBIDDEN",
                         new ErrorResponse
                         {
                             TraceId = context.HttpContext.TraceIdentifier,
@@ -176,7 +186,7 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowFrontend",
         policy =>
         {
-            policy.WithOrigins("http://localhost:3000")
+            policy.WithOrigins("http://localhost:3000", "http://localhost:3001")
                   .AllowAnyHeader()
                   .AllowAnyMethod()
                   .AllowCredentials();
@@ -186,42 +196,46 @@ builder.Services.AddAuthorization();
 builder.Services.AddSignalR();
 builder.Services.AddScoped<IRealtimeNotificationPublisher, SignalRNotificationPublisher>();
 builder.Services.AddScoped<ApplicationLayer.Services.Chats.IRealtimeChatPublisher, SignalRChatPublisher>();
+builder.Services.AddScoped<IFileStorageService, LocalFileStorageService>();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
-    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme 
-    { 
-        Name = "Authorization", 
-        Type = SecuritySchemeType.Http, 
-        Scheme = "bearer", 
-        BearerFormat = "JWT", 
-        In = ParameterLocation.Header 
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header
     });
     options.AddSecurityRequirement(new OpenApiSecurityRequirement { { new OpenApiSecurityScheme { Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" } }, Array.Empty<string>() } });
 });
 
 var app = builder.Build();
 
-await AISeedData.SeedAsync(app.Services);
+// Demo data is opt-in. A normal application start must never mutate a shared database.
+if (string.Equals(builder.Configuration["SeedDemoData"], "true", StringComparison.OrdinalIgnoreCase))
+{
+    await AISeedData.SeedAsync(app.Services);
+}
 
-if (app.Environment.IsDevelopment()) 
+if (app.Environment.IsDevelopment())
 {
     app.Services
         .GetRequiredService<AutoMapper.IMapper>()
         .ConfigurationProvider
         .AssertConfigurationIsValid();
-    app.UseSwagger(); 
-    app.UseSwaggerUI(); 
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
-if (!app.Environment.IsDevelopment())
-{
-    app.UseHttpsRedirection();
-}
+app.UseHttpsRedirection();
 
 app.UseCors(CustomerAppCorsPolicy);
+
+app.UseStaticFiles();
 
 app.UseAuthentication();
 

@@ -1,9 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using DomainLayer.Common;
 using System.Linq.Expressions;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace DomainLayer.InterfaceRepository
@@ -16,7 +15,7 @@ namespace DomainLayer.InterfaceRepository
         Task<T?> FirstOrDefaultAsync(Expression<Func<T, bool>> predicate);
         Task<bool> AnyAsync(Expression<Func<T, bool>> predicate);
         Task<int> CountAsync(Expression<Func<T, bool>>? predicate = null);
-        
+
         // Pagination
         Task<PagedResult<T>> GetPagedAsync(
             Expression<Func<T, bool>>? predicate,
@@ -33,5 +32,6 @@ namespace DomainLayer.InterfaceRepository
         void Delete(T entity);
         void DeleteRange(IEnumerable<T> entities);
         Task<int> SaveChangesAsync();
+
     }
 }

@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.Helppers;
 using ApplicationLayer.Services.NightMarkets;
@@ -11,16 +12,27 @@ namespace PresentationLayer.Controllers;
 public class NightMarketsController : ControllerBase
 {
     private readonly INightMarketService _service;
+
     public NightMarketsController(INightMarketService service)
     {
         _service = service;
     }
+
+    private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+    private string CurrentUserRole => User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
 
     [AllowAnonymous]
     [HttpGet]
     public async Task<IActionResult> GetAll([FromQuery] NightMarketListRequest request, CancellationToken cancellationToken = default)
     {
         return Ok(await _service.GetAllAsync(request, cancellationToken));
+    }
+
+    [AllowAnonymous]
+    [HttpGet("options")]
+    public async Task<IActionResult> GetOptions(CancellationToken cancellationToken)
+    {
+        return Ok(await _service.GetOptionsAsync(cancellationToken));
     }
 
     [AllowAnonymous]
@@ -31,40 +43,54 @@ public class NightMarketsController : ControllerBase
         return response.Success ? Ok(response) : NotFound(response);
     }
 
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "MarketOwner")]
+    [HttpGet("mine")]
+    public async Task<IActionResult> GetMine(CancellationToken cancellationToken)
+    {
+        return Ok(await _service.GetMineAsync(CurrentUserId, cancellationToken));
+    }
+
+    [Authorize(Roles = "Admin,MarketOwner")]
     [HttpPost]
     public async Task<IActionResult> Create(CreateNightMarketRequest request, CancellationToken cancellationToken)
     {
-        var response = await _service.CreateAsync(request, cancellationToken);
+        var response = await _service.CreateAsync(request, CurrentUserId, cancellationToken);
         return response.Success ? CreatedAtAction(nameof(Get), new { id = response.Data!.Id }, response) : BadRequest(response);
     }
 
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,MarketOwner")]
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, UpdateNightMarketRequest request, CancellationToken cancellationToken)
     {
-        var response = await _service.UpdateAsync(id, request, cancellationToken);
+        var response = await _service.UpdateAsync(id, request, CurrentUserId, CurrentUserRole, cancellationToken);
         return response.Success ? Ok(response) : NotFound(response);
     }
 
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,MarketOwner")]
     [HttpPut("{id:guid}/geographic-location")]
     public async Task<IActionResult> UpdateGeographicLocation(Guid id, UpdateNightMarketGeographicLocationRequest request, CancellationToken cancellationToken)
     {
-        return Ok(await _service.UpdateGeographicLocationAsync(id, request, cancellationToken));
+        return Ok(await _service.UpdateGeographicLocationAsync(id, request, CurrentUserId, CurrentUserRole, cancellationToken));
     }
 
     [AllowAnonymous]
-    [HttpGet("{id:guid}/navigation-info")]
+    [HttpGet("{id:guid}/navigation")]
     public async Task<IActionResult> GetNavigationInfo(Guid id, CancellationToken cancellationToken)
     {
         return Ok(await _service.GetNavigationInfoAsync(id, cancellationToken));
     }
 
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,MarketOwner")]
+    [HttpGet("{id:guid}/deletion-impact")]
+    public async Task<IActionResult> GetDeletionImpact(Guid id, CancellationToken cancellationToken)
+    {
+        return Ok(await _service.GetDeletionImpactAsync(id, CurrentUserId, CurrentUserRole, cancellationToken));
+    }
+
+    [Authorize(Roles = "Admin,MarketOwner")]
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
-        return Ok(await _service.DeleteAsync(id, cancellationToken));
+        return Ok(await _service.DeleteAsync(id, CurrentUserId, CurrentUserRole, cancellationToken));
     }
 }

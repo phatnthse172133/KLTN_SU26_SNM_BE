@@ -17,4 +17,5 @@ public interface INightMarketRepository : IGenericRepository<NightMarket>
 
     Task<NightMarket?> GetActiveByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<bool> ActiveNameExistsAsync(string name, Guid? excludeId = null, CancellationToken cancellationToken = default);
+    Task<List<NightMarket>> GetByOwnerIdAsync(Guid marketOwnerId, CancellationToken cancellationToken = default);
 }

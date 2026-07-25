@@ -21,6 +21,7 @@ public class EnumValidationFilter : IActionFilter
 
         context.Result = new BadRequestObjectResult(ApiResponse<ErrorResponse>.Failure(
             "Request validation failed.",
+            "VALIDATION_ERROR",
             new ErrorResponse
             {
                 TraceId = context.HttpContext.TraceIdentifier,

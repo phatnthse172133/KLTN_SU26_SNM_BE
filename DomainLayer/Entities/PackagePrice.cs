@@ -5,7 +5,7 @@ using DomainLayer.Common;
 namespace DomainLayer.Entities;
 
 
-// Bảng giá theo thời điểm của gói dịch vụ
+// Báº£ng giÃ¡ theo thá»i Ä‘iá»ƒm cá»§a gÃ³i dá»‹ch vá»¥
 public partial class PackagePrice : ISoftDelete
 {
     public Guid Id { get; set; }
@@ -13,6 +13,8 @@ public partial class PackagePrice : ISoftDelete
     public Guid PackageId { get; set; }
 
     public decimal Price { get; set; }
+
+    public int DurationDays { get; set; }
 
     public DateTime? StartDate { get; set; }
 

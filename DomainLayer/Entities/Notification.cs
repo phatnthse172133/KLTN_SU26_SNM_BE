@@ -1,18 +1,28 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using DomainLayer.Common;
 using static DomainLayer.Enums.GeneralEnum;
 
 namespace DomainLayer.Entities;
 
-// Thông báo đẩy (push notification qua FCM) cho người dùng
+// ThÃƒÆ’Ã‚Â´ng bÃƒÆ’Ã‚Â¡o Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚ÂºÃ‚Â©y (push notification qua FCM) cho ngÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã‚Âi dÃƒÆ’Ã‚Â¹ng
 public partial class Notification : ISoftDelete
 {
     public Guid Id { get; set; }
 
     public Guid UserId { get; set; }
 
-    // NULL khi thông báo không gắn với gian hàng cụ thể (VD: thông báo hệ thống)
+    public Guid? BatchId { get; set; }
+
+    public Guid? CreatedByUserId { get; set; }
+
+    public NotificationTarget? Target { get; set; }
+
+    [MaxLength(50)]
+    public string? TargetRole { get; set; }
+
+    // NULL khi thÃƒÆ’Ã‚Â´ng bÃƒÆ’Ã‚Â¡o khÃƒÆ’Ã‚Â´ng gÃƒÂ¡Ã‚ÂºÃ‚Â¯n vÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºi gian hÃƒÆ’Ã‚Â ng cÃƒÂ¡Ã‚Â»Ã‚Â¥ thÃƒÂ¡Ã‚Â»Ã†â€™ (VD: thÃƒÆ’Ã‚Â´ng bÃƒÆ’Ã‚Â¡o hÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡ thÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœng)
     public Guid? BoothId { get; set; }
 
     public NotificationType Type { get; set; }

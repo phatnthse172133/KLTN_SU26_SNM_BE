@@ -26,4 +26,10 @@ public class AppException : Exception
 
     public static AppException Conflict(string message, string errorCode = "CONFLICT")
         => new(message, 409, errorCode);
+
+    public static AppException ServiceUnavailable(string message, string errorCode = "SERVICE_UNAVAILABLE")
+        => new(message, 503, errorCode);
+
+    public static AppException PayloadTooLarge(string message, string errorCode = "PAYLOAD_TOO_LARGE")
+        => new(message, 413, errorCode);
 }

@@ -26,6 +26,12 @@ using ApplicationLayer.Services.Carts;
 using ApplicationLayer.Services.Promotions;
 using ApplicationLayer.Services.Notifications;
 using ApplicationLayer.Services.Chats;
+using ApplicationLayer.Services.Subscriptions;
+using ApplicationLayer.Services.PayOS;
+using ApplicationLayer.Configuration;
+using ApplicationLayer.Services.Dashboard;
+using ApplicationLayer.Services.MarketOwnerDashboard;
+using ApplicationLayer.Services.AdminModeration;
 using ApplicationLayer.Mappings;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceCore.Email;
@@ -58,6 +64,7 @@ namespace InfrastructureLayer
 
             // Register Repositories
             services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
+            services.AddScoped<IUnitOfWork, UnitOfWork>();
             services.AddScoped<IBoothRepository, BoothRepository>();
             services.AddScoped<IBoothRegistrationRepository, BoothRegistrationRepository>();
             services.AddScoped<IFoodCategoryRepository, FoodCategoryRepository>();
@@ -73,6 +80,8 @@ namespace InfrastructureLayer
             services.AddScoped<ILayoutNodeRepository, LayoutNodeRepository>();
             services.AddScoped<ILayoutEdgeRepository, LayoutEdgeRepository>();
             services.AddScoped<IBoothLocationRepository, BoothLocationRepository>();
+            services.AddScoped<ISubscriptionRepository, SubscriptionRepository>();
+            services.AddScoped<IDashboardRepository, DashboardRepository>();
             services.AddScoped<ICartRepository, CartRepository>();
             services.AddScoped<ICartItemRepository, CartItemRepository>();
             services.AddScoped<IPromotionRepository, PromotionRepository>();
@@ -80,6 +89,7 @@ namespace InfrastructureLayer
             services.AddScoped<INotificationRepository, NotificationRepository>();
             services.AddScoped<IConversationRepository, ConversationRepository>();
             services.AddScoped<IMessageRepository, MessageRepository>();
+            services.AddScoped<IMarketOwnerDashboardRepository, MarketOwnerDashboardRepository>();
             services.AddScoped<IUserDeviceTokenRepository, UserDeviceTokenRepository>();
             services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<IPaymentMethodRepository, PaymentMethodRepository>();
@@ -93,7 +103,7 @@ namespace InfrastructureLayer
             services.AddHttpClient<IGoogleTokenValidator, GoogleTokenValidator>();
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<IAccountService, AccountService>();
-            
+
             services.AddScoped<IBoothRegistrationService, BoothRegistrationService>();
             services.AddScoped<IBoothService, BoothService>();
 
@@ -101,7 +111,7 @@ namespace InfrastructureLayer
 
             services.AddScoped<IFoodCategoryService, FoodCategoryService>();
             services.AddScoped<IMenuService, MenuService>();
-            
+
             services.AddScoped<INightMarketService, NightMarketService>();
             services.AddScoped<IComplaintService, ComplaintService>();
             services.AddScoped<IReviewService, ReviewService>();
@@ -113,6 +123,13 @@ namespace InfrastructureLayer
             services.AddScoped<IBoothLocationService, BoothLocationService>();
             services.AddScoped<IMapNavigationService, MapNavigationService>();
             services.AddScoped<IPackageService, PackageService>();
+            services.AddScoped<ISubscriptionService, SubscriptionService>();
+            services.AddScoped<IOwnerSubscriptionService, OwnerSubscriptionService>();
+            services.AddScoped<IPackagePolicyService, PackagePolicyService>();
+            services.AddScoped<IPayOSWebhookService, PayOSWebhookService>();
+            services.AddScoped<ISubscriptionEntitlementService, SubscriptionEntitlementService>();
+            services.AddScoped<IDashboardService, DashboardService>();
+            services.AddScoped<IMarketOwnerDashboardService, MarketOwnerDashboardService>();
             services.AddScoped<IPriceService, PriceService>();
             services.AddScoped<ICartService, CartService>();
             services.AddScoped<IPromotionService, PromotionService>();
@@ -131,12 +148,24 @@ namespace InfrastructureLayer
                 configuration.GetSection(FirebaseSettings.SectionName));
             services.AddHttpClient<IPushNotificationService, FirebasePushNotificationService>();
             services.AddScoped<IPaymentMethodService, PaymentMethodService>();
+
+            // PayOS configuration and service (uses PayOSClient singleton registered in Program.cs)
+            services.Configure<PayOSSettings>(configuration.GetSection(PayOSSettings.SectionName));
+            services.AddScoped<IPayOSService, PayOSService>();
+            services.AddScoped<DomainLayer.InterfaceRepository.ISequenceRepository, SequenceRepository>();
+            services.AddScoped<IPayOSOrderCodeGenerator, PayOSOrderCodeGenerator>();
+            services.AddScoped<IPayOSWebhookDispatcher, PayOSWebhookDispatcher>();
+
+            services.AddScoped<IModerationRepository, ModerationRepository>();
+            services.AddScoped<IAdminModerationService, AdminModerationService>();
+
             services.AddAutoMapper(_ => { }, typeof(MappingProfile).Assembly);
 
             // Add HttpContextAccessor
             services.AddHttpContextAccessor();
 
             services.AddHostedService<EmailOutboxWorker>();
+            services.AddHostedService<SubscriptionExpiryWorker>();
 
             return services;
         }

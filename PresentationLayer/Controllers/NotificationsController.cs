@@ -63,14 +63,15 @@ public class NotificationsController : ControllerBase
             cancellationToken));
 
     [HttpDelete("{notificationId:guid}")]
-    public async Task<IActionResult> Delete(
+    public IActionResult Delete(
         Guid notificationId,
         CancellationToken cancellationToken)
     {
-        await _service.DeleteAsync(
-            CurrentUserId,
-            notificationId,
-            cancellationToken);
-        return NoContent();
+        return StatusCode(StatusCodes.Status405MethodNotAllowed, new
+        {
+            success = false,
+            message = "Notifications cannot be deleted.",
+            errorCode = "NOTIFICATION_DELETE_NOT_ALLOWED"
+        });
     }
 }

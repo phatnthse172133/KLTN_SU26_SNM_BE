@@ -202,7 +202,7 @@ namespace TestingLayer
             var targetId = Guid.NewGuid();
             var request = new ChangeUserStatusRequest { Status = UserStatus.Inactive, Reason = "Valid reason length here" };
 
-            _mockUsers.Setup(repo => repo.GetByIdAsync(targetId)).ReturnsAsync((User)null);
+            _mockUsers.Setup(repo => repo.GetByIdAsync(targetId)).ReturnsAsync((User)null!);
 
             var ex = await Assert.ThrowsAsync<AppException>(() =>
                 _accountService.ChangeUserStatusAsync(adminId, targetId, request));
@@ -219,7 +219,7 @@ namespace TestingLayer
         {
             var adminId = Guid.NewGuid();
             var targetId = Guid.NewGuid();
-            var request = new ChangeUserStatusRequest { Status = UserStatus.Inactive, Reason = reason };
+            var request = new ChangeUserStatusRequest { Status = UserStatus.Inactive, Reason = reason! };
 
             var ex = await Assert.ThrowsAsync<AppException>(() =>
                 _accountService.ChangeUserStatusAsync(adminId, targetId, request));

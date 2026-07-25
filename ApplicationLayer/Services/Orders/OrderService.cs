@@ -63,11 +63,14 @@ namespace ApplicationLayer.Services.Orders
                 finalCustomerId = Guid.Parse(walkInIdString);
             }
 
+            if (!finalCustomerId.HasValue)
+                return ApiResponse<OrderResponseDto>.Failure("CustomerId is required for orders created by customers.", "CUSTOMER_ID_REQUIRED");
+
             // 2. Khá»Ÿi táº¡o Ä‘á»‘i tÆ°á»£ng Order chÃ­nh
             var order = new Order
             {
                 Id = Guid.NewGuid(),
-                CustomerId = (Guid) finalCustomerId,
+                CustomerId = finalCustomerId.Value,
                 BoothOwnerId = dto.BoothOwnerId,
                 OrderCode = uniqueOrderCode,
                 Note = dto.Note,
@@ -746,7 +749,7 @@ namespace ApplicationLayer.Services.Orders
             // Náº¿u lÃ  ID khÃ¡ch vÃ£ng lai (toÃ n sá»‘ 0) thÃ¬ bá» qua khÃ´ng cáº§n báº¯n
             var walkInId = Guid.Parse(_config["SystemSettings:WalkInCustomerId"] ?? "00000000-0000-0000-0000-000000000001");
 
-            if (order.CustomerId != null && order.CustomerId != walkInId)
+            if (order.CustomerId != walkInId)
             {
                 string title = "";
                 string content = "";

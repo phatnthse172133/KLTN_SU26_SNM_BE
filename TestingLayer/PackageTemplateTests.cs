@@ -331,6 +331,7 @@ public class PackageTemplateTests
     {
         var result = _service.GetTemplates();
 
+        Assert.NotNull(result.Data);
         Assert.Equal(5, result.Data.Count);
         Assert.Contains(result.Data, t => t.Code == "MARKET_BASIC");
         Assert.Contains(result.Data, t => t.Code == "MARKET_PRO");
@@ -343,6 +344,7 @@ public class PackageTemplateTests
     public void GetTemplates_MarketBasic_HasCorrectFeatures()
     {
         var result = _service.GetTemplates();
+        Assert.NotNull(result.Data);
         var basic = result.Data.First(t => t.Code == "MARKET_BASIC");
 
         Assert.Equal(PackageType.Market, basic.PackageType);
@@ -354,6 +356,7 @@ public class PackageTemplateTests
     public void GetTemplates_MarketPro_HasMoreFeaturesThanBasic()
     {
         var result = _service.GetTemplates();
+        Assert.NotNull(result.Data);
         var basic = result.Data.First(t => t.Code == "MARKET_BASIC");
         var pro = result.Data.First(t => t.Code == "MARKET_PRO");
 

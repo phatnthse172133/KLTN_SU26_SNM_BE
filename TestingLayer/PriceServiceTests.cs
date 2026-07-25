@@ -54,7 +54,7 @@ public class PriceServiceTests
                      .ReturnsAsync(package);
 
         _packagePricesMock.Setup(x => x.FirstOrDefaultAsync(It.IsAny<Expression<Func<PackagePrice, bool>>>()))
-                          .ReturnsAsync((PackagePrice)null);
+                          .ReturnsAsync((PackagePrice)null!);
 
         var request = new CreatePriceRequest
         {
@@ -85,7 +85,7 @@ public class PriceServiceTests
                      .ReturnsAsync(package);
 
         _packagePricesMock.Setup(x => x.FirstOrDefaultAsync(It.IsAny<Expression<Func<PackagePrice, bool>>>()))
-                          .ReturnsAsync((PackagePrice)null);
+                          .ReturnsAsync((PackagePrice)null!);
 
         // Requesting promo for duration 15, but there's no regular price for 15
         var request = new CreatePriceRequest
@@ -112,7 +112,7 @@ public class PriceServiceTests
 
         // No overlapping promos, and base price falls back to package.Price since duration = 30
         _packagePricesMock.Setup(x => x.FirstOrDefaultAsync(It.IsAny<Expression<Func<PackagePrice, bool>>>()))
-                          .ReturnsAsync((PackagePrice)null);
+                          .ReturnsAsync((PackagePrice)null!);
 
         var request = new CreatePriceRequest
         {

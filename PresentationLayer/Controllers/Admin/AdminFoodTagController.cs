@@ -32,37 +32,5 @@ namespace PresentationLayer.Controllers.Admin
             return Ok(result);
         }
 
-        [HttpPost]
-        public async Task<IActionResult> CreateTag([FromBody] CreateFoodTagRequest request, CancellationToken cancellationToken)
-        {
-            var result = await _foodTagService.CreateAsync(request, cancellationToken);
-            if (!result.Success)
-            {
-                return BadRequest(result);
-            }
-            return Ok(result);
-        }
-
-        [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateTag(Guid id, [FromBody] UpdateFoodTagRequest request, CancellationToken cancellationToken)
-        {
-            var result = await _foodTagService.UpdateAsync(id, request, cancellationToken);
-            if (!result.Success)
-            {
-                return BadRequest(result);
-            }
-            return Ok(result);
-        }
-
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteTag(Guid id, CancellationToken cancellationToken)
-        {
-            var result = await _foodTagService.DeleteAsync(id, cancellationToken);
-            if (!result.Success)
-            {
-                return BadRequest(result);
-            }
-            return Ok(result);
-        }
     }
 }

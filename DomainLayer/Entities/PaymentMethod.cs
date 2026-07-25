@@ -15,12 +15,12 @@ namespace DomainLayer.Entities
 
         // Lưu các thông tin mã định danh kết nối (ví dụ: Token từ cổng thanh toán trả về)
         // Tuyệt đối KHÔNG lưu số thẻ hay mật khẩu của khách để tránh vi phạm bảo mật
-        public string PaymentToken { get; set; }
+        public string PaymentToken { get; set; } = string.Empty;
 
         public bool IsDefault { get; set; } = false; // Có phải là mặc định không
 
         // Khóa ngoại liên kết tới bảng User
         public virtual Guid UserId { get; set; }
-        public virtual User User { get; set; } // Navigation property
+        public virtual User User { get; set; } = null!; // Navigation property
     }
 }

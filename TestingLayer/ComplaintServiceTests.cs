@@ -440,6 +440,7 @@ namespace TestingLayer
             var result = await _service.GetCountsAsync();
 
             Assert.True(result.Success);
+            Assert.NotNull(result.Data);
             Assert.Equal(3, result.Data.Pending);
             Assert.Equal(5, result.Data.Resolved);
             Assert.Equal(2, result.Data.Rejected);

@@ -10,9 +10,11 @@ namespace DomainLayer.Enums
     {
         public enum UserStatus
         {
-            PendingVerification = 0, // vá»«a Ä‘Äƒng kÃ½
-            Active = 1,              // hoáº¡t Ä‘á»™ng
-            Inactive = 2             // bá»‹ Admin khÃ³a
+            PendingVerification = 0, // vừa đăng ký
+            Active = 1,              // hoạt động
+            Suspended = 2,           // khóa tạm thời
+            Banned = 3,              // khóa vĩnh viễn
+            Inactive = 4             // tự ngưng sử dụng
         }
 
         public enum BoothRegistrationStatus
@@ -220,7 +222,7 @@ namespace DomainLayer.Enums
             ComplaintResolved = 25,
             ComplaintRejected = 26,
             SubscriptionActivated = 27,
-            SubscriptionExpiring = 28,
+            SubscriptionRejected = 28,
             SubscriptionExpired = 29,
             PaymentSucceeded = 30,
             PaymentFailed = 31,
@@ -228,8 +230,7 @@ namespace DomainLayer.Enums
             AccountSuspended = 33,
             BoothSuspended = 34,
             AccountDeactivated = 35,
-            AccountReactivated = 36,
-            SubscriptionRejected = 37
+            AccountReactivated = 36
         }
 
         public enum DevicePlatform

@@ -1414,6 +1414,48 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.SentAt).HasColumnType("timestamp with time zone");
             });
 
+            modelBuilder.Entity<UserStatusHistory>(entity =>
+            {
+                entity.ToTable("UserStatusHistories");
+                entity.HasKey(e => e.Id);
+
+                entity.Property(e => e.UserId).IsRequired();
+                entity.Property(e => e.ChangedByAdminId).IsRequired();
+                entity.Property(e => e.PreviousStatus)
+                    .IsRequired()
+                    .HasConversion<string>()
+                    .HasMaxLength(20);
+                entity.Property(e => e.NewStatus)
+                    .IsRequired()
+                    .HasConversion<string>()
+                    .HasMaxLength(20);
+                entity.Property(e => e.Reason).IsRequired().HasMaxLength(1000);
+                entity.Property(e => e.CreatedAt).IsRequired().HasColumnType("timestamp with time zone");
+
+                entity.HasIndex(e => new { e.UserId, e.CreatedAt });
+                entity.HasIndex(e => e.ChangedByAdminId);
+
+                entity.HasOne(e => e.User)
+                    .WithMany()
+                    .HasForeignKey(e => e.UserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.ChangedByAdmin)
+                    .WithMany()
+                    .HasForeignKey(e => e.ChangedByAdminId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<EmailOutbox>(entity =>
+            {
+                entity.ToTable("EmailOutbox");
+                entity.HasKey(e => e.Id);
+                entity.HasIndex(e => new { e.ReferenceId, e.EmailType }).IsUnique();
+                entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone");
+                entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
+                entity.Property(e => e.NextRetryAt).HasColumnType("timestamp with time zone");
+                entity.Property(e => e.SentAt).HasColumnType("timestamp with time zone");
+            });
+
             modelBuilder.Entity<PaymentMethod>(entity =>
             {
                 entity.HasKey(e => e.Id);

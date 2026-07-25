@@ -13,7 +13,7 @@ namespace ApplicationLayer.Helppers
         public string? ErrorCode { get; init; }
         public T? Data { get; init; }
 
-        public static ApiResponse<T> SuccessResponse(T data, string message = "Success") =>
+        public static ApiResponse<T> SuccessResponse(T? data, string message = "Success") =>
             new() { Success = true, Message = message, Data = data };
 
         public static ApiResponse<T> Failure(string message, string? errorCode = null, T? data = default) =>

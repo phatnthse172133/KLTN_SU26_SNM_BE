@@ -42,9 +42,9 @@ if (string.IsNullOrWhiteSpace(jwtSettings.SecretKey) || jwtSettings.SecretKey.Le
 
 var payOSSettings = builder.Configuration.GetSection("PayOS");
 var payOSClient = new PayOSClient(
-    payOSSettings["ClientId"],
-    payOSSettings["ApiKey"],
-    payOSSettings["ChecksumKey"]
+    payOSSettings["ClientId"] ?? string.Empty,
+    payOSSettings["ApiKey"] ?? string.Empty,
+    payOSSettings["ChecksumKey"] ?? string.Empty
 );
 
 builder.Services.AddSingleton(payOSClient); // ÄÄƒng kÃ½ PayOS vÃ o há»‡ thá»‘ng

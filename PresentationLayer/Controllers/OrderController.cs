@@ -3,6 +3,7 @@ using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Services.Orders;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using System.Security.Claims;
 
 // For more information on enabling Web API for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
@@ -26,6 +27,7 @@ namespace PresentationLayer.Controllers
 
         // POST api/<OrderController>
         [HttpPost]
+        [EnableRateLimiting("OrderApiPolicy")]
         public async Task<IActionResult> CreateOrder([FromBody] CreateOrderDto dto)
         {
             if (dto == null || dto.Items.Count == 0)
@@ -49,37 +51,26 @@ namespace PresentationLayer.Controllers
             return response.Success ? Ok(response) : BadRequest(response);
         }
 
-        [HttpPut("orders/{orderCode}/cancel")]
-        public async Task<IActionResult> CancelOrder([FromRoute] long orderCode)
+        [HttpPut("{orderCode}/Customer/Cancel")]
+        public async Task<IActionResult> CancelOrderByCustomer([FromRoute] long orderCode)
         {
-            var response = await _orderService.CancelOrder(orderCode);
+            var response = await _orderService.CancelOrderByCustomer(orderCode);
             return response.Success ? Ok(response) : BadRequest(response);
         }
 
-        [HttpGet("orders/{orderCode}/check-payment-status")]
-        public async Task<IActionResult> CheckPaymentStatus([FromRoute] long orderCode)
+        [HttpPut("{orderCode}/BoothOwner/Cancel")]
+        public async Task<IActionResult> CancelOrderByBoothOwner([FromRoute] long orderCode, [FromBody] RefundQRRequest request)
         {
-            var response = await _orderService.ActiveCheckPaymentStatus(orderCode);
+            var response = await _orderService.CancelOrderByBoothOwnerAsync(orderCode, request);
             return response.Success ? Ok(response) : BadRequest(response);
         }
 
-        [HttpPost("orders/{orderCode}/pay-remaining")]
-        [Authorize(Roles = "Customer,BoothOwner")]
-        public async Task<IActionResult> PayRemainingAmount([FromRoute] long orderCode)
-        {
-            var response = await _orderService.PayRemainingAmountAsync(CurrentUserId, orderCode);
-            if (response.Success)
-                return Ok(response);
-
-            return response.ErrorCode switch
-            {
-                "ORDER_NOT_FOUND" => NotFound(response),
-                "ORDER_ACCESS_DENIED" => StatusCode(StatusCodes.Status403Forbidden, response),
-                "ORDER_NOT_UNDERPAID" or "ORDER_ALREADY_FULLY_PAID" => Conflict(response),
-                "SUPPLEMENTAL_PAYMENT_LINK_FAILED" => StatusCode(StatusCodes.Status502BadGateway, response),
-                _ => BadRequest(response)
-            };
-        }
+        //[HttpGet("{orderCode}/check-payment-status")]
+        //public async Task<IActionResult> CheckPaymentStatus([FromRoute] long orderCode)
+        //{
+        //    var response = await _orderService.ActiveCheckPaymentStatus(orderCode);
+        //    return response.Success ? Ok(response) : BadRequest(response);
+        //}
 
     }
 }

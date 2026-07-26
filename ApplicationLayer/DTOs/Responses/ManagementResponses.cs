@@ -18,9 +18,10 @@ public class BoothRegistrationResponse
 {
     public Guid Id { get; set; }
     public Guid OwnerId { get; set; }
+    public string OwnerName { get; set; } = string.Empty;
+    public string OwnerEmail { get; set; } = string.Empty;
     public Guid RequestedNightMarketId { get; set; }
     public Guid? PreferredZoneId { get; set; }
-    public Guid? PreferredLayoutNodeId { get; set; }
     public string BoothName { get; set; } = string.Empty;
     public string? Description { get; set; }
     public string? Phone { get; set; }
@@ -37,4 +38,13 @@ public class BoothDocumentResponse
     public string DocumentType { get; set; } = string.Empty;
     public string FileUrl { get; set; } = string.Empty;
     public string VerificationStatus { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
+}
+
+public class RegistrationCountsResponse
+{
+    public int PendingReview { get; set; }
+    public int Approved { get; set; }
+    public int Rejected { get; set; }
+    public int Total { get; set; }
 }

@@ -5,19 +5,19 @@ using static DomainLayer.Enums.GeneralEnum;
 namespace DomainLayer.Entities;
 
 
-// Lịch sử giao dịch thanh toán/hoàn tiền - tích hợp đa cổng VNPay/ZaloPay/MoMo/Payos
+// Lá»‹ch sá»­ giao dá»‹ch thanh toÃ¡n/hoÃ n tiá»n - tÃ­ch há»£p Ä‘a cá»•ng VNPay/ZaloPay/MoMo/Payos
 public partial class Payment
 {
     public Guid Id { get; set; }
 
     public Guid OrderId { get; set; }
 
-    // FK tới User – chủ gian hàng nhận tiền
+    // FK tá»›i User â€“ chá»§ gian hÃ ng nháº­n tiá»n
     public Guid BoothOwnerId { get; set; }
 
-    public PaymentType Type { get; set; } //Cash hoặc PayOS
+    public PaymentType Type { get; set; } //Cash hoáº·c PayOS
 
-    //public string Gateway { get; set; } = null!;
+    public PaymentGateway Gateway { get; set; }
 
     public decimal Amount { get; set; }
 
@@ -25,10 +25,13 @@ public partial class Payment
 
     public PaymentStatus Status { get; set; }
 
-    // Cổng PayOS cần các trường này để lưu link thanh toán
+    // Cá»•ng PayOS cáº§n cÃ¡c trÆ°á»ng nÃ y Ä‘á»ƒ lÆ°u link thanh toÃ¡n
     public string? CheckoutUrl { get; set; }
     public string? PaymentLinkId { get; set; }
     public string? GatewayRef { get; set; }
+
+    // PayOS order code for this specific payment transaction (used for supplemental payments)
+    public long? PayOSOrderCode { get; set; }
 
     public string? RefundReason { get; set; }
 
@@ -38,7 +41,7 @@ public partial class Payment
 
     public DateTime UpdatedAt { get; set; }
 
-    // Navigation: chủ gian hàng nhận tiền
+    // Navigation: chá»§ gian hÃ ng nháº­n tiá»n
     public virtual User BoothOwner { get; set; } = null!;
 
     public virtual Order Order { get; set; } = null!;

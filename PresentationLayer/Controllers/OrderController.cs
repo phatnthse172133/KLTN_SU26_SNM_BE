@@ -1,6 +1,7 @@
 using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Services.Orders;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Security.Claims;
@@ -21,7 +22,7 @@ namespace PresentationLayer.Controllers
         }
 
         private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        //TEST, khi nào chạy thật lấy dòng trên, còn khi test thì dùng dòng dưới
+        //TEST, khi nÃ o cháº¡y tháº­t láº¥y dÃ²ng trÃªn, cÃ²n khi test thÃ¬ dÃ¹ng dÃ²ng dÆ°á»›i
         //private Guid CurrentUserId => Guid.Parse("22222222-2222-2222-2222-222222222222");
 
         // POST api/<OrderController>
@@ -31,7 +32,7 @@ namespace PresentationLayer.Controllers
         {
             if (dto == null || dto.Items.Count == 0)
             {
-                return BadRequest(new { message = "Giỏ hàng không có sản phẩm nào!" });
+                return BadRequest(new { message = "Giá» hÃ ng khÃ´ng cÃ³ sáº£n pháº©m nÃ o!" });
             }
 
             var response = await _orderService.CreateOrderAsync(dto);
@@ -43,7 +44,7 @@ namespace PresentationLayer.Controllers
         {
             if (dto == null)
             {
-                return BadRequest(new { message = "Dữ liệu không hợp lệ!" });
+                return BadRequest(new { message = "Dá»¯ liá»‡u khÃ´ng há»£p lá»‡!" });
             }
 
             var response = await _orderService.UpdateOrderStatusByBoothOwnerAsync(CurrentUserId, dto);

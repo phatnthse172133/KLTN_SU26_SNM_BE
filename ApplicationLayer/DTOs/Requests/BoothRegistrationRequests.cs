@@ -16,7 +16,7 @@ public class CreateBoothRegistrationRequest
 
 public class BoothDocumentRequest
 {
-    [Required, StringLength(100)] public string DocumentType { get; set; } = string.Empty;
+    [Required] public BoothDocumentType? DocumentType { get; set; }
     [Required, Url, StringLength(500)] public string FileUrl { get; set; } = string.Empty;
 }
 

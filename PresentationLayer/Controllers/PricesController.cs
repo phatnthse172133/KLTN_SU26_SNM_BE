@@ -39,6 +39,11 @@ public class PricesController : ControllerBase
     public async Task<IActionResult> DeleteFoodPrice(Guid boothId, Guid foodItemId, Guid priceId, CancellationToken cancellationToken)
         => Ok(await _service.DeleteFoodPriceAsync(CurrentUserId, boothId, foodItemId, priceId, cancellationToken));
 
+    [Authorize(Roles = "MarketOwner,BoothOwner,Admin")]
+    [HttpGet("api/packages/{packageId:guid}/prices")]
+    public async Task<IActionResult> GetPublicPackagePrices(Guid packageId, CancellationToken cancellationToken)
+        => Ok(await _service.GetPublicPackagePricesAsync(packageId, cancellationToken));
+
     [Authorize(Roles = "Admin")]
     [HttpGet("api/admin/packages/{packageId:guid}/prices")]
     public async Task<IActionResult> GetPackagePrices(Guid packageId, [FromQuery] PaginationReq pagination, CancellationToken cancellationToken)

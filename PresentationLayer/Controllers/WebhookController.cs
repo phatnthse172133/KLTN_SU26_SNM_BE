@@ -1,6 +1,6 @@
-using ApplicationLayer.Services.Orders;
+using ApplicationLayer.Services.PayOS;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore.Metadata.Conventions;
+using Microsoft.Extensions.Logging;
 using PayOS.Models.Webhooks;
 using static System.Runtime.InteropServices.JavaScript.JSType;
 
@@ -8,8 +8,9 @@ using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace PresentationLayer.Controllers
 {
-    [Route("api/[controller]")]
+    [Route("api/webhook")]
     [ApiController]
+    [Obsolete("Use /api/webhooks/payos instead. This endpoint is kept for backward compatibility.")]
     public class WebhookController : ControllerBase
     {
         private readonly IOrderService _orderService;
@@ -20,28 +21,11 @@ namespace PresentationLayer.Controllers
             _orderService = orderService;
             _logger = logger;
         }
-        // GET: api/<WebhookController>
-        //[HttpGet]
-        //public IEnumerable<string> Get()
-        //{
-        //    return new string[] { "value1", "value2" };
-        //}
 
-        //// GET api/<WebhookController>/5
-        //[HttpGet("{id}")]
-        //public string Get(int id)
-        //{
-        //    return "value";
-        //}
-
-        // POST api/<WebhookController>
         [HttpPost("payos")]
-        public async Task<IActionResult> ReceivePayOSWebhook([FromBody] Webhook bodyReceived)
+        public async Task<IActionResult> ReceivePayOSWebhook([FromBody] Webhook body)
         {
-            if (bodyReceived == null)
-            {
-                return BadRequest();
-            }
+            var result = await _dispatcher.DispatchAsync(body);
 
             //var data = bodyReceived.Data;
 
@@ -59,17 +43,5 @@ namespace PresentationLayer.Controllers
             bool isSuccess = await _orderService.ProcessPaymentWebhookAsync(bodyReceived);
             return isSuccess ? Ok() : BadRequest("Xử lý webhook Payment thất bại");
         }
-
-        // PUT api/<WebhookController>/5
-        //[HttpPut("{id}")]
-        //public void Put(int id, [FromBody] string value)
-        //{
-        //}
-
-        //// DELETE api/<WebhookController>/5
-        //[HttpDelete("{id}")]
-        //public void Delete(int id)
-        //{
-        //}
     }
 }

@@ -14,8 +14,10 @@ public partial class Message
 
     public Guid SenderId { get; set; }
 
+    public Guid? ClientMessageId { get; set; }
+
     // Snapshot vai trò người gửi: Customer | BoothOwner
-    public string SenderRole { get; set; } = null!;
+    public ConversationParticipantRole SenderRole { get; set; }
 
     // Text | Image | System | File
     public MessageType Type { get; set; }
@@ -23,6 +25,10 @@ public partial class Message
     public string Content { get; set; } = null!;
 
     public bool IsRead { get; set; }
+
+    public DateTime? ReadAt { get; set; }
+
+    public DateTime? DeletedAt { get; set; }
 
     public DateTime CreatedAt { get; set; }
 

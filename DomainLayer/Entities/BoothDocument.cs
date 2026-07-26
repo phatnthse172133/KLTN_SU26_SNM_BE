@@ -12,7 +12,7 @@ public partial class BoothDocument
 
     public Guid RegistrationId { get; set; }
 
-    public string DocumentType { get; set; } = null!;
+    public BoothDocumentType DocumentType { get; set; }
 
     public string DocumentUrl { get; set; } = null!;
 

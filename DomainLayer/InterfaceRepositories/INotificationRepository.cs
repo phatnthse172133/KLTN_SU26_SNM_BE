@@ -25,4 +25,27 @@ public interface INotificationRepository : IGenericRepository<Notification>
         Guid userId,
         DateTime readAt,
         CancellationToken cancellationToken = default);
+
+    Task<PagedResult<Notification>> GetAdminPagedBatchesAsync(
+        string? keyword,
+        NotificationTarget? target,
+        string? role,
+        NotificationType? type,
+        DateTime? fromDate,
+        DateTime? toDate,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default);
+
+    Task<Notification?> GetAdminBatchDetailAsync(
+        Guid batchId,
+        CancellationToken cancellationToken = default);
+
+    Task<Dictionary<Guid, int>> GetBatchRecipientCountsAsync(
+        List<Guid> batchIds,
+        CancellationToken cancellationToken = default);
+
+    Task<int> CountByBatchIdAsync(
+        Guid batchId,
+        CancellationToken cancellationToken = default);
 }

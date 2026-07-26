@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using ApplicationLayer.AI;
 using ApplicationLayer.AI.DTOs;
 using ApplicationLayer.AI.Services;
 using Microsoft.Extensions.Options;

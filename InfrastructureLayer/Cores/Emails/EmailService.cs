@@ -37,20 +37,20 @@ public class EmailService : IEmailService
 
         message.From.Add(new MailboxAddress(smtp.FromName, smtp.FromAddress));
         message.To.Add(MailboxAddress.Parse(email));
-        message.Subject = "Xác thực tài khoản Smart Night Market";
+        message.Subject = "Verify your Smart Night Market account";
         message.Body = new TextPart("html")
         {
             Text = $$"""
                 <!doctype html>
-                <html lang="vi">
+                <html lang="en">
                 <head>
                     <meta charset="utf-8">
                     <meta name="viewport" content="width=device-width, initial-scale=1">
-                    <title>Xác thực tài khoản Smart Night Market</title>
+                    <title>Verify your Smart Night Market account</title>
                 </head>
                 <body style="margin:0;padding:0;background-color:#070b1a;font-family:Arial,'Helvetica Neue',sans-serif;color:#f8fafc;">
                     <div style="display:none;max-height:0;overflow:hidden;opacity:0;">
-                        Chỉ còn một bước để bắt đầu khám phá Smart Night Market.
+                        Just one more step to start exploring Smart Night Market.
                     </div>
                     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#070b1a;">
                         <tr>
@@ -65,36 +65,36 @@ public class EmailService : IEmailService
                                                 SMART NIGHT MARKET
                                             </div>
                                             <h1 style="margin:22px 0 10px;color:#ffffff;font-size:30px;line-height:1.25;font-weight:800;">
-                                                Chào mừng đến với<br><span style="color:#f6b73c;">khu chợ đêm thông minh</span>
+                                                Welcome to<br><span style="color:#f6b73c;">Smart Night Market</span>
                                             </h1>
                                             <p style="margin:0;color:#9fb0cf;font-size:15px;line-height:1.6;">
-                                                Khám phá món ngon, gian hàng và những trải nghiệm rực rỡ về đêm.
+                                                Discover great food, booths, and vibrant night experiences.
                                             </p>
                                         </td>
                                     </tr>
                                     <tr>
                                         <td style="padding:32px 36px 36px;">
                                             <p style="margin:0 0 14px;color:#f8fafc;font-size:17px;line-height:1.6;">
-                                                Xin chào <strong>{{encodedName}}</strong>,
+                                                Hello <strong>{{encodedName}}</strong>,
                                             </p>
                                             <p style="margin:0 0 26px;color:#c3cee2;font-size:15px;line-height:1.7;">
-                                                Cảm ơn bạn đã đăng ký. Vui lòng xác thực địa chỉ email để kích hoạt tài khoản Smart Night Market của bạn.
+                                                Thank you for signing up. Please verify your email address to activate your Smart Night Market account.
                                             </p>
                                             <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">
                                                 <tr>
                                                     <td align="center" bgcolor="#f6b73c" style="border-radius:12px;">
                                                         <a href="{{encodedLink}}" target="_blank" style="display:inline-block;padding:15px 30px;color:#111827;text-decoration:none;font-size:16px;font-weight:800;line-height:1;">
-                                                            Xác thực tài khoản
+                                                            Verify Account
                                                         </a>
                                                     </td>
                                                 </tr>
                                             </table>
                                             <p style="margin:25px 0 0;color:#7f91b2;font-size:13px;line-height:1.6;text-align:center;">
-                                                Liên kết có hiệu lực trong 24 giờ và chỉ sử dụng được một lần.
+                                                This link is valid for 24 hours and can only be used once.
                                             </p>
                                             <div style="margin-top:28px;padding-top:22px;border-top:1px solid #273657;">
                                                 <p style="margin:0 0 8px;color:#9fb0cf;font-size:12px;line-height:1.5;">
-                                                    Nếu nút phía trên không hoạt động, hãy sao chép liên kết này vào trình duyệt:
+                                                    If the button above doesn't work, copy this link into your browser:
                                                 </p>
                                                 <p style="margin:0;word-break:break-all;font-size:12px;line-height:1.5;">
                                                     <a href="{{encodedLink}}" style="color:#65d9e8;text-decoration:underline;">{{encodedLink}}</a>
@@ -104,8 +104,8 @@ public class EmailService : IEmailService
                                     </tr>
                                     <tr>
                                         <td align="center" style="padding:21px 30px;background-color:#0a1021;color:#7182a3;font-size:12px;line-height:1.6;">
-                                            Bạn nhận được email này vì đã đăng ký Smart Night Market.<br>
-                                            Nếu không phải bạn, bạn có thể bỏ qua email này.
+                                            You received this email because you signed up for Smart Night Market.<br>
+                                            If this wasn't you, you can safely ignore this email.
                                         </td>
                                     </tr>
                                 </table>
@@ -160,7 +160,7 @@ public class EmailService : IEmailService
         var smtp = GetSmtpConfiguration();
         if (string.IsNullOrWhiteSpace(endpoint) || smtp is null)
         {
-            _logger.LogWarning("Password-reset endpoint or email is not configured; reset link for {Email} was not delivered.", email);
+            _logger.LogWarning("SMTP email configuration or password-reset endpoint is missing. Email skipped.");
             return;
         }
 
@@ -176,6 +176,46 @@ public class EmailService : IEmailService
             await client.AuthenticateAsync(smtp.Username, smtp.Password, cancellationToken);
         await client.SendAsync(message, cancellationToken);
         await client.DisconnectAsync(true, cancellationToken);
+    }
+
+    public async Task SendHtmlEmailAsync(string recipientEmail, string subject, string htmlBody, CancellationToken cancellationToken = default)
+    {
+        var smtp = GetSmtpConfiguration();
+        if (smtp is null)
+        {
+            throw new InvalidOperationException("SMTP email configuration is missing.");
+        }
+
+        var message = new MimeMessage();
+        message.From.Add(new MailboxAddress(smtp.FromName, smtp.FromAddress));
+        message.To.Add(MailboxAddress.Parse(recipientEmail));
+        message.Subject = subject;
+        message.Body = new TextPart("html")
+        {
+            Text = htmlBody
+        };
+
+        using var client = new SmtpClient();
+        try
+        {
+            await client.ConnectAsync(smtp.Host, smtp.Port, SecureSocketOptions.StartTls, cancellationToken);
+            if (smtp.Username is not null && smtp.Password is not null)
+            {
+                await client.AuthenticateAsync(smtp.Username, smtp.Password, cancellationToken);
+            }
+
+            await client.SendAsync(message, cancellationToken);
+            _logger.LogInformation("Sent email to {Email}", recipientEmail);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send email to {Email}", recipientEmail);
+            throw; // Re-throw to let the worker handle retry
+        }
+        finally
+        {
+            await client.DisconnectAsync(true, cancellationToken);
+        }
     }
 
     private SmtpConfiguration? GetSmtpConfiguration()

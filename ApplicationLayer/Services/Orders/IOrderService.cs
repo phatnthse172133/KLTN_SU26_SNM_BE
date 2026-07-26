@@ -1,7 +1,7 @@
 using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Helppers;
-using PayOS.Models.Webhooks;
+using ApplicationLayer.Services.PayOS;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,10 +15,12 @@ namespace ApplicationLayer.Services.Orders
         Task<ApiResponse<OrderResponseDto>> CreateOrderAsync(CreateOrderDto dto);
         Task<bool> ProcessPaymentWebhookAsync(Webhook webhookBody);
         Task<bool> ProcessPayoutWebhookAsync(Webhook webhookBody);
+        Task<ApiResponse<SupplementalPaymentResponseDto>> PayRemainingAmountAsync(Guid actorId, long orderCode);
+        Task<WebhookDispatchResult> ProcessPaymentWebhookAsync(PayOSWebhookData verifiedData);
         Task<ApiResponse<bool>> UpdateOrderStatusByBoothOwnerAsync(Guid boothOwnerId, UpdateOrderStatusDto dto);
         Task<ApiResponse<bool>> CancelOrderByCustomer(long orderCode);
         Task<ApiResponse<bool>> CancelOrderByBoothOwnerAsync(long orderCode, RefundQRRequest request);
         Task<ApiResponse<bool>> ActiveCheckPaymentStatus(long orderCode);
-
+        Task<bool> HasOrderWithCodeAsync(long orderCode);
     }
 }

@@ -16,11 +16,13 @@ public interface INotificationService
 
     Task<ApiResponse<UnreadNotificationCountResponse>> GetUnreadCountAsync(Guid userId, CancellationToken cancellationToken = default);
 
-    Task DeleteAsync(Guid userId,Guid notificationId, CancellationToken cancellationToken = default);
-
     Task NotifyAsync(NotificationMessage message, CancellationToken cancellationToken = default);
 
     Task NotifyRoleAsync(RoleNotificationMessage message, CancellationToken cancellationToken = default);
 
-    Task<ApiResponse<AdminNotificationResultResponse>> CreateByAdminAsync(AdminCreateNotificationRequest request, CancellationToken cancellationToken = default);
+    Task<ApiResponse<AdminNotificationResultResponse>> CreateByAdminAsync(Guid currentAdminId, AdminCreateNotificationRequest request, CancellationToken cancellationToken = default);
+
+    Task<ApiResponse<PaginationResp<AdminNotificationListItemResponse>>> GetAdminNotificationsAsync(AdminNotificationListRequest request, CancellationToken cancellationToken = default);
+
+    Task<ApiResponse<AdminNotificationDetailResponse>> GetAdminNotificationDetailAsync(Guid batchId, CancellationToken cancellationToken = default);
 }

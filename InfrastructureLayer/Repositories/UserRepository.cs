@@ -32,4 +32,65 @@ public class UserRepository : GenericRepository<User>, IUserRepository
 
     public async Task<bool> UserExistsAsync(Guid userId)
         => await _dbSet.AnyAsync(u => u.Id == userId);
+    public async Task BeginTransactionAsync()
+    {
+        if (_context.Database.CurrentTransaction == null)
+        {
+            await _context.Database.BeginTransactionAsync();
+        }
+    }
+
+    public async Task CommitTransactionAsync()
+    {
+        if (_context.Database.CurrentTransaction != null)
+        {
+            await _context.Database.CurrentTransaction.CommitAsync();
+        }
+    }
+
+    public async Task RollbackTransactionAsync()
+    {
+        if (_context.Database.CurrentTransaction != null)
+        {
+            await _context.Database.CurrentTransaction.RollbackAsync();
+        }
+    }
+
+    public async Task<int> UpdateStatusWithConcurrencyAsync(Guid userId, UserStatus expectedPreviousStatus, UserStatus newStatus, DateTime updatedAt)
+    {
+        var query = _dbSet.Where(u => u.Id == userId && u.Status == expectedPreviousStatus);
+
+        if (newStatus == UserStatus.Inactive)
+        {
+            return await query.ExecuteUpdateAsync(update => update
+                .SetProperty(u => u.Status, newStatus)
+                .SetProperty(u => u.UpdatedAt, updatedAt)
+                .SetProperty(u => u.RefreshTokenHash, (string?)null)
+                .SetProperty(u => u.RefreshTokenExpiresAt, (DateTime?)null));
+        }
+
+        return await query.ExecuteUpdateAsync(update => update
+            .SetProperty(u => u.Status, newStatus)
+            .SetProperty(u => u.UpdatedAt, updatedAt));
+    }
+
+    public async Task ReloadAsync(User entity)
+    {
+        await _context.Entry(entity).ReloadAsync();
+    }
+    public async Task<Dictionary<Guid, string>> GetUserNamesByIdsAsync(
+        List<Guid> userIds,
+        CancellationToken cancellationToken = default)
+    {
+        if (userIds == null || userIds.Count == 0)
+            return new Dictionary<Guid, string>();
+
+        var names = await _dbSet
+            .AsNoTracking()
+            .Where(u => userIds.Contains(u.Id))
+            .Select(u => new { u.Id, u.FullName })
+            .ToDictionaryAsync(x => x.Id, x => x.FullName ?? string.Empty, cancellationToken);
+
+        return names;
+    }
 }

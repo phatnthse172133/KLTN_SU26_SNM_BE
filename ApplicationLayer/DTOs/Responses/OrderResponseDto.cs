@@ -11,13 +11,24 @@ namespace ApplicationLayer.DTOs.Responses
     {
         public Guid OrderId { get; set; }
         public long OrderCode { get; set; }
-        public OrderStatus Status { get; set; } // "Placed" hoặc "PendingPayment"
-        public string? PaymentUrl { get; set; } // Chỉ có nếu chọn thanh toán PayOS
+        public OrderStatus Status { get; set; } // "Placed" hoáº·c "PendingPayment"
+        public string? PaymentUrl { get; set; } // Chá»‰ cÃ³ náº¿u chá»n thanh toÃ¡n PayOS
     }
 
     public class UpdateOrderStatusDto
     {
         public long OrderCode { get; set; }
         public OrderStatus NewStatus { get; set; } // Preparing -> Ready -> ReadyForPickup -> Completed
+    }
+
+    public class SupplementalPaymentResponseDto
+    {
+        public Guid OrderId { get; set; }
+        public long OrderCode { get; set; }
+        public decimal RemainingAmount { get; set; }
+        public decimal TotalPaid { get; set; }
+        public decimal FinalAmount { get; set; }
+        public string? PaymentUrl { get; set; }
+        public long PayOSOrderCode { get; set; }
     }
 }

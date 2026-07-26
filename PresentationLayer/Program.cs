@@ -13,6 +13,7 @@ using Microsoft.OpenApi.Models;
 using PayOS;
 using PresentationLayer.Hubs;
 using PresentationLayer.Middlewares;
+using PresentationLayer.Filters;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.RateLimiting;
@@ -91,6 +92,10 @@ builder.Services.AddCors(options =>
     {
         policy
             .WithOrigins(
+                "http://localhost:3000",
+                "http://127.0.0.1:3000",
+                "http://localhost:3001",
+                "http://127.0.0.1:3001",
                 "http://localhost:8081",
                 "http://localhost:8082",
                 "http://localhost:8083",
@@ -107,7 +112,11 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddInfrastructure(builder.Configuration);
-builder.Services.AddControllers()
+builder.Services.AddScoped<EnumValidationFilter>();
+builder.Services.AddControllers(options =>
+    {
+        options.Filters.Add<EnumValidationFilter>();
+    })
     .ConfigureApiBehaviorOptions(options =>
     {
         options.InvalidModelStateResponseFactory = context =>
@@ -120,6 +129,7 @@ builder.Services.AddControllers()
                     .Where(message => !string.IsNullOrWhiteSpace(message)));
             var response = ApiResponse<ErrorResponse>.Failure(
                 "Request validation failed.",
+                "VALIDATION_ERROR",
                 new ErrorResponse
                 {
                     TraceId = context.HttpContext.TraceIdentifier,
@@ -151,7 +161,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             {
                 var accessToken = context.Request.Query["access_token"];
                 if (!string.IsNullOrEmpty(accessToken)
-                    && context.HttpContext.Request.Path.StartsWithSegments("/hubs/notifications"))
+                    && (context.HttpContext.Request.Path.StartsWithSegments("/hubs/notifications")
+                        || context.HttpContext.Request.Path.StartsWithSegments("/hubs/chats")))
                 {
                     context.Token = accessToken;
                 }
@@ -161,10 +172,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             OnTokenValidated = async context =>
             {
                 var subject = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
-                if (!Guid.TryParse(subject, out var userId)) 
-                { 
-                    context.Fail("Invalid user claim."); 
-                    return; 
+                if (!Guid.TryParse(subject, out var userId))
+                {
+                    context.Fail("Invalid user claim.");
+                    return;
                 }
                 var dbContext = context.HttpContext.RequestServices.GetRequiredService<SNMDbContext>();
                 var isActive = await dbContext.Users.AnyAsync(user => user.Id == userId && user.Status == UserStatus.Active);
@@ -179,6 +190,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 await context.Response.WriteAsJsonAsync(
                     ApiResponse<ErrorResponse>.Failure(
                         "Authentication is required.",
+                        "UNAUTHORIZED",
                         new ErrorResponse
                         {
                             TraceId = context.HttpContext.TraceIdentifier,
@@ -192,6 +204,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 await context.Response.WriteAsJsonAsync(
                     ApiResponse<ErrorResponse>.Failure(
                         "You do not have permission to access this resource.",
+                        "FORBIDDEN",
                         new ErrorResponse
                         {
                             TraceId = context.HttpContext.TraceIdentifier,
@@ -206,7 +219,7 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowFrontend",
         policy =>
         {
-            policy.WithOrigins("http://localhost:3000")
+            policy.WithOrigins("http://localhost:3000", "http://localhost:3001")
                   .AllowAnyHeader()
                   .AllowAnyMethod()
                   .AllowCredentials();
@@ -215,42 +228,47 @@ builder.Services.AddCors(options =>
 builder.Services.AddAuthorization();
 builder.Services.AddSignalR();
 builder.Services.AddScoped<IRealtimeNotificationPublisher, SignalRNotificationPublisher>();
+builder.Services.AddScoped<ApplicationLayer.Services.Chats.IRealtimeChatPublisher, SignalRChatPublisher>();
+builder.Services.AddScoped<IFileStorageService, LocalFileStorageService>();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
-    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme 
-    { 
-        Name = "Authorization", 
-        Type = SecuritySchemeType.Http, 
-        Scheme = "bearer", 
-        BearerFormat = "JWT", 
-        In = ParameterLocation.Header 
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header
     });
     options.AddSecurityRequirement(new OpenApiSecurityRequirement { { new OpenApiSecurityScheme { Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" } }, Array.Empty<string>() } });
 });
 
 var app = builder.Build();
 
-await AISeedData.SeedAsync(app.Services);
+// Demo data is opt-in. A normal application start must never mutate a shared database.
+if (string.Equals(builder.Configuration["SeedDemoData"], "true", StringComparison.OrdinalIgnoreCase))
+{
+    await AISeedData.SeedAsync(app.Services);
+}
 
-if (app.Environment.IsDevelopment()) 
+if (app.Environment.IsDevelopment())
 {
     app.Services
         .GetRequiredService<AutoMapper.IMapper>()
         .ConfigurationProvider
         .AssertConfigurationIsValid();
-    app.UseSwagger(); 
-    app.UseSwaggerUI(); 
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
-if (!app.Environment.IsDevelopment())
-{
-    app.UseHttpsRedirection();
-}
+app.UseHttpsRedirection();
 
 app.UseCors(CustomerAppCorsPolicy);
+
+app.UseStaticFiles();
 
 app.UseAuthentication();
 
@@ -261,6 +279,7 @@ app.UseRateLimiter();
 
 app.MapControllers();
 app.MapHub<NotificationHub>("/hubs/notifications");
+app.MapHub<ChatHub>("/hubs/chats");
 
 
 

@@ -40,6 +40,15 @@ public class JWTService : IJwtService
     }
 
     public string GenerateSecureToken() => Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
+    public string GenerateNumericCode(int digits)
+    {
+        if (digits is < 1 or > 9)
+            throw new ArgumentOutOfRangeException(nameof(digits), "Code length must be between 1 and 9 digits.");
+
+        var upperBound = (int)Math.Pow(10, digits);
+        return RandomNumberGenerator.GetInt32(upperBound).ToString($"D{digits}");
+    }
+
     public string HashToken(string token) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
     public DateTime GetAccessTokenExpiry() => DateTime.UtcNow.AddMinutes(_settings.AccessTokenMinutes);
     public DateTime GetRefreshTokenExpiry() => DateTime.UtcNow.AddDays(_settings.RefreshTokenDays);

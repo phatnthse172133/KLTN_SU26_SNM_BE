@@ -5,6 +5,13 @@ namespace DomainLayer.InterfaceRepository;
 
 public interface IFoodItemRepository : IGenericRepository<FoodItem>
 {
+    Task<PagedResult<NightMarketFoodCustomerReadModel>> GetCustomerByNightMarketPagedAsync(
+        Guid nightMarketId,
+        DateTime utcNow,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default);
+
     Task<PagedResult<FoodItem>> GetMenuByBoothPagedAsync(
         Guid boothId, int page, int pageSize, CancellationToken cancellationToken = default);
     Task<FoodItem?> GetByBoothAsync(Guid boothId, Guid foodItemId);

@@ -1790,7 +1790,7 @@ namespace InfrastructureLayer.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
-                        .HasDefaultValueSql("'Active'::character varying");
+                        .HasDefaultValue("Draft");
 
                     b.Property<string>("ThumbnailUrl")
                         .HasMaxLength(500)

@@ -43,6 +43,22 @@ public class NightMarketsController : ControllerBase
         return response.Success ? Ok(response) : NotFound(response);
     }
 
+    [AllowAnonymous]
+    [HttpGet("{id:guid}/booths")]
+    public async Task<IActionResult> GetBooths(
+        Guid id,
+        [FromQuery] PaginationReq pagination,
+        CancellationToken cancellationToken)
+        => Ok(await _service.GetBoothsAsync(id, pagination, cancellationToken));
+
+    [AllowAnonymous]
+    [HttpGet("{id:guid}/foods")]
+    public async Task<IActionResult> GetFoods(
+        Guid id,
+        [FromQuery] PaginationReq pagination,
+        CancellationToken cancellationToken)
+        => Ok(await _service.GetFoodsAsync(id, pagination, cancellationToken));
+
     [Authorize(Roles = "MarketOwner")]
     [HttpGet("mine")]
     public async Task<IActionResult> GetMine(CancellationToken cancellationToken)
@@ -55,7 +71,9 @@ public class NightMarketsController : ControllerBase
     public async Task<IActionResult> Create(CreateNightMarketRequest request, CancellationToken cancellationToken)
     {
         var response = await _service.CreateAsync(request, CurrentUserId, cancellationToken);
-        return response.Success ? CreatedAtAction(nameof(Get), new { id = response.Data!.Id }, response) : BadRequest(response);
+        return response.Success
+            ? StatusCode(StatusCodes.Status201Created, response)
+            : BadRequest(response);
     }
 
     [Authorize(Roles = "Admin,MarketOwner")]

@@ -67,12 +67,13 @@ public class AuthService : IAuthService
 
         if (await _userRepository.AnyAsync(user => user.Email == email))
         {
-            throw AppException.Conflict("Email is already in use.");
+            throw AppException.Conflict("Email is already in use.", AuthErrorCodes.EmailAlreadyExists);
         }
 
-        if (await _userRepository.AnyAsync(user => user.UserName == userName))
+        var normalizedUserName = userName.ToLowerInvariant();
+        if (await _userRepository.AnyAsync(user => user.UserName.ToLower() == normalizedUserName))
         {
-            throw AppException.Conflict("Username is already in use.");
+            throw AppException.Conflict("Username is already in use.", AuthErrorCodes.UserNameAlreadyExists);
         }
 
         var role = await GetOrCreateRoleAsync(roleName);
@@ -81,7 +82,7 @@ public class AuthService : IAuthService
         {
             Id = Guid.NewGuid(),
             RoleId = role.Id,
-            UserName = userName,
+            UserName = normalizedUserName,
             FullName = request.FullName.Trim(),
             Email = email,
             PasswordHash = _passwordHasher.HashPassword(request.Password),
@@ -107,12 +108,14 @@ public class AuthService : IAuthService
 
         if (user is null || !_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
         {
-            throw AppException.Unauthorized("Email/username or password is incorrect.", "INVALID_CREDENTIALS");
+            throw AppException.Unauthorized("Email/username or password is incorrect.", AuthErrorCodes.InvalidCredentials);
         }
 
         if (user.AuthProvider == AuthProvider.Google)
         {
-            throw AppException.BadRequest("This account uses Google sign-in. Please continue with Google.");
+            throw AppException.BadRequest(
+                "This account uses Google sign-in. Please continue with Google.",
+                AuthErrorCodes.GooglePasswordLoginNotAllowed);
         }
 
         return await CreateSessionForActiveUserAsync(user, cancellationToken);
@@ -126,30 +129,47 @@ public class AuthService : IAuthService
         {
             googleUser = await _googleTokenValidator.ValidateAsync(request.IdToken, cancellationToken);
         }
-        catch (Exception)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            throw AppException.Unauthorized("Unable to validate the Google token.");
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw AppException.ServiceUnavailable(
+                "Google sign-in is temporarily unavailable.",
+                AuthErrorCodes.GoogleAuthUnavailable,
+                exception);
         }
 
         if (googleUser is null)
         {
-            throw AppException.Unauthorized("Google token is invalid or the email has not been verified.");
+            throw AppException.Unauthorized(
+                "Google token is invalid or the email has not been verified.",
+                AuthErrorCodes.InvalidGoogleToken);
         }
 
         var user = await _userRepository.FirstOrDefaultAsync(item => item.GoogleId == googleUser.GoogleId);
-        if (user is null)
+        var userWithSameEmail = user is null
+            ? await _userRepository.FirstOrDefaultAsync(item => item.Email == googleUser.Email)
+            : null;
+
+        // This public endpoint cannot prove that the caller also controls an existing local
+        // session, so it must not silently add Google as a sign-in method by matching email.
+        if (userWithSameEmail is not null)
         {
-            user = await _userRepository.FirstOrDefaultAsync(item => item.Email == googleUser.Email);
+            throw AppException.Conflict(
+                "An account with this email already exists. Sign in with its existing method before linking Google.",
+                AuthErrorCodes.GoogleAccountLinkRequired);
         }
 
         if (user is null)
         {
-            var role = await GetOrCreateRoleAsync("Customer");
+            var customerRole = await GetOrCreateRoleAsync("Customer");
             var now = DateTime.UtcNow;
             user = new User
             {
                 Id = Guid.NewGuid(),
-                RoleId = role.Id,
+                RoleId = customerRole.Id,
                 Email = googleUser.Email,
                 FullName = googleUser.FullName,
                 UserName = $"google_{Guid.NewGuid():N}"[..19],
@@ -165,16 +185,13 @@ public class AuthService : IAuthService
             await _userRepository.AddAsync(user);
             await _userRepository.SaveChangesAsync();
         }
-        else if (string.IsNullOrWhiteSpace(user.GoogleId))
+
+        var role = await _roleRepository.GetByIdAsync(user.RoleId);
+        if (role is null || !string.Equals(role.RoleName, "Customer", StringComparison.Ordinal))
         {
-            user.GoogleId = googleUser.GoogleId;
-            user.AuthProvider = user.AuthProvider == AuthProvider.Local
-                ? AuthProvider.LocalGoogle
-                : AuthProvider.Google;
-            user.AvatarUrl ??= googleUser.AvatarUrl;
-            user.UpdatedAt = DateTime.UtcNow;
-            _userRepository.Update(user);
-            await _userRepository.SaveChangesAsync();
+            throw AppException.Forbidden(
+                "Google sign-in is only available for customer accounts.",
+                AuthErrorCodes.GoogleCustomerOnly);
         }
 
         return await CreateSessionForActiveUserAsync(user, cancellationToken);
@@ -184,7 +201,9 @@ public class AuthService : IAuthService
     {
         if (string.IsNullOrWhiteSpace(token))
         {
-            throw AppException.BadRequest("Verification token is invalid.");
+            throw AppException.BadRequest(
+                "Verification token is invalid.",
+                AuthErrorCodes.InvalidOrExpiredVerificationToken);
         }
 
         var tokenHash = _jwtService.HashToken(token);
@@ -192,15 +211,14 @@ public class AuthService : IAuthService
         var user = await _userRepository.FirstOrDefaultAsync(item =>
             item.EmailVerificationTokenHash == tokenHash &&
             item.EmailVerificationTokenExpiresAt > now);
-        if (user is null)
+        if (user is null || user.Status != UserStatus.PendingVerification)
         {
-            throw AppException.BadRequest("Verification token is invalid or has expired.");
+            throw AppException.BadRequest(
+                "Verification token is invalid or has expired.",
+                AuthErrorCodes.InvalidOrExpiredVerificationToken);
         }
 
-        if (user.Status == UserStatus.PendingVerification)
-        {
-            user.Status = UserStatus.Active;
-        }
+        user.Status = UserStatus.Active;
 
         user.EmailVerificationTokenHash = null;
         user.EmailVerificationTokenExpiresAt = null;
@@ -227,10 +245,10 @@ public class AuthService : IAuthService
     public async Task<ApiResponse<object>> ForgotPasswordAsync(ForgotPasswordRequest request, CancellationToken cancellationToken = default)
     {
         var user = await _userRepository.FirstOrDefaultAsync(item => item.Email == request.Email.Trim().ToLowerInvariant());
-        if (user is null || user.Status != UserStatus.Active)
+        if (user is null || user.Status != UserStatus.Active || user.AuthProvider == AuthProvider.Google)
             return ApiResponse<object>.SuccessResponse(new { }, "If the email exists, a password-reset OTP has been sent.");
 
-        var otp = Random.Shared.Next(0, 1_000_000).ToString("D6");
+        var otp = _jwtService.GenerateNumericCode(6);
         var rawResetToken = _jwtService.GenerateSecureToken();
         var now = DateTime.UtcNow;
         user.PasswordResetOtpHash = _jwtService.HashToken(otp);
@@ -254,22 +272,30 @@ public class AuthService : IAuthService
                     user.PasswordResetOtpHash == _jwtService.HashToken(request.Otp) &&
                     user.PasswordResetOtpExpiresAt > DateTime.UtcNow;
         return !valid
-            ? throw AppException.BadRequest("OTP is invalid, expired, or already used.")
+            ? throw AppException.BadRequest(
+                "OTP is invalid, expired, or already used.",
+                AuthErrorCodes.InvalidOrExpiredResetOtp)
             : ApiResponse<object>.SuccessResponse(new { }, "OTP is valid. You can set a new password.");
     }
 
     public async Task<ApiResponse<object>> ResetPasswordAsync(ResetPasswordRequest request, CancellationToken cancellationToken = default)
     {
         var user = await FindActiveUserByEmailAsync(request.Email);
-        if (user is null)
-            throw AppException.BadRequest("This account cannot reset its password.");
+        if (user is null || user.AuthProvider == AuthProvider.Google)
+            throw AppException.BadRequest(
+                "This account cannot reset its password.",
+                AuthErrorCodes.PasswordResetNotAllowed);
 
         if (_passwordHasher.VerifyPassword(request.NewPassword, user.PasswordHash))
-            throw AppException.BadRequest("New password must differ from the current password.");
+            throw AppException.BadRequest(
+                "New password must differ from the current password.",
+                AuthErrorCodes.PasswordReuseNotAllowed);
 
         if (user.PasswordResetOtpHash != _jwtService.HashToken(request.Otp) ||
             user.PasswordResetOtpExpiresAt <= DateTime.UtcNow)
-            throw AppException.BadRequest("OTP is invalid, expired, or already used.");
+            throw AppException.BadRequest(
+                "OTP is invalid, expired, or already used.",
+                AuthErrorCodes.InvalidOrExpiredResetOtp);
 
         user.PasswordHash = _passwordHasher.HashPassword(request.NewPassword);
         ClearPasswordResetTokens(user);
@@ -290,13 +316,19 @@ public class AuthService : IAuthService
             item.PasswordResetTokenHash == tokenHash &&
             item.PasswordResetTokenExpiresAt > now);
         if (user is null)
-            throw AppException.BadRequest("Reset link is invalid, expired, or already used.");
+            throw AppException.BadRequest(
+                "Reset link is invalid, expired, or already used.",
+                AuthErrorCodes.InvalidOrExpiredResetToken);
 
-        if (user.Status != UserStatus.Active)
-            throw AppException.BadRequest("This account cannot reset its password.");
+        if (user.Status != UserStatus.Active || user.AuthProvider == AuthProvider.Google)
+            throw AppException.BadRequest(
+                "This account cannot reset its password.",
+                AuthErrorCodes.PasswordResetNotAllowed);
 
         if (_passwordHasher.VerifyPassword(request.NewPassword, user.PasswordHash)) 
-            throw AppException.BadRequest("New password must differ from the current password.");
+            throw AppException.BadRequest(
+                "New password must differ from the current password.",
+                AuthErrorCodes.PasswordReuseNotAllowed);
 
         user.PasswordHash = _passwordHasher.HashPassword(request.NewPassword);
         ClearPasswordResetTokens(user);
@@ -318,12 +350,14 @@ public class AuthService : IAuthService
             item.RefreshTokenExpiresAt > now);
         if (user is null)
         {
-            throw AppException.Unauthorized("Refresh token is invalid or has expired.");
+            throw AppException.Unauthorized(
+                "Refresh token is invalid or has expired.",
+                AuthErrorCodes.InvalidOrExpiredRefreshToken);
         }
 
         if (user.Status != UserStatus.Active)
         {
-            throw AppException.Forbidden("Account is no longer active.");
+            throw AppException.Forbidden("Account is no longer active.", AuthErrorCodes.AccountNotActive);
         }
 
         var newRawToken = _jwtService.GenerateSecureToken();
@@ -368,12 +402,14 @@ public class AuthService : IAuthService
     {
         if (user.Status == UserStatus.PendingVerification)
         {
-            throw AppException.Forbidden("Please verify your email before signing in.");
+            throw AppException.Forbidden(
+                "Please verify your email before signing in.",
+                AuthErrorCodes.EmailNotVerified);
         }
 
         if (user.Status != UserStatus.Active)
         {
-            throw AppException.Forbidden("Account is not active.");
+            throw AppException.Forbidden("Account is not active.", AuthErrorCodes.AccountNotActive);
         }
 
         var rawToken = _jwtService.GenerateSecureToken();
@@ -390,7 +426,9 @@ public class AuthService : IAuthService
         var role = await _roleRepository.GetByIdAsync(user.RoleId);
         if (role is null)
         {
-            throw AppException.BadRequest("Account has no valid assigned role.");
+            throw AppException.BadRequest(
+                "Account has no valid assigned role.",
+                AuthErrorCodes.InvalidAccountRole);
         }
 
         var userResponse = _mapper.Map<UserResponse>(user);
@@ -443,7 +481,10 @@ public class AuthService : IAuthService
 
     private Task<User?> FindActiveUserByEmailAsync(string email)
     {
-        return _userRepository.FirstOrDefaultAsync(item => item.Email == email.Trim().ToLowerInvariant() && item.Status == UserStatus.Active);
+        return _userRepository.FirstOrDefaultAsync(item =>
+            item.Email == email.Trim().ToLowerInvariant() &&
+            item.Status == UserStatus.Active &&
+            item.AuthProvider != AuthProvider.Google);
     }
 
     private void SetRefreshToken(User user, string rawToken)

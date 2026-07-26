@@ -9,9 +9,9 @@ public class NightMarketListRequest : PaginationReq
     [StringLength(200)]
     public string? Keyword { get; set; }
 
-    public NightMarketStatus? Status { get; set; }
+    public bool? OpenNow { get; set; }
 
-    [RegularExpression("(?i)^(name|status|createdAt|updatedAt)$", ErrorMessage = "SortBy must be name, status, createdAt, or updatedAt.")]
+    [RegularExpression("(?i)^(name|boothCount|createdAt)$", ErrorMessage = "SortBy must be name, boothCount, or createdAt.")]
     public string SortBy { get; set; } = "createdAt";
 
     [RegularExpression("(?i)^(asc|desc)$", ErrorMessage = "SortDirection must be asc or desc.")]

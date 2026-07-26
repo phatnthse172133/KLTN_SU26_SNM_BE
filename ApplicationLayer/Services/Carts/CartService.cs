@@ -4,6 +4,7 @@ using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
 using AutoMapper;
 using DomainLayer.Entities;
+using DomainLayer.Common;
 using DomainLayer.InterfaceRepository;
 using static DomainLayer.Enums.GeneralEnum;
 
@@ -261,17 +262,7 @@ public class CartService : ICartService
     }
 
     private static decimal GetCurrentPrice(FoodItem foodItem)
-    {
-        var now = DateTime.UtcNow;
-        return foodItem.FoodPrices
-            .Where(price => !price.IsDeleted
-                && (!price.StartDate.HasValue || price.StartDate.Value <= now)
-                && (!price.EndDate.HasValue || price.EndDate.Value >= now))
-            .OrderByDescending(price => price.StartDate)
-            .ThenByDescending(price => price.CreatedAt)
-            .Select(price => (decimal?)price.Price)
-            .FirstOrDefault() ?? foodItem.Price;
-    }
+        => FoodPriceResolver.GetCurrentPrice(foodItem, DateTime.UtcNow);
 
     private static void EnsureAvailable(FoodItem foodItem)
     {

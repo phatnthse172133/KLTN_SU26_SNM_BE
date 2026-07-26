@@ -13,7 +13,7 @@ public class RegisterRequest
     [Required, EmailAddress, StringLength(150)]
     public string Email { get; set; } = string.Empty;
 
-    [Required, MinLength(6)]
+    [Required, StringLength(128, MinimumLength = 8)]
     public string Password { get; set; } = string.Empty;
 
     [Required, Compare(nameof(Password))]
@@ -33,25 +33,25 @@ public class LoginRequest
     [Required]
     public string EmailOrUserName { get; set; } = string.Empty;
 
-    [Required]
+    [Required, StringLength(128)]
     public string Password { get; set; } = string.Empty;
 }
 
 public class GoogleLoginRequest
 {
-    [Required]
+    [Required, StringLength(8192)]
     public string IdToken { get; set; } = string.Empty;
 }
 
 public class RefreshTokenRequest
 {
-    [Required]
+    [Required, StringLength(256)]
     public string RefreshToken { get; set; } = string.Empty;
 }
 
 public class LogoutRequest
 {
-    [Required]
+    [Required, StringLength(256)]
     public string RefreshToken { get; set; } = string.Empty;
 
     [StringLength(4096)]
@@ -81,7 +81,7 @@ public class VerifyPasswordResetOtpRequest
 
 public class ResetPasswordRequest : VerifyPasswordResetOtpRequest
 {
-    [Required, MinLength(6)]
+    [Required, StringLength(128, MinimumLength = 8)]
     public string NewPassword { get; set; } = string.Empty;
 
     [Required, Compare(nameof(NewPassword))]
@@ -90,10 +90,10 @@ public class ResetPasswordRequest : VerifyPasswordResetOtpRequest
 
 public class ResetPasswordByTokenRequest
 {
-    [Required]
+    [Required, StringLength(4096)]
     public string Token { get; set; } = string.Empty;
 
-    [Required, MinLength(6)]
+    [Required, StringLength(128, MinimumLength = 8)]
     public string NewPassword { get; set; } = string.Empty;
 
     [Required, Compare(nameof(NewPassword))]

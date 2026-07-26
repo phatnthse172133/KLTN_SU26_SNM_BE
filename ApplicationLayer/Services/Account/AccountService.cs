@@ -8,6 +8,7 @@ using DomainLayer.InterfaceCore.JWT;
 using DomainLayer.InterfaceRepository;
 using static DomainLayer.Enums.GeneralEnum;
 using ApplicationLayer.Services.Notifications;
+using ApplicationLayer.Services.Auth;
 
 using Microsoft.Extensions.Logging;
 
@@ -79,13 +80,17 @@ public class AccountService : IAccountService
         var user = await _users.GetByIdAsync(userId);
 
         if (user is null)
-            throw AppException.NotFound("Account was not found.");
+            throw AppException.NotFound("Account was not found.", AuthErrorCodes.AccountNotFound);
 
         if (!_passwordHasher.VerifyPassword(request.CurrentPassword, user.PasswordHash))
-            throw AppException.BadRequest("Current password is incorrect.");
+            throw AppException.BadRequest(
+                "Current password is incorrect.",
+                AuthErrorCodes.CurrentPasswordInvalid);
 
         if (_passwordHasher.VerifyPassword(request.NewPassword, user.PasswordHash))
-            throw AppException.BadRequest("New password must be different from the current password.");
+            throw AppException.BadRequest(
+                "New password must be different from the current password.",
+                AuthErrorCodes.PasswordReuseNotAllowed);
 
         user.PasswordHash = _passwordHasher.HashPassword(request.NewPassword);
         user.RefreshTokenHash = null;

@@ -1,6 +1,7 @@
 using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
 using DomainLayer.Entities;
+using DomainLayer.Common;
 using DomainLayer.InterfaceRepository;
 using static DomainLayer.Enums.GeneralEnum;
 
@@ -113,15 +114,5 @@ public class PromotionValidationService : IPromotionValidationService
     }
 
     private static decimal GetCurrentPrice(FoodItem foodItem)
-    {
-        var now = DateTime.UtcNow;
-        return foodItem.FoodPrices
-            .Where(price => !price.IsDeleted
-                && (!price.StartDate.HasValue || price.StartDate.Value <= now)
-                && (!price.EndDate.HasValue || price.EndDate.Value >= now))
-            .OrderByDescending(price => price.StartDate)
-            .ThenByDescending(price => price.CreatedAt)
-            .Select(price => (decimal?)price.Price)
-            .FirstOrDefault() ?? foodItem.Price;
-    }
+        => FoodPriceResolver.GetCurrentPrice(foodItem, DateTime.UtcNow);
 }

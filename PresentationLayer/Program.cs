@@ -79,6 +79,32 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0                       // Không xếp hàng, gọi thừa là REJECT ngay
             });
     });
+    options.AddPolicy("AuthAbusePolicy", httpContext =>
+    {
+        var clientKey = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        var endpointKey = httpContext.Request.Path.Value?.ToLowerInvariant() ?? "auth";
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: $"{endpointKey}:{clientKey}",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            });
+    });
+    options.AddPolicy("AuthSessionPolicy", httpContext =>
+    {
+        var clientKey = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        var endpointKey = httpContext.Request.Path.Value?.ToLowerInvariant() ?? "auth-session";
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: $"{endpointKey}:{clientKey}",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 60,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            });
+    });
 });
 
 

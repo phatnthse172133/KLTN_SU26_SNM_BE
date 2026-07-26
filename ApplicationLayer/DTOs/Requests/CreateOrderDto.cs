@@ -11,9 +11,10 @@ namespace ApplicationLayer.DTOs.Requests
     {
         public Guid? CustomerId { get; set; }
         public Guid BoothOwnerId { get; set; }
+        public Guid BoothId { get; set; }
         public string? Note { get; set; }
         public PaymentType PaymentMethod { get; set; } // "Cash" hoặc "PayOS", đối với khách vãng lai thì mặc định là "Cash"
-        public decimal DiscountAmount { get; set; }
+        public string? PromotionCode { get; set; }
         public List<CartItemDto> Items { get; set; } = new();
 
         public bool IsCreatedByBooth { get; set; } = false; //Mặc định customer đặt trên app, nếu booth tạo thì set true

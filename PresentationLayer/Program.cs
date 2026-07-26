@@ -1,24 +1,23 @@
+using ApplicationLayer.Helppers;
+using ApplicationLayer.Services.Notifications;
 using InfrastructureLayer;
+using InfrastructureLayer.Backgrounds;
 using InfrastructureLayer.Cores.JWTs;
 using InfrastructureLayer.Data;
-using ApplicationLayer.Helppers;
+using InfrastructureLayer.Data.Seeders;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using PayOS;
+using PresentationLayer.Hubs;
 using PresentationLayer.Middlewares;
 using PresentationLayer.Filters;
 using System.Security.Claims;
 using System.Text;
+using System.Threading.RateLimiting;
 using static DomainLayer.Enums.GeneralEnum;
-using ApplicationLayer.Services.Notifications;
-using ApplicationLayer.Services.Chats;
-using ApplicationLayer.Services.Storage;
-using InfrastructureLayer.Storage;
-using PresentationLayer.Hubs;
-using PayOS;
-using InfrastructureLayer.Data.Seeders;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -40,16 +39,50 @@ var jwtSettings = builder.Configuration.GetSection(JwtSettings.SectionName).Get<
 if (string.IsNullOrWhiteSpace(jwtSettings.SecretKey) || jwtSettings.SecretKey.Length < 32)
     throw new InvalidOperationException("JWT secret is missing. Set Jwt__SecretKey in PresentationLayer/.env or Jwt:SecretKey in appsettings.json (minimum 32 characters).");
 
-var payOSSettings = builder.Configuration.GetSection("PayOS");
-var payOSClient = new PayOSClient(
-    payOSSettings["ClientId"] ?? string.Empty,
-    payOSSettings["ApiKey"] ?? string.Empty,
-    payOSSettings["ChecksumKey"] ?? string.Empty
-);
+// Đăng ký PayIn Client với Key là "PayIn"
+builder.Services.AddKeyedSingleton<PayOSClient>("PayIn", (sp, key) =>
+{
+    var config = sp.GetRequiredService<IConfiguration>();
+    var settings = config.GetSection("PayOS:PayIn");
+    return new PayOSClient(settings["ClientId"], settings["ApiKey"], settings["ChecksumKey"]);
+});
 
-builder.Services.AddSingleton(payOSClient); // ÄÄƒng kÃ½ PayOS vÃ o há»‡ thá»‘ng
+// Đăng ký PayOut Client với Key là "PayOut"
+builder.Services.AddKeyedSingleton<PayOSClient>("PayOut", (sp, key) =>
+{
+    var config = sp.GetRequiredService<IConfiguration>();
+    var settings = config.GetSection("PayOS:PayOut");
+    return new PayOSClient(settings["ClientId"], settings["ApiKey"], settings["ChecksumKey"]);
+});
 
 //await payOSClient.Webhooks.ConfirmAsync("https://your-url.com/payos-webhook");
+
+// Đăng ký Background Service dọn dẹp đơn hàng treo
+//builder.Services.AddHostedService<OrderCleanupBackgroundService>();
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("OrderApiPolicy", httpContext =>
+    {
+        // Lấy UserId từ Token (nếu đã login)
+        var userId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                     ?? httpContext.User.FindFirst("sub")?.Value
+                     ?? "anonymous";
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: userId,
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 1,                     // Chỉ cho phép 1 request
+                Window = TimeSpan.FromSeconds(5),    // Trong cửa sổ 5 giây
+                QueueLimit = 0                       // Không xếp hàng, gọi thừa là REJECT ngay
+            });
+    });
+});
+
+
+
 
 const string CustomerAppCorsPolicy = "CustomerAppCorsPolicy";
 
@@ -241,8 +274,13 @@ app.UseAuthentication();
 
 app.UseAuthorization();
 
+// Thêm Middleware
+app.UseRateLimiter();
+
 app.MapControllers();
 app.MapHub<NotificationHub>("/hubs/notifications");
 app.MapHub<ChatHub>("/hubs/chats");
+
+
 
 app.Run();

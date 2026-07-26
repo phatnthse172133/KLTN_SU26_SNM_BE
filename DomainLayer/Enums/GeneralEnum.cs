@@ -305,22 +305,25 @@ namespace DomainLayer.Enums
 
         public enum PaymentStatus
         {
-            Pending = 0, // ChÆ°a thanh toÃ¡n (Máº·c Ä‘á»‹nh khi táº¡o Ä‘Æ¡n PayOS)
-            Paid = 1, // ÄÃ£ thu tiá»n thÃ nh cÃ´ng (Cáº­p nháº­t khi Webhook Ting Ting)
-            Failed = 2, // Thanh toÃ¡n tháº¥t báº¡i
-            Refunded = 3, // ÄÃ£ hoÃ n tiá»n cho khÃ¡ch
+            Pending = 0, // Chưa thanh toán (Mặc định khi tạo đơn PayOS)
+            Paid = 1, // Đã thu tiền thành công (Cập nhật khi Webhook Ting Ting)
+            Failed = 2, // Thanh toán thất bại, chủ quán không nhận được tiền
+            Refunded = 3, // Đã hoàn tiền cho khách
             Cancelled = 4,
+            RefundProcessing = 5, // Đang xử lý hoàn tiền
+            Underpaid = 6 // Thanh toán thiếu (Phát hiện gian lận hoặc lỗi dòng tiền)
         }
 
         public enum OrderStatus
         {
-            Placed = 0,          // ÄÆ¡n hÃ ng má»›i Ä‘Ã£ Ä‘Æ°á»£c há»‡ thá»‘ng ghi nháº­n
-            Preparing = 1,       // Quáº§y Ä‘ang chuáº©n bá»‹ mÃ³n
-            ReadyForPickup = 2,  // MÃ³n Ä‘Ã£ xong, chá» khÃ¡ch Ä‘áº¿n láº¥y
-            Completed = 3,       // KhÃ¡ch Ä‘Ã£ láº¥y mÃ³n -> HoÃ n thÃ nh Ä‘Æ¡n
-            Cancelled = 4,        // ÄÆ¡n bá»‹ há»§y (Do khÃ¡ch há»§y hoáº·c quáº§y háº¿t nguyÃªn liá»‡u)
-            Underpaid = 5,        // Thanh toÃ¡n thiáº¿u (PhÃ¡t hiá»‡n gian láº­n hoáº·c lá»—i dÃ²ng tiá»n)
-            Refunded = 6,         // ÄÆ¡n Ä‘Ã£ Ä‘Æ°á»£c hoÃ n tiá»n cho khÃ¡ch
+            Placed = 0,          // Đơn hàng mới đã được hệ thống ghi nhận
+            Preparing = 1,       // Quầy đang chuẩn bị món
+            ReadyForPickup = 2,  // Món đã xong, chờ khách đến lấy (hoàn thành món nhưng chưa trả tiền cho quầy nếu customer chọn
+                                 // Cash)
+            Completed = 3,       // Khách đã lấy món -> Hoàn thành đơn (đã trả tiền cho quầy nếu customer chọn Cash)
+            Cancelled = 4      // Đơn bị hủy (Do khách hủy hoặc quầy hết nguyên liệu)
+            //Underpaid = 5,        // Thanh toán thiếu (Phát hiện gian lận hoặc lỗi dòng tiền)
+            //Refunded = 6,         // Đơn đã được hoàn tiền cho khách
         }
 
         //public enum PayOrderStatus

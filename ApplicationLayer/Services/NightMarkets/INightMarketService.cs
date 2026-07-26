@@ -6,9 +6,11 @@ namespace ApplicationLayer.Services.NightMarkets;
 
 public interface INightMarketService
 {
-    Task<ApiResponse<PaginationResp<NightMarketResponse>>> GetAllAsync(NightMarketListRequest request, CancellationToken cancellationToken = default);
+    Task<ApiResponse<PaginationResp<NightMarketListItemResponse>>> GetAllAsync(NightMarketListRequest request, CancellationToken cancellationToken = default);
     Task<ApiResponse<List<NightMarketResponse>>> GetMineAsync(Guid marketOwnerId, CancellationToken cancellationToken = default);
-    Task<ApiResponse<NightMarketResponse>> GetAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<ApiResponse<NightMarketDetailResponse>> GetAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<ApiResponse<PaginationResp<NightMarketBoothListItemResponse>>> GetBoothsAsync(Guid id, PaginationReq pagination, CancellationToken cancellationToken = default);
+    Task<ApiResponse<PaginationResp<NightMarketFoodListItemResponse>>> GetFoodsAsync(Guid id, PaginationReq pagination, CancellationToken cancellationToken = default);
     Task<ApiResponse<NightMarketResponse>> CreateAsync(CreateNightMarketRequest request, Guid marketOwnerId, CancellationToken cancellationToken = default);
     Task<ApiResponse<NightMarketResponse>> UpdateAsync(Guid id, UpdateNightMarketRequest request, Guid? currentUserId, string currentUserRole, CancellationToken cancellationToken = default);
     Task<ApiResponse<NightMarketResponse>> UpdateGeographicLocationAsync(Guid id, UpdateNightMarketGeographicLocationRequest request, Guid? currentUserId, string currentUserRole, CancellationToken cancellationToken = default);

@@ -27,10 +27,11 @@ public class MapNavigationService : IMapNavigationService
 
     public async Task<ApiResponse<NightMarketMapResponse>> GetMapAsync(Guid nightMarketId, CancellationToken cancellationToken = default)
     {
-        var market = await _markets.GetActiveByIdAsync(nightMarketId, cancellationToken) ?? throw AppException.NotFound("Night market was not found.");
+        var market = await _markets.GetCustomerByIdAsync(nightMarketId, cancellationToken)
+            ?? throw AppException.NotFound("Night market was not found.", "NIGHT_MARKET_NOT_FOUND");
         var layout = await _layouts.GetActiveMapAsync(nightMarketId, cancellationToken) ?? throw AppException.NotFound("This night market has no active map.");
         var nodes = await _nodes.GetByLayoutAsync(layout.Id, accessibleOnly: true, cancellationToken);
-        var locations = await _locations.GetCurrentByLayoutAsync(layout.Id, cancellationToken);
+        var locations = await _locations.GetCustomerCurrentByLayoutAsync(layout.Id, cancellationToken);
         var zones = await _zones.GetActiveByNightMarketIdAsync(nightMarketId, cancellationToken);
 
         return ApiResponse<NightMarketMapResponse>.SuccessResponse(new()
@@ -85,6 +86,8 @@ public class MapNavigationService : IMapNavigationService
             throw AppException.BadRequest("The starting node is invalid or inaccessible.");
 
         var booth = await _booths.GetByIdAsync(boothId) ?? throw AppException.NotFound("Booth was not found.");
+        if (booth.Status != DomainLayer.Enums.GeneralEnum.BoothStatus.Active)
+            throw AppException.NotFound("Booth was not found.");
 
         var location = await _locations.GetCurrentByBoothAsync(boothId, cancellationToken)
             ?? throw AppException.NotFound("The booth does not have an active location.");
@@ -114,6 +117,8 @@ public class MapNavigationService : IMapNavigationService
         var layout = await _layouts.GetActiveByIdAsync(id, token) ?? throw AppException.NotFound("Market layout was not found.");
         if (layout.Status != DomainLayer.Enums.GeneralEnum.MarketLayoutStatus.Active)
             throw AppException.NotFound("An active market layout was not found.");
+        if (!await _markets.CustomerVisibleExistsAsync(layout.NightMarketId, token))
+            throw AppException.NotFound("Market layout was not found.");
         return layout;
     }
     private static bool IsStartingPoint(LayoutNode x) => x.IsStartingPoint ||

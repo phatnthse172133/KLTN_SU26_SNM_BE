@@ -1,18 +1,15 @@
 using DomainLayer.InterfaceCore.External;
+using Google.Apis.Auth;
 using Microsoft.Extensions.Configuration;
-using System.Net.Http.Json;
-using System.Text.Json.Serialization;
 
 namespace InfrastructureLayer.Cores.External;
 
 public class GoogleTokenValidator : IGoogleTokenValidator
 {
-    private readonly HttpClient _httpClient;
     private readonly string _clientId;
 
-    public GoogleTokenValidator(HttpClient httpClient, IConfiguration configuration)
+    public GoogleTokenValidator(IConfiguration configuration)
     {
-        _httpClient = httpClient;
         _clientId = configuration["Google:ClientId"]
             ?? configuration["Google OAuth:ClientId"]
             ?? string.Empty;
@@ -23,40 +20,28 @@ public class GoogleTokenValidator : IGoogleTokenValidator
         if (string.IsNullOrWhiteSpace(_clientId)) 
             throw new InvalidOperationException("Google:ClientId or Google OAuth:ClientId is not configured.");
 
-        var response = await _httpClient.GetFromJsonAsync<GoogleTokenInfo>($"https://oauth2.googleapis.com/tokeninfo?id_token={Uri.EscapeDataString(idToken)}", cancellationToken);
+        try
+        {
+            var payload = await GoogleJsonWebSignature.ValidateAsync(
+                idToken,
+                new GoogleJsonWebSignature.ValidationSettings
+                {
+                    Audience = new[] { _clientId }
+                });
 
-        if (response is null || 
-            response.Audience != _clientId || 
-            !string.Equals(response.EmailVerified, "true", StringComparison.OrdinalIgnoreCase) || 
-            string.IsNullOrWhiteSpace(response.Subject) ||
-            string.IsNullOrWhiteSpace(response.Email)) 
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!payload.EmailVerified || string.IsNullOrWhiteSpace(payload.Subject) || string.IsNullOrWhiteSpace(payload.Email))
+                return null;
+
+            return new GoogleUserInfo(
+                payload.Subject,
+                payload.Email.Trim().ToLowerInvariant(),
+                payload.Name ?? payload.Email,
+                payload.Picture);
+        }
+        catch (InvalidJwtException)
+        {
             return null;
-
-        return new GoogleUserInfo(
-            response.Subject,
-            response.Email.Trim().ToLowerInvariant(),
-            response.Name ?? response.Email,
-            response.Picture);
-    }
-
-    private class GoogleTokenInfo
-    {
-        [JsonPropertyName("aud")]
-        public string? Audience { get; init; }
-
-        [JsonPropertyName("sub")]
-        public string? Subject { get; init; }
-
-        [JsonPropertyName("email")]
-        public string? Email { get; init; }
-
-        [JsonPropertyName("email_verified")]
-        public string? EmailVerified { get; init; }
-
-        [JsonPropertyName("name")]
-        public string? Name { get; init; }
-
-        [JsonPropertyName("picture")]
-        public string? Picture { get; init; }
+        }
     }
 }

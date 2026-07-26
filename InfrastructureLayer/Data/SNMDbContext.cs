@@ -842,7 +842,7 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.Status)
                     .HasConversion<string>()
                     .HasMaxLength(20)
-                    .HasDefaultValueSql("'Active'::character varying");
+                    .HasDefaultValue(NightMarketStatus.Draft);
                 entity.Property(e => e.ModerationStatus)
                     .HasConversion<string>()
                     .HasMaxLength(20)

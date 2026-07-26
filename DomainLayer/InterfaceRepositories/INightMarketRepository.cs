@@ -6,6 +6,24 @@ namespace DomainLayer.InterfaceRepository;
 
 public interface INightMarketRepository : IGenericRepository<NightMarket>
 {
+    Task<PagedResult<NightMarketCustomerReadModel>> GetCustomerPagedAsync(
+        string? keyword,
+        bool? openNow,
+        TimeOnly localTime,
+        int page,
+        int pageSize,
+        string sortBy,
+        bool ascending,
+        CancellationToken cancellationToken = default);
+
+    Task<NightMarketCustomerReadModel?> GetCustomerByIdAsync(
+        Guid id,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> CustomerVisibleExistsAsync(
+        Guid id,
+        CancellationToken cancellationToken = default);
+
     Task<PagedResult<NightMarket>> GetActivePagedAsync(
         string? keyword,
         NightMarketStatus? status,

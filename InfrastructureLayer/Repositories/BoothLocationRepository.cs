@@ -32,6 +32,18 @@ public class BoothLocationRepository : GenericRepository<BoothLocation>, IBoothL
             .Where(x => x.LayoutId == layoutId && !x.IsDeleted)
             .OrderBy(x => x.SlotNumber).ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyCollection<BoothLocation>> GetCustomerCurrentByLayoutAsync(
+        Guid layoutId,
+        CancellationToken cancellationToken = default)
+        => await _dbSet.AsNoTracking()
+            .Include(location => location.Booth)
+            .Where(location =>
+                location.LayoutId == layoutId &&
+                !location.IsDeleted &&
+                location.Booth.Status == DomainLayer.Enums.GeneralEnum.BoothStatus.Active)
+            .OrderBy(location => location.SlotNumber)
+            .ToListAsync(cancellationToken);
+
     public async Task AssignOrMoveAsync(BoothLocation location, DateTime now, CancellationToken cancellationToken = default)
     {
         await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);

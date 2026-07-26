@@ -102,7 +102,7 @@ namespace InfrastructureLayer
             services.AddScoped<IJwtService, JWTService>();
             services.AddScoped<IPasswordHasher, PasswordHasher>();
             services.AddScoped<IEmailService, EmailService>();
-            services.AddHttpClient<IGoogleTokenValidator, GoogleTokenValidator>();
+            services.AddScoped<IGoogleTokenValidator, GoogleTokenValidator>();
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<IAccountService, AccountService>();
 

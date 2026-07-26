@@ -5,8 +5,12 @@ public class AppException : Exception
     public int StatusCode { get; }
     public string ErrorCode { get; }
 
-    public AppException(string message, int statusCode = 400, string errorCode = "APP_ERROR")
-        : base(message)
+    public AppException(
+        string message,
+        int statusCode = 400,
+        string errorCode = "APP_ERROR",
+        Exception? innerException = null)
+        : base(message, innerException)
     {
         StatusCode = statusCode;
         ErrorCode = errorCode;
@@ -27,8 +31,11 @@ public class AppException : Exception
     public static AppException Conflict(string message, string errorCode = "CONFLICT")
         => new(message, 409, errorCode);
 
-    public static AppException ServiceUnavailable(string message, string errorCode = "SERVICE_UNAVAILABLE")
-        => new(message, 503, errorCode);
+    public static AppException ServiceUnavailable(
+        string message,
+        string errorCode = "SERVICE_UNAVAILABLE",
+        Exception? innerException = null)
+        => new(message, 503, errorCode, innerException);
 
     public static AppException PayloadTooLarge(string message, string errorCode = "PAYLOAD_TOO_LARGE")
         => new(message, 413, errorCode);

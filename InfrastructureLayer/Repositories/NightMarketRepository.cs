@@ -13,6 +13,68 @@ public class NightMarketRepository : GenericRepository<NightMarket>, INightMarke
     {
     }
 
+    public async Task<PagedResult<NightMarketCustomerReadModel>> GetCustomerPagedAsync(
+        string? keyword,
+        bool? openNow,
+        TimeOnly localTime,
+        int page,
+        int pageSize,
+        string sortBy,
+        bool ascending,
+        CancellationToken cancellationToken = default)
+    {
+        var query = CustomerVisibleQuery();
+
+        if (!string.IsNullOrWhiteSpace(keyword))
+        {
+            var normalizedKeyword = keyword.Trim().ToLower();
+            query = query.Where(market =>
+                market.Name.ToLower().Contains(normalizedKeyword) ||
+                market.Address.ToLower().Contains(normalizedKeyword));
+        }
+
+        if (openNow == true)
+        {
+            query = query.Where(market =>
+                market.Status == NightMarketStatus.Open &&
+                market.OpeningHours.HasValue &&
+                market.ClosingHours.HasValue &&
+                market.OpeningHours.Value <= localTime &&
+                localTime < market.ClosingHours.Value);
+        }
+        else if (openNow == false)
+        {
+            query = query.Where(market =>
+                market.Status == NightMarketStatus.Closed ||
+                (market.Status == NightMarketStatus.Open &&
+                 market.OpeningHours.HasValue &&
+                 market.ClosingHours.HasValue &&
+                 (localTime < market.OpeningHours.Value ||
+                  localTime >= market.ClosingHours.Value)));
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        query = ApplyCustomerSorting(query, sortBy, ascending);
+
+        var items = await ProjectCustomer(query)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return new PagedResult<NightMarketCustomerReadModel>(items, totalCount);
+    }
+
+    public Task<NightMarketCustomerReadModel?> GetCustomerByIdAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
+        => ProjectCustomer(CustomerVisibleQuery().Where(market => market.Id == id))
+            .FirstOrDefaultAsync(cancellationToken);
+
+    public Task<bool> CustomerVisibleExistsAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
+        => CustomerVisibleQuery().AnyAsync(market => market.Id == id, cancellationToken);
+
     public async Task<PagedResult<NightMarket>> GetActivePagedAsync(
         string? keyword,
         NightMarketStatus? status,
@@ -68,6 +130,46 @@ public class NightMarketRepository : GenericRepository<NightMarket>, INightMarke
             .Where(market => market.MarketOwnerId == marketOwnerId && !market.IsDeleted && market.ModerationStatus != ModerationStatus.Suspended)
             .OrderByDescending(market => market.CreatedAt)
             .ToListAsync(cancellationToken);
+
+    private IQueryable<NightMarket> CustomerVisibleQuery()
+        => _dbSet.AsNoTracking().Where(market =>
+            !market.IsDeleted &&
+            market.ModerationStatus == ModerationStatus.Active &&
+            (market.Status == NightMarketStatus.Upcoming ||
+             market.Status == NightMarketStatus.Open ||
+             market.Status == NightMarketStatus.Closed));
+
+    private static IQueryable<NightMarketCustomerReadModel> ProjectCustomer(IQueryable<NightMarket> query)
+        => query.Select(market => new NightMarketCustomerReadModel(
+            market.Id,
+            market.Name,
+            market.Description,
+            market.Address,
+            market.Latitude,
+            market.Longitude,
+            market.OpeningHours,
+            market.ClosingHours,
+            market.ThumbnailUrl,
+            market.Status,
+            market.Booths.Count(booth => booth.Status == BoothStatus.Active),
+            market.MarketLayouts.Any(layout =>
+                !layout.IsDeleted && layout.Status == MarketLayoutStatus.Active),
+            market.BoundaryWidthMeters,
+            market.BoundaryHeightMeters));
+
+    private static IQueryable<NightMarket> ApplyCustomerSorting(
+        IQueryable<NightMarket> query,
+        string sortBy,
+        bool ascending)
+        => (sortBy.ToLowerInvariant(), ascending) switch
+        {
+            ("name", true) => query.OrderBy(market => market.Name).ThenBy(market => market.Id),
+            ("name", false) => query.OrderByDescending(market => market.Name).ThenBy(market => market.Id),
+            ("boothcount", true) => query.OrderBy(market => market.Booths.Count(booth => booth.Status == BoothStatus.Active)).ThenBy(market => market.Id),
+            ("boothcount", false) => query.OrderByDescending(market => market.Booths.Count(booth => booth.Status == BoothStatus.Active)).ThenBy(market => market.Id),
+            ("createdat", true) => query.OrderBy(market => market.CreatedAt).ThenBy(market => market.Id),
+            _ => query.OrderByDescending(market => market.CreatedAt).ThenBy(market => market.Id)
+        };
 
     private static IQueryable<NightMarket> ApplySorting(
         IQueryable<NightMarket> query,

@@ -8,6 +8,7 @@ using DomainLayer.Entities;
 using DomainLayer.InterfaceCore.JWT;
 using DomainLayer.InterfaceRepository;
 using ApplicationLayer.Services.Account;
+using ApplicationLayer.Services.Auth;
 using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Services.Notifications;
@@ -54,6 +55,34 @@ namespace TestingLayer
                 _mockOutbox.Object,
                 _mockLogger.Object
             );
+        }
+
+        [Fact]
+        public async Task ChangePasswordAsync_WrongCurrentPassword_DoesNotUpdateAccount()
+        {
+            var user = new User
+            {
+                Id = Guid.NewGuid(),
+                PasswordHash = "stored-hash",
+                Status = UserStatus.Active
+            };
+            _mockUsers.Setup(repository => repository.GetByIdAsync(user.Id)).ReturnsAsync(user);
+            _mockPasswordHasher
+                .Setup(hasher => hasher.VerifyPassword("wrong-password", user.PasswordHash))
+                .Returns(false);
+
+            var exception = await Assert.ThrowsAsync<AppException>(() => _accountService.ChangePasswordAsync(
+                user.Id,
+                new ChangePasswordRequest
+                {
+                    CurrentPassword = "wrong-password",
+                    NewPassword = "new-password",
+                    ConfirmNewPassword = "new-password"
+                }));
+
+            Assert.Equal(AuthErrorCodes.CurrentPasswordInvalid, exception.ErrorCode);
+            _mockUsers.Verify(repository => repository.Update(It.IsAny<User>()), Times.Never);
+            _mockUsers.Verify(repository => repository.SaveChangesAsync(), Times.Never);
         }
 
         [Fact]

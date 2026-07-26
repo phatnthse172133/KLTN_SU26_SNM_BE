@@ -13,6 +13,54 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
     {
     }
 
+    public async Task<PagedResult<NightMarketFoodCustomerReadModel>> GetCustomerByNightMarketPagedAsync(
+        Guid nightMarketId,
+        DateTime utcNow,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        var query = ActiveQuery().AsNoTracking().Where(item =>
+            item.IsAvailable &&
+            !item.Category.IsDeleted &&
+            item.Booth.NightMarketId == nightMarketId &&
+            item.Booth.Status == BoothStatus.Active &&
+            !item.Booth.NightMarket.IsDeleted &&
+            item.Booth.NightMarket.ModerationStatus == ModerationStatus.Active &&
+            (item.Booth.NightMarket.Status == NightMarketStatus.Upcoming ||
+             item.Booth.NightMarket.Status == NightMarketStatus.Open ||
+             item.Booth.NightMarket.Status == NightMarketStatus.Closed));
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var foodItems = await query
+            .OrderByDescending(item => item.IsFeatured)
+            .ThenBy(item => item.Name)
+            .ThenBy(item => item.Id)
+            .Include(item => item.Booth)
+            .Include(item => item.Category)
+            .Include(item => item.FoodPrices)
+            .AsSplitQuery()
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        var items = foodItems
+            .Select(item => new NightMarketFoodCustomerReadModel(
+                item.Id,
+                item.BoothId,
+                item.Booth.BoothName,
+                item.CategoryId,
+                item.Category.Name,
+                item.Name,
+                item.Description,
+                FoodPriceResolver.GetCurrentPrice(item, utcNow),
+                item.ThumbnailUrl,
+                item.IsFeatured))
+            .ToList();
+
+        return new PagedResult<NightMarketFoodCustomerReadModel>(items, totalCount);
+    }
+
     public async Task<PagedResult<FoodItem>> GetMenuByBoothPagedAsync(
         Guid boothId,
         int page,

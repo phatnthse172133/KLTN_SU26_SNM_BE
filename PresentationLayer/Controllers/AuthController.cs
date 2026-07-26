@@ -2,6 +2,7 @@ using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.Services.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace PresentationLayer.Controllers;
 
@@ -17,6 +18,7 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("register/customer")]
+    [EnableRateLimiting("AuthAbusePolicy")]
     public async Task<IActionResult> RegisterCustomer(RegisterCustomerRequest request, CancellationToken cancellationToken)
     {
         var response = await _authService.RegisterCustomerAsync(request, cancellationToken);
@@ -24,6 +26,7 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("register/booth-owner")]
+    [EnableRateLimiting("AuthAbusePolicy")]
     public async Task<IActionResult> RegisterBoothOwner(RegisterBoothOwnerRequest request, CancellationToken cancellationToken)
     {
         var response = await _authService.RegisterBoothOwnerAsync(request, cancellationToken);
@@ -31,6 +34,7 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("login")]
+    [EnableRateLimiting("AuthAbusePolicy")]
     public async Task<IActionResult> Login(LoginRequest request, CancellationToken cancellationToken)
     {
         var response = await _authService.LoginAsync(request, cancellationToken);
@@ -38,6 +42,7 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("google-login")]
+    [EnableRateLimiting("AuthAbusePolicy")]
     public async Task<IActionResult> GoogleLogin(GoogleLoginRequest request, CancellationToken cancellationToken)
     {
         var response = await _authService.GoogleLoginAsync(request, cancellationToken);
@@ -45,6 +50,7 @@ public class AuthController : ControllerBase
     }
 
     [HttpGet("verify-email")]
+    [EnableRateLimiting("AuthAbusePolicy")]
     public async Task<IActionResult> VerifyEmail([FromQuery] string token, CancellationToken cancellationToken)
     {
         var response = await _authService.VerifyEmailAsync(token, cancellationToken);
@@ -52,6 +58,7 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("resend-verification")]
+    [EnableRateLimiting("AuthAbusePolicy")]
     public async Task<IActionResult> ResendVerification(ResendVerificationRequest request, CancellationToken cancellationToken)
     {
         var response = await _authService.ResendVerificationAsync(request, cancellationToken);
@@ -59,6 +66,7 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("forgot-password")]
+    [EnableRateLimiting("AuthAbusePolicy")]
     public async Task<IActionResult> ForgotPassword(ForgotPasswordRequest request, CancellationToken cancellationToken)
     {
         var response = await _authService.ForgotPasswordAsync(request, cancellationToken);
@@ -66,6 +74,7 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("verify-password-reset-otp")]
+    [EnableRateLimiting("AuthAbusePolicy")]
     public async Task<IActionResult> VerifyPasswordResetOtp(VerifyPasswordResetOtpRequest request, CancellationToken cancellationToken)
     {
         var response = await _authService.VerifyPasswordResetOtpAsync(request, cancellationToken);
@@ -73,6 +82,7 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("reset-password")]
+    [EnableRateLimiting("AuthAbusePolicy")]
     public async Task<IActionResult> ResetPassword(ResetPasswordRequest request, CancellationToken cancellationToken)
     {
         var response = await _authService.ResetPasswordAsync(request, cancellationToken);
@@ -80,6 +90,7 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("reset-password-by-token")]
+    [EnableRateLimiting("AuthAbusePolicy")]
     public async Task<IActionResult> ResetPasswordByToken(ResetPasswordByTokenRequest request, CancellationToken cancellationToken)
     {
         var response = await _authService.ResetPasswordByTokenAsync(request, cancellationToken);
@@ -87,6 +98,7 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("refresh-token")]
+    [EnableRateLimiting("AuthSessionPolicy")]
     public async Task<IActionResult> RefreshToken(RefreshTokenRequest request, CancellationToken cancellationToken)
     {
         var response = await _authService.RefreshTokenAsync(request, cancellationToken);
@@ -95,6 +107,7 @@ public class AuthController : ControllerBase
 
     [AllowAnonymous]
     [HttpPost("logout")]
+    [EnableRateLimiting("AuthSessionPolicy")]
     public async Task<IActionResult> Logout(LogoutRequest request, CancellationToken cancellationToken)
     {
         var response = await _authService.LogoutAsync(request, cancellationToken);

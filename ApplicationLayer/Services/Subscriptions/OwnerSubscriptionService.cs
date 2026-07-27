@@ -42,7 +42,7 @@ namespace ApplicationLayer.Services.Subscriptions
                 throw AppException.Forbidden("You do not have permission to manage this booth.", "BOOTH_OWNERSHIP_REQUIRED");
         }
 
-        // â”€â”€â”€ Booth â”€â”€â”€
+        // ─── Booth ───
 
         public async Task<ApiResponse<CurrentSubscriptionResponse>> GetBoothCurrentAsync(Guid ownerId, Guid boothId, CancellationToken ct = default)
         {
@@ -53,11 +53,13 @@ namespace ApplicationLayer.Services.Subscriptions
             if (sub == null)
             {
                 // Fallback to BOOTH_FREE
+                var freePackage = await _repo.GetPackageByCodeAsync(BoothFreePackageCode, ct);
                 return ApiResponse<CurrentSubscriptionResponse>.SuccessResponse(new CurrentSubscriptionResponse
                 {
                     Status = "Active",
                     PackageCode = "BOOTH_FREE",
                     PackageName = "Booth Basic",
+                    PackageImageUrl = freePackage?.ImageUrl,
                     DaysRemaining = 0,
                     Entitlements = EntitlementHelper.SerializeBooth(BoothEntitlements.Free),
                     PaidAmount = 0,
@@ -211,7 +213,7 @@ namespace ApplicationLayer.Services.Subscriptions
             }
         }
 
-        // â”€â”€â”€ Market â”€â”€â”€
+        // ─── Market ───
 
         public async Task<ApiResponse<CurrentSubscriptionResponse>> GetMarketCurrentAsync(Guid ownerId, CancellationToken ct = default)
         {
@@ -236,25 +238,33 @@ namespace ApplicationLayer.Services.Subscriptions
             if (amount <= 0)
                 throw AppException.BadRequest("Market package price must be greater than 0.", "INVALID_PACKAGE_PRICE");
 
-            var policyAcceptance = ValidateAndSnapshotPolicy(policy, request.AcceptedPolicy, request.AcceptedPolicyVersion);
+            // Check pending payment BEFORE policy validation so a policy version change
+            // doesn't block resuming an already-accepted pending payment.
+            var pending = await _repo.GetPendingMarketSubscriptionAsync(ownerId, ct);
+            if (pending != null)
+            {
+                var pendingResult = await HandlePendingMarketPaymentAsync(pending, pkg, durationDays, ct);
+                if (pendingResult != null)
+                    return pendingResult;
+            }
 
-            if (await _repo.HasPendingMarketSubscriptionAsync(ownerId, ct))
-                throw AppException.Conflict("You already have a pending payment. Please complete or cancel it first.", "PENDING_SUBSCRIPTION_EXISTS");
+            // Now validate policy for new purchase
+            var policyAcceptance = ValidateAndSnapshotPolicy(policy, request.AcceptedPolicy, request.AcceptedPolicyVersion);
 
             var active = await _repo.GetActiveMarketSubscriptionAsync(ownerId, ct);
             if (active?.PackageId == pkg.Id)
                 throw AppException.Conflict("This package is already active. Use renewal to extend it.", "USE_RENEWAL_ENDPOINT");
 
-            var now = DateTime.UtcNow;
+            var now2 = DateTime.UtcNow;
             var changeType = DetermineChangeType(active?.Package, pkg);
-            var creditAmount = changeType == "Upgrade" ? CalculateProratedCredit(active, now) : 0m;
+            var creditAmount = changeType == "Upgrade" ? CalculateProratedCredit(active, now2) : 0m;
             var amountDue = Math.Max(0m, amount - creditAmount);
             var subscription = new MarketSubscription
             {
                 MarketOwnerId = ownerId,
                 PackageId = pkg.Id,
-                StartDate = now,
-                EndDate = now.AddDays(durationDays),
+                StartDate = now2,
+                EndDate = now2.AddDays(durationDays),
                 Status = SubscriptionStatus.PendingPayment,
                 PaidAmount = amountDue,
                 PolicyVersion = policyAcceptance.Version,
@@ -268,19 +278,19 @@ namespace ApplicationLayer.Services.Subscriptions
             await _repo.SaveChangesAsync(ct);
 
             if (amountDue == 0)
-                return await ActivateCreditCoveredMarketSubscriptionAsync(subscription, pkg, durationDays, active, now, ct);
+                return await ActivateCreditCoveredMarketSubscriptionAsync(subscription, pkg, durationDays, active, now2, ct);
 
-            var orderCode = await _orderCodeGenerator.GenerateAsync(PayOSOrderSource.MarketSubscription);
+            var newOrderCode = await _orderCodeGenerator.GenerateAsync(PayOSOrderSource.MarketSubscription);
             try
             {
                 var payosResp = await _payos.CreatePaymentLinkAsync(new PayOSPaymentRequest
                 {
-                    OrderCode = orderCode,
+                    OrderCode = newOrderCode,
                     Amount = amountDue,
-                    Description = $"SNM {orderCode}",
+                    Description = $"SNM {newOrderCode}",
                 });
 
-                subscription.PayOSOrderCode = orderCode;
+                subscription.PayOSOrderCode = newOrderCode;
                 subscription.PayOSPaymentLinkId = payosResp.PaymentLinkId;
                 subscription.PaymentExpiresAt = ParsePayOSExpiry(payosResp.ExpiresAt);
                 await _repo.SaveChangesAsync(ct);
@@ -294,7 +304,6 @@ namespace ApplicationLayer.Services.Subscriptions
                 throw;
             }
         }
-
         public async Task<ApiResponse<PayOSPaymentResponseDto>> RenewMarketAsync(Guid ownerId, RenewSubscriptionRequest request, CancellationToken ct = default)
         {
             var current = await _repo.GetActiveMarketSubscriptionAsync(ownerId, ct)
@@ -303,13 +312,20 @@ namespace ApplicationLayer.Services.Subscriptions
             var durationDays = request.DurationDays ?? current.Package.DurationDays;
             var (pkg, policy, price, resolvedDuration, amount) = await ResolvePackageAndPriceAsync(current.PackageId, durationDays, PackageType.Market, ct);
 
-            var policyAcceptance = ValidateAndSnapshotPolicy(policy, request.AcceptedPolicy, request.AcceptedPolicyVersion);
-
             if (amount <= 0)
                 throw AppException.BadRequest("Market package price must be greater than 0.", "INVALID_PACKAGE_PRICE");
 
-            if (await _repo.HasPendingMarketSubscriptionAsync(ownerId, ct))
-                throw AppException.Conflict("You already have a pending payment. Please complete or cancel it first.", "PENDING_SUBSCRIPTION_EXISTS");
+            // Check pending payment BEFORE policy validation
+            var pending = await _repo.GetPendingMarketSubscriptionAsync(ownerId, ct);
+            if (pending != null)
+            {
+                var pendingResult = await HandlePendingMarketPaymentAsync(pending, pkg, resolvedDuration, ct);
+                if (pendingResult != null)
+                    return pendingResult;
+            }
+
+            // Now validate policy for new renewal
+            var policyAcceptance = ValidateAndSnapshotPolicy(policy, request.AcceptedPolicy, request.AcceptedPolicyVersion);
 
             var now = DateTime.UtcNow;
             var subscription = new MarketSubscription
@@ -354,7 +370,7 @@ namespace ApplicationLayer.Services.Subscriptions
             }
         }
 
-        // â”€â”€â”€ Payment Status & Cancel â”€â”€â”€
+        // ─── Payment Status & Cancel ───
 
         public async Task<ApiResponse<PaymentStatusResponse>> GetPaymentStatusAsync(Guid userId, Guid subscriptionId, CancellationToken ct = default)
         {
@@ -442,7 +458,7 @@ namespace ApplicationLayer.Services.Subscriptions
             throw AppException.NotFound("Subscription was not found.");
         }
 
-        // â”€â”€â”€ Helpers â”€â”€â”€
+        // ─── Helpers ───
 
         private async Task<(Package pkg, PackagePolicy? policy, PackagePrice? price, int durationDays, decimal amount)> ResolvePackageAndPriceAsync(Guid packageId, int? durationDays, PackageType expectedType, CancellationToken ct)
         {
@@ -510,10 +526,12 @@ namespace ApplicationLayer.Services.Subscriptions
                 BoothId = boothId,
                 PackageId = package.Id,
                 StartDate = now,
-                EndDate = now.AddDays(durationDays),
+                EndDate = DateTime.MaxValue,
                 Status = SubscriptionStatus.PendingPayment,
                 PaidAmount = 0,
-                ChangeType = "FreeDefault"
+                ChangeType = "FreeDefault",
+                CreatedAt = now,
+                UpdatedAt = now
             };
 
             await _repo.AddBoothSubscriptionAsync(subscription, ct);
@@ -703,12 +721,118 @@ namespace ApplicationLayer.Services.Subscriptions
             return Math.Round(paidAmount * remainingDays / totalDays, 0, MidpointRounding.AwayFromZero);
         }
 
+        /// <summary>
+        /// Handles an existing pending market subscription payment.
+        /// Returns a response if the pending payment is resolved (resumed/awaiting/paid),
+        /// or null if the caller should proceed with a new purchase (pending was cancelled/expired).
+        /// </summary>
+        private async Task<ApiResponse<PayOSPaymentResponseDto>?> HandlePendingMarketPaymentAsync(
+            MarketSubscription pending, Package targetPkg, int durationDays, CancellationToken ct)
+        {
+            var now = DateTime.UtcNow;
+            var isExpired = pending.PaymentExpiresAt.HasValue && pending.PaymentExpiresAt.Value <= now;
+
+            // Different package and not expired -> block
+            if (!isExpired && pending.PackageId != targetPkg.Id)
+                throw AppException.Conflict("You already have a pending payment for a different package. Complete or cancel it first.", "PENDING_PAYMENT_EXISTS");
+
+            // Check PayOS status of the existing order before doing anything
+            if (pending.PayOSOrderCode.HasValue)
+            {
+                try
+                {
+                    var payosStatus = await _payos.GetPaymentStatusAsync(pending.PayOSOrderCode.Value);
+                    if (payosStatus != null)
+                    {
+                        // Already paid - webhook may not have arrived yet. Don't create new QR.
+                        if (string.Equals(payosStatus.Status, "PAID", StringComparison.OrdinalIgnoreCase))
+                        {
+                            return ApiResponse<PayOSPaymentResponseDto>.SuccessResponse(
+                                new PayOSPaymentResponseDto
+                                {
+                                    SubscriptionId = pending.Id,
+                                    OrderCode = pending.PayOSOrderCode.Value,
+                                    PackageName = targetPkg.PackageName,
+                                    DurationDays = durationDays,
+                                    Amount = pending.PaidAmount,
+                                    Status = "AwaitingWebhook",
+                                },
+                                "Payment has been confirmed. Your subscription is being activated.");
+                        }
+
+                        // Still pending and not expired. Subscription rows do not persist
+                        // checkout URL/QR, so create a fresh payment link on the same subscription.
+                        if (!isExpired && string.Equals(payosStatus.Status, "PENDING", StringComparison.OrdinalIgnoreCase))
+                        {
+                            return await RecreatePendingMarketPaymentLinkAsync(
+                                pending,
+                                targetPkg.PackageName,
+                                durationDays,
+                                "Your pending payment has been resumed. Please complete the payment.",
+                                ct);
+                        }
+                    }
+                }
+                catch
+                {
+                    // If PayOS status check fails, fall through to expiry-based logic
+                }
+            }
+
+            // Expired or cancelled on PayOS side - cancel old pending and create new
+            if (!isExpired && pending.PackageId == targetPkg.Id && pending.PayOSOrderCode.HasValue)
+            {
+                return await RecreatePendingMarketPaymentLinkAsync(
+                    pending,
+                    targetPkg.PackageName,
+                    durationDays,
+                    "A new payment link has been created. Please complete the payment.",
+                    ct);
+            }
+
+            // Expired or different package expired - cancel and let caller proceed
+            await _repo.CancelMarketSubscriptionAsync(pending.Id, ct);
+            await _repo.SaveChangesAsync(ct);
+            return null;
+        }
+
+        private async Task<ApiResponse<PayOSPaymentResponseDto>> RecreatePendingMarketPaymentLinkAsync(
+            MarketSubscription pending,
+            string packageName,
+            int durationDays,
+            string message,
+            CancellationToken ct)
+        {
+            if (pending.PayOSOrderCode.HasValue)
+            {
+                try { await _payos.CancelPaymentLinkAsync(pending.PayOSOrderCode.Value); }
+                catch { }
+            }
+
+            var orderCode = await _orderCodeGenerator.GenerateAsync(PayOSOrderSource.MarketSubscription);
+            var payosResp = await _payos.CreatePaymentLinkAsync(new PayOSPaymentRequest
+            {
+                OrderCode = orderCode,
+                Amount = pending.PaidAmount,
+                Description = $"SNM {orderCode}",
+            });
+
+            pending.PayOSOrderCode = orderCode;
+            pending.PayOSPaymentLinkId = payosResp.PaymentLinkId;
+            pending.PaymentExpiresAt = ParsePayOSExpiry(payosResp.ExpiresAt);
+            await _repo.SaveChangesAsync(ct);
+
+            return ApiResponse<PayOSPaymentResponseDto>.SuccessResponse(
+                MapPayOSResponse(pending.Id, packageName, durationDays, pending.PaidAmount, payosResp, "PendingPaymentResumed"),
+                message);
+        }
+
         private static DateTime? ParsePayOSExpiry(DateTimeOffset? expiresAt)
         {
             return expiresAt?.UtcDateTime;
         }
 
-        private static PayOSPaymentResponseDto MapPayOSResponse(Guid subscriptionId, string packageName, int durationDays, decimal amount, PayOSPaymentResponse resp)
+        private static PayOSPaymentResponseDto MapPayOSResponse(Guid subscriptionId, string packageName, int durationDays, decimal amount, PayOSPaymentResponse resp, string status = "PendingPayment")
         {
             return new PayOSPaymentResponseDto
             {
@@ -723,7 +847,7 @@ namespace ApplicationLayer.Services.Subscriptions
                 AccountName = resp.AccountName,
                 Description = resp.Description,
                 ExpiresAt = resp.ExpiresAt,
-                Status = "PendingPayment",
+                Status = status,
             };
         }
 
@@ -741,15 +865,51 @@ namespace ApplicationLayer.Services.Subscriptions
             };
         }
 
+        private static TimeZoneInfo? _vnTimeZone;
+
+        private static TimeZoneInfo GetVietnamTimeZone()
+        {
+            if (_vnTimeZone != null)
+                return _vnTimeZone;
+
+            string[] ids = { "Asia/Ho_Chi_Minh", "SE Asia Standard Time", "Vietnam Standard Time" };
+            foreach (var id in ids)
+            {
+                try
+                {
+                    _vnTimeZone = TimeZoneInfo.FindSystemTimeZoneById(id);
+                    return _vnTimeZone;
+                }
+                catch { }
+            }
+
+            // Fallback: UTC+7
+            _vnTimeZone = TimeZoneInfo.CreateCustomTimeZone("VN", TimeSpan.FromHours(7), "Vietnam", "Vietnam Standard Time");
+            return _vnTimeZone;
+        }
+
+        private static int CalculateDaysRemaining(DateTime endDate, SubscriptionStatus status)
+        {
+            if (status != SubscriptionStatus.Active)
+                return 0;
+
+            var vnTimeZone = GetVietnamTimeZone();
+            var nowInVn = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, vnTimeZone);
+            var endDateInVn = TimeZoneInfo.ConvertTimeFromUtc(endDate, vnTimeZone);
+
+            var daysRemaining = (endDateInVn.Date - nowInVn.Date).Days;
+            return daysRemaining > 0 ? daysRemaining : 0;
+        }
+
         private static CurrentSubscriptionResponse MapBoothCurrent(BoothSubscription sub, bool hasPending)
         {
-            var now = DateTime.UtcNow;
-            var daysRemaining = sub.EndDate > now ? (int)(sub.EndDate - now).TotalDays : 0;
+            var daysRemaining = CalculateDaysRemaining(sub.EndDate, sub.Status);
             return new CurrentSubscriptionResponse
             {
                 SubscriptionId = sub.Id,
                 PackageCode = sub.Package?.Code,
                 PackageName = sub.Package?.PackageName ?? "",
+                PackageImageUrl = sub.Package?.ImageUrl,
                 Status = sub.Status == SubscriptionStatus.Active && sub.StartDate > DateTime.UtcNow
                     ? "Scheduled"
                     : sub.Status.ToString(),
@@ -765,13 +925,13 @@ namespace ApplicationLayer.Services.Subscriptions
 
         private static CurrentSubscriptionResponse MapMarketCurrent(MarketSubscription sub, bool hasPending)
         {
-            var now = DateTime.UtcNow;
-            var daysRemaining = sub.EndDate > now ? (int)(sub.EndDate - now).TotalDays : 0;
+            var daysRemaining = CalculateDaysRemaining(sub.EndDate, sub.Status);
             return new CurrentSubscriptionResponse
             {
                 SubscriptionId = sub.Id,
                 PackageCode = sub.Package?.Code,
                 PackageName = sub.Package?.PackageName ?? "",
+                PackageImageUrl = sub.Package?.ImageUrl,
                 Status = sub.Status.ToString(),
                 StartDate = sub.StartDate,
                 EndDate = sub.EndDate,
@@ -790,6 +950,7 @@ namespace ApplicationLayer.Services.Subscriptions
                 Id = sub.Id,
                 PackageName = sub.Package?.PackageName ?? "",
                 PackageCode = sub.Package?.Code,
+                PackageImageUrl = sub.Package?.ImageUrl,
                 Status = sub.Status == SubscriptionStatus.Active && sub.StartDate > DateTime.UtcNow
                     ? "Scheduled"
                     : sub.Status.ToString(),
@@ -809,6 +970,7 @@ namespace ApplicationLayer.Services.Subscriptions
                 Id = sub.Id,
                 PackageName = sub.Package?.PackageName ?? "",
                 PackageCode = sub.Package?.Code,
+                PackageImageUrl = sub.Package?.ImageUrl,
                 Status = sub.Status.ToString(),
                 StartDate = sub.StartDate,
                 EndDate = sub.EndDate,

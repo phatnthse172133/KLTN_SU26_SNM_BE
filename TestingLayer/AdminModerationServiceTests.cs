@@ -50,7 +50,7 @@ namespace TestingLayer
             );
         }
 
-        // â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ─── Helpers ───────────────────────────────────────────────
 
         private static NightMarket CreateMarket(ModerationStatus modStatus = ModerationStatus.Active)
         {
@@ -60,7 +60,7 @@ namespace TestingLayer
                 MarketOwnerId = Guid.NewGuid(),
                 Name = "Test Night Market",
                 Address = "123 Test Street",
-                Status = NightMarketStatus.Open,
+                Status = NightMarketStatus.Active,
                 ModerationStatus = modStatus,
                 TotalBooth = 10,
                 CreatedAt = DateTime.UtcNow.AddDays(-10),
@@ -94,7 +94,13 @@ namespace TestingLayer
         private static ChangeModerationStatusRequest CreateRestoreRequest()
             => new() { Status = ModerationStatus.Active, Reason = "This is a valid restore reason." };
 
-        // â”€â”€â”€ Night Market Tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        private static BoothModerationActionRequest CreateBanRequest()
+            => new() { Reason = "This is a valid ban reason." };
+
+        private static BoothModerationActionRequest CreateBoothRestoreRequest()
+            => new() { Reason = "This is a valid restore reason." };
+
+        // ─── Night Market Tests ─────────────────────────────────────
 
         [Fact]
         public async Task GetMarketsAsync_ReturnsPagedResult()
@@ -306,7 +312,7 @@ namespace TestingLayer
             Assert.Equal("Suspended", result.Data.Items.First().NewStatus);
         }
 
-        // â”€â”€â”€ Booth Tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ─── Booth Tests ────────────────────────────────────────────
 
         [Fact]
         public async Task GetBoothsAsync_ReturnsPagedResult()
@@ -331,11 +337,9 @@ namespace TestingLayer
         }
 
         [Theory]
-        [InlineData(BoothStatus.PendingApproval)]
         [InlineData(BoothStatus.Active)]
         [InlineData(BoothStatus.Inactive)]
-        [InlineData(BoothStatus.Suspended)]
-        [InlineData(BoothStatus.Closed)]
+        [InlineData(BoothStatus.Banned)]
         public async Task GetBoothsAsync_ReturnsActualBoothStatus(BoothStatus status)
         {
             var booth = CreateBooth(status);
@@ -369,17 +373,19 @@ namespace TestingLayer
         public async Task GetBoothDetailAsync_ReturnsDetail()
         {
             var booth = CreateBooth();
+            var registrationId = Guid.NewGuid();
+            booth.RegistrationId = registrationId;
             var documentCreatedAt = DateTime.UtcNow.AddDays(-3);
             booth.Registration = new BoothRegistration
             {
-                Id = booth.RegistrationId,
+                Id = registrationId,
                 BoothName = booth.BoothName,
                 BoothDocuments = new List<BoothDocument>
                 {
                     new()
                     {
                         Id = Guid.NewGuid(),
-                        RegistrationId = booth.RegistrationId,
+                        RegistrationId = registrationId,
                         DocumentType = BoothDocumentType.BusinessLicense,
                         DocumentUrl = "/uploads/documents/license.pdf",
                         FileUrl = "/uploads/documents/license.pdf",
@@ -406,10 +412,94 @@ namespace TestingLayer
             Assert.Equal(documentCreatedAt, document.CreatedAt);
         }
 
+        [Fact]
+        public async Task GetBoothDetailAsync_DirectBoothLinkedDocuments_ReturnedWithoutRegistration()
+        {
+            var booth = CreateBooth();
+            booth.BoothDocuments = new List<BoothDocument>
+            {
+                new()
+                {
+                    Id = Guid.NewGuid(),
+                    BoothId = booth.Id,
+                    RegistrationId = null,
+                    DocumentType = BoothDocumentType.FoodSafetyCertificate,
+                    DocumentUrl = "/uploads/images/booth-documents/direct.pdf",
+                    FileUrl = "/uploads/images/booth-documents/direct.pdf",
+                    VerificationStatus = BoothDocumentStatus.PendingReview,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                }
+            };
+            _mockModerationRepo.Setup(r => r.GetBoothDetailAsync(booth.Id, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(booth);
+            _mockModerationRepo.Setup(r => r.CountComplaintsByBoothAsync(booth.Id, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(0);
+            _mockModerationRepo.Setup(r => r.GetRecentComplaintsByBoothAsync(booth.Id, 5, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<Complaint>());
+
+            var result = await _service.GetBoothDetailAsync(booth.Id);
+
+            var document = Assert.Single(result.Data!.Documents);
+            Assert.Equal("/uploads/images/booth-documents/direct.pdf", document.FileUrl);
+        }
+
+        [Fact]
+        public async Task GetBoothDetailAsync_DocumentInBothLinks_IsDeduplicated()
+        {
+            var booth = CreateBooth();
+            var registrationId = Guid.NewGuid();
+            booth.RegistrationId = registrationId;
+            var sharedId = Guid.NewGuid();
+            var backfilled = new BoothDocument
+            {
+                Id = sharedId,
+                BoothId = booth.Id,
+                RegistrationId = registrationId,
+                DocumentType = BoothDocumentType.BusinessLicense,
+                DocumentUrl = "/uploads/images/booth-documents/license.png",
+                FileUrl = "/uploads/images/booth-documents/license.png",
+                VerificationStatus = BoothDocumentStatus.Verified,
+                CreatedAt = DateTime.UtcNow.AddDays(-2),
+                UpdatedAt = DateTime.UtcNow.AddDays(-2)
+            };
+            var registrationOnly = new BoothDocument
+            {
+                Id = Guid.NewGuid(),
+                BoothId = null,
+                RegistrationId = registrationId,
+                DocumentType = BoothDocumentType.OwnerIdentification,
+                DocumentUrl = "/uploads/images/booth-documents/id.png",
+                FileUrl = "/uploads/images/booth-documents/id.png",
+                VerificationStatus = BoothDocumentStatus.PendingReview,
+                CreatedAt = DateTime.UtcNow.AddDays(-1),
+                UpdatedAt = DateTime.UtcNow.AddDays(-1)
+            };
+            booth.BoothDocuments = new List<BoothDocument> { backfilled };
+            booth.Registration = new BoothRegistration
+            {
+                Id = registrationId,
+                BoothName = booth.BoothName,
+                BoothDocuments = new List<BoothDocument> { backfilled, registrationOnly }
+            };
+            _mockModerationRepo.Setup(r => r.GetBoothDetailAsync(booth.Id, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(booth);
+            _mockModerationRepo.Setup(r => r.CountComplaintsByBoothAsync(booth.Id, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(0);
+            _mockModerationRepo.Setup(r => r.GetRecentComplaintsByBoothAsync(booth.Id, 5, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<Complaint>());
+
+            var result = await _service.GetBoothDetailAsync(booth.Id);
+
+            Assert.Equal(2, result.Data!.Documents.Count);
+            Assert.Single(result.Data.Documents, d => d.Id == sharedId);
+            Assert.Single(result.Data.Documents, d => d.Id == registrationOnly.Id);
+        }
+
         [Theory]
-        [InlineData(BoothStatus.PendingApproval)]
-        [InlineData(BoothStatus.Closed)]
-        public async Task GetBoothDetailAsync_ReturnsActualNonModeratableStatus(BoothStatus status)
+        [InlineData(BoothStatus.Inactive)]
+        [InlineData(BoothStatus.Banned)]
+        public async Task GetBoothDetailAsync_ReturnsActualStatus(BoothStatus status)
         {
             var booth = CreateBooth(status);
             _mockModerationRepo.Setup(r => r.GetBoothDetailAsync(booth.Id, It.IsAny<CancellationToken>()))
@@ -426,80 +516,106 @@ namespace TestingLayer
             Assert.Equal(status.ToString(), result.Data!.Status);
         }
 
-        [Fact]
-        public async Task ChangeBoothStatus_Suspend_Succeeds()
+        [Theory]
+        [InlineData(BoothStatus.Active)]
+        [InlineData(BoothStatus.Inactive)]
+        public async Task BanBooth_FromActiveOrInactive_SetsBannedAndWritesHistory(BoothStatus previousStatus)
         {
-            var booth = CreateBooth(BoothStatus.Active);
-            var request = CreateSuspendRequest();
+            var booth = CreateBooth(previousStatus);
+            var request = CreateBanRequest();
 
             _mockModerationRepo.Setup(r => r.GetBoothDetailAsync(booth.Id, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(booth);
             _mockModerationRepo.Setup(r => r.UpdateBoothStatusAsync(
-                booth.Id, BoothStatus.Active, BoothStatus.Suspended, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+                booth.Id, previousStatus, BoothStatus.Banned, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(1);
 
-            var result = await _service.ChangeBoothStatusAsync(AdminId, AdminName, booth.Id, request);
+            var result = await _service.BanBoothAsync(AdminId, AdminName, booth.Id, request);
 
             Assert.True(result.Success);
             Assert.True(result.Data!.Success);
             _mockModerationRepo.Verify(r => r.AddAsync(It.Is<ModerationActionHistory>(h =>
-                h.BoothId == booth.Id && h.NewStatus == "Suspended")), Times.Once);
+                h.BoothId == booth.Id && h.NewStatus == "Banned" && h.PreviousStatus == previousStatus.ToString())), Times.Once);
+            _mockModerationRepo.Verify(r => r.SaveChangesAsync(), Times.Once);
             _mockNotifications.Verify(n => n.NotifyAsync(It.IsAny<NotificationMessage>(), It.IsAny<CancellationToken>()), Times.Once);
         }
 
         [Fact]
-        public async Task ChangeBoothStatus_Restore_Succeeds()
+        public async Task RestoreBooth_FromBanned_SetsActiveAndWritesHistory()
         {
-            var booth = CreateBooth(BoothStatus.Suspended);
-            var request = CreateRestoreRequest();
+            var booth = CreateBooth(BoothStatus.Banned);
+            var request = CreateBoothRestoreRequest();
 
             _mockModerationRepo.Setup(r => r.GetBoothDetailAsync(booth.Id, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(booth);
             _mockModerationRepo.Setup(r => r.UpdateBoothStatusAsync(
-                booth.Id, BoothStatus.Suspended, BoothStatus.Active, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+                booth.Id, BoothStatus.Banned, BoothStatus.Active, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(1);
 
-            var result = await _service.ChangeBoothStatusAsync(AdminId, AdminName, booth.Id, request);
+            var result = await _service.RestoreBoothAsync(AdminId, AdminName, booth.Id, request);
 
             Assert.True(result.Success);
             _mockModerationRepo.Verify(r => r.AddAsync(It.Is<ModerationActionHistory>(h =>
-                h.NewStatus == "Active" && h.PreviousStatus == "Suspended")), Times.Once);
+                h.NewStatus == "Active" && h.PreviousStatus == "Banned")), Times.Once);
+            _mockNotifications.Verify(n => n.NotifyAsync(It.IsAny<NotificationMessage>(), It.IsAny<CancellationToken>()), Times.Once);
         }
 
         [Fact]
-        public async Task ChangeBoothStatus_NotFound_Throws()
+        public async Task BanBooth_NotFound_Throws()
         {
             _mockModerationRepo.Setup(r => r.GetBoothDetailAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync((Booth?)null);
 
             await Assert.ThrowsAsync<AppException>(() =>
-                _service.ChangeBoothStatusAsync(AdminId, AdminName, Guid.NewGuid(), CreateSuspendRequest()));
+                _service.BanBoothAsync(AdminId, AdminName, Guid.NewGuid(), CreateBanRequest()));
         }
 
         [Fact]
-        public async Task ChangeBoothStatus_AlreadySuspended_Throws()
+        public async Task BanBooth_AlreadyBanned_Throws()
         {
-            var booth = CreateBooth(BoothStatus.Suspended);
+            var booth = CreateBooth(BoothStatus.Banned);
             _mockModerationRepo.Setup(r => r.GetBoothDetailAsync(booth.Id, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(booth);
 
             await Assert.ThrowsAsync<AppException>(() =>
-                _service.ChangeBoothStatusAsync(AdminId, AdminName, booth.Id, CreateSuspendRequest()));
+                _service.BanBoothAsync(AdminId, AdminName, booth.Id, CreateBanRequest()));
         }
 
         [Fact]
-        public async Task ChangeBoothStatus_InvalidTransition_Throws()
+        public async Task RestoreBooth_NotBanned_Throws()
         {
-            var booth = CreateBooth(BoothStatus.PendingApproval);
+            var booth = CreateBooth(BoothStatus.Active);
             _mockModerationRepo.Setup(r => r.GetBoothDetailAsync(booth.Id, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(booth);
 
             await Assert.ThrowsAsync<AppException>(() =>
-                _service.ChangeBoothStatusAsync(AdminId, AdminName, booth.Id, CreateSuspendRequest()));
+                _service.RestoreBoothAsync(AdminId, AdminName, booth.Id, CreateBoothRestoreRequest()));
         }
 
         [Fact]
-        public async Task ChangeBoothStatus_ConcurrencyConflict_Throws()
+        public async Task BanBooth_ShortReason_Throws()
+        {
+            var booth = CreateBooth(BoothStatus.Active);
+            _mockModerationRepo.Setup(r => r.GetBoothDetailAsync(booth.Id, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(booth);
+
+            await Assert.ThrowsAsync<AppException>(() =>
+                _service.BanBoothAsync(AdminId, AdminName, booth.Id, new BoothModerationActionRequest { Reason = "short" }));
+        }
+
+        [Fact]
+        public async Task BanBooth_TooLongReason_Throws()
+        {
+            var booth = CreateBooth(BoothStatus.Active);
+            _mockModerationRepo.Setup(r => r.GetBoothDetailAsync(booth.Id, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(booth);
+
+            await Assert.ThrowsAsync<AppException>(() =>
+                _service.BanBoothAsync(AdminId, AdminName, booth.Id, new BoothModerationActionRequest { Reason = new string('x', 1001) }));
+        }
+
+        [Fact]
+        public async Task BanBooth_ConcurrencyConflict_Throws()
         {
             var booth = CreateBooth(BoothStatus.Active);
             _mockModerationRepo.Setup(r => r.GetBoothDetailAsync(booth.Id, It.IsAny<CancellationToken>()))
@@ -510,7 +626,7 @@ namespace TestingLayer
                 .ReturnsAsync(0);
 
             var ex = await Assert.ThrowsAsync<AppException>(() =>
-                _service.ChangeBoothStatusAsync(AdminId, AdminName, booth.Id, CreateSuspendRequest()));
+                _service.BanBoothAsync(AdminId, AdminName, booth.Id, CreateBanRequest()));
             Assert.Equal("MODERATION_CONFLICT", ex.ErrorCode);
         }
 
@@ -544,24 +660,23 @@ namespace TestingLayer
         }
 
         [Fact]
-        public async Task ChangeBoothStatus_WithComplaintId_SetsComplaintSource()
+        public async Task BanBooth_WithComplaintId_SetsComplaintSource()
         {
             var booth = CreateBooth(BoothStatus.Active);
             var complaintId = Guid.NewGuid();
-            var request = new ChangeModerationStatusRequest
+            var request = new BoothModerationActionRequest
             {
-                Status = ModerationStatus.Suspended,
-                Reason = "Valid suspension reason for complaint.",
+                Reason = "Valid ban reason for complaint.",
                 ComplaintId = complaintId
             };
 
             _mockModerationRepo.Setup(r => r.GetBoothDetailAsync(booth.Id, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(booth);
             _mockModerationRepo.Setup(r => r.UpdateBoothStatusAsync(
-                booth.Id, BoothStatus.Active, BoothStatus.Suspended, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+                booth.Id, BoothStatus.Active, BoothStatus.Banned, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(1);
 
-            await _service.ChangeBoothStatusAsync(AdminId, AdminName, booth.Id, request);
+            await _service.BanBoothAsync(AdminId, AdminName, booth.Id, request);
 
             _mockModerationRepo.Verify(r => r.AddAsync(It.Is<ModerationActionHistory>(h =>
                 h.Source == ModerationActionSource.Complaint && h.ComplaintId == complaintId)), Times.Once);
@@ -584,21 +699,5 @@ namespace TestingLayer
                 _service.ChangeMarketModerationStatusAsync(AdminId, AdminName, market.Id, request));
         }
 
-        [Fact]
-        public async Task ChangeBoothStatus_InvalidStatus_Throws()
-        {
-            var booth = CreateBooth(BoothStatus.Active);
-            _mockModerationRepo.Setup(r => r.GetBoothDetailAsync(booth.Id, It.IsAny<CancellationToken>()))
-                .ReturnsAsync(booth);
-
-            var request = new ChangeModerationStatusRequest
-            {
-                Status = (ModerationStatus)99,
-                Reason = "This is a valid suspension reason."
-            };
-
-            await Assert.ThrowsAsync<AppException>(() =>
-                _service.ChangeBoothStatusAsync(AdminId, AdminName, booth.Id, request));
-        }
     }
 }

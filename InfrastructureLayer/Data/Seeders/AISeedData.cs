@@ -180,7 +180,7 @@ public static class AISeedData
                 BoundaryWidthMeters = seed.WidthMeters,
                 BoundaryHeightMeters = seed.HeightMeters,
                 TotalBooth = BoothSeeds.Count(booth => booth.MarketId == seed.Id),
-                Status = NightMarketStatus.Open,
+                Status = NightMarketStatus.Active,
                 IsDeleted = false,
                 CreatedAt = now,
                 UpdatedAt = now

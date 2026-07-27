@@ -16,61 +16,10 @@ public class NightMarketResponse
     public int TotalBooth { get; set; }
     public string? ThumbnailUrl { get; set; }
     public string Status { get; set; } = string.Empty;
+    public string ModerationStatus { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
-}
-
-public class NightMarketListItemResponse
-{
-    public Guid Id { get; set; }
-    public string Name { get; set; } = string.Empty;
-    public string Address { get; set; } = string.Empty;
-    public decimal? Latitude { get; set; }
-    public decimal? Longitude { get; set; }
-    public string? ThumbnailUrl { get; set; }
-    public TimeOnly? OpeningHours { get; set; }
-    public TimeOnly? ClosingHours { get; set; }
-    public bool IsOpenNow { get; set; }
-    public string OpeningStatusText { get; set; } = string.Empty;
-    public int ActiveBoothCount { get; set; }
-    public string Status { get; set; } = string.Empty;
-}
-
-public sealed class NightMarketDetailResponse : NightMarketListItemResponse
-{
-    public string? Description { get; set; }
-    public IReadOnlyCollection<string> ImageUrls { get; set; } = [];
-    public bool HasLayout { get; set; }
-}
-
-public sealed class NightMarketBoothListItemResponse
-{
-    public Guid Id { get; set; }
-    public Guid NightMarketId { get; set; }
-    public string Name { get; set; } = string.Empty;
-    public string? Description { get; set; }
-    public string? ThumbnailUrl { get; set; }
-    public string? SlotNumber { get; set; }
-    public decimal? Latitude { get; set; }
-    public decimal? Longitude { get; set; }
-    public TimeOnly? OpenTime { get; set; }
-    public TimeOnly? CloseTime { get; set; }
-    public decimal? AverageRating { get; set; }
-    public bool IsFeatured { get; set; }
-}
-
-public sealed class NightMarketFoodListItemResponse
-{
-    public Guid Id { get; set; }
-    public Guid BoothId { get; set; }
-    public string BoothName { get; set; } = string.Empty;
-    public Guid CategoryId { get; set; }
-    public string CategoryName { get; set; } = string.Empty;
-    public string Name { get; set; } = string.Empty;
-    public string? Description { get; set; }
-    public decimal Price { get; set; }
-    public string? ThumbnailUrl { get; set; }
-    public bool IsFeatured { get; set; }
+    public List<NightMarketImageResponse> Images { get; set; } = new();
 }
 
 public class NightMarketOptionDto
@@ -99,4 +48,16 @@ public class GeographicBoundaryResponse
 {
     public int WidthMeters { get; set; }
     public int HeightMeters { get; set; }
+}
+
+public class NightMarketImageResponse
+{
+    public Guid Id { get; set; }
+    public Guid NightMarketId { get; set; }
+    public string ImageUrl { get; set; } = string.Empty;
+    public int DisplayOrder { get; set; }
+    public bool IsCover { get; set; }
+    public bool IsDeleted { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
 }

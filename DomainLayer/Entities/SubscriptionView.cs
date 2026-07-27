@@ -12,6 +12,7 @@ namespace DomainLayer.Entities
         public PackageType PackageType { get; set; }
         public Guid PackageId { get; set; }
         public string PackageName { get; set; } = string.Empty;
+        public string? PackageImageUrl { get; set; }
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
         public SubscriptionStatus Status { get; set; }

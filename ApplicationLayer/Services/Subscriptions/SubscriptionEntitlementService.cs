@@ -33,7 +33,6 @@ namespace ApplicationLayer.Services.Subscriptions
     public class SubscriptionEntitlementService : ISubscriptionEntitlementService
     {
         private readonly ISubscriptionRepository _subscriptionRepo;
-
         public SubscriptionEntitlementService(ISubscriptionRepository subscriptionRepo)
         {
             _subscriptionRepo = subscriptionRepo;

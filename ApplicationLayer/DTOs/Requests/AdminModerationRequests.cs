@@ -4,7 +4,7 @@ using static DomainLayer.Enums.GeneralEnum;
 
 namespace ApplicationLayer.DTOs.Requests;
 
-// â”€â”€â”€ Night Market Moderation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Night Market Moderation ───────────────────────────────────
 
 public class AdminMarketModerationQueryRequest : PaginationReq
 {
@@ -24,7 +24,7 @@ public class AdminMarketModerationQueryRequest : PaginationReq
     public string SortDirection { get; set; } = "desc";
 }
 
-// â”€â”€â”€ Booth Moderation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Booth Moderation ──────────────────────────────────────────
 
 public class AdminBoothModerationQueryRequest : PaginationReq
 {
@@ -44,7 +44,18 @@ public class AdminBoothModerationQueryRequest : PaginationReq
     public string SortDirection { get; set; } = "desc";
 }
 
-// â”€â”€â”€ Shared â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+public class BoothModerationActionRequest
+{
+    [Required]
+    [StringLength(1000, MinimumLength = 10)]
+    public string Reason { get; set; } = string.Empty;
+
+    public DateTime? ExpectedUpdatedAt { get; set; }
+
+    public Guid? ComplaintId { get; set; }
+}
+
+// ─── Shared ────────────────────────────────────────────────────
 
 public class ChangeModerationStatusRequest
 {

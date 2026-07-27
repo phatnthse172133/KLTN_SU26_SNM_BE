@@ -11,7 +11,7 @@ public class ModerationRepository : GenericRepository<ModerationActionHistory>, 
 {
     public ModerationRepository(SNMDbContext context) : base(context) { }
 
-    // â”€â”€â”€ Night Market â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── Night Market ──────────────────────────────────────────────
 
     public async Task<PagedResult<NightMarket>> GetMarketsPagedAsync(
         string? keyword,
@@ -86,7 +86,7 @@ public class ModerationRepository : GenericRepository<ModerationActionHistory>, 
                 .SetProperty(m => m.UpdatedAt, updatedAt), cancellationToken);
     }
 
-    // â”€â”€â”€ Booth â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── Booth ─────────────────────────────────────────────────────
 
     public async Task<PagedResult<Booth>> GetBoothsPagedAsync(
         string? keyword,
@@ -150,6 +150,7 @@ public class ModerationRepository : GenericRepository<ModerationActionHistory>, 
             .Include(b => b.BoothOwner)
             .Include(b => b.NightMarket)
             .Include(b => b.Zone)
+            .Include(b => b.BoothDocuments)
             .Include(b => b.Registration)
                 .ThenInclude(r => r.BoothDocuments)
             .FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
@@ -169,7 +170,7 @@ public class ModerationRepository : GenericRepository<ModerationActionHistory>, 
                 .SetProperty(b => b.UpdatedAt, updatedAt), cancellationToken);
     }
 
-    // â”€â”€â”€ History â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── History ───────────────────────────────────────────────────
 
     public async Task<PagedResult<ModerationActionHistory>> GetHistoryByBoothAsync(
         Guid boothId, int page, int pageSize, CancellationToken cancellationToken = default)
@@ -203,7 +204,7 @@ public class ModerationRepository : GenericRepository<ModerationActionHistory>, 
         return new PagedResult<ModerationActionHistory>(items, totalCount);
     }
 
-    // â”€â”€â”€ Complaint counts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── Complaint counts ──────────────────────────────────────────
 
     public async Task<int> CountComplaintsByMarketAsync(Guid marketId, CancellationToken cancellationToken = default)
     {

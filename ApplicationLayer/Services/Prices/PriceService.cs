@@ -245,7 +245,7 @@ public class PriceService : IPriceService
         if (booth.BoothOwnerId != ownerId)
             throw AppException.Forbidden("You do not have permission to manage this booth.");
 
-        if (requireManageableBooth && booth.Status is BoothStatus.Suspended or BoothStatus.Closed)
+        if (requireManageableBooth && booth.Status is BoothStatus.Banned)
             throw AppException.BadRequest("This booth cannot manage prices in its current status.");
 
         var foodItem = await _foodItems.GetByBoothAsync(boothId, foodItemId);

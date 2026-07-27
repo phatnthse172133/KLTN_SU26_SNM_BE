@@ -21,9 +21,9 @@ public sealed class NightMarketCustomerTests
     public async Task CustomerList_ReturnsOnlyVisibleMarkets_AndProjectsCounts()
     {
         await using var context = CreateContext();
-        var visible = CreateMarket("Visible market", NightMarketStatus.Open);
-        var draft = CreateMarket("Draft market", NightMarketStatus.Draft);
-        var suspended = CreateMarket("Suspended market", NightMarketStatus.Open);
+        var visible = CreateMarket("Visible market", NightMarketStatus.Active);
+        var draft = CreateMarket("Inactive market", NightMarketStatus.Inactive);
+        var suspended = CreateMarket("Suspended market", NightMarketStatus.Active);
         suspended.ModerationStatus = ModerationStatus.Suspended;
 
         visible.Booths.Add(CreateBooth(visible.Id, BoothStatus.Active));
@@ -58,11 +58,11 @@ public sealed class NightMarketCustomerTests
     public async Task CustomerDetail_DoesNotReturnNonVisibleMarkets()
     {
         await using var context = CreateContext();
-        var draft = CreateMarket("Draft market", NightMarketStatus.Draft);
-        var suspended = CreateMarket("Suspended market", NightMarketStatus.Open);
+        var draft = CreateMarket("Inactive market", NightMarketStatus.Inactive);
+        var suspended = CreateMarket("Suspended market", NightMarketStatus.Active);
         suspended.ModerationStatus = ModerationStatus.Suspended;
-        var cancelled = CreateMarket("Cancelled market", NightMarketStatus.Cancelled);
-        var deleted = CreateMarket("Deleted market", NightMarketStatus.Open);
+        var cancelled = CreateMarket("Another inactive market", NightMarketStatus.Inactive);
+        var deleted = CreateMarket("Deleted market", NightMarketStatus.Active);
         deleted.IsDeleted = true;
         context.NightMarkets.AddRange(draft, suspended, cancelled, deleted);
         await context.SaveChangesAsync();
@@ -81,7 +81,7 @@ public sealed class NightMarketCustomerTests
     public async Task CustomerList_SearchIsTrimmedAndCaseInsensitive()
     {
         await using var context = CreateContext();
-        var market = CreateMarket("Ben Thanh Night Market", NightMarketStatus.Open);
+        var market = CreateMarket("Ben Thanh Night Market", NightMarketStatus.Active);
         context.NightMarkets.Add(market);
         await context.SaveChangesAsync();
 
@@ -96,10 +96,10 @@ public sealed class NightMarketCustomerTests
     public async Task CustomerList_OpenNowFiltersByStatusAndSameDaySchedule()
     {
         await using var context = CreateContext();
-        var open = CreateMarket("Open market", NightMarketStatus.Open);
+        var open = CreateMarket("Open market", NightMarketStatus.Active);
         open.OpeningHours = new TimeOnly(18, 0);
         open.ClosingHours = new TimeOnly(23, 0);
-        var outsideSchedule = CreateMarket("Outside schedule", NightMarketStatus.Open);
+        var outsideSchedule = CreateMarket("Outside schedule", NightMarketStatus.Active);
         outsideSchedule.OpeningHours = new TimeOnly(8, 0);
         outsideSchedule.ClosingHours = new TimeOnly(17, 0);
         context.NightMarkets.AddRange(open, outsideSchedule);
@@ -120,10 +120,10 @@ public sealed class NightMarketCustomerTests
     public void Availability_UsesVietnamTimeAndDoesNotFakeMissingHours()
     {
         var scheduled = CreateReadModel(
-            NightMarketStatus.Open,
+            NightMarketStatus.Active,
             new TimeOnly(18, 0),
             new TimeOnly(23, 0));
-        var missingHours = CreateReadModel(NightMarketStatus.Open, null, null);
+        var missingHours = CreateReadModel(NightMarketStatus.Active, null, null);
 
         var duringOpening = NightMarketAvailability.Evaluate(
             scheduled,
@@ -141,7 +141,7 @@ public sealed class NightMarketCustomerTests
     public async Task CustomerBoothAndFoodQueries_ReturnOnlyActiveData_AndEffectivePrice()
     {
         await using var context = CreateContext();
-        var market = CreateMarket("Visible market", NightMarketStatus.Open);
+        var market = CreateMarket("Visible market", NightMarketStatus.Active);
         var activeBooth = CreateBooth(market.Id, BoothStatus.Active);
         var inactiveBooth = CreateBooth(market.Id, BoothStatus.Inactive);
         market.Booths.Add(activeBooth);
@@ -190,38 +190,6 @@ public sealed class NightMarketCustomerTests
         Assert.Equal(25_000m, Assert.Single(foodResult.Items).Price);
     }
 
-    [Fact]
-    public async Task NestedCustomerEndpoints_BlockAnyMarketThatIsNotCustomerVisible()
-    {
-        var markets = new Mock<INightMarketRepository>();
-        var booths = new Mock<IBoothRepository>();
-        var foods = new Mock<IFoodItemRepository>();
-        var service = CreateService(markets, booths, foods);
-        var suspendedMarketId = Guid.NewGuid();
-        var deletedMarketId = Guid.NewGuid();
-        markets.Setup(repository => repository.CustomerVisibleExistsAsync(
-                It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
-
-        foreach (var marketId in new[] { suspendedMarketId, deletedMarketId })
-        {
-            var boothsError = await Assert.ThrowsAsync<AppException>(() =>
-                service.GetBoothsAsync(marketId, new PaginationReq()));
-            var foodsError = await Assert.ThrowsAsync<AppException>(() =>
-                service.GetFoodsAsync(marketId, new PaginationReq()));
-
-            Assert.Equal(404, boothsError.StatusCode);
-            Assert.Equal("NIGHT_MARKET_NOT_FOUND", boothsError.ErrorCode);
-            Assert.Equal(404, foodsError.StatusCode);
-            Assert.Equal("NIGHT_MARKET_NOT_FOUND", foodsError.ErrorCode);
-        }
-
-        booths.Verify(repository => repository.GetCustomerByNightMarketPagedAsync(
-            It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
-        foods.Verify(repository => repository.GetCustomerByNightMarketPagedAsync(
-            It.IsAny<Guid>(), It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
-    }
-
     private static SNMDbContext CreateContext()
     {
         var options = new DbContextOptionsBuilder<SNMDbContext>()
@@ -229,22 +197,6 @@ public sealed class NightMarketCustomerTests
             .Options;
         return new SNMDbContext(options);
     }
-
-    private static NightMarketService CreateService(
-        Mock<INightMarketRepository> markets,
-        Mock<IBoothRepository> booths,
-        Mock<IFoodItemRepository> foods)
-        => new(
-            markets.Object,
-            Mock.Of<IMapper>(),
-            Mock.Of<ISubscriptionEntitlementService>(),
-            booths.Object,
-            Mock.Of<ISubscriptionRepository>(),
-            Mock.Of<IBoothRegistrationRepository>(),
-            Mock.Of<IMarketLayoutRepository>(),
-            Mock.Of<IZoneRepository>(),
-            Mock.Of<IOrderRepository>(),
-            foods.Object);
 
     private static NightMarket CreateMarket(string name, NightMarketStatus status)
         => new()

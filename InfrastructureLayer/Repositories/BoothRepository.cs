@@ -23,9 +23,7 @@ public class BoothRepository : GenericRepository<Booth>, IBoothRepository
             booth.Status == DomainLayer.Enums.GeneralEnum.BoothStatus.Active &&
             !booth.NightMarket.IsDeleted &&
             booth.NightMarket.ModerationStatus == DomainLayer.Enums.GeneralEnum.ModerationStatus.Active &&
-            (booth.NightMarket.Status == DomainLayer.Enums.GeneralEnum.NightMarketStatus.Upcoming ||
-             booth.NightMarket.Status == DomainLayer.Enums.GeneralEnum.NightMarketStatus.Open ||
-             booth.NightMarket.Status == DomainLayer.Enums.GeneralEnum.NightMarketStatus.Closed));
+            booth.NightMarket.Status == DomainLayer.Enums.GeneralEnum.NightMarketStatus.Active);
 
         var totalCount = await query.CountAsync(cancellationToken);
         var items = await query

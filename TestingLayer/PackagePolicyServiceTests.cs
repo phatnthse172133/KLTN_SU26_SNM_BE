@@ -80,10 +80,8 @@ public class PackagePolicyServiceTests
 
         var result = await _service.CreatePolicyAsync(_packageId, new CreatePackagePolicyRequest
         {
-            Version = "2026.08",
             Title = "Subscription terms",
-            ContentJson = "{\"terms\":[\"No refunds after activation\"]}",
-            ContentMarkdown = "No refunds after activation.",
+            Terms = new System.Collections.Generic.List<string> { "No refunds after activation" },
             EffectiveFrom = DateTimeOffset.UtcNow.AddMinutes(1)
         });
 
@@ -94,26 +92,26 @@ public class PackagePolicyServiceTests
     }
 
     [Fact]
-    public async Task CreatePolicyAsync_DuplicateVersion_ThrowsConflictWithoutSaving()
+    public async Task CreatePolicyAsync_AutoIncrementsVersion_WhenPolicyExists()
     {
         var existing = CreatePolicy(DateTime.UtcNow);
         ArrangePolicyAndPackage(existing);
         _repo.Setup(r => r.GetPackagePoliciesByPackageAsync(_packageId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new System.Collections.Generic.List<PackagePolicy> { existing });
+        _repo.Setup(r => r.AddPackagePolicyAsync(It.IsAny<PackagePolicy>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        _repo.Setup(r => r.SaveChangesAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
 
-        var ex = await Assert.ThrowsAsync<AppException>(() => _service.CreatePolicyAsync(_packageId,
+        var result = await _service.CreatePolicyAsync(_packageId,
             new CreatePackagePolicyRequest
             {
-                Version = existing.Version,
-                Title = "Duplicate policy",
-                ContentJson = "{\"terms\":[]}",
+                Title = "Second policy",
+                Terms = new System.Collections.Generic.List<string> { "Updated terms" },
                 EffectiveFrom = DateTimeOffset.UtcNow
-            }));
+            });
 
-        Assert.Equal(409, ex.StatusCode);
-        Assert.Equal("POLICY_VERSION_DUPLICATE", ex.ErrorCode);
-        _repo.Verify(r => r.AddPackagePolicyAsync(It.IsAny<PackagePolicy>(), It.IsAny<CancellationToken>()), Times.Never);
-        _repo.Verify(r => r.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+        Assert.True(result.Success);
+        Assert.NotEqual(existing.Version, result.Data?.Version);
     }
 
     [Fact]
@@ -132,6 +130,121 @@ public class PackagePolicyServiceTests
         Assert.Equal("POLICY_ACTIVATION_CONFLICT", ex.ErrorCode);
         _repo.Verify(r => r.RollbackTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
         _repo.Verify(r => r.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CreatePolicyAsync_TitleTooShort_Rejects()
+    {
+        var ex = await Assert.ThrowsAsync<AppException>(() =>
+            _service.CreatePolicyAsync(_packageId, new CreatePackagePolicyRequest
+            {
+                Title = "Hi",
+                Terms = new System.Collections.Generic.List<string> { "Valid term" },
+                EffectiveFrom = DateTimeOffset.UtcNow
+            }));
+
+        Assert.Equal(400, ex.StatusCode);
+        Assert.Equal("POLICY_TITLE_LENGTH", ex.ErrorCode);
+    }
+
+    [Fact]
+    public async Task CreatePolicyAsync_TitleTooLong_Rejects()
+    {
+        var ex = await Assert.ThrowsAsync<AppException>(() =>
+            _service.CreatePolicyAsync(_packageId, new CreatePackagePolicyRequest
+            {
+                Title = new string('A', 201),
+                Terms = new System.Collections.Generic.List<string> { "Valid term" },
+                EffectiveFrom = DateTimeOffset.UtcNow
+            }));
+
+        Assert.Equal(400, ex.StatusCode);
+        Assert.Equal("POLICY_TITLE_LENGTH", ex.ErrorCode);
+    }
+
+    [Fact]
+    public async Task CreatePolicyAsync_WhitespaceOnlyTerms_Rejects()
+    {
+        var ex = await Assert.ThrowsAsync<AppException>(() =>
+            _service.CreatePolicyAsync(_packageId, new CreatePackagePolicyRequest
+            {
+                Title = "Valid title",
+                Terms = new System.Collections.Generic.List<string> { "   ", "  " },
+                EffectiveFrom = DateTimeOffset.UtcNow
+            }));
+
+        Assert.Equal(400, ex.StatusCode);
+        Assert.Equal("POLICY_TERMS_REQUIRED", ex.ErrorCode);
+    }
+
+    [Fact]
+    public async Task CreatePolicyAsync_DuplicateTermsCaseInsensitive_Rejects()
+    {
+        var ex = await Assert.ThrowsAsync<AppException>(() =>
+            _service.CreatePolicyAsync(_packageId, new CreatePackagePolicyRequest
+            {
+                Title = "Valid title",
+                Terms = new System.Collections.Generic.List<string> { "No refunds", "no refunds" },
+                EffectiveFrom = DateTimeOffset.UtcNow
+            }));
+
+        Assert.Equal(400, ex.StatusCode);
+        Assert.Equal("POLICY_DUPLICATE_TERMS", ex.ErrorCode);
+    }
+
+    [Fact]
+    public async Task CreatePolicyAsync_InactivePackage_Rejects()
+    {
+        _repo.Setup(r => r.GetPackageByIdAsync(_packageId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Package
+            {
+                Id = _packageId,
+                PackageName = "Inactive Package",
+                Status = PackageStatus.Inactive,
+                Type = PackageType.Market
+            });
+
+        var ex = await Assert.ThrowsAsync<AppException>(() =>
+            _service.CreatePolicyAsync(_packageId, new CreatePackagePolicyRequest
+            {
+                Title = "Valid title",
+                Terms = new System.Collections.Generic.List<string> { "Valid term" },
+                EffectiveFrom = DateTimeOffset.UtcNow
+            }));
+
+        Assert.Equal(400, ex.StatusCode);
+        Assert.Equal("PACKAGE_NOT_ACTIVE", ex.ErrorCode);
+    }
+
+    [Fact]
+    public async Task CreatePolicyAsync_TrimsTitleAndTerms()
+    {
+        _repo.Setup(r => r.GetPackageByIdAsync(_packageId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Package
+            {
+                Id = _packageId,
+                PackageName = "Market Pro",
+                Status = PackageStatus.Active,
+                Type = PackageType.Market
+            });
+        _repo.Setup(r => r.GetPackagePoliciesByPackageAsync(_packageId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new System.Collections.Generic.List<PackagePolicy>());
+        PackagePolicy? persisted = null;
+        _repo.Setup(r => r.AddPackagePolicyAsync(It.IsAny<PackagePolicy>(), It.IsAny<CancellationToken>()))
+            .Callback<PackagePolicy, CancellationToken>((policy, _) => persisted = policy)
+            .Returns(Task.CompletedTask);
+        _repo.Setup(r => r.SaveChangesAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+
+        var result = await _service.CreatePolicyAsync(_packageId, new CreatePackagePolicyRequest
+        {
+            Title = "  Spaced Title  ",
+            Terms = new System.Collections.Generic.List<string> { "  Trim me  " },
+            EffectiveFrom = DateTimeOffset.UtcNow.AddMinutes(1)
+        });
+
+        Assert.True(result.Success);
+        Assert.Equal("Spaced Title", persisted!.Title);
+        Assert.Contains("Trim me", persisted.ContentJson);
     }
 
     private PackagePolicy CreatePolicy(DateTime effectiveFrom) => new()

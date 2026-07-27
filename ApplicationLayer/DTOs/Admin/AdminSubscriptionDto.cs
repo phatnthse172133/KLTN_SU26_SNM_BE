@@ -12,6 +12,7 @@ namespace ApplicationLayer.DTOs.Admin
         public PackageType PackageType { get; set; } // Booth = 0, Market = 1
         public Guid PackageId { get; set; }
         public string PackageName { get; set; } = string.Empty;
+        public string? PackageImageUrl { get; set; }
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
         public SubscriptionStatus Status { get; set; }

@@ -15,6 +15,7 @@ public partial class Package : ISoftDelete
     public PackageType Type { get; set; }
     public string? Description { get; set; }
     public string? Entitlements { get; set; }
+    public string? ImageUrl { get; set; }
     public PackageStatus Status { get; set; }
     public bool IsDeleted { get; set; }
     public DateTime CreatedAt { get; set; }

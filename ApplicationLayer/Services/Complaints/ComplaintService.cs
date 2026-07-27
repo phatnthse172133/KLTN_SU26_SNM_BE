@@ -298,7 +298,7 @@ public class ComplaintService : IComplaintService
                 if (booth is not null)
                 {
                     var previousBoothStatus = booth.Status;
-                    booth.Status = BoothStatus.Suspended;
+                    booth.Status = BoothStatus.Banned;
                     booth.UpdatedAt = now;
                     _booths.Update(booth);
                     await _booths.SaveChangesAsync();
@@ -310,7 +310,7 @@ public class ComplaintService : IComplaintService
                         AdminId = actorId ?? Guid.Empty,
                         AdminName = "Complaint Workflow",
                         PreviousStatus = previousBoothStatus.ToString(),
-                        NewStatus = BoothStatus.Suspended.ToString(),
+                        NewStatus = BoothStatus.Banned.ToString(),
                         Reason = $"Auto-suspended via complaint: {complaint.Title}",
                         Source = ModerationActionSource.Complaint,
                         ComplaintId = complaint.Id,

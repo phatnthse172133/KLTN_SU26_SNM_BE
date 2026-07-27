@@ -55,7 +55,6 @@ public class AuthenticationServiceTests
     }
 
     [Theory]
-    [InlineData(UserStatus.Suspended, AuthErrorCodes.AccountNotActive)]
     [InlineData(UserStatus.Inactive, AuthErrorCodes.AccountNotActive)]
     [InlineData(UserStatus.Banned, AuthErrorCodes.AccountNotActive)]
     [InlineData(UserStatus.PendingVerification, AuthErrorCodes.EmailNotVerified)]
@@ -95,10 +94,10 @@ public class AuthenticationServiceTests
     }
 
     [Fact]
-    public async Task VerifyEmail_SuspendedAccount_DoesNotReactivateAccount()
+    public async Task VerifyEmail_InactiveAccount_DoesNotReactivateAccount()
     {
         var user = CreateUser(AuthProvider.Local, "customer@example.com");
-        user.Status = UserStatus.Suspended;
+        user.Status = UserStatus.Inactive;
         user.EmailVerificationTokenHash = "verification-hash";
         user.EmailVerificationTokenExpiresAt = DateTime.UtcNow.AddMinutes(5);
         var fixture = CreateFixture(new[] { user });
@@ -108,7 +107,7 @@ public class AuthenticationServiceTests
             fixture.Service.VerifyEmailAsync("verification-token"));
 
         Assert.Equal(AuthErrorCodes.InvalidOrExpiredVerificationToken, exception.ErrorCode);
-        Assert.Equal(UserStatus.Suspended, user.Status);
+        Assert.Equal(UserStatus.Inactive, user.Status);
         fixture.Users.Verify(repository => repository.Update(It.IsAny<User>()), Times.Never);
     }
 

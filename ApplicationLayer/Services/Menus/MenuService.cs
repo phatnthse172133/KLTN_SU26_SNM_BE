@@ -36,7 +36,7 @@ public class MenuService : IMenuService
         CancellationToken cancellationToken = default)
     {
         var ownershipError = await ValidateBoothOwnershipAsync(ownerId, boothId);
-        if (ownershipError is not null) 
+        if (ownershipError is not null)
             throw ToBoothAccessException(ownershipError);
 
         var page = await _foodItems.GetMenuByBoothPagedAsync(
@@ -48,7 +48,7 @@ public class MenuService : IMenuService
     public async Task<ApiResponse<FoodItemResponse>> CreateFoodItemAsync(Guid ownerId, Guid boothId, CreateFoodItemRequest request, CancellationToken cancellationToken = default)
     {
         var managementError = await ValidateBoothManagementAsync(ownerId, boothId);
-        if (managementError is not null) 
+        if (managementError is not null)
             throw ToBoothAccessException(managementError);
 
         var (validationError, category) = await ValidateFoodItemRequestAsync(boothId, request);
@@ -75,11 +75,11 @@ public class MenuService : IMenuService
     public async Task<ApiResponse<FoodItemResponse>> UpdateFoodItemAsync(Guid ownerId, Guid boothId, Guid foodItemId, UpdateFoodItemRequest request, CancellationToken cancellationToken = default)
     {
         var managementError = await ValidateBoothManagementAsync(ownerId, boothId);
-        if (managementError is not null) 
+        if (managementError is not null)
             throw ToBoothAccessException(managementError);
 
         var foodItem = await _foodItems.GetByBoothAsync(boothId, foodItemId);
-        if (foodItem is null) 
+        if (foodItem is null)
             throw AppException.NotFound("Food item was not found.");
 
         var (validationError, category) = await ValidateFoodItemRequestAsync(boothId, request);
@@ -101,11 +101,11 @@ public class MenuService : IMenuService
     public async Task<ApiResponse<FoodItemResponse>> UpdateAvailabilityAsync(Guid ownerId, Guid boothId, Guid foodItemId, UpdateFoodAvailabilityRequest request, CancellationToken cancellationToken = default)
     {
         var managementError = await ValidateBoothManagementAsync(ownerId, boothId);
-        if (managementError is not null) 
+        if (managementError is not null)
             throw ToBoothAccessException(managementError);
 
         var foodItem = await _foodItems.GetByBoothAsync(boothId, foodItemId);
-        if (foodItem is null) 
+        if (foodItem is null)
             throw AppException.NotFound("Food item was not found.");
 
         foodItem.IsAvailable = request.IsAvailable;
@@ -120,11 +120,11 @@ public class MenuService : IMenuService
     public async Task<ApiResponse<FoodItemResponse>> UpdateFeaturedAsync(Guid ownerId, Guid boothId, Guid foodItemId, UpdateFoodFeaturedRequest request, CancellationToken cancellationToken = default)
     {
         var managementError = await ValidateBoothManagementAsync(ownerId, boothId);
-        if (managementError is not null) 
+        if (managementError is not null)
             throw ToBoothAccessException(managementError);
 
         var foodItem = await _foodItems.GetByBoothAsync(boothId, foodItemId);
-        if (foodItem is null) 
+        if (foodItem is null)
             throw AppException.NotFound("Food item was not found.");
 
         foodItem.IsFeatured = request.IsFeatured;
@@ -139,11 +139,11 @@ public class MenuService : IMenuService
     public async Task<ApiResponse<object>> DeleteFoodItemAsync(Guid ownerId, Guid boothId, Guid foodItemId, CancellationToken cancellationToken = default)
     {
         var managementError = await ValidateBoothManagementAsync(ownerId, boothId);
-        if (managementError is not null) 
+        if (managementError is not null)
             throw ToBoothAccessException(managementError);
 
         var foodItem = await _foodItems.GetByBoothAsync(boothId, foodItemId);
-        if (foodItem is null) 
+        if (foodItem is null)
             throw AppException.NotFound("Food item was not found.");
 
         foodItem.IsAvailable = false;
@@ -158,7 +158,7 @@ public class MenuService : IMenuService
     private async Task<string?> ValidateBoothOwnershipAsync(Guid ownerId, Guid boothId)
     {
         var booth = await _booths.GetByIdAsync(boothId);
-        if (booth is null) 
+        if (booth is null)
             return "Booth was not found.";
         return booth.BoothOwnerId == ownerId ? null : "You do not have permission to manage this booth.";
     }
@@ -173,7 +173,7 @@ public class MenuService : IMenuService
                 : "Booth was not found.";
         }
 
-        if (booth.Status is BoothStatus.Suspended or BoothStatus.Closed) 
+        if (booth.Status is BoothStatus.Banned or BoothStatus.Inactive)
             return "This booth cannot manage menu items in its current status.";
 
         return null;
@@ -181,10 +181,10 @@ public class MenuService : IMenuService
 
     private async Task<(string? Error, FoodCategory? Category)> ValidateFoodItemRequestAsync(Guid boothId, CreateFoodItemRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.Name)) 
+        if (string.IsNullOrWhiteSpace(request.Name))
             return ("Food item name is required.", null);
 
-        if (request.Price <= 0) 
+        if (request.Price <= 0)
             return ("Food item price must be greater than zero.", null);
 
         var category = await _categories.GetActiveByBoothAsync(boothId, request.CategoryId);

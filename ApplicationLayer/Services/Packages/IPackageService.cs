@@ -17,11 +17,9 @@ public interface IPackageService
     Task<ApiResponse<PackageResponse>> GetActiveByIdAsync(Guid packageId, CancellationToken cancellationToken = default);
     Task<ApiResponse<object>> StopSellingAsync(Guid packageId, CancellationToken cancellationToken = default);
     Task<ApiResponse<object>> ResumeSellingAsync(Guid packageId, CancellationToken cancellationToken = default);
+    Task<ApiResponse<PackageResponse>> UploadImageAsync(Guid packageId, Stream stream, string fileName, string contentType, long length, CancellationToken cancellationToken = default);
+    Task<ApiResponse<object>> DeleteImageAsync(Guid packageId, CancellationToken cancellationToken = default);
     ApiResponse<List<PackageTemplateResponse>> GetTemplates();
 
-    Task<ApiResponse<PackagePolicyResponse>> CreatePolicyVersionAsync(Guid packageId, CreatePackagePolicyRequest request, CancellationToken cancellationToken = default);
-    Task<ApiResponse<object>> ActivatePolicyVersionAsync(Guid packageId, Guid policyId, CancellationToken cancellationToken = default);
-    Task<ApiResponse<PackagePolicyResponse>> GetActivePolicyAsync(Guid packageId, CancellationToken cancellationToken = default);
-    Task<ApiResponse<List<PackagePolicyResponse>>> GetPoliciesAsync(Guid packageId, CancellationToken cancellationToken = default);
 
 }

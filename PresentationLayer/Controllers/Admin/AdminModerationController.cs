@@ -22,7 +22,7 @@ public class AdminModerationController : ControllerBase
     private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     private string CurrentUserName => User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name ?? "Admin";
 
-    // â”€â”€â”€ Night Market Moderation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── Night Market Moderation ──────────────────────────────────
 
     [HttpGet("night-markets")]
     public async Task<IActionResult> GetMarkets([FromQuery] AdminMarketModerationQueryRequest request, CancellationToken cancellationToken)
@@ -50,7 +50,7 @@ public class AdminModerationController : ControllerBase
         CancellationToken cancellationToken = default)
         => Ok(await _service.GetMarketHistoryAsync(marketId, page, pageSize, cancellationToken));
 
-    // â”€â”€â”€ Booth Moderation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── Booth Moderation ─────────────────────────────────────────
 
     [HttpGet("booths")]
     public async Task<IActionResult> GetBooths([FromQuery] AdminBoothModerationQueryRequest request, CancellationToken cancellationToken)
@@ -63,10 +63,17 @@ public class AdminModerationController : ControllerBase
         return response.Success ? Ok(response) : NotFound(response);
     }
 
-    [HttpPatch("booths/{boothId:guid}/status")]
-    public async Task<IActionResult> ChangeBoothStatus(Guid boothId, ChangeModerationStatusRequest request, CancellationToken cancellationToken)
+    [HttpPost("moderation/booths/{boothId:guid}/ban")]
+    public async Task<IActionResult> BanBooth(Guid boothId, BoothModerationActionRequest request, CancellationToken cancellationToken)
     {
-        var response = await _service.ChangeBoothStatusAsync(CurrentUserId, CurrentUserName, boothId, request, cancellationToken);
+        var response = await _service.BanBoothAsync(CurrentUserId, CurrentUserName, boothId, request, cancellationToken);
+        return response.Success ? Ok(response) : BadRequest(response);
+    }
+
+    [HttpPost("moderation/booths/{boothId:guid}/restore")]
+    public async Task<IActionResult> RestoreBooth(Guid boothId, BoothModerationActionRequest request, CancellationToken cancellationToken)
+    {
+        var response = await _service.RestoreBoothAsync(CurrentUserId, CurrentUserName, boothId, request, cancellationToken);
         return response.Success ? Ok(response) : BadRequest(response);
     }
 

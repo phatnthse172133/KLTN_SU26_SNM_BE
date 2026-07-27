@@ -27,9 +27,7 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
             item.Booth.Status == BoothStatus.Active &&
             !item.Booth.NightMarket.IsDeleted &&
             item.Booth.NightMarket.ModerationStatus == ModerationStatus.Active &&
-            (item.Booth.NightMarket.Status == NightMarketStatus.Upcoming ||
-             item.Booth.NightMarket.Status == NightMarketStatus.Open ||
-             item.Booth.NightMarket.Status == NightMarketStatus.Closed));
+            item.Booth.NightMarket.Status == NightMarketStatus.Active);
 
         var totalCount = await query.CountAsync(cancellationToken);
         var foodItems = await query
@@ -127,7 +125,7 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
             .Where(item =>
                 item.IsAvailable
                 && item.Booth.Status == BoothStatus.Active
-                && item.Booth.NightMarket.Status == NightMarketStatus.Open
+                && item.Booth.NightMarket.Status == NightMarketStatus.Active
                 && !item.Booth.NightMarket.IsDeleted);
 
         if (nightMarketId.HasValue)

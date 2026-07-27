@@ -288,7 +288,7 @@ namespace TestingLayer
 
             await _service.UpdateStatusAsync(complaint.Id, request);
 
-            Assert.Equal(BoothStatus.Suspended, booth.Status);
+            Assert.Equal(BoothStatus.Banned, booth.Status);
             _mockBooths.Verify(r => r.Update(booth), Times.Once);
             _mockBooths.Verify(r => r.SaveChangesAsync(), Times.Once);
             _mockComplaints.Verify(r => r.CommitTransactionAsync(), Times.Once);

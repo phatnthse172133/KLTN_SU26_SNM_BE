@@ -155,6 +155,10 @@ public class AIRecommendationService : IAIRecommendationService
             "rating" => scored.OrderByDescending(item => item.BoothRating).ThenByDescending(item => item.MatchScore).ToList(),
             _ => scored.OrderByDescending(item => item.MatchScore).ThenByDescending(item => item.BoothRating).ThenBy(item => item.Price).ToList()
         };
+        if (scored.Count == 0)
+            throw AppException.NotFound(
+                "No food candidates satisfy the current constraints.",
+                AIErrorCodes.NoCandidates);
 
         var response = new FoodDiscoveryResponse
         {
@@ -215,7 +219,7 @@ public class AIRecommendationService : IAIRecommendationService
     {
         request.PreferredTagIds ??= [];
         request.AvoidTagIds ??= [];
-        request.DiningStyle = string.IsNullOrWhiteSpace(request.DiningStyle) ? "FullMeal" : request.DiningStyle;
+        request.DiningStyle = NormalizeDiningStyle(request.DiningStyle);
         if (request.Budget <= 0)
             throw AppException.BadRequest("Vui lòng chọn ngân sách để AI tạo kế hoạch phù hợp.");
 
@@ -231,14 +235,17 @@ public class AIRecommendationService : IAIRecommendationService
             request.DiningStyle,
             cancellationToken);
 
-        var candidates = await _foodItems.GetAiCandidatesAsync(request.NightMarketId, GetCandidateLimit(), cancellationToken);
+        var candidates = await _foodItems.GetAiOrderableCandidatesAsync(
+            request.NightMarketId,
+            GetVietnamLocalTime(),
+            GetCandidateLimit(),
+            cancellationToken);
         ApplyEffectivePrices(candidates);
         var scopedCandidates = candidates
             .Where(item => !request.NightMarketId.HasValue || item.Booth.NightMarketId == request.NightMarketId.Value)
+            .Where(IsOrderableNow)
             .ToList();
         var options = BuildPlanOptions(scopedCandidates, intent, request)
-            .OrderByDescending(option => option.MatchScore)
-            .ThenBy(option => option.EstimatedTotal)
             .Take(3)
             .ToList();
 
@@ -250,34 +257,24 @@ public class AIRecommendationService : IAIRecommendationService
                 : "AI đã chuẩn bị các phương án ăn uống dễ chọn cho bạn.",
             Options = options
         };
+        var resolvedPlanMarketId = request.NightMarketId ?? options.FirstOrDefault()?.NightMarketId;
 
-        var log = await TrySaveLogAsync(
+        response.LogId = Guid.NewGuid();
+        await SaveRequiredLogAsync(
+            response.LogId,
             customerId,
-            request.NightMarketId,
+            resolvedPlanMarketId,
             AIRecommendationType.DiningPlan,
-            new
-            {
-                request.NightMarketId,
+            new StoredDiningPlanRequest(
+                resolvedPlanMarketId,
                 request.GroupSize,
                 request.Budget,
-                request.DiningStyle,
-                request.PreferredTagIds,
-                request.AvoidTagIds,
-                request.PreferNearMe,
-                HasCoordinates = request.Latitude.HasValue && request.Longitude.HasValue,
-                HasFreeText = !string.IsNullOrWhiteSpace(request.Query)
-            },
+                NormalizeDiningStyle(intent.DiningStyle),
+                intent.CurrentPreferredTagIds,
+                intent.AvoidTagIds),
             ToParsedIntent(intent),
             ToLocationSafeLogResponse(response),
             cancellationToken);
-
-        if (log is not null)
-        {
-            response.LogId = log.Id;
-            log.ResultJson = JsonSerializer.Serialize(ToLocationSafeLogResponse(response), JsonOptions);
-            _logs.Update(log);
-            await _logs.SaveChangesAsync();
-        }
 
         return ApiResponse<DiningPlanAssistantResponse>.SuccessResponse(response);
     }
@@ -288,30 +285,48 @@ public class AIRecommendationService : IAIRecommendationService
         CancellationToken cancellationToken = default)
     {
         var log = await GetOwnedLogAsync(customerId, request.LogId, cancellationToken);
+        if (log.RecommendationType != AIRecommendationType.DiningPlan)
+            throw AppException.Conflict("The AI log is not a dining plan.", AIErrorCodes.PlanChanged);
         var result = JsonSerializer.Deserialize<DiningPlanAssistantResponse>(log.ResultJson, JsonOptions)
             ?? throw AppException.BadRequest("AI log result is invalid.");
         var option = result.Options.FirstOrDefault(item => item.OptionId == request.OptionId)
             ?? throw AppException.NotFound("Dining plan option was not found.");
 
-        var candidates = await _foodItems.GetAiCandidatesAsync(option.NightMarketId, GetCandidateLimit(), cancellationToken);
+        if (option.PlanPreview.Count == 0 || option.PlanPreview.Any(item => item.Quantity < 1))
+            throw AppException.Conflict("The dining plan structure has changed.", AIErrorCodes.PlanChanged);
+
+        var candidates = await _foodItems.GetAllFoodItemsByIdsAsync(option.PlanPreview.Select(item => item.FoodItemId).Distinct().ToList());
         ApplyEffectivePrices(candidates);
         var candidateMap = candidates.ToDictionary(item => item.Id);
         foreach (var item in option.PlanPreview)
         {
             if (!candidateMap.TryGetValue(item.FoodItemId, out var current))
-                throw AppException.Conflict("A food item in this plan is no longer available.");
+                throw AppException.Conflict("A food item in this plan no longer exists.", AIErrorCodes.ItemUnavailable);
+            var orderability = CustomerOrderability.Evaluate(current, _timeProvider.GetUtcNow().UtcDateTime);
+            if (!orderability.CanOrder)
+            {
+                var code = orderability.ReasonCode switch
+                {
+                    CustomerOrderability.MarketUnavailable or CustomerOrderability.MarketClosed => AIErrorCodes.MarketNotOrderable,
+                    CustomerOrderability.BoothUnavailable or CustomerOrderability.BoothClosed => AIErrorCodes.BoothNotOrderable,
+                    _ => AIErrorCodes.ItemUnavailable
+                };
+                throw AppException.Conflict(CustomerOrderability.GetPublicMessage(orderability.ReasonCode!), code);
+            }
+            if (current.Booth.NightMarketId != option.NightMarketId)
+                throw AppException.Conflict("The dining plan market has changed.", AIErrorCodes.PlanChanged);
             if (current.Price != item.UnitPrice)
-                throw AppException.Conflict("A food item price has changed. Please regenerate the plan.");
+                throw AppException.Conflict("A food item price has changed. Please regenerate the plan.", AIErrorCodes.PriceChanged);
         }
 
-        var currentTotal = option.PlanPreview.Sum(item => item.UnitPrice * item.Quantity);
-        if (currentTotal > option.Budget || currentTotal != option.EstimatedTotal)
-            throw AppException.Conflict("The dining plan is no longer within its budget. Please regenerate the plan.");
-        if (option.PlanPreview.Any(item => candidateMap[item.FoodItemId].Booth.NightMarketId != option.NightMarketId))
-            throw AppException.Conflict("The dining plan contains food from another night market.");
+        var currentTotal = option.PlanPreview.Sum(item => candidateMap[item.FoodItemId].Price * item.Quantity);
+        if (currentTotal > option.Budget)
+            throw AppException.Conflict("The dining plan exceeds its total group budget.", AIErrorCodes.BudgetExceeded);
+        if (currentTotal != option.EstimatedTotal)
+            throw AppException.Conflict("The dining plan totals have changed.", AIErrorCodes.PlanChanged);
 
         log.SelectedOptionId = option.OptionId;
-        log.UpdatedAt = DateTime.UtcNow;
+        log.UpdatedAt = _timeProvider.GetUtcNow().UtcDateTime;
         _logs.Update(log);
         await _logs.SaveChangesAsync();
 
@@ -336,28 +351,48 @@ public class AIRecommendationService : IAIRecommendationService
         CancellationToken cancellationToken = default)
     {
         var log = await GetOwnedLogAsync(customerId, request.LogId, cancellationToken);
+        if (log.RecommendationType != AIRecommendationType.DiningPlan)
+            throw AppException.Conflict("The AI log is not a dining plan.", AIErrorCodes.PlanChanged);
         var original = JsonSerializer.Deserialize<DiningPlanAssistantResponse>(log.ResultJson, JsonOptions)
             ?? throw AppException.BadRequest("AI log result is invalid.");
-
-        var refreshedOptions = await RefreshPlanOptionsAsync(original.Options, cancellationToken);
-        var options = (request.Priority ?? string.Empty).Trim().ToLowerInvariant() switch
+        var stored = JsonSerializer.Deserialize<StoredDiningPlanRequest>(log.InputJson, JsonOptions)
+            ?? throw AppException.Conflict("The original dining-plan request is unavailable.", AIErrorCodes.PlanChanged);
+        var rebuiltRequest = new DiningPlanAssistantRequest
         {
-            "cheaper" => refreshedOptions.OrderBy(option => option.EstimatedTotal).ToList(),
-            "higherrated" => refreshedOptions.OrderByDescending(option => option.MatchScore).ToList(),
-            _ => refreshedOptions.OrderByDescending(option => option.MatchScore).ThenBy(option => option.EstimatedTotal).ToList()
+            NightMarketId = stored.NightMarketId,
+            GroupSize = stored.GroupSize,
+            Budget = stored.Budget,
+            DiningStyle = NormalizeDiningStyle(stored.DiningStyle),
+            PreferredTagIds = stored.CurrentPreferredTagIds,
+            AvoidTagIds = stored.AvoidTagIds
         };
+        ValidateDiningPlanRequest(rebuiltRequest);
 
-        original.Options = options;
-        original.Step = options.Count == 0 ? "NO_PLAN_FOUND" : "PLAN_OPTIONS";
-        original.Message = options.Count == 0
-            ? "Các món trong phương án cũ không còn khả dụng trong ngân sách. Vui lòng tạo kế hoạch mới."
-            : "Các phương án đã được kiểm tra lại theo giá và tình trạng hiện tại.";
-        log.ResultJson = JsonSerializer.Serialize(original, JsonOptions);
-        log.UpdatedAt = _timeProvider.GetUtcNow().UtcDateTime;
-        _logs.Update(log);
-        await _logs.SaveChangesAsync();
+        var tags = await _foodTags.GetActiveAsync(cancellationToken);
+        var intent = await BuildIntentAsync(
+            null, tags, rebuiltRequest.PreferredTagIds, rebuiltRequest.AvoidTagIds,
+            customerId, rebuiltRequest.Budget, rebuiltRequest.DiningStyle, cancellationToken);
+        var candidates = await _foodItems.GetAiOrderableCandidatesAsync(
+            rebuiltRequest.NightMarketId, GetVietnamLocalTime(), GetCandidateLimit(), cancellationToken);
+        ApplyEffectivePrices(candidates);
+        var previousSignatures = original.Options.Select(option => GetPlanSignature(option.PlanPreview)).ToHashSet(StringComparer.Ordinal);
+        var options = BuildPlanOptions(
+            candidates.Where(IsOrderableNow).ToList(), intent, rebuiltRequest,
+            previousSignatures, request.Priority).Take(3).ToList();
 
-        return ApiResponse<DiningPlanAssistantResponse>.SuccessResponse(original);
+        var regenerated = new DiningPlanAssistantResponse
+        {
+            LogId = Guid.NewGuid(),
+            Step = options.Count == 0 ? "NO_PLAN_FOUND" : "PLAN_OPTIONS",
+            Message = options.Count == 0
+                ? "Không còn phương án có thể đặt ngay trong ngân sách hiện tại."
+                : "Đã tạo lại phương án từ dữ liệu và trạng thái hiện tại.",
+            Options = options
+        };
+        await SaveRequiredLogAsync(
+            regenerated.LogId, customerId, rebuiltRequest.NightMarketId, AIRecommendationType.DiningPlan,
+            stored, ToParsedIntent(intent), ToLocationSafeLogResponse(regenerated), cancellationToken);
+        return ApiResponse<DiningPlanAssistantResponse>.SuccessResponse(regenerated);
     }
 
     private async Task<List<DiningPlanOptionResponse>> RefreshPlanOptionsAsync(
@@ -430,18 +465,14 @@ public class AIRecommendationService : IAIRecommendationService
             HasReason = !string.IsNullOrWhiteSpace(request.Reason)
         };
 
-        var log = await TrySaveLogAsync(
-            customerId,
-            null,
-            AIRecommendationType.PreferenceProfile,
-            feedback,
-            null,
-            new { Status = "Recorded", request.FeedbackType },
-            cancellationToken);
+        var feedbackLogId = Guid.NewGuid();
+        await SaveRequiredLogAsync(
+            feedbackLogId, customerId, null, AIRecommendationType.PreferenceProfile,
+            feedback, null, new { Status = "Recorded", request.FeedbackType }, cancellationToken);
 
         return ApiResponse<AIFeedbackResponse>.SuccessResponse(new AIFeedbackResponse
         {
-            FeedbackLogId = log?.Id ?? Guid.Empty,
+            FeedbackLogId = feedbackLogId,
             Message = "Cảm ơn bạn, phản hồi đã được ghi nhận."
         });
     }
@@ -562,7 +593,7 @@ public class AIRecommendationService : IAIRecommendationService
             preferred,
             avoid,
             budget ?? NormalizeProviderBudget(providerIntent.BudgetMax),
-            diningStyle ?? providerIntent.DiningStyle,
+            diningStyle is null ? NormalizeProviderDiningStyle(providerIntent.DiningStyle) : NormalizeDiningStyle(diningStyle),
             allowedTags.ToDictionary(tag => tag.Id),
             currentPreferred,
             savedPreferred,
@@ -611,6 +642,14 @@ public class AIRecommendationService : IAIRecommendationService
             .Where(tag => intent.PreferredTagIds.Contains(tag.FoodTagId))
             .Select(tag => tag.FoodTag.Name)
             .ToList();
+        var matchedCurrentTags = item.FoodItemTags
+            .Where(tag => intent.CurrentPreferredTagIds.Contains(tag.FoodTagId))
+            .Select(tag => tag.FoodTag.Name)
+            .ToList();
+        var matchedSavedTags = item.FoodItemTags
+            .Where(tag => intent.SavedPreferredTagIds.Contains(tag.FoodTagId))
+            .Select(tag => tag.FoodTag.Name)
+            .ToList();
 
         return new FoodDiscoveryItemResponse
         {
@@ -629,28 +668,61 @@ public class AIRecommendationService : IAIRecommendationService
             DistanceMeters = distanceMeters,
             MatchScore = (int)Math.Round(Math.Clamp(score, 0, 100)),
             MatchedPreferences = matchedTags,
+            MatchedCurrentPreferences = matchedCurrentTags,
+            MatchedSavedPreferences = matchedSavedTags,
             IsFallback = intent.CurrentPreferredTagIds.Count > 0 && !intent.CurrentPreferredTagIds.Overlaps(itemTagIds),
             Reason = BuildReason(item.Name, matchedTags, item.Price, intent.BudgetMax, item.Booth.AverageRating, item.Booth.NightMarket.Name, distanceMeters),
-            Tags = item.FoodItemTags.Select(tag => tag.FoodTag.Code).ToList()
+            Tags = item.FoodItemTags
+                .Where(tag => tag.FoodTag.Status == FoodTagStatus.Active)
+                .Select(tag => tag.FoodTag.Code)
+                .ToList()
         };
     }
 
     private IReadOnlyCollection<DiningPlanOptionResponse> BuildPlanOptions(
         IReadOnlyCollection<FoodItem> candidates,
         ResolvedIntent intent,
-        DiningPlanAssistantRequest request)
-        => candidates
+        DiningPlanAssistantRequest request,
+        IReadOnlySet<string>? excludedCombinations = null,
+        string? preferredStrategy = null)
+    {
+        var marketGroup = candidates
             .GroupBy(item => item.Booth.NightMarketId)
-            .Select((marketGroup, index) => BuildPlanOption(marketGroup.ToList(), intent, request, index + 1))
-            .Where(option => option is not null)
-            .Select(option => option!)
-            .ToList();
+            .OrderByDescending(group => group.Max(item => ScoreItem(item, intent)))
+            .ThenByDescending(group => group.Max(item => item.Booth.AverageRating ?? 0))
+            .ThenBy(group => group.Key)
+            .FirstOrDefault();
+        if (marketGroup is null) return [];
+
+        var strategies = new[] { "BestMatch", "BudgetFriendly", "HighRating" };
+        if (!string.IsNullOrWhiteSpace(preferredStrategy))
+        {
+            var normalized = NormalizeStrategy(preferredStrategy);
+            strategies = strategies.OrderBy(strategy => strategy == normalized ? 0 : 1).ToArray();
+        }
+
+        var options = new List<DiningPlanOptionResponse>();
+        var combinations = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var strategy in strategies)
+        {
+            var option = BuildPlanOption(marketGroup.ToList(), intent, request, strategy);
+            if (option is null) continue;
+            var signature = GetPlanSignature(option.PlanPreview);
+            if (!combinations.Add(signature)) continue;
+            if (excludedCombinations?.Contains(signature) == true) continue;
+            options.Add(option);
+        }
+
+        if (options.Count == 0 && excludedCombinations is not null)
+            return BuildPlanOptions(candidates, intent, request, null, preferredStrategy);
+        return options;
+    }
 
     private DiningPlanOptionResponse? BuildPlanOption(
         IReadOnlyCollection<FoodItem> marketItems,
         ResolvedIntent intent,
         DiningPlanAssistantRequest request,
-        int index)
+        string strategy)
     {
         var distanceMeters = CalculateDistanceMeters(
             request.PreferNearMe,
@@ -658,11 +730,18 @@ public class AIRecommendationService : IAIRecommendationService
             request.Latitude,
             request.Longitude,
             marketItems.First().Booth.NightMarket);
-        var filtered = marketItems
-            .Where(item => !intent.AvoidTagIds.Overlaps(item.FoodItemTags.Select(tag => tag.FoodTagId).ToHashSet()))
-            .OrderByDescending(item => ScoreItem(item, intent, distanceMeters))
-            .ThenBy(item => item.Price)
-            .ToList();
+        var eligible = marketItems
+            .Where(IsOrderableNow)
+            .Where(item => !intent.AvoidTagIds.Overlaps(item.FoodItemTags.Select(tag => tag.FoodTagId).ToHashSet()));
+        var filtered = strategy switch
+        {
+            "BudgetFriendly" => eligible.OrderBy(item => item.Price)
+                .ThenByDescending(item => ScoreItem(item, intent, distanceMeters)).ThenBy(item => item.Id).ToList(),
+            "HighRating" => eligible.OrderByDescending(item => item.Booth.AverageRating ?? 0)
+                .ThenByDescending(item => ScoreItem(item, intent, distanceMeters)).ThenBy(item => item.Price).ThenBy(item => item.Id).ToList(),
+            _ => eligible.OrderByDescending(item => ScoreItem(item, intent, distanceMeters))
+                .ThenByDescending(item => item.Booth.AverageRating ?? 0).ThenBy(item => item.Price).ThenBy(item => item.Id).ToList()
+        };
 
         if (filtered.Count == 0) return null;
 
@@ -685,21 +764,19 @@ public class AIRecommendationService : IAIRecommendationService
 
         return new DiningPlanOptionResponse
         {
-            OptionId = $"OPT{index:000}",
-            OptionType = index switch
+            OptionId = strategy switch
             {
-                1 => "BestMatch",
-                2 => "BudgetFriendly",
-                3 => "HighRating",
-                _ => "Alternative"
+                "BudgetFriendly" => "OPT_BUDGET_FRIENDLY",
+                "HighRating" => "OPT_HIGH_RATING",
+                _ => "OPT_BEST_MATCH"
             },
-            FeasibilityStatus = "WithinBudget",
-            Label = index switch
+            OptionType = strategy,
+            FeasibilityStatus = "OrderableNow",
+            Label = strategy switch
             {
-                1 => "Phù hợp nhất",
-                2 => "Tiết kiệm hơn",
-                3 => "Rating cao hơn",
-                _ => $"Phương án {index}"
+                "BudgetFriendly" => "Tiết kiệm hơn",
+                "HighRating" => "Ưu tiên rating gian hàng",
+                _ => "Phù hợp nhất"
             },
             NightMarketId = market.Id,
             NightMarketName = market.Name,
@@ -712,7 +789,7 @@ public class AIRecommendationService : IAIRecommendationService
             PlanPreview = planItems,
             Reason = distanceMeters.HasValue
                 ? $"Có món thật tại {market.Name}, cách vị trí của bạn khoảng {distanceMeters.Value:N0} m; tổng dự kiến {total:N0} trong ngân sách {request.Budget:N0}."
-                : $"Có món thật đang bán tại {market.Name}, tổng dự kiến {total:N0} trong ngân sách {request.Budget:N0}."
+                : $"Các món hiện có thể đặt tại {market.Name}; tổng dự kiến {total:N0} trong ngân sách nhóm {request.Budget:N0}."
         };
     }
 
@@ -786,7 +863,9 @@ public class AIRecommendationService : IAIRecommendationService
         var usedIds = planItems.Select(item => item.FoodItemId).ToHashSet();
         var item = candidates.FirstOrDefault(food =>
             !usedIds.Contains(food.Id)
-            && food.FoodItemTags.Any(tag => tagCodes.Contains(tag.FoodTag.Code)));
+            && food.FoodItemTags.Any(tag =>
+                tag.FoodTag.Status == FoodTagStatus.Active
+                && tagCodes.Contains(tag.FoodTag.Code)));
         if (item is not null)
         {
             planItems.Add(ToPlanItem(item, quantity, role));
@@ -841,6 +920,8 @@ public class AIRecommendationService : IAIRecommendationService
         }
 
         if (intent.History.HasHistory && !intent.History.RecentFoodIds.Contains(item.Id)) score += 3;
+        if (intent.History.FoodFeedbackScores?.TryGetValue(item.Id, out var feedbackScore) == true)
+            score += feedbackScore * 2;
         if (!intent.BudgetMax.HasValue && intent.History.TypicalUnitPrice is > 0)
         {
             var deviation = Math.Abs(item.Price - intent.History.TypicalUnitPrice.Value) / intent.History.TypicalUnitPrice.Value;
@@ -873,12 +954,13 @@ public class AIRecommendationService : IAIRecommendationService
         object input,
         object? parsedIntent,
         object result,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Guid? logId = null)
     {
-        var now = DateTime.UtcNow;
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
         var log = new AIRecommendationLog
         {
-            Id = Guid.NewGuid(),
+            Id = logId ?? Guid.NewGuid(),
             CustomerId = customerId,
             NightMarketId = nightMarketId,
             RecommendationType = type,
@@ -892,6 +974,34 @@ public class AIRecommendationService : IAIRecommendationService
         await _logs.AddAsync(log);
         await _logs.SaveChangesAsync();
         return log;
+    }
+
+    private async Task<AIRecommendationLog> SaveRequiredLogAsync(
+        Guid logId,
+        Guid? customerId,
+        Guid? nightMarketId,
+        AIRecommendationType type,
+        object input,
+        object? parsedIntent,
+        object result,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await SaveLogAsync(
+                customerId, nightMarketId, type, input, parsedIntent, result, cancellationToken, logId);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw AppException.ServiceUnavailable(
+                "The AI result could not be persisted. Please try again.",
+                AIErrorCodes.PlanLogUnavailable,
+                exception);
+        }
     }
 
     private async Task<AIRecommendationLog?> TrySaveLogAsync(
@@ -990,11 +1100,13 @@ public class AIRecommendationService : IAIRecommendationService
         ValidateQueryAndTags(request.Query, request.PreferredTagIds.Concat(request.AvoidTagIds).ToList());
         ValidateCoordinates(request.PreferNearMe, request.Latitude, request.Longitude);
         if (request.GroupSize is < 1 or > 50)
-            throw AppException.BadRequest("GroupSize must be between 1 and 50.");
+            throw AppException.BadRequest("GroupSize must be between 1 and 50.", AIErrorCodes.InvalidRequest);
         if (request.Budget <= 0 || request.Budget > _settings.MaxBudget)
-            throw AppException.BadRequest("Budget is outside the supported range.");
+            throw AppException.BadRequest("Budget is outside the supported range.", AIErrorCodes.InvalidRequest);
         if (request.DiningStyle.Length > 50)
             throw AppException.BadRequest("DiningStyle is too long.");
+        if (request.PreferredTagIds.Intersect(request.AvoidTagIds).Any())
+            throw AppException.BadRequest("Preferred and avoid tags must not overlap.", AIErrorCodes.InvalidRequest);
     }
 
     private void ValidateQueryAndTags(string? query, IReadOnlyCollection<Guid> tagIds)
@@ -1047,17 +1159,37 @@ public class AIRecommendationService : IAIRecommendationService
         => providerBudget is > 0 && providerBudget <= _settings.MaxBudget ? providerBudget : null;
 
     private bool IsOrderableNow(FoodItem item)
-    {
-        var utcNow = _timeProvider.GetUtcNow().UtcDateTime;
-        var localTime = TimeOnly.FromDateTime(NightMarketAvailability.GetVietnamLocalTime(utcNow));
-        return item.IsAvailable && CustomerAvailability.IsOpenNow(
-            item.Booth.NightMarket.Status == NightMarketStatus.Open,
-            item.Booth.NightMarket.OpeningHours,
-            item.Booth.NightMarket.ClosingHours,
-            item.Booth.OpenTime,
-            item.Booth.CloseTime,
-            localTime);
-    }
+        => CustomerOrderability.Evaluate(item, _timeProvider.GetUtcNow().UtcDateTime).CanOrder;
+
+    private TimeOnly GetVietnamLocalTime()
+        => TimeOnly.FromDateTime(NightMarketAvailability.GetVietnamLocalTime(_timeProvider.GetUtcNow().UtcDateTime));
+
+    private static string GetPlanSignature(IReadOnlyCollection<DiningPlanItemResponse> items)
+        => string.Join('|', items.OrderBy(item => item.FoodItemId)
+            .Select(item => $"{item.FoodItemId:N}:{item.Quantity}"));
+
+    private static string NormalizeStrategy(string? strategy)
+        => strategy?.Trim().ToLowerInvariant() switch
+        {
+            "cheaper" or "budgetfriendly" or "budget_friendly" => "BudgetFriendly",
+            "higherrated" or "highrating" or "high_rating" => "HighRating",
+            _ => "BestMatch"
+        };
+
+    private static string NormalizeDiningStyle(string? diningStyle)
+        => diningStyle?.Trim().ToLowerInvariant() switch
+        {
+            "lightmeal" or "light" => "LightMeal",
+            "foodtour" => "FoodTour",
+            "datenight" => "DateNight",
+            "family" or "sharing" => "Family",
+            "snack" => "Snack",
+            "drink" => "Drink",
+            _ => "FullMeal"
+        };
+
+    private static string? NormalizeProviderDiningStyle(string? diningStyle)
+        => string.IsNullOrWhiteSpace(diningStyle) ? null : NormalizeDiningStyle(diningStyle);
 
     private static string BuildReason(
         string foodName,
@@ -1091,4 +1223,12 @@ public class AIRecommendationService : IAIRecommendationService
         HashSet<Guid> CurrentPreferredTagIds,
         HashSet<Guid> SavedPreferredTagIds,
         CustomerRecommendationContext History);
+
+    private sealed record StoredDiningPlanRequest(
+        Guid? NightMarketId,
+        int GroupSize,
+        decimal Budget,
+        string DiningStyle,
+        IReadOnlyCollection<Guid> CurrentPreferredTagIds,
+        IReadOnlyCollection<Guid> AvoidTagIds);
 }

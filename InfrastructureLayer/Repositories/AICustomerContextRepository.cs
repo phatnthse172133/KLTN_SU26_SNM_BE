@@ -2,6 +2,7 @@ using DomainLayer.Common;
 using DomainLayer.InterfaceRepository;
 using InfrastructureLayer.Data;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 using static DomainLayer.Enums.GeneralEnum;
 
 namespace InfrastructureLayer.Repositories;
@@ -34,7 +35,7 @@ public sealed class AICustomerContextRepository : IAICustomerContextRepository
             .ToListAsync(cancellationToken);
 
         if (orderIds.Count == 0)
-            return await WithReviewSignalsAsync(customerId, maxReviews, CustomerRecommendationContext.Empty, cancellationToken);
+            return await WithFeedbackAndReviewSignalsAsync(customerId, maxReviews, CustomerRecommendationContext.Empty, cancellationToken);
 
         var details = _context.OrderDetails
             .AsNoTracking()
@@ -82,10 +83,10 @@ public sealed class AICustomerContextRepository : IAICustomerContextRepository
             new HashSet<Guid>(),
             typicalUnitPrice);
 
-        return await WithReviewSignalsAsync(customerId, maxReviews, context, cancellationToken);
+        return await WithFeedbackAndReviewSignalsAsync(customerId, maxReviews, context, cancellationToken);
     }
 
-    private async Task<CustomerRecommendationContext> WithReviewSignalsAsync(
+    private async Task<CustomerRecommendationContext> WithFeedbackAndReviewSignalsAsync(
         Guid customerId,
         int maxReviews,
         CustomerRecommendationContext context,
@@ -107,6 +108,97 @@ public sealed class AICustomerContextRepository : IAICustomerContextRepository
         var negative = reviews.Where(review => review.Rating <= 2).Select(review => review.BoothId).ToHashSet();
         positive.ExceptWith(negative);
 
-        return context with { PositiveBoothIds = positive, NegativeBoothIds = negative };
+        var feedbackRows = await _context.AIRecommendationLogs
+            .AsNoTracking()
+            .Where(log => log.CustomerId == customerId && log.RecommendationType == AIRecommendationType.PreferenceProfile)
+            .OrderByDescending(log => log.CreatedAt)
+            .ThenByDescending(log => log.Id)
+            .Select(log => log.InputJson)
+            .Take(50)
+            .ToListAsync(cancellationToken);
+
+        var parsed = feedbackRows.Select(ParseFeedback).Where(item => item is not null).Select(item => item!).ToList();
+        var sourceIds = parsed.Where(item => item.SourceLogId.HasValue).Select(item => item.SourceLogId!.Value).Distinct().ToList();
+        var sources = sourceIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await _context.AIRecommendationLogs.AsNoTracking()
+                .Where(log => log.CustomerId == customerId && sourceIds.Contains(log.Id))
+                .ToDictionaryAsync(log => log.Id, log => log.ResultJson, cancellationToken);
+        var scores = new Dictionary<Guid, int>();
+        foreach (var item in parsed)
+        {
+            var foodIds = item.FoodItemId.HasValue
+                ? new[] { item.FoodItemId.Value }
+                : ResolveOptionFoodIds(item, sources);
+            foreach (var foodId in foodIds)
+                scores[foodId] = Math.Clamp(scores.GetValueOrDefault(foodId) + item.Weight, -3, 3);
+        }
+
+        return context with
+        {
+            PositiveBoothIds = positive,
+            NegativeBoothIds = negative,
+            FoodFeedbackScores = scores
+        };
     }
+
+    private static ParsedFeedback? ParseFeedback(string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+            var type = root.TryGetProperty("feedbackType", out var typeElement) ? typeElement.GetString() : null;
+            var weight = type?.Trim().ToLowerInvariant() switch
+            {
+                "like" or "liked" or "suitable" or "helpful" or "relevant" or "positive" => 1,
+                "dislike" or "notsuitable" or "not_suitable" or "irrelevant" or "negative" => -1,
+                _ => 0
+            };
+            if (weight == 0) return null;
+            return new ParsedFeedback(
+                ReadGuid(root, "foodItemId"),
+                ReadGuid(root, "logId"),
+                root.TryGetProperty("optionId", out var option) ? option.GetString() : null,
+                weight);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static IReadOnlyCollection<Guid> ResolveOptionFoodIds(
+        ParsedFeedback feedback,
+        IReadOnlyDictionary<Guid, string> sourceLogs)
+    {
+        if (!feedback.SourceLogId.HasValue || string.IsNullOrWhiteSpace(feedback.OptionId)
+            || !sourceLogs.TryGetValue(feedback.SourceLogId.Value, out var json)) return [];
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            if (!document.RootElement.TryGetProperty("options", out var options)) return [];
+            foreach (var option in options.EnumerateArray())
+            {
+                if (!option.TryGetProperty("optionId", out var id) || id.GetString() != feedback.OptionId) continue;
+                if (!option.TryGetProperty("planPreview", out var preview)) return [];
+                return preview.EnumerateArray()
+                    .Select(item => ReadGuid(item, "foodItemId"))
+                    .Where(id => id.HasValue)
+                    .Select(id => id!.Value)
+                    .Distinct()
+                    .ToList();
+            }
+        }
+        catch (JsonException)
+        {
+        }
+        return [];
+    }
+
+    private static Guid? ReadGuid(JsonElement element, string propertyName)
+        => element.TryGetProperty(propertyName, out var value)
+            && Guid.TryParse(value.GetString(), out var id) ? id : null;
+
+    private sealed record ParsedFeedback(Guid? FoodItemId, Guid? SourceLogId, string? OptionId, int Weight);
 }

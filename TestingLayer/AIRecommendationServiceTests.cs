@@ -9,6 +9,7 @@ using Microsoft.Extensions.Options;
 using Moq;
 using InfrastructureLayer.Cores.AI;
 using static DomainLayer.Enums.GeneralEnum;
+using System.Text.Json;
 
 namespace TestingLayer;
 
@@ -239,6 +240,24 @@ public class AIRecommendationServiceTests
     }
 
     [Fact]
+    public async Task LocalIntentParser_CurrentNotSpicyOverridesSpicyKeyword()
+    {
+        var settingsRepository = new Mock<IGenericRepository<SystemSetting>>();
+        settingsRepository.Setup(repository => repository.FindAsync(
+                It.IsAny<System.Linq.Expressions.Expression<Func<SystemSetting, bool>>>()))
+            .ReturnsAsync([]);
+        var provider = new GeminiAIProviderService(
+            new HttpClient(),
+            Options.Create(new AIProviderSettings { EnableExternalProvider = false }),
+            settingsRepository.Object);
+
+        var intent = await provider.ParseFoodIntentAsync("Hôm nay tôi muốn món không cay", ["SPICY", "MILD"]);
+
+        Assert.DoesNotContain("SPICY", intent.MatchedTagNames);
+        Assert.Contains("SPICY", intent.AvoidTagNames);
+    }
+
+    [Fact]
     public async Task FoodDiscovery_UsesEffectivePriceAndHonorsStructuredBudget()
     {
         var spicy = Tag("SPICY");
@@ -332,6 +351,156 @@ public class AIRecommendationServiceTests
         Assert.All(result.Data.Results, item => Assert.Contains(foods, food => food.Id == item.FoodItemId));
     }
 
+    [Fact]
+    public async Task CurrentPreference_IsStrongerThanSavedLike()
+    {
+        var spicy = Tag("SPICY");
+        var mild = Tag("MILD");
+        var spicyFood = Food(50_000m, spicy);
+        var mildFood = Food(50_000m, mild);
+        var saved = new CustomerPreference
+        {
+            FoodTagId = spicy.Id, FoodTag = spicy, PreferenceKind = CustomerPreferenceKind.Like
+        };
+        var service = CreateService([spicy, mild], [spicyFood, mildFood], new FoodIntentDto(), savedPreferences: [saved]);
+
+        var result = await service.FoodDiscoveryAsync(Guid.NewGuid(), new FoodDiscoveryRequest
+        {
+            SelectedTagIds = [mild.Id]
+        });
+
+        Assert.Equal(mildFood.Id, result.Data!.Results.First().FoodItemId);
+    }
+
+    [Fact]
+    public async Task FoodDiscovery_NoEligibleFoodReturnsStableErrorCode()
+    {
+        var service = CreateService([], [], new FoodIntentDto());
+
+        var error = await Assert.ThrowsAsync<AppException>(() => service.FoodDiscoveryAsync(
+            Guid.NewGuid(), new FoodDiscoveryRequest { BudgetMax = 50_000m }));
+
+        Assert.Equal(404, error.StatusCode);
+        Assert.Equal(AIErrorCodes.NoCandidates, error.ErrorCode);
+    }
+
+    [Fact]
+    public async Task DiningPlan_ExcludesCandidateThatIsNotOrderableNow()
+    {
+        var main = Tag("FULLMEAL");
+        var food = Food(50_000m, main);
+        food.Booth.NightMarket.Status = NightMarketStatus.Closed;
+        var service = CreateService([main], [food], new FoodIntentDto());
+
+        var result = await service.DiningPlanAssistantAsync(Guid.NewGuid(), new DiningPlanAssistantRequest
+        {
+            NightMarketId = food.Booth.NightMarketId,
+            GroupSize = 1,
+            Budget = 100_000m
+        });
+
+        Assert.Equal("NO_PLAN_FOUND", result.Data!.Step);
+        Assert.Empty(result.Data.Options);
+        Assert.NotEqual(Guid.Empty, result.Data.LogId);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(51)]
+    public async Task DiningPlan_GroupSizeOutsideOneToFiftyIsRejected(int groupSize)
+    {
+        var service = CreateService([], [], new FoodIntentDto());
+
+        var error = await Assert.ThrowsAsync<AppException>(() => service.DiningPlanAssistantAsync(
+            Guid.NewGuid(), new DiningPlanAssistantRequest { GroupSize = groupSize, Budget = 100_000m }));
+
+        Assert.Equal(AIErrorCodes.InvalidRequest, error.ErrorCode);
+    }
+
+    [Fact]
+    public async Task DiningPlan_StrategyLabelsRepresentDistinctAlgorithms()
+    {
+        var main = Tag("FULLMEAL");
+        var preferred = Tag("PREFERRED");
+        var market = Market(10.77m, 106.69m);
+        var best = Food(70_000m, main, market);
+        best.Booth.AverageRating = 4m;
+        AddTag(best, preferred);
+        var cheap = Food(30_000m, main, market);
+        cheap.Booth.AverageRating = 3m;
+        var rated = Food(90_000m, main, market);
+        rated.Booth.AverageRating = 5m;
+        var service = CreateService([main, preferred], [cheap, rated, best], new FoodIntentDto());
+
+        var result = await service.DiningPlanAssistantAsync(Guid.NewGuid(), new DiningPlanAssistantRequest
+        {
+            NightMarketId = market.Id,
+            PreferredTagIds = [preferred.Id],
+            GroupSize = 1,
+            Budget = 100_000m
+        });
+
+        var options = result.Data!.Options.ToDictionary(option => option.OptionType);
+        Assert.Equal(best.Id, Assert.Single(options["BestMatch"].PlanPreview).FoodItemId);
+        Assert.Equal(cheap.Id, Assert.Single(options["BudgetFriendly"].PlanPreview).FoodItemId);
+        Assert.Equal(rated.Id, Assert.Single(options["HighRating"].PlanPreview).FoodItemId);
+        Assert.Single(options.Values.Select(option => option.NightMarketId).Distinct());
+    }
+
+    [Fact]
+    public async Task DiningPlan_LogFailureNeverReturnsConfirmableEmptyId()
+    {
+        var main = Tag("FULLMEAL");
+        var food = Food(40_000m, main);
+        var logs = new Mock<IAIRecommendationLogRepository>();
+        logs.Setup(repository => repository.AddAsync(It.IsAny<AIRecommendationLog>())).Returns(Task.CompletedTask);
+        logs.Setup(repository => repository.SaveChangesAsync()).ThrowsAsync(new InvalidOperationException("database down"));
+        var service = CreateService([main], [food], new FoodIntentDto(), logRepository: logs);
+
+        var error = await Assert.ThrowsAsync<AppException>(() => service.DiningPlanAssistantAsync(
+            Guid.NewGuid(), new DiningPlanAssistantRequest
+            {
+                NightMarketId = food.Booth.NightMarketId, GroupSize = 1, Budget = 100_000m
+            }));
+
+        Assert.Equal(503, error.StatusCode);
+        Assert.Equal(AIErrorCodes.PlanLogUnavailable, error.ErrorCode);
+        Assert.DoesNotContain("database down", error.Message);
+    }
+
+    [Fact]
+    public async Task Confirm_RevalidatesMarketAndReturnsStableErrorCode()
+    {
+        var main = Tag("FULLMEAL");
+        var food = Food(40_000m, main);
+        food.Booth.NightMarket.Status = NightMarketStatus.Closed;
+        var customerId = Guid.NewGuid();
+        var logId = Guid.NewGuid();
+        var option = new DiningPlanOptionResponse
+        {
+            OptionId = "OPT_BEST_MATCH", NightMarketId = food.Booth.NightMarketId,
+            NightMarketName = food.Booth.NightMarket.Name, GroupSize = 1, Budget = 100_000m,
+            EstimatedTotal = food.Price,
+            PlanPreview = [new DiningPlanItemResponse
+            {
+                FoodItemId = food.Id, BoothId = food.BoothId, Quantity = 1,
+                UnitPrice = food.Price, TotalPrice = food.Price
+            }]
+        };
+        var logs = new Mock<IAIRecommendationLogRepository>();
+        logs.Setup(repository => repository.GetByIdAsync(logId)).ReturnsAsync(new AIRecommendationLog
+        {
+            Id = logId, CustomerId = customerId, RecommendationType = AIRecommendationType.DiningPlan,
+            InputJson = "{}", ResultJson = JsonSerializer.Serialize(new DiningPlanAssistantResponse { Options = [option] })
+        });
+        var service = CreateService([main], [food], new FoodIntentDto(), logRepository: logs);
+
+        var error = await Assert.ThrowsAsync<AppException>(() => service.ConfirmDiningPlanAsync(
+            customerId, new ConfirmDiningPlanRequest { LogId = logId, OptionId = option.OptionId }));
+
+        Assert.Equal(AIErrorCodes.MarketNotOrderable, error.ErrorCode);
+    }
+
     private static AIRecommendationService CreateService(
         IReadOnlyCollection<FoodTag> tags,
         IReadOnlyCollection<FoodItem> foods,
@@ -344,6 +513,11 @@ public class AIRecommendationServiceTests
         foodRepository.Setup(repository => repository.GetAiCandidatesAsync(
                 It.IsAny<Guid?>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(foods);
+        foodRepository.Setup(repository => repository.GetAiOrderableCandidatesAsync(
+                It.IsAny<Guid?>(), It.IsAny<TimeOnly>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(foods);
+        foodRepository.Setup(repository => repository.GetAllFoodItemsByIdsAsync(It.IsAny<List<Guid>>()))
+            .ReturnsAsync((List<Guid> ids) => foods.Where(food => ids.Contains(food.Id)).ToList());
 
         var tagRepository = new Mock<IFoodTagRepository>();
         tagRepository.Setup(repository => repository.GetActiveAsync(It.IsAny<CancellationToken>()))
@@ -440,4 +614,10 @@ public class AIRecommendationServiceTests
         });
         return food;
     }
+
+    private static void AddTag(FoodItem food, FoodTag tag)
+        => food.FoodItemTags.Add(new FoodItemTag
+        {
+            FoodItemId = food.Id, FoodItem = food, FoodTagId = tag.Id, FoodTag = tag
+        });
 }

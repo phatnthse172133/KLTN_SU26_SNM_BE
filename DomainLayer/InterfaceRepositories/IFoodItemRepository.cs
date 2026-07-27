@@ -51,5 +51,11 @@ public interface IFoodItemRepository : IGenericRepository<FoodItem>
         int maxCandidates,
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyCollection<FoodItem>> GetAiOrderableCandidatesAsync(
+        Guid? nightMarketId,
+        TimeOnly localTime,
+        int maxCandidates,
+        CancellationToken cancellationToken = default);
+
     Task<List<FoodItem>> GetAllFoodItemsByIdsAsync(List<Guid> foodItemIds);
 }

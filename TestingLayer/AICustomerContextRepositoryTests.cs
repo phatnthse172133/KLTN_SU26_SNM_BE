@@ -9,6 +9,27 @@ namespace TestingLayer;
 public class AICustomerContextRepositoryTests
 {
     [Fact]
+    public async Task Context_FeedbackIsBoundedAndIsolatedByCustomer()
+    {
+        await using var db = new SNMDbContext(new DbContextOptionsBuilder<SNMDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        var customerId = Guid.NewGuid();
+        var positiveFoodId = Guid.NewGuid();
+        var negativeFoodId = Guid.NewGuid();
+        var now = DateTime.UtcNow;
+        db.AIRecommendationLogs.AddRange(
+            Feedback(customerId, positiveFoodId, "Suitable", now),
+            Feedback(customerId, negativeFoodId, "NotSuitable", now.AddMinutes(1)),
+            Feedback(Guid.NewGuid(), positiveFoodId, "NotSuitable", now.AddMinutes(2)));
+        await db.SaveChangesAsync();
+
+        var context = await new AICustomerContextRepository(db).GetAsync(customerId, 20, 20);
+
+        Assert.Equal(1, context.FoodFeedbackScores![positiveFoodId]);
+        Assert.Equal(-1, context.FoodFeedbackScores[negativeFoodId]);
+    }
+
+    [Fact]
     public async Task AiCandidates_ExcludeCloserButHiddenMarket()
     {
         await using var db = new SNMDbContext(new DbContextOptionsBuilder<SNMDbContext>()
@@ -124,4 +145,13 @@ public class AICustomerContextRepositoryTests
         Id = Guid.NewGuid(), CustomerId = customerId, OrderId = order.Id, Order = order,
         BoothId = boothId, Rating = rating, CreatedAt = order.CreatedAt
     };
+
+    private static AIRecommendationLog Feedback(Guid customerId, Guid foodItemId, string type, DateTime createdAt)
+        => new()
+        {
+            Id = Guid.NewGuid(), CustomerId = customerId,
+            RecommendationType = AIRecommendationType.PreferenceProfile,
+            InputJson = System.Text.Json.JsonSerializer.Serialize(new { foodItemId, feedbackType = type }),
+            ResultJson = "{}", CreatedAt = createdAt, UpdatedAt = createdAt
+        };
 }

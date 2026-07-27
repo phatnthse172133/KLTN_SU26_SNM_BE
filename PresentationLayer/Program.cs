@@ -82,6 +82,19 @@ builder.Services.AddKeyedSingleton<PayOSClient>("PayOut", (sp, key) =>
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        var response = ApiResponse<ErrorResponse>.Failure(
+            "Too many requests. Please try again later.",
+            "RATE_LIMITED",
+            new ErrorResponse
+            {
+                TraceId = context.HttpContext.TraceIdentifier,
+                ErrorCode = "RATE_LIMITED",
+                Details = "The request rate limit was exceeded."
+            });
+        await context.HttpContext.Response.WriteAsJsonAsync(response, cancellationToken);
+    };
     options.AddPolicy("OrderApiPolicy", httpContext =>
     {
         // Lấy UserId từ Token (nếu đã login)

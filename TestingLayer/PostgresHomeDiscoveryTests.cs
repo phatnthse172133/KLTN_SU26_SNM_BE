@@ -81,6 +81,8 @@ public class PostgresHomeDiscoveryTests
         var foodsByPriceDescending = await new FoodItemRepository(context).GetCustomerPagedAsync(
             null, null, null, null, null, null, true,
             DateTime.UtcNow, new TimeOnly(20, 0), 1, 6, "priceDesc");
+        var aiOrderableFoods = await new FoodItemRepository(context).GetAiOrderableCandidatesAsync(
+            null, new TimeOnly(20, 0), 200);
         var booths = await new BoothRepository(context).GetCustomerPagedAsync(
             null, null, null, new TimeOnly(20, 0), null, 1, 6, "featured");
 
@@ -89,6 +91,7 @@ public class PostgresHomeDiscoveryTests
         Assert.NotNull(foodsByName.Items);
         Assert.NotNull(foodsByPrice.Items);
         Assert.NotNull(foodsByPriceDescending.Items);
+        Assert.NotNull(aiOrderableFoods);
         Assert.NotNull(booths.Items);
 
         if (!expectEmpty)

@@ -239,6 +239,44 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyCollection<FoodItem>> GetAiOrderableCandidatesAsync(
+        Guid? nightMarketId,
+        TimeOnly localTime,
+        int maxCandidates,
+        CancellationToken cancellationToken = default)
+    {
+        if (maxCandidates is < 1 or > 500)
+            throw new ArgumentOutOfRangeException(nameof(maxCandidates));
+
+        var query = ActiveQuery()
+            .AsNoTracking()
+            .Include(item => item.Category)
+            .Include(item => item.FoodPrices)
+            .Include(item => item.FoodItemTags)
+                .ThenInclude(foodItemTag => foodItemTag.FoodTag)
+            .Include(item => item.Booth)
+                .ThenInclude(booth => booth.NightMarket)
+            .Include(item => item.Booth)
+                .ThenInclude(booth => booth.Zone)
+            .Where(item =>
+                !item.Category.IsDeleted
+                && item.Booth.Status == BoothStatus.Active
+                && item.Booth.NightMarket.ModerationStatus == ModerationStatus.Active
+                && !item.Booth.NightMarket.IsDeleted)
+            .Where(IsCustomerOrderableAt(localTime));
+
+        if (nightMarketId.HasValue)
+            query = query.Where(item => item.Booth.NightMarketId == nightMarketId.Value);
+
+        return await query
+            .OrderByDescending(item => item.IsFeatured)
+            .ThenByDescending(item => item.Booth.AverageRating)
+            .ThenBy(item => item.Id)
+            .Take(maxCandidates)
+            .AsSplitQuery()
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<List<FoodItem>> GetAllFoodItemsByIdsAsync(List<Guid> foodItemIds)
     {
         return await _dbSet

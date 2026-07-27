@@ -161,6 +161,13 @@ public class GeminiAIProviderService : IAIProviderService
         AddIfAllowed(matched, allowedTags, normalized, "SNACK", ["an vat", "ăn vặt", "snack"]);
         AddIfAllowed(matched, allowedTags, normalized, "SEAFOOD", ["hai san", "hải sản", "seafood"]);
 
+        if (normalized.Contains("khong cay") || normalized.Contains("không cay")
+            || normalized.Contains("not spicy") || normalized.Contains("no spicy"))
+        {
+            matched.Remove("SPICY");
+            AddAllowed(avoid, allowedTags, "SPICY");
+        }
+
         if (normalized.Contains("khong an hai san") || normalized.Contains("không ăn hải sản") || normalized.Contains("no seafood"))
         {
             matched.Remove("SEAFOOD");

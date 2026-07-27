@@ -7,7 +7,8 @@ public sealed record CustomerRecommendationContext(
     IReadOnlySet<Guid> RecentFoodIds,
     IReadOnlySet<Guid> PositiveBoothIds,
     IReadOnlySet<Guid> NegativeBoothIds,
-    decimal? TypicalUnitPrice)
+    decimal? TypicalUnitPrice,
+    IReadOnlyDictionary<Guid, int>? FoodFeedbackScores = null)
 {
     public static CustomerRecommendationContext Empty { get; } = new(
         new Dictionary<Guid, int>(),
@@ -16,7 +17,9 @@ public sealed record CustomerRecommendationContext(
         new HashSet<Guid>(),
         new HashSet<Guid>(),
         new HashSet<Guid>(),
-        null);
+        null,
+        new Dictionary<Guid, int>());
 
-    public bool HasHistory => TagQuantities.Count > 0 || CategoryQuantities.Count > 0 || BoothQuantities.Count > 0;
+    public bool HasHistory => TagQuantities.Count > 0 || CategoryQuantities.Count > 0 || BoothQuantities.Count > 0
+        || FoodFeedbackScores?.Count > 0;
 }

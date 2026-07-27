@@ -48,6 +48,8 @@ public class FoodDiscoveryItemResponse
     public double? DistanceMeters { get; set; }
     public int MatchScore { get; set; }
     public IReadOnlyCollection<string> MatchedPreferences { get; set; } = [];
+    public IReadOnlyCollection<string> MatchedCurrentPreferences { get; set; } = [];
+    public IReadOnlyCollection<string> MatchedSavedPreferences { get; set; } = [];
     public bool IsFallback { get; set; }
     public string Reason { get; set; } = string.Empty;
     public IReadOnlyCollection<string> Tags { get; set; } = [];

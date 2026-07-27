@@ -12,6 +12,7 @@ public class PackageResponse
     public PackageType Type { get; set; }
     public string? Description { get; set; }
     public string? Entitlements { get; set; }
+    public string? ImageUrl { get; set; }
     public string Status { get; set; } = string.Empty;
     public List<string> Features { get; set; } = new();
     public DateTime CreatedAt { get; set; }

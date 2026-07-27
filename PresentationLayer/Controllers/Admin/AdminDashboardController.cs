@@ -42,6 +42,20 @@ namespace PresentationLayer.Controllers.Admin
             return Ok(new { Message = "Revenue chart retrieved successfully", Data = chart });
         }
 
+        [HttpGet("pending-complaints")]
+        public async Task<IActionResult> GetPendingComplaints([FromQuery] int limit = 5)
+        {
+            var complaints = await _dashboardService.GetPendingComplaintsAsync(limit);
+            return Ok(new { Message = "Pending complaints retrieved successfully", Data = complaints });
+        }
+
+        [HttpGet("recent-booth-registrations")]
+        public async Task<IActionResult> GetRecentBoothRegistrations([FromQuery] int limit = 5)
+        {
+            var registrations = await _dashboardService.GetRecentBoothRegistrationsAsync(limit);
+            return Ok(new { Message = "Recent registrations retrieved successfully", Data = registrations });
+        }
+
         private static (DateTime Start, DateTime End) NormalizeRange(DateTime? startDate, DateTime? endDate)
         {
             var end = (endDate ?? DateTime.UtcNow.Date.AddDays(1)).ToUniversalTime();

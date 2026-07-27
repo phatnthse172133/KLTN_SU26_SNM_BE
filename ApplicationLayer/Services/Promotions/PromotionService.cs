@@ -390,7 +390,7 @@ public class PromotionService : IPromotionService
         }
 
         if (requireManageable
-            && booth.Status is BoothStatus.Suspended or BoothStatus.Closed)
+            && booth.Status is BoothStatus.Banned or BoothStatus.Inactive)
         {
             throw AppException.BadRequest(
                 "This booth cannot manage promotions in its current status.",

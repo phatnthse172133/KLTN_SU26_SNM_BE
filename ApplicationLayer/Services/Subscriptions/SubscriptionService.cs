@@ -36,6 +36,7 @@ namespace ApplicationLayer.Services.Subscriptions
                 PackageType = s.PackageType,
                 PackageId = s.PackageId,
                 PackageName = s.PackageName,
+                PackageImageUrl = s.PackageImageUrl,
                 StartDate = s.StartDate,
                 EndDate = s.EndDate,
                 Status = s.Status,

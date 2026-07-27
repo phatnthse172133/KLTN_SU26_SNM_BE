@@ -36,7 +36,7 @@ public class NightMarketRepository : GenericRepository<NightMarket>, INightMarke
         if (openNow == true)
         {
             query = query.Where(market =>
-                market.Status == NightMarketStatus.Open &&
+                market.Status == NightMarketStatus.Active &&
                 market.OpeningHours.HasValue &&
                 market.ClosingHours.HasValue &&
                 market.OpeningHours.Value <= localTime &&
@@ -45,8 +45,8 @@ public class NightMarketRepository : GenericRepository<NightMarket>, INightMarke
         else if (openNow == false)
         {
             query = query.Where(market =>
-                market.Status == NightMarketStatus.Closed ||
-                (market.Status == NightMarketStatus.Open &&
+                market.Status == NightMarketStatus.Inactive ||
+                (market.Status == NightMarketStatus.Active &&
                  market.OpeningHours.HasValue &&
                  market.ClosingHours.HasValue &&
                  (localTime < market.OpeningHours.Value ||
@@ -135,9 +135,7 @@ public class NightMarketRepository : GenericRepository<NightMarket>, INightMarke
         => _dbSet.AsNoTracking().Where(market =>
             !market.IsDeleted &&
             market.ModerationStatus == ModerationStatus.Active &&
-            (market.Status == NightMarketStatus.Upcoming ||
-             market.Status == NightMarketStatus.Open ||
-             market.Status == NightMarketStatus.Closed));
+            market.Status == NightMarketStatus.Active);
 
     private static IQueryable<NightMarketCustomerReadModel> ProjectCustomer(IQueryable<NightMarket> query)
         => query.Select(market => new NightMarketCustomerReadModel(

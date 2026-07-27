@@ -24,6 +24,9 @@ namespace ApplicationLayer.Services.PayOS
             _client = client;
             _settings = settings.Value;
             _logger = logger;
+
+            if (string.IsNullOrEmpty(_settings.ClientId) || string.IsNullOrEmpty(_settings.ApiKey) || string.IsNullOrEmpty(_settings.ChecksumKey))
+                throw new InvalidOperationException("PayOS is not configured. Set PayOS__ClientId, PayOS__ApiKey, PayOS__ChecksumKey in environment or appsettings.");
         }
 
         public async Task<PayOSPaymentResponse> CreatePaymentLinkAsync(PayOSPaymentRequest request)
@@ -79,7 +82,6 @@ namespace ApplicationLayer.Services.PayOS
 
         public async Task CancelPaymentLinkAsync(long orderCode)
         {
-            EnsureConfigured();
             try
             {
                 await _client.PaymentRequests.CancelAsync(orderCode);
@@ -94,7 +96,6 @@ namespace ApplicationLayer.Services.PayOS
 
         public async Task<PayOSWebhookData?> VerifyWebhookAsync(Webhook webhook)
         {
-            EnsureConfigured();
             try
             {
                 var verifiedData = await _client.Webhooks.VerifyAsync(webhook);
@@ -126,7 +127,6 @@ namespace ApplicationLayer.Services.PayOS
 
         public async Task<PayOSPaymentStatus?> GetPaymentStatusAsync(long orderCode)
         {
-            EnsureConfigured();
             try
             {
                 var paymentLink = await _client.PaymentRequests.GetAsync(orderCode);
@@ -146,18 +146,6 @@ namespace ApplicationLayer.Services.PayOS
             {
                 _logger.LogError(ex, "PayOS get payment status failed for order {OrderCode}", orderCode);
                 return null;
-            }
-        }
-
-        private void EnsureConfigured()
-        {
-            if (string.IsNullOrWhiteSpace(_settings.ClientId) ||
-                string.IsNullOrWhiteSpace(_settings.ApiKey) ||
-                string.IsNullOrWhiteSpace(_settings.ChecksumKey))
-            {
-                throw AppException.ServiceUnavailable(
-                    "PayOS is not configured. Set PayOS__ClientId, PayOS__ApiKey, and PayOS__ChecksumKey.",
-                    "PAYOS_NOT_CONFIGURED");
             }
         }
     }

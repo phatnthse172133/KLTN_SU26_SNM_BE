@@ -1,6 +1,7 @@
 using DomainLayer.Common;
 using DomainLayer.Entities;
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using static DomainLayer.Enums.GeneralEnum;
@@ -13,6 +14,7 @@ namespace DomainLayer.InterfaceRepository
         Task<BoothSubscription?> GetBoothSubscriptionByIdAsync(Guid id, CancellationToken ct = default);
         Task<MarketSubscription?> GetMarketSubscriptionByIdAsync(Guid id, CancellationToken ct = default);
         Task<Package?> GetPackageByIdAsync(Guid id, CancellationToken ct = default);
+        Task<Package?> GetPackageByCodeAsync(string code, CancellationToken ct = default);
         Task<PackagePolicy?> GetActivePackagePolicyAsync(Guid packageId, CancellationToken ct = default);
         Task SaveChangesAsync(CancellationToken ct = default);
 
@@ -22,6 +24,8 @@ namespace DomainLayer.InterfaceRepository
         Task<MarketSubscription?> GetLatestApprovedMarketSubscriptionAsync(Guid marketOwnerId, CancellationToken ct = default);
         Task<bool> HasPendingBoothSubscriptionAsync(Guid boothId, CancellationToken ct = default);
         Task<bool> HasPendingMarketSubscriptionAsync(Guid marketOwnerId, CancellationToken ct = default);
+        Task<MarketSubscription?> GetPendingMarketSubscriptionAsync(Guid marketOwnerId, CancellationToken ct = default);
+        Task<BoothSubscription?> GetPendingBoothSubscriptionAsync(Guid boothId, CancellationToken ct = default);
         Task<List<BoothSubscription>> GetBoothSubscriptionHistoryAsync(Guid boothId, CancellationToken ct = default);
         Task<List<MarketSubscription>> GetMarketSubscriptionHistoryAsync(Guid marketOwnerId, CancellationToken ct = default);
         Task AddBoothSubscriptionAsync(BoothSubscription subscription, CancellationToken ct = default);
@@ -47,5 +51,7 @@ namespace DomainLayer.InterfaceRepository
         Task AddPackagePolicyAsync(PackagePolicy policy, CancellationToken ct = default);
         Task<int> DeactivateActivePolicyAsync(Guid packageId, CancellationToken ct = default);
         Task<int> ActivatePolicyAsync(Guid policyId, CancellationToken ct = default);
+        Task<List<BoothSubscription>> GetExpiredBoothSubscriptionsAsync(CancellationToken ct = default);
+        Task<List<MarketSubscription>> GetExpiredMarketSubscriptionsAsync(CancellationToken ct = default);
     }
 }

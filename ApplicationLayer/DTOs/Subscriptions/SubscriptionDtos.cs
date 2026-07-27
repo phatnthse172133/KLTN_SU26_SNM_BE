@@ -24,6 +24,7 @@ namespace ApplicationLayer.DTOs.Subscriptions
         public Guid SubscriptionId { get; set; }
         public string? PackageCode { get; set; }
         public string PackageName { get; set; } = string.Empty;
+        public string? PackageImageUrl { get; set; }
         public string Status { get; set; } = string.Empty;
         public DateTime? StartDate { get; set; }
         public DateTime? EndDate { get; set; }
@@ -39,6 +40,7 @@ namespace ApplicationLayer.DTOs.Subscriptions
         public Guid Id { get; set; }
         public string PackageName { get; set; } = string.Empty;
         public string? PackageCode { get; set; }
+        public string? PackageImageUrl { get; set; }
         public string Status { get; set; } = string.Empty;
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }

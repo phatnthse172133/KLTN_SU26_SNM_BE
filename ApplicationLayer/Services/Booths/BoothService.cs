@@ -49,7 +49,7 @@ public class BoothService : IBoothService
         booth.BoothName = booth.BoothName.Trim(); booth.UpdatedAt = DateTime.UtcNow;
 
         _booths.Update(booth); await _booths.SaveChangesAsync();
-        if (booth.Status == DomainLayer.Enums.GeneralEnum.BoothStatus.Closed)
+        if (booth.Status == DomainLayer.Enums.GeneralEnum.BoothStatus.Inactive)
             await _locations.ReleaseAsync(booth.Id, DateTime.UtcNow, cancellationToken);
         return ApiResponse<BoothResponse>.SuccessResponse(_mapper.Map<BoothResponse>(booth), "Booth updated successfully.");
     }
@@ -76,7 +76,7 @@ public class BoothService : IBoothService
         booth.BoothName = booth.BoothName.Trim(); booth.UpdatedAt = DateTime.UtcNow;
 
         _booths.Update(booth); await _booths.SaveChangesAsync();
-        if (booth.Status == DomainLayer.Enums.GeneralEnum.BoothStatus.Closed)
+        if (booth.Status == DomainLayer.Enums.GeneralEnum.BoothStatus.Inactive)
             await _locations.ReleaseAsync(booth.Id, DateTime.UtcNow, cancellationToken);
         return ApiResponse<BoothResponse>.SuccessResponse(_mapper.Map<BoothResponse>(booth), "Booth updated successfully by the administrator.");
     }

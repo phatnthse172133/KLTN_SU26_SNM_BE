@@ -2,7 +2,7 @@ using static DomainLayer.Enums.GeneralEnum;
 
 namespace ApplicationLayer.DTOs.Responses;
 
-// â”€â”€â”€ Night Market Moderation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Night Market Moderation ───────────────────────────────────
 
 public class MarketModerationOverviewResponse
 {
@@ -33,7 +33,7 @@ public class MarketModerationDetailResponse : MarketModerationOverviewResponse
     public List<ModerationComplaintSummaryResponse> RecentComplaints { get; set; } = new();
 }
 
-// â”€â”€â”€ Booth Moderation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Booth Moderation ──────────────────────────────────────────
 
 public class BoothModerationOverviewResponse
 {
@@ -62,7 +62,7 @@ public class BoothModerationDetailResponse : BoothModerationOverviewResponse
     public List<BoothDocumentResponse> Documents { get; set; } = new();
 }
 
-// â”€â”€â”€ Shared â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Shared ────────────────────────────────────────────────────
 
 public class ModerationComplaintSummaryResponse
 {

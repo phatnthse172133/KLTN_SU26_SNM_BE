@@ -37,9 +37,9 @@ public class AdminModerationService : IAdminModerationService
         _logger = logger;
     }
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ════════════════════════════════════════════════════════════
     //  Night Market
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ════════════════════════════════════════════════════════════
 
     public async Task<ApiResponse<PaginationResp<MarketModerationOverviewResponse>>> GetMarketsAsync(
         AdminMarketModerationQueryRequest request, CancellationToken cancellationToken = default)
@@ -198,9 +198,9 @@ public class AdminModerationService : IAdminModerationService
                 items, result.TotalCount, new PaginationReq { Page = page, PageSize = pageSize }));
     }
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ════════════════════════════════════════════════════════════
     //  Booth
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ════════════════════════════════════════════════════════════
 
     public async Task<ApiResponse<PaginationResp<BoothModerationOverviewResponse>>> GetBoothsAsync(
         AdminBoothModerationQueryRequest request, CancellationToken cancellationToken = default)
@@ -241,56 +241,85 @@ public class AdminModerationService : IAdminModerationService
         return ApiResponse<BoothModerationDetailResponse>.SuccessResponse(detail);
     }
 
-    public async Task<ApiResponse<ModerationActionResponse>> ChangeBoothStatusAsync(
-        Guid adminId, string adminName, Guid boothId, ChangeModerationStatusRequest request, CancellationToken cancellationToken = default)
+    public async Task<ApiResponse<ModerationActionResponse>> BanBoothAsync(
+        Guid adminId, string adminName, Guid boothId, BoothModerationActionRequest request, CancellationToken cancellationToken = default)
     {
         ValidateReason(request.Reason);
-        ValidateModerationStatus(request.Status);
 
         var booth = await _moderationRepo.GetBoothDetailAsync(boothId, cancellationToken);
         if (booth is null)
             throw AppException.NotFound("Booth was not found.");
 
-        // Map ModerationStatus to BoothStatus
-        var targetBoothStatus = request.Status == ModerationStatus.Suspended
-            ? BoothStatus.Suspended
-            : BoothStatus.Active;
+        if (booth.Status == BoothStatus.Banned)
+            throw AppException.BadRequest("Booth is already banned.");
 
-        if (booth.Status == targetBoothStatus)
-            throw AppException.BadRequest($"Booth is already {request.Status}.");
+        var history = await ExecuteBoothStatusChangeAsync(adminId, adminName, booth, BoothStatus.Banned, request, cancellationToken);
 
-        // Only Active â†” Suspended transitions are allowed
-        var validTransition =
-            (booth.Status == BoothStatus.Active && targetBoothStatus == BoothStatus.Suspended) ||
-            (booth.Status == BoothStatus.Suspended && targetBoothStatus == BoothStatus.Active);
-        if (!validTransition)
-            throw AppException.BadRequest($"Cannot change booth status from {booth.Status} to {targetBoothStatus}.");
+        await NotifyBoothOwnerAsync(
+            booth,
+            "Booth banned",
+            $"Your booth \"{booth.BoothName}\" has been banned by the platform.\n\nReason: {request.Reason.Trim()}",
+            BoothStatus.Banned,
+            cancellationToken);
 
+        return ApiResponse<ModerationActionResponse>.SuccessResponse(
+            new ModerationActionResponse { Id = history.Id, Success = true, Message = "Booth has been banned." },
+            "Booth has been banned.");
+    }
+
+    public async Task<ApiResponse<ModerationActionResponse>> RestoreBoothAsync(
+        Guid adminId, string adminName, Guid boothId, BoothModerationActionRequest request, CancellationToken cancellationToken = default)
+    {
+        ValidateReason(request.Reason);
+
+        var booth = await _moderationRepo.GetBoothDetailAsync(boothId, cancellationToken);
+        if (booth is null)
+            throw AppException.NotFound("Booth was not found.");
+
+        if (booth.Status != BoothStatus.Banned)
+            throw AppException.BadRequest("Only a banned booth can be restored.");
+
+        var history = await ExecuteBoothStatusChangeAsync(adminId, adminName, booth, BoothStatus.Active, request, cancellationToken);
+
+        await NotifyBoothOwnerAsync(
+            booth,
+            "Booth restored",
+            $"Your booth \"{booth.BoothName}\" has been restored.\n\nReason: {request.Reason.Trim()}",
+            BoothStatus.Active,
+            cancellationToken);
+
+        return ApiResponse<ModerationActionResponse>.SuccessResponse(
+            new ModerationActionResponse { Id = history.Id, Success = true, Message = "Booth has been restored." },
+            "Booth has been restored.");
+    }
+
+    private async Task<ModerationActionHistory> ExecuteBoothStatusChangeAsync(
+        Guid adminId, string adminName, Booth booth, BoothStatus targetStatus, BoothModerationActionRequest request, CancellationToken cancellationToken)
+    {
         if (request.ExpectedUpdatedAt.HasValue && booth.UpdatedAt != request.ExpectedUpdatedAt.Value)
             throw AppException.Conflict("Booth has been modified by another user. Please refresh and try again.", "MODERATION_CONFLICT");
 
         var now = DateTime.UtcNow;
-        var previousBoothStatus = booth.Status;
+        var previousStatus = booth.Status;
         ModerationActionHistory history;
 
         await _moderationRepo.BeginTransactionAsync();
         try
         {
             var rowsAffected = await _moderationRepo.UpdateBoothStatusAsync(
-                boothId, previousBoothStatus, targetBoothStatus, now, cancellationToken);
+                booth.Id, previousStatus, targetStatus, now, cancellationToken);
 
             if (rowsAffected == 0)
                 throw AppException.Conflict("Booth has been modified by another user. Please refresh and try again.", "MODERATION_CONFLICT");
 
-            // Save history
             history = new ModerationActionHistory
             {
                 Id = Guid.NewGuid(),
-                BoothId = boothId,
+                BoothId = booth.Id,
                 AdminId = adminId,
                 AdminName = adminName,
-                PreviousStatus = MapBoothStatusToModeration(previousBoothStatus),
-                NewStatus = request.Status.ToString(),
+                PreviousStatus = previousStatus.ToString(),
+                NewStatus = targetStatus.ToString(),
                 Reason = request.Reason.Trim(),
                 Source = request.ComplaintId.HasValue ? ModerationActionSource.Complaint : ModerationActionSource.DirectAdmin,
                 ComplaintId = request.ComplaintId,
@@ -311,14 +340,14 @@ public class AdminModerationService : IAdminModerationService
             throw;
         }
 
-        // Notify booth owner
+        return history;
+    }
+
+    private async Task NotifyBoothOwnerAsync(
+        Booth booth, string title, string content, BoothStatus action, CancellationToken cancellationToken)
+    {
         try
         {
-            var title = request.Status == ModerationStatus.Suspended ? "Booth suspended" : "Booth restored";
-            var content = request.Status == ModerationStatus.Suspended
-                ? $"Your booth \"{booth.BoothName}\" has been suspended.\n\nReason: {request.Reason.Trim()}"
-                : $"Your booth \"{booth.BoothName}\" has been restored.\n\nReason: {request.Reason.Trim()}";
-
             await _notifications.NotifyAsync(new NotificationMessage(
                 booth.BoothOwnerId,
                 NotificationType.BoothSuspended,
@@ -327,16 +356,12 @@ public class AdminModerationService : IAdminModerationService
                 booth.Id,
                 "Booth",
                 booth.Id,
-                JsonSerializer.Serialize(new { boothId, action = request.Status.ToString() })), cancellationToken);
+                JsonSerializer.Serialize(new { boothId = booth.Id, action = action.ToString() })), cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to notify booth owner {OwnerId} about moderation change for booth {BoothId}", booth.BoothOwnerId, boothId);
+            _logger.LogWarning(ex, "Failed to notify booth owner {OwnerId} about moderation change for booth {BoothId}", booth.BoothOwnerId, booth.Id);
         }
-
-        return ApiResponse<ModerationActionResponse>.SuccessResponse(
-            new ModerationActionResponse { Id = history.Id, Success = true, Message = $"Booth has been {request.Status.ToString().ToLower()}." },
-            request.Status == ModerationStatus.Suspended ? "Booth has been suspended." : "Booth has been restored.");
     }
 
     public async Task<ApiResponse<PaginationResp<ModerationActionHistoryResponse>>> GetBoothHistoryAsync(
@@ -353,9 +378,9 @@ public class AdminModerationService : IAdminModerationService
                 items, result.TotalCount, new PaginationReq { Page = page, PageSize = pageSize }));
     }
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ════════════════════════════════════════════════════════════
     //  Private helpers
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ════════════════════════════════════════════════════════════
 
     private static void ValidateReason(string? reason)
     {
@@ -474,14 +499,20 @@ public class AdminModerationService : IAdminModerationService
             ComplaintCount = complaintCount,
             CreatedAt = booth.CreatedAt,
             UpdatedAt = booth.UpdatedAt,
-            Documents = booth.Registration?.BoothDocuments?.Select(d => new BoothDocumentResponse
-            {
-                Id = d.Id,
-                DocumentType = d.DocumentType.ToString(),
-                FileUrl = d.FileUrl,
-                VerificationStatus = d.VerificationStatus.ToString(),
-                CreatedAt = d.CreatedAt
-            }).ToList() ?? new List<BoothDocumentResponse>(),
+            Documents = (booth.BoothDocuments ?? Enumerable.Empty<BoothDocument>())
+                .Concat(booth.Registration?.BoothDocuments ?? Enumerable.Empty<BoothDocument>())
+                .GroupBy(d => d.Id)
+                .Select(g => g.First())
+                .OrderBy(d => d.CreatedAt)
+                .Select(d => new BoothDocumentResponse
+                {
+                    Id = d.Id,
+                    DocumentType = d.DocumentType.ToString(),
+                    FileUrl = d.FileUrl,
+                    VerificationStatus = d.VerificationStatus.ToString(),
+                    CreatedAt = d.CreatedAt,
+                    UpdatedAt = d.UpdatedAt
+                }).ToList(),
             RecentComplaints = recentComplaints.Select(MapComplaintSummary).ToList()
         };
     }
@@ -524,10 +555,4 @@ public class AdminModerationService : IAdminModerationService
             CreatedAt = history.CreatedAt
         };
     }
-
-    private static string MapBoothStatusToModeration(BoothStatus status) => status switch
-    {
-        BoothStatus.Suspended => ModerationStatus.Suspended.ToString(),
-        _ => ModerationStatus.Active.ToString()
-    };
 }

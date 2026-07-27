@@ -24,14 +24,14 @@ public static class PackageTemplateHelper
             IsFree = false,
             Features = new List<string>
             {
-                "1 market",
-                "30 slots per market",
+                "Manage 1 night market",
+                "Up to 30 booth slots per market",
                 "1 layout per market",
-                "Operating hours management",
-                "Approve booth registrations",
-                "Assign booths to slots",
-                "Basic complaint management (no SLA)",
-                "Statistics on number of booths and registrations"
+                "Manage market information and operating hours",
+                "Create and manage booth slots",
+                "Assign booths to available slots",
+                "Basic complaint management",
+                "View basic booth and order statistics"
             }
         },
         new()
@@ -42,19 +42,19 @@ public static class PackageTemplateHelper
             IsFree = false,
             Features = new List<string>
             {
-                "Inherits all features from Market Basic",
-                "3 markets",
-                "150 slots per market",
-                "Manage multiple layouts (up to 5 layouts per market)",
-                "Zone management",
-                "Advanced booth approval filters",
-                "Booth owner risk indicators",
-                "Advanced complaint management (priority + SLA)",
+                "Includes all Market Basic features",
+                "Manage up to 3 night markets",
+                "Up to 150 booth slots per market",
+                "Up to 5 layouts per market",
+                "Create Food, Drink and Dessert zones",
+                "Advanced booth management",
+                "Booth risk indicators",
+                "Priority complaint handling and SLA tracking",
                 "Advanced complaint dashboard",
-                "Per-market activity reports",
+                "Market activity reports",
                 "Booth performance reports",
                 "Sales activity insights",
-                "Export reports as PDF/Excel"
+                "Export reports"
             }
         },
         new()
@@ -66,12 +66,12 @@ public static class PackageTemplateHelper
             Features = new List<string>
             {
                 "Manage one booth created and assigned by a Market Owner",
-                "Menu limited to 20 items",
-                "Receive orders",
+                "Manage up to 20 menu items",
+                "Receive and process orders",
                 "Create orders for customers",
                 "Chat with customers",
-                "View reviews but cannot reply",
-                "Basic statistics: order count, revenue and rating",
+                "View customer reviews",
+                "View basic order, revenue and rating statistics",
                 "No expiration and no payment required"
             }
         },
@@ -85,9 +85,10 @@ public static class PackageTemplateHelper
             {
                 "Includes all Booth Basic features",
                 "Unlimited menu items",
-                "Reply to reviews",
-                "Analytics for best-selling items and peak hours",
-                "Create promotions",
+                "Reply to customer reviews",
+                "View best-selling item analytics",
+                "View peak-hour analytics",
+                "Create promotions and combos",
                 "Tier 2 recommendation priority"
             }
         },
@@ -100,11 +101,10 @@ public static class PackageTemplateHelper
             Features = new List<string>
             {
                 "Includes all Booth Boost features",
-                "Featured badge",
-                "Priority placement in recommendations",
-                "Featured food",
-                "Create promotions",
-                "Tier 3 recommendation priority"
+                "Featured booth badge",
+                "Higher visibility in relevant booth discovery",
+                "Highest recommendation priority among Booth plans",
+                "Feature selected food items"
             }
         }
     };

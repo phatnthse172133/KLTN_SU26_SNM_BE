@@ -9,9 +9,9 @@ public class NightMarketListRequest : PaginationReq
     [StringLength(200)]
     public string? Keyword { get; set; }
 
-    public bool? OpenNow { get; set; }
+    public NightMarketStatus? Status { get; set; }
 
-    [RegularExpression("(?i)^(name|boothCount|createdAt)$", ErrorMessage = "SortBy must be name, boothCount, or createdAt.")]
+    [RegularExpression("(?i)^(name|status|createdAt|updatedAt)$", ErrorMessage = "SortBy must be name, status, createdAt, or updatedAt.")]
     public string SortBy { get; set; } = "createdAt";
 
     [RegularExpression("(?i)^(asc|desc)$", ErrorMessage = "SortDirection must be asc or desc.")]
@@ -47,8 +47,6 @@ public class CreateNightMarketRequest
 
     [Url, StringLength(500)]
     public string? ThumbnailUrl { get; set; }
-
-    public NightMarketStatus Status { get; set; } = NightMarketStatus.Draft;
 }
 
 public class UpdateNightMarketRequest : CreateNightMarketRequest { }
@@ -69,4 +67,10 @@ public class UpdateNightMarketGeographicLocationRequest
 
     [Range(1, int.MaxValue)]
     public int BoundaryHeightMeters { get; set; }
+}
+
+public class PatchNightMarketStatusRequest
+{
+    [Required]
+    public NightMarketStatus Status { get; set; }
 }

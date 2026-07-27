@@ -5,7 +5,7 @@ using DomainLayer.Common;
 namespace DomainLayer.Entities;
 
 
-// Báº£ng giÃ¡ theo thá»i Ä‘iá»ƒm cá»§a gÃ³i dá»‹ch vá»¥
+// Bảng giá theo thời điểm của gói dịch vụ
 public partial class PackagePrice : ISoftDelete
 {
     public Guid Id { get; set; }

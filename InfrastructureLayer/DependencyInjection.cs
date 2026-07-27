@@ -80,6 +80,7 @@ namespace InfrastructureLayer
             services.AddScoped<IComplaintRepository, ComplaintRepository>();
             services.AddScoped<IReviewRepository, ReviewRepository>();
             services.AddScoped<INightMarketRepository, NightMarketRepository>();
+            services.AddScoped<INightMarketImageRepository, NightMarketImageRepository>();
             services.AddScoped<IZoneRepository, ZoneRepository>();
             services.AddScoped<IMarketLayoutRepository, MarketLayoutRepository>();
             services.AddScoped<ILayoutNodeRepository, LayoutNodeRepository>();

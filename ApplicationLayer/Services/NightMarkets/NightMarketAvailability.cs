@@ -17,13 +17,10 @@ public static class NightMarketAvailability
         NightMarketCustomerReadModel market,
         DateTime utcNow)
     {
-        if (market.Status == NightMarketStatus.Upcoming)
-            return new NightMarketAvailabilityResult(false, "Upcoming");
+        if (market.Status != NightMarketStatus.Active)
+            return new NightMarketAvailabilityResult(false, "Inactive");
 
-        if (market.Status == NightMarketStatus.Closed)
-            return new NightMarketAvailabilityResult(false, "Closed");
-
-        if (market.Status != NightMarketStatus.Open ||
+        if (
             !market.OpeningHours.HasValue ||
             !market.ClosingHours.HasValue)
             return new NightMarketAvailabilityResult(false, "Hours unavailable");

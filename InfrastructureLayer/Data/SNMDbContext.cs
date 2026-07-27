@@ -68,6 +68,8 @@ namespace InfrastructureLayer.Data
 
         public virtual DbSet<NightMarket> NightMarkets { get; set; }
 
+        public virtual DbSet<NightMarketImage> NightMarketImages { get; set; }
+
         public virtual DbSet<Notification> Notifications { get; set; }
 
         public virtual DbSet<Order> Orders { get; set; }
@@ -109,7 +111,7 @@ namespace InfrastructureLayer.Data
         public virtual DbSet<SystemSetting> SystemSettings { get; set; }
         public virtual DbSet<PackagePolicy> PackagePolicies { get; set; }
 
-    public virtual DbSet<ModerationActionHistory> ModerationActionHistories { get; set; }
+        public virtual DbSet<ModerationActionHistory> ModerationActionHistories { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -121,7 +123,7 @@ namespace InfrastructureLayer.Data
             {
                 entity.HasKey(e => e.Id).HasName("AIRecommendationLog_pkey");
 
-                entity.ToTable("AIRecommendationLog", tb => tb.HasComment("Log tá»‘i giáº£n cho cÃ¡c láº§n AI recommendation Ä‘á»ƒ debug/demo"));
+                entity.ToTable("AIRecommendationLog", tb => tb.HasComment("Log tÃ¡Â»â€˜i giÃ¡ÂºÂ£n cho cÃƒÂ¡c lÃ¡ÂºÂ§n AI recommendation Ã„â€˜Ã¡Â»Æ’ debug/demo"));
 
                 entity.HasIndex(e => e.CustomerId, "idx_airecommendationlog_customer");
                 entity.HasIndex(e => e.NightMarketId, "idx_airecommendationlog_nightmarket");
@@ -153,7 +155,7 @@ namespace InfrastructureLayer.Data
             {
                 entity.HasKey(e => e.Id).HasName("Cart_pkey");
 
-                entity.ToTable("Cart", tb => tb.HasComment("Giá» hÃ ng hiá»‡n táº¡i cá»§a khÃ¡ch hÃ ng"));
+                entity.ToTable("Cart", tb => tb.HasComment("GiÃ¡Â»Â hÃƒÂ ng hiÃ¡Â»â€¡n tÃ¡ÂºÂ¡i cÃ¡Â»Â§a khÃƒÂ¡ch hÃƒÂ ng"));
 
                 entity.HasIndex(e => e.CustomerId, "ux_cart_active_customer")
                     .IsUnique()
@@ -174,7 +176,7 @@ namespace InfrastructureLayer.Data
             {
                 entity.HasKey(e => e.Id).HasName("CartItem_pkey");
 
-                entity.ToTable("CartItem", tb => tb.HasComment("MÃ³n Äƒn trong giá» hÃ ng"));
+                entity.ToTable("CartItem", tb => tb.HasComment("MÃƒÂ³n Ã„Æ’n trong giÃ¡Â»Â hÃƒÂ ng"));
 
                 entity.HasIndex(e => e.CartId, "idx_cartitem_cart");
                 entity.HasIndex(e => e.FoodItemId, "idx_cartitem_fooditem");
@@ -203,7 +205,7 @@ namespace InfrastructureLayer.Data
             {
                 entity.HasKey(e => e.Id).HasName("Booth_pkey");
 
-                entity.ToTable("Booth", tb => tb.HasComment("Gian hÃ ng áº©m thá»±c - thá»±c thá»ƒ trung tÃ¢m, má»—i gian hÃ ng thuá»™c 1 NightMarket vÃ  do 1 User (BoothOwner) quáº£n lÃ½"));
+                entity.ToTable("Booth", tb => tb.HasComment("Gian hÃƒÂ ng Ã¡ÂºÂ©m thÃ¡Â»Â±c - thÃ¡Â»Â±c thÃ¡Â»Æ’ trung tÃƒÂ¢m, mÃ¡Â»â€”i gian hÃƒÂ ng thuÃ¡Â»â„¢c 1 NightMarket vÃƒÂ  do 1 User (BoothOwner) quÃ¡ÂºÂ£n lÃƒÂ½"));
 
                 entity.HasIndex(e => e.NightMarketId, "idx_booth_nightmarket");
 
@@ -213,7 +215,7 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.AverageRating)
                     .HasPrecision(3, 2)
                     .HasDefaultValueSql("0")
-                    .HasComment("Cache Ä‘iá»ƒm trung bÃ¬nh review, cáº­p nháº­t qua trigger hoáº·c job Ä‘á»‹nh ká»³");
+                    .HasComment("Cache Ã„â€˜iÃ¡Â»Æ’m trung bÃƒÂ¬nh review, cÃ¡ÂºÂ­p nhÃ¡ÂºÂ­t qua trigger hoÃ¡ÂºÂ·c job Ã„â€˜Ã¡Â»â€¹nh kÃ¡Â»Â³");
                 entity.Property(e => e.BoothName).HasMaxLength(200);
                 entity.Property(e => e.BoothCode).HasMaxLength(50);
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
@@ -228,7 +230,7 @@ namespace InfrastructureLayer.Data
                     .HasConversion<string>()
                     .HasMaxLength(20)
                     .HasDefaultValueSql("'Pending'::character varying")
-                    .HasComment("Pending: chá» Admin duyá»‡t | Active: hoáº¡t Ä‘á»™ng | Inactive: táº¡m ngá»«ng | Suspended: bá»‹ khÃ³a do vi pháº¡m");
+                    .HasComment("Pending: chÃ¡Â»Â Admin duyÃ¡Â»â€¡t | Active: hoÃ¡ÂºÂ¡t Ã„â€˜Ã¡Â»â„¢ng | Inactive: tÃ¡ÂºÂ¡m ngÃ¡Â»Â«ng | Suspended: bÃ¡Â»â€¹ khÃƒÂ³a do vi phÃ¡ÂºÂ¡m");
                 entity.Property(e => e.ThumbnailUrl).HasMaxLength(500);
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
 
@@ -253,7 +255,7 @@ namespace InfrastructureLayer.Data
             {
                 entity.HasKey(e => e.Id).HasName("BoothDocuments_pkey");
 
-                entity.ToTable(tb => tb.HasComment("Giáº¥y tá» phÃ¡p lÃ½ cá»§a gian hÃ ng Ä‘á»ƒ Admin xÃ¡c minh trÆ°á»›c khi cho phÃ©p hoáº¡t Ä‘á»™ng"));
+                entity.ToTable(tb => tb.HasComment("GiÃ¡ÂºÂ¥y tÃ¡Â»Â phÃƒÂ¡p lÃƒÂ½ cÃ¡Â»Â§a gian hÃƒÂ ng Ã„â€˜Ã¡Â»Æ’ Admin xÃƒÂ¡c minh trÃ†Â°Ã¡Â»â€ºc khi cho phÃƒÂ©p hoÃ¡ÂºÂ¡t Ã„â€˜Ã¡Â»â„¢ng"));
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
@@ -276,7 +278,7 @@ namespace InfrastructureLayer.Data
             {
                 entity.HasKey(e => e.Id).HasName("BoothImages_pkey");
 
-                entity.ToTable(tb => tb.HasComment("ThÆ° viá»‡n áº£nh (gallery) cá»§a gian hÃ ng"));
+                entity.ToTable(tb => tb.HasComment("ThÃ†Â° viÃ¡Â»â€¡n Ã¡ÂºÂ£nh (gallery) cÃ¡Â»Â§a gian hÃƒÂ ng"));
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
@@ -293,7 +295,7 @@ namespace InfrastructureLayer.Data
             {
                 entity.HasKey(e => e.Id).HasName("BoothLocations_pkey");
 
-                entity.ToTable(tb => tb.HasComment("Vá»‹ trÃ­ cá»¥ thá»ƒ (tá»a Ä‘á»™) cá»§a 1 gian hÃ ng trÃªn 1 sÆ¡ Ä‘á»“ máº·t báº±ng"));
+                entity.ToTable(tb => tb.HasComment("VÃ¡Â»â€¹ trÃƒÂ­ cÃ¡Â»Â¥ thÃ¡Â»Æ’ (tÃ¡Â»Âa Ã„â€˜Ã¡Â»â„¢) cÃ¡Â»Â§a 1 gian hÃƒÂ ng trÃƒÂªn 1 sÃ†Â¡ Ã„â€˜Ã¡Â»â€œ mÃ¡ÂºÂ·t bÃ¡ÂºÂ±ng"));
 
                 entity.HasIndex(e => e.BoothId, "ux_boothlocation_active_booth").IsUnique().HasFilter("\"IsDeleted\" = false");
                 entity.HasIndex(e => e.LayoutNodeId, "ux_boothlocation_active_node").IsUnique().HasFilter("\"IsDeleted\" = false");
@@ -333,7 +335,7 @@ namespace InfrastructureLayer.Data
             {
                 entity.HasKey(e => e.Id).HasName("BoothPaymentInfos_pkey");
 
-                entity.ToTable(tb => tb.HasComment("ThÃ´ng tin tÃ i khoáº£n/QR nháº­n thanh toÃ¡n cá»§a gian hÃ ng"));
+                entity.ToTable(tb => tb.HasComment("ThÃƒÂ´ng tin tÃƒÂ i khoÃ¡ÂºÂ£n/QR nhÃ¡ÂºÂ­n thanh toÃƒÂ¡n cÃ¡Â»Â§a gian hÃƒÂ ng"));
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.BankAccountHolder).HasMaxLength(150);
@@ -361,7 +363,7 @@ namespace InfrastructureLayer.Data
             {
                 entity.HasKey(e => e.Id).HasName("BoothSubscriptions_pkey");
 
-                entity.ToTable(tb => tb.HasComment("Lá»‹ch sá»­ Ä‘Äƒng kÃ½ gÃ³i dá»‹ch vá»¥ cá»§a gian hÃ ng"));
+                entity.ToTable(tb => tb.HasComment("LÃ¡Â»â€¹ch sÃ¡Â»Â­ Ã„â€˜Ã„Æ’ng kÃƒÂ½ gÃƒÂ³i dÃ¡Â»â€¹ch vÃ¡Â»Â¥ cÃ¡Â»Â§a gian hÃƒÂ ng"));
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
@@ -393,13 +395,13 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.BuyerName).HasMaxLength(200);
                 entity.Property(e => e.BuyerEmail).HasMaxLength(200);
                 entity.Property(e => e.BuyerPhone).HasMaxLength(20);
-});
+            });
 
             modelBuilder.Entity<MarketSubscription>(entity =>
             {
                 entity.HasKey(e => e.Id).HasName("MarketSubscriptions_pkey");
 
-                entity.ToTable(tb => tb.HasComment("Lá»‹ch sá»­ Ä‘Äƒng kÃ½ gÃ³i dá»‹ch vá»¥ cá»§a Market Owner"));
+                entity.ToTable(tb => tb.HasComment("LÃ¡Â»â€¹ch sÃ¡Â»Â­ Ã„â€˜Ã„Æ’ng kÃƒÂ½ gÃƒÂ³i dÃ¡Â»â€¹ch vÃ¡Â»Â¥ cÃ¡Â»Â§a Market Owner"));
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
@@ -431,7 +433,7 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.BuyerName).HasMaxLength(200);
                 entity.Property(e => e.BuyerEmail).HasMaxLength(200);
                 entity.Property(e => e.BuyerPhone).HasMaxLength(20);
-});
+            });
 
             modelBuilder.Entity<Complaint>(entity =>
             {
@@ -479,7 +481,7 @@ namespace InfrastructureLayer.Data
             {
                 entity.HasKey(e => e.Id).HasName("ComplaintImages_pkey");
 
-                entity.ToTable(tb => tb.HasComment("áº¢nh minh chá»©ng Ä‘Ã­nh kÃ¨m theo khiáº¿u náº¡i"));
+                entity.ToTable(tb => tb.HasComment("Ã¡ÂºÂ¢nh minh chÃ¡Â»Â©ng Ã„â€˜ÃƒÂ­nh kÃƒÂ¨m theo khiÃ¡ÂºÂ¿u nÃ¡ÂºÂ¡i"));
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
@@ -495,7 +497,7 @@ namespace InfrastructureLayer.Data
             {
                 entity.HasKey(e => e.Id).HasName("Conversations_pkey");
 
-                entity.ToTable(tb => tb.HasComment("Cuá»™c trÃ² chuyá»‡n giá»¯a 1 khÃ¡ch hÃ ng vÃ  1 gian hÃ ng - dÃ¹ng SignalR Ä‘á»ƒ realtime"));
+                entity.ToTable(tb => tb.HasComment("CuÃ¡Â»â„¢c trÃƒÂ² chuyÃ¡Â»â€¡n giÃ¡Â»Â¯a 1 khÃƒÂ¡ch hÃƒÂ ng vÃƒÂ  1 gian hÃƒÂ ng - dÃƒÂ¹ng SignalR Ã„â€˜Ã¡Â»Æ’ realtime"));
 
                 entity.HasIndex(e => new { e.CustomerId, e.BoothId }, "uq_conversation_customer_booth").IsUnique();
                 entity.HasIndex(e => e.LastMessageAt, "idx_conversation_last_message");
@@ -530,7 +532,7 @@ namespace InfrastructureLayer.Data
             {
                 entity.HasKey(e => e.Id).HasName("CustomerPreference_pkey");
 
-                entity.ToTable("CustomerPreference", tb => tb.HasComment("Sá»Ÿ thÃ­ch rÃµ rÃ ng cá»§a khÃ¡ch hÃ ng theo FoodTag: Like/Avoid"));
+                entity.ToTable("CustomerPreference", tb => tb.HasComment("SÃ¡Â»Å¸ thÃƒÂ­ch rÃƒÂµ rÃƒÂ ng cÃ¡Â»Â§a khÃƒÂ¡ch hÃƒÂ ng theo FoodTag: Like/Avoid"));
 
                 entity.HasIndex(e => e.CustomerId, "idx_customerpreference_customer");
                 entity.HasIndex(e => e.FoodTagId, "idx_customerpreference_foodtag");
@@ -562,7 +564,7 @@ namespace InfrastructureLayer.Data
             {
                 entity.HasKey(e => e.Id).HasName("FoodCategories_pkey");
 
-                entity.ToTable(tb => tb.HasComment("Danh má»¥c mÃ³n Äƒn cá»§a tá»«ng gian hÃ ng"));
+                entity.ToTable(tb => tb.HasComment("Danh mÃ¡Â»Â¥c mÃƒÂ³n Ã„Æ’n cÃ¡Â»Â§a tÃ¡Â»Â«ng gian hÃƒÂ ng"));
 
                 entity.HasIndex(e => e.BoothId, "idx_foodcategory_booth");
 
@@ -585,7 +587,7 @@ namespace InfrastructureLayer.Data
             {
                 entity.HasKey(e => e.Id).HasName("FoodImages_pkey");
 
-                entity.ToTable(tb => tb.HasComment("ThÆ° viá»‡n áº£nh (gallery) cho tá»«ng mÃ³n Äƒn"));
+                entity.ToTable(tb => tb.HasComment("ThÃ†Â° viÃ¡Â»â€¡n Ã¡ÂºÂ£nh (gallery) cho tÃ¡Â»Â«ng mÃƒÂ³n Ã„Æ’n"));
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
@@ -602,7 +604,7 @@ namespace InfrastructureLayer.Data
             {
                 entity.HasKey(e => e.Id).HasName("FoodItem_pkey");
 
-                entity.ToTable("FoodItem", tb => tb.HasComment("MÃ³n Äƒn cá»§a tá»«ng gian hÃ ng"));
+                entity.ToTable("FoodItem", tb => tb.HasComment("MÃƒÂ³n Ã„Æ’n cÃ¡Â»Â§a tÃ¡Â»Â«ng gian hÃƒÂ ng"));
 
                 entity.HasIndex(e => e.BoothId, "idx_fooditem_booth");
 
@@ -612,13 +614,13 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
                 entity.Property(e => e.IsAvailable)
                     .HasDefaultValue(true)
-                    .HasComment("false khi mÃ³n háº¿t nguyÃªn liá»‡u hoáº·c chá»§ quÃ¡n táº¡m áº©n");
+                    .HasComment("false khi mÃƒÂ³n hÃ¡ÂºÂ¿t nguyÃƒÂªn liÃ¡Â»â€¡u hoÃ¡ÂºÂ·c chÃ¡Â»Â§ quÃƒÂ¡n tÃ¡ÂºÂ¡m Ã¡ÂºÂ©n");
                 entity.Property(e => e.IsDeleted).HasDefaultValue(false);
                 entity.Property(e => e.IsFeatured).HasDefaultValue(false);
                 entity.Property(e => e.Name).HasMaxLength(200);
                 entity.Property(e => e.Price)
                     .HasPrecision(12, 2)
-                    .HasComment("GiÃ¡ máº·c Ä‘á»‹nh. Náº¿u cÃ³ FoodPrice theo ngÃ y hiá»‡n táº¡i thÃ¬ giÃ¡ Ä‘Ã³ Ä‘Æ°á»£c Æ°u tiÃªn (override)");
+                    .HasComment("GiÃƒÂ¡ mÃ¡ÂºÂ·c Ã„â€˜Ã¡Â»â€¹nh. NÃ¡ÂºÂ¿u cÃƒÂ³ FoodPrice theo ngÃƒÂ y hiÃ¡Â»â€¡n tÃ¡ÂºÂ¡i thÃƒÂ¬ giÃƒÂ¡ Ã„â€˜ÃƒÂ³ Ã„â€˜Ã†Â°Ã¡Â»Â£c Ã†Â°u tiÃƒÂªn (override)");
                 entity.Property(e => e.ThumbnailUrl).HasMaxLength(500);
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
 
@@ -638,7 +640,7 @@ namespace InfrastructureLayer.Data
                 entity.HasKey(e => new { e.FoodItemId, e.FoodTagId })
                     .HasName("FoodItemTag_pkey");
 
-                entity.ToTable("FoodItemTag", tb => tb.HasComment("Báº£ng ná»‘i gáº¯n tag ngá»¯ nghÄ©a vÃ o mÃ³n Äƒn"));
+                entity.ToTable("FoodItemTag", tb => tb.HasComment("BÃ¡ÂºÂ£ng nÃ¡Â»â€˜i gÃ¡ÂºÂ¯n tag ngÃ¡Â»Â¯ nghÃ„Â©a vÃƒÂ o mÃƒÂ³n Ã„Æ’n"));
 
                 entity.HasIndex(e => e.FoodTagId, "idx_fooditemtag_foodtag");
 
@@ -659,7 +661,7 @@ namespace InfrastructureLayer.Data
             {
                 entity.HasKey(e => e.Id).HasName("FoodPrice_pkey");
 
-                entity.ToTable("FoodPrice", tb => tb.HasComment("Báº£ng giÃ¡ theo ngÃ y trong tuáº§n - override giÃ¡ máº·c Ä‘á»‹nh cá»§a FoodItem"));
+                entity.ToTable("FoodPrice", tb => tb.HasComment("BÃ¡ÂºÂ£ng giÃƒÂ¡ theo ngÃƒÂ y trong tuÃ¡ÂºÂ§n - override giÃƒÂ¡ mÃ¡ÂºÂ·c Ã„â€˜Ã¡Â»â€¹nh cÃ¡Â»Â§a FoodItem"));
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.IsDeleted).HasDefaultValue(false);
@@ -675,7 +677,7 @@ namespace InfrastructureLayer.Data
             {
                 entity.HasKey(e => e.Id).HasName("FoodTag_pkey");
 
-                entity.ToTable("FoodTag", tb => tb.HasComment("Danh sÃ¡ch tag chuáº©n mÃ´ táº£ ngá»¯ nghÄ©a mÃ³n Äƒn cho AI/recommendation"));
+                entity.ToTable("FoodTag", tb => tb.HasComment("Danh sÃƒÂ¡ch tag chuÃ¡ÂºÂ©n mÃƒÂ´ tÃ¡ÂºÂ£ ngÃ¡Â»Â¯ nghÃ„Â©a mÃƒÂ³n Ã„Æ’n cho AI/recommendation"));
 
                 entity.HasIndex(e => e.Code, "ux_foodtag_code_active")
                     .IsUnique()
@@ -703,7 +705,7 @@ namespace InfrastructureLayer.Data
             {
                 entity.HasKey(e => e.Id).HasName("LayoutEdges_pkey");
 
-                entity.ToTable(tb => tb.HasComment("Cáº¡nh ná»‘i giá»¯a 2 LayoutNode - thá»ƒ hiá»‡n Ä‘Æ°á»ng Ä‘i vÃ  khoáº£ng cÃ¡ch, dÃ¹ng cho thuáº­t toÃ¡n tÃ¬m Ä‘Æ°á»ng ngáº¯n nháº¥t trong chá»£"));
+                entity.ToTable(tb => tb.HasComment("CÃ¡ÂºÂ¡nh nÃ¡Â»â€˜i giÃ¡Â»Â¯a 2 LayoutNode - thÃ¡Â»Æ’ hiÃ¡Â»â€¡n Ã„â€˜Ã†Â°Ã¡Â»Âng Ã„â€˜i vÃƒÂ  khoÃ¡ÂºÂ£ng cÃƒÂ¡ch, dÃƒÂ¹ng cho thuÃ¡ÂºÂ­t toÃƒÂ¡n tÃƒÂ¬m Ã„â€˜Ã†Â°Ã¡Â»Âng ngÃ¡ÂºÂ¯n nhÃ¡ÂºÂ¥t trong chÃ¡Â»Â£"));
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
@@ -734,7 +736,7 @@ namespace InfrastructureLayer.Data
             {
                 entity.HasKey(e => e.Id).HasName("LayoutNodes_pkey");
 
-                entity.ToTable(tb => tb.HasComment("CÃ¡c Ä‘iá»ƒm/nÃºt (node) trÃªn sÆ¡ Ä‘á»“ máº·t báº±ng - lÃ  Ä‘á»‰nh cá»§a Ä‘á»“ thá»‹ dÃ¹ng cho tÃ¬m Ä‘Æ°á»ng ná»™i bá»™ chá»£"));
+                entity.ToTable(tb => tb.HasComment("CÃƒÂ¡c Ã„â€˜iÃ¡Â»Æ’m/nÃƒÂºt (node) trÃƒÂªn sÃ†Â¡ Ã„â€˜Ã¡Â»â€œ mÃ¡ÂºÂ·t bÃ¡ÂºÂ±ng - lÃƒÂ  Ã„â€˜Ã¡Â»â€°nh cÃ¡Â»Â§a Ã„â€˜Ã¡Â»â€œ thÃ¡Â»â€¹ dÃƒÂ¹ng cho tÃƒÂ¬m Ã„â€˜Ã†Â°Ã¡Â»Âng nÃ¡Â»â„¢i bÃ¡Â»â„¢ chÃ¡Â»Â£"));
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
@@ -768,7 +770,7 @@ namespace InfrastructureLayer.Data
             {
                 entity.HasKey(e => e.Id).HasName("MarketLayouts_pkey");
 
-                entity.ToTable(tb => tb.HasComment("SÆ¡ Ä‘á»“ máº·t báº±ng cá»§a má»™t chá»£ Ä‘Ãªm - dÃ¹ng lÃ m ná»n Ä‘á»ƒ Ä‘áº·t cÃ¡c Ä‘iá»ƒm (LayoutNodes) vÃ  gian hÃ ng (BoothLocations)"));
+                entity.ToTable(tb => tb.HasComment("SÃ†Â¡ Ã„â€˜Ã¡Â»â€œ mÃ¡ÂºÂ·t bÃ¡ÂºÂ±ng cÃ¡Â»Â§a mÃ¡Â»â„¢t chÃ¡Â»Â£ Ã„â€˜ÃƒÂªm - dÃƒÂ¹ng lÃƒÂ m nÃ¡Â»Ân Ã„â€˜Ã¡Â»Æ’ Ã„â€˜Ã¡ÂºÂ·t cÃƒÂ¡c Ã„â€˜iÃ¡Â»Æ’m (LayoutNodes) vÃƒÂ  gian hÃƒÂ ng (BoothLocations)"));
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
@@ -801,7 +803,7 @@ namespace InfrastructureLayer.Data
             {
                 entity.HasKey(e => e.Id).HasName("Message_pkey");
 
-                entity.ToTable("Message", tb => tb.HasComment("Tin nháº¯n trong cuá»™c trÃ² chuyá»‡n - truyá»n táº£i qua SignalR Hub"));
+                entity.ToTable("Message", tb => tb.HasComment("Tin nhÃ¡ÂºÂ¯n trong cuÃ¡Â»â„¢c trÃƒÂ² chuyÃ¡Â»â€¡n - truyÃ¡Â»Ân tÃ¡ÂºÂ£i qua SignalR Hub"));
 
                 entity.HasIndex(e => new { e.ConversationId, e.CreatedAt, e.Id }, "idx_message_conversation");
                 entity.HasIndex(e => new { e.SenderId, e.ClientMessageId }, "ux_message_sender_client_message")
@@ -819,7 +821,7 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.SenderRole)
                     .HasConversion<string>()
                     .HasMaxLength(20)
-                    .HasComment("Snapshot vai trÃ² ngÆ°á»i gá»­i: Customer | BoothOwner");
+                    .HasComment("Snapshot vai trÃƒÂ² ngÃ†Â°Ã¡Â»Âi gÃ¡Â»Â­i: Customer | BoothOwner");
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
 
                 entity.HasOne(d => d.Conversation).WithMany(p => p.Messages)
@@ -836,7 +838,7 @@ namespace InfrastructureLayer.Data
             {
                 entity.HasKey(e => e.Id).HasName("NightMarket_pkey");
 
-                entity.ToTable("NightMarket", tb => tb.HasComment("ThÃ´ng tin cÃ¡c chá»£ Ä‘Ãªm - Ä‘Æ¡n vá»‹ quáº£n lÃ½ cáº¥p cao nháº¥t, chá»©a nhiá»u Booth"));
+                entity.ToTable("NightMarket", tb => tb.HasComment("ThÃƒÂ´ng tin cÃƒÂ¡c chÃ¡Â»Â£ Ã„â€˜ÃƒÂªm - Ã„â€˜Ã†Â¡n vÃ¡Â»â€¹ quÃ¡ÂºÂ£n lÃƒÂ½ cÃ¡ÂºÂ¥p cao nhÃ¡ÂºÂ¥t, chÃ¡Â»Â©a nhiÃ¡Â»Âu Booth"));
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.HasIndex(e => new { e.IsDeleted, e.Status, e.CreatedAt }, "idx_nightmarket_active_status_created");
@@ -850,7 +852,7 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.Status)
                     .HasConversion<string>()
                     .HasMaxLength(20)
-                    .HasDefaultValue(NightMarketStatus.Draft);
+                    .HasDefaultValue(NightMarketStatus.Inactive);
                 entity.Property(e => e.ModerationStatus)
                     .HasConversion<string>()
                     .HasMaxLength(20)
@@ -858,7 +860,7 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.ThumbnailUrl).HasMaxLength(500);
                 entity.Property(e => e.TotalBooth)
                     .HasDefaultValue(0)
-                    .HasComment("Sá»‘ lÆ°á»£ng gian hÃ ng - giÃ¡ trá»‹ cache, Ä‘á»“ng bá»™ qua trigger hoáº·c job Ä‘á»‹nh ká»³");
+                    .HasComment("SÃ¡Â»â€˜ lÃ†Â°Ã¡Â»Â£ng gian hÃƒÂ ng - giÃƒÂ¡ trÃ¡Â»â€¹ cache, Ã„â€˜Ã¡Â»â€œng bÃ¡Â»â„¢ qua trigger hoÃ¡ÂºÂ·c job Ã„â€˜Ã¡Â»â€¹nh kÃ¡Â»Â³");
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
 
                 entity.HasOne(d => d.MarketOwner)
@@ -868,11 +870,32 @@ namespace InfrastructureLayer.Data
                     .HasConstraintName("NightMarket_MarketOwnerId_fkey");
             });
 
+            modelBuilder.Entity<NightMarketImage>(entity =>
+            {
+                entity.HasKey(e => e.Id).HasName("NightMarketImages_pkey");
+                entity.ToTable(tb => tb.HasComment("Night market image gallery"));
+                entity.HasIndex(e => e.NightMarketId, "idx_nightmarketimage_market");
+                entity.HasIndex(e => e.NightMarketId, "ux_nightmarketimage_one_cover")
+                    .IsUnique()
+                    .HasFilter("\"IsCover\" = true AND \"IsDeleted\" = false");
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+                entity.Property(e => e.DisplayOrder).HasDefaultValue(0);
+                entity.Property(e => e.ImageUrl).HasMaxLength(500);
+                entity.Property(e => e.IsCover).HasDefaultValue(false);
+                entity.Property(e => e.IsDeleted).HasDefaultValue(false);
+                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+                entity.HasOne(d => d.NightMarket)
+                    .WithMany(p => p.NightMarketImages)
+                    .HasForeignKey(d => d.NightMarketId)
+                    .HasConstraintName("NightMarketImages_NightMarketId_fkey");
+            });
+
             modelBuilder.Entity<ModerationActionHistory>(entity =>
             {
                 entity.HasKey(e => e.Id).HasName("ModerationActionHistory_pkey");
 
-                entity.ToTable("ModerationActionHistory", tb => tb.HasComment("Lá»‹ch sá»­ hÃ nh Ä‘á»™ng moderation cho Booth hoáº·c Night Market"));
+                entity.ToTable("ModerationActionHistory", tb => tb.HasComment("LÃ¡Â»â€¹ch sÃ¡Â»Â­ hÃƒÂ nh Ã„â€˜Ã¡Â»â„¢ng moderation cho Booth hoÃ¡ÂºÂ·c Night Market"));
 
                 entity.HasIndex(e => e.BoothId, "idx_moderationhistory_booth");
                 entity.HasIndex(e => e.NightMarketId, "idx_moderationhistory_nightmarket");
@@ -906,13 +929,13 @@ namespace InfrastructureLayer.Data
             {
                 entity.HasKey(e => e.Id).HasName("Notification_pkey");
 
-                entity.ToTable("Notification", tb => tb.HasComment("ThÃ´ng bÃ¡o Ä‘áº©y (push notification qua FCM) cho ngÆ°á»i dÃ¹ng"));
+                entity.ToTable("Notification", tb => tb.HasComment("ThÃƒÂ´ng bÃƒÂ¡o Ã„â€˜Ã¡ÂºÂ©y (push notification qua FCM) cho ngÃ†Â°Ã¡Â»Âi dÃƒÂ¹ng"));
 
                 entity.HasIndex(e => new { e.UserId, e.CreatedAt }, "idx_notification_user").IsDescending(false, true);
                 entity.HasIndex(e => new { e.UserId, e.IsRead, e.CreatedAt }, "idx_notification_user_read").IsDescending(false, false, true);
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
-                entity.Property(e => e.BoothId).HasComment("NULL khi thÃ´ng bÃ¡o khÃ´ng gáº¯n vá»›i gian hÃ ng cá»¥ thá»ƒ (VD: thÃ´ng bÃ¡o há»‡ thá»‘ng)");
+                entity.Property(e => e.BoothId).HasComment("NULL khi thÃƒÂ´ng bÃƒÂ¡o khÃƒÂ´ng gÃ¡ÂºÂ¯n vÃ¡Â»â€ºi gian hÃƒÂ ng cÃ¡Â»Â¥ thÃ¡Â»Æ’ (VD: thÃƒÂ´ng bÃƒÂ¡o hÃ¡Â»â€¡ thÃ¡Â»â€˜ng)");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
                 entity.Property(e => e.IsDeleted).HasDefaultValue(false);
                 entity.Property(e => e.IsRead).HasDefaultValue(false);
@@ -964,7 +987,7 @@ namespace InfrastructureLayer.Data
             {
                 entity.HasKey(e => e.Id).HasName("Order_pkey");
 
-                entity.ToTable("Order", tb => tb.HasComment("ÄÆ¡n hÃ ng cá»§a khÃ¡ch (1 Ä‘Æ¡n chá»‰ thuá»™c vá» 1 quÃ¡n)"));
+                entity.ToTable("Order", tb => tb.HasComment("Ã„ÂÃ†Â¡n hÃƒÂ ng cÃ¡Â»Â§a khÃƒÂ¡ch (1 Ã„â€˜Ã†Â¡n chÃ¡Â»â€° thuÃ¡Â»â„¢c vÃ¡Â»Â 1 quÃƒÂ¡n)"));
 
                 entity.HasIndex(e => e.OrderCode, "Order_OrderCode_key").IsUnique();
 
@@ -1008,7 +1031,7 @@ namespace InfrastructureLayer.Data
             {
                 entity.HasKey(e => e.Id).HasName("OrderDetail_pkey");
 
-                entity.ToTable("OrderDetail", tb => tb.HasComment("Chi tiáº¿t mÃ³n Äƒn trong tá»«ng Ä‘Æ¡n hÃ ng"));
+                entity.ToTable("OrderDetail", tb => tb.HasComment("Chi tiÃ¡ÂºÂ¿t mÃƒÂ³n Ã„Æ’n trong tÃ¡Â»Â«ng Ã„â€˜Ã†Â¡n hÃƒÂ ng"));
 
                 entity.HasIndex(e => e.OrderId, "idx_orderdetail_order");
 
@@ -1018,7 +1041,7 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.TotalPrice).HasPrecision(12, 2);
                 entity.Property(e => e.UnitPrice)
                     .HasPrecision(12, 2)
-                    .HasComment("SNAPSHOT giÃ¡ táº¡i thá»i Ä‘iá»ƒm Ä‘áº·t hÃ ng - KHÃ”NG tÃ­nh láº¡i tá»« FoodItem.Price");
+                    .HasComment("SNAPSHOT giÃƒÂ¡ tÃ¡ÂºÂ¡i thÃ¡Â»Âi Ã„â€˜iÃ¡Â»Æ’m Ã„â€˜Ã¡ÂºÂ·t hÃƒÂ ng - KHÃƒâ€NG tÃƒÂ­nh lÃ¡ÂºÂ¡i tÃ¡Â»Â« FoodItem.Price");
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
 
                 entity.HasOne(d => d.FoodItem).WithMany(p => p.OrderDetails)
@@ -1035,7 +1058,7 @@ namespace InfrastructureLayer.Data
             {
                 entity.HasKey(e => e.Id).HasName("Payments_pkey");
 
-                entity.ToTable(tb => tb.HasComment("Lá»‹ch sá»­ giao dá»‹ch thanh toÃ¡n/hoÃ n tiá»n - tÃ­ch há»£p Ä‘a cá»•ng VNPay/ZaloPay/MoMo/Payos"));
+                entity.ToTable(tb => tb.HasComment("LÃ¡Â»â€¹ch sÃ¡Â»Â­ giao dÃ¡Â»â€¹ch thanh toÃƒÂ¡n/hoÃƒÂ n tiÃ¡Â»Ân - tÃƒÂ­ch hÃ¡Â»Â£p Ã„â€˜a cÃ¡Â»â€¢ng VNPay/ZaloPay/MoMo/Payos"));
 
                 entity.HasIndex(e => e.OrderId, "idx_payments_order");
 
@@ -1067,18 +1090,18 @@ namespace InfrastructureLayer.Data
                 //entity.Property(e => e.Gateway).HasMaxLength(20);
                 entity.Property(e => e.CheckoutUrl)
                     .HasMaxLength(2000)
-                    .HasComment("ÄÆ°á»ng link thanh toÃ¡n VietQR Ä‘á»™ng ngáº¯n háº¡n do PayOS tráº£ vá»");
+                    .HasComment("Ã„ÂÃ†Â°Ã¡Â»Âng link thanh toÃƒÂ¡n VietQR Ã„â€˜Ã¡Â»â„¢ng ngÃ¡ÂºÂ¯n hÃ¡ÂºÂ¡n do PayOS trÃ¡ÂºÂ£ vÃ¡Â»Â");
                 entity.Property(e => e.PaymentLinkId)
                     .HasMaxLength(255)
-                    .HasComment("ID quáº£n lÃ½ liÃªn káº¿t link thanh toÃ¡n cá»§a há»‡ thá»‘ng PayOS");
+                    .HasComment("ID quÃ¡ÂºÂ£n lÃƒÂ½ liÃƒÂªn kÃ¡ÂºÂ¿t link thanh toÃƒÂ¡n cÃ¡Â»Â§a hÃ¡Â»â€¡ thÃ¡Â»â€˜ng PayOS");
                 entity.Property(e => e.GatewayRef)
                     .HasMaxLength(255)
-                    .HasComment("MÃ£ tra soÃ¡t thá»±c táº¿ cá»§a ngÃ¢n hÃ ng (VÃ­ dá»¥ mÃ£ giao dá»‹ch cá»§a BIDV...)");
+                    .HasComment("MÃƒÂ£ tra soÃƒÂ¡t thÃ¡Â»Â±c tÃ¡ÂºÂ¿ cÃ¡Â»Â§a ngÃƒÂ¢n hÃƒÂ ng (VÃƒÂ­ dÃ¡Â»Â¥ mÃƒÂ£ giao dÃ¡Â»â€¹ch cÃ¡Â»Â§a BIDV...)");
                 entity.Property(e => e.PayOSOrderCode)
                     .HasComment("PayOS order code for this specific payment transaction (supplemental payments)");
                 entity.Property(e => e.RefundReason)
                     .HasMaxLength(500)
-                    .HasComment("LÃ½ do hoÃ n tiá»n (Náº¿u cÃ³)");
+                    .HasComment("LÃƒÂ½ do hoÃƒÂ n tiÃ¡Â»Ân (NÃ¡ÂºÂ¿u cÃƒÂ³)");
                 entity.Property(e => e.Status)
                     .HasConversion<string>()
                     .HasMaxLength(20)
@@ -1089,12 +1112,12 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.Type)
                     .HasConversion<string>()
                     .HasMaxLength(20)
-                    .HasComment("Tiá»n máº·t hoáº·c PayOS");
+                    .HasComment("TiÃ¡Â»Ân mÃ¡ÂºÂ·t hoÃ¡ÂºÂ·c PayOS");
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
 
                 entity.Property(e => e.PaidAt)
-                    .IsRequired(false) // Ä‘Ã¢y lÃ  trÆ°á»ng Nullable (Ä‘Æ°á»£c phÃ©p trá»‘ng)
-                    .HasComment("Thá»i Ä‘iá»ƒm dÃ²ng tiá»n thá»±c táº¿ Ä‘Æ°á»£c khÃ¡ch hÃ ng quÃ©t mÃ£ vÃ  báº¯n vá» há»‡ thá»‘ng thÃ nh cÃ´ng");
+                    .IsRequired(false) // Ã„â€˜ÃƒÂ¢y lÃƒÂ  trÃ†Â°Ã¡Â»Âng Nullable (Ã„â€˜Ã†Â°Ã¡Â»Â£c phÃƒÂ©p trÃ¡Â»â€˜ng)
+                    .HasComment("ThÃ¡Â»Âi Ã„â€˜iÃ¡Â»Æ’m dÃƒÂ²ng tiÃ¡Â»Ân thÃ¡Â»Â±c tÃ¡ÂºÂ¿ Ã„â€˜Ã†Â°Ã¡Â»Â£c khÃƒÂ¡ch hÃƒÂ ng quÃƒÂ©t mÃƒÂ£ vÃƒÂ  bÃ¡ÂºÂ¯n vÃ¡Â»Â hÃ¡Â»â€¡ thÃ¡Â»â€˜ng thÃƒÂ nh cÃƒÂ´ng");
 
                 entity.HasOne(d => d.BoothOwner).WithMany(p => p.Payments)
                     .HasForeignKey(d => d.BoothOwnerId)
@@ -1149,7 +1172,7 @@ namespace InfrastructureLayer.Data
             {
                 entity.HasKey(e => e.Id).HasName("Promotion_pkey");
 
-                entity.ToTable("Promotion", tb => tb.HasComment("ChÆ°Æ¡ng trÃ¬nh khuyáº¿n mÃ£i/mÃ£ giáº£m giÃ¡ do gian hÃ ng táº¡o"));
+                entity.ToTable("Promotion", tb => tb.HasComment("ChÃ†Â°Ã†Â¡ng trÃƒÂ¬nh khuyÃ¡ÂºÂ¿n mÃƒÂ£i/mÃƒÂ£ giÃ¡ÂºÂ£m giÃƒÂ¡ do gian hÃƒÂ ng tÃ¡ÂºÂ¡o"));
 
                 entity.HasIndex(e => e.BoothId, "idx_promotion_booth");
                 entity.HasIndex(e => new { e.BoothId, e.PromotionCode }, "ux_promotion_active_code")
@@ -1161,7 +1184,7 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.DiscountType)
                     .HasConversion<string>()
                     .HasMaxLength(20)
-                    .HasComment("Percentage: giáº£m % | FixedAmount: giáº£m sá»‘ tiá»n cá»‘ Ä‘á»‹nh");
+                    .HasComment("Percentage: giÃ¡ÂºÂ£m % | FixedAmount: giÃ¡ÂºÂ£m sÃ¡Â»â€˜ tiÃ¡Â»Ân cÃ¡Â»â€˜ Ã„â€˜Ã¡Â»â€¹nh");
                 entity.Property(e => e.DiscountValue).HasPrecision(12, 2);
                 entity.Property(e => e.Scope)
                     .HasConversion<string>()
@@ -1231,7 +1254,7 @@ namespace InfrastructureLayer.Data
             {
                 entity.HasKey(e => e.Id).HasName("PromotionUsages_pkey");
 
-                entity.ToTable(tb => tb.HasComment("Lá»‹ch sá»­ sá»­ dá»¥ng mÃ£ khuyáº¿n mÃ£i - kiá»ƒm tra UsageLimit vÃ  chá»‘ng dÃ¹ng trÃ¹ng"));
+                entity.ToTable(tb => tb.HasComment("LÃ¡Â»â€¹ch sÃ¡Â»Â­ sÃ¡Â»Â­ dÃ¡Â»Â¥ng mÃƒÂ£ khuyÃ¡ÂºÂ¿n mÃƒÂ£i - kiÃ¡Â»Æ’m tra UsageLimit vÃƒÂ  chÃ¡Â»â€˜ng dÃƒÂ¹ng trÃƒÂ¹ng"));
 
                 entity.HasIndex(e => new { e.PromotionId, e.OrderId }, "uq_promotionusage_order").IsUnique();
 
@@ -1264,7 +1287,7 @@ namespace InfrastructureLayer.Data
             {
                 entity.HasKey(e => e.Id).HasName("Reviews_pkey");
 
-                entity.ToTable(tb => tb.HasComment("ÄÃ¡nh giÃ¡ cá»§a khÃ¡ch hÃ ng cho gian hÃ ng, gáº¯n liá»n vá»›i 1 Ä‘Æ¡n hÃ ng Ä‘Ã£ hoÃ n táº¥t"));
+                entity.ToTable(tb => tb.HasComment("Ã„ÂÃƒÂ¡nh giÃƒÂ¡ cÃ¡Â»Â§a khÃƒÂ¡ch hÃƒÂ ng cho gian hÃƒÂ ng, gÃ¡ÂºÂ¯n liÃ¡Â»Ân vÃ¡Â»â€ºi 1 Ã„â€˜Ã†Â¡n hÃƒÂ ng Ã„â€˜ÃƒÂ£ hoÃƒÂ n tÃ¡ÂºÂ¥t"));
 
                 entity.HasIndex(e => e.BoothId, "idx_reviews_booth");
 
@@ -1278,7 +1301,7 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.ImageUrl).HasMaxLength(500);
                 entity.Property(e => e.IsVisible)
                     .HasDefaultValue(true)
-                    .HasComment("false: Admin áº©n review nhÆ°ng váº«n giá»¯ dá»¯ liá»‡u Ä‘á»ƒ tÃ­nh rating");
+                    .HasComment("false: Admin Ã¡ÂºÂ©n review nhÃ†Â°ng vÃ¡ÂºÂ«n giÃ¡Â»Â¯ dÃ¡Â»Â¯ liÃ¡Â»â€¡u Ã„â€˜Ã¡Â»Æ’ tÃƒÂ­nh rating");
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
 
                 entity.ToTable(table => table.HasCheckConstraint("ck_reviews_rating", "\"Rating\" BETWEEN 1 AND 5"));
@@ -1302,7 +1325,7 @@ namespace InfrastructureLayer.Data
             {
                 entity.HasKey(e => e.Id).HasName("ReviewReplies_pkey");
 
-                entity.ToTable(tb => tb.HasComment("Pháº£n há»“i cá»§a chá»§ gian hÃ ng Ä‘á»‘i vá»›i Ä‘Ã¡nh giÃ¡ - quan há»‡ 1-1 vá»›i Reviews"));
+                entity.ToTable(tb => tb.HasComment("PhÃ¡ÂºÂ£n hÃ¡Â»â€œi cÃ¡Â»Â§a chÃ¡Â»Â§ gian hÃƒÂ ng Ã„â€˜Ã¡Â»â€˜i vÃ¡Â»â€ºi Ã„â€˜ÃƒÂ¡nh giÃƒÂ¡ - quan hÃ¡Â»â€¡ 1-1 vÃ¡Â»â€ºi Reviews"));
 
                 entity.HasIndex(e => e.ReviewId, "ReviewReplies_ReviewId_key").IsUnique();
 
@@ -1324,7 +1347,7 @@ namespace InfrastructureLayer.Data
             {
                 entity.HasKey(e => e.Id).HasName("Role_pkey");
 
-                entity.ToTable("Role", tb => tb.HasComment("Danh sÃ¡ch vai trÃ² ngÆ°á»i dÃ¹ng trong há»‡ thá»‘ng (Customer, BoothOwner, Admin)"));
+                entity.ToTable("Role", tb => tb.HasComment("Danh sÃƒÂ¡ch vai trÃƒÂ² ngÃ†Â°Ã¡Â»Âi dÃƒÂ¹ng trong hÃ¡Â»â€¡ thÃ¡Â»â€˜ng (Customer, BoothOwner, Admin)"));
 
                 entity.HasIndex(e => e.RoleName, "Role_RoleName_key").IsUnique();
 
@@ -1337,7 +1360,7 @@ namespace InfrastructureLayer.Data
             {
                 entity.HasKey(e => e.Id).HasName("User_pkey");
 
-                entity.ToTable("User", tb => tb.HasComment("TÃ i khoáº£n ngÆ°á»i dÃ¹ng - dÃ¹ng chung cho Customer, BoothOwner, Admin (phÃ¢n biá»‡t qua RoleId)"));
+                entity.ToTable("User", tb => tb.HasComment("TÃƒÂ i khoÃ¡ÂºÂ£n ngÃ†Â°Ã¡Â»Âi dÃƒÂ¹ng - dÃƒÂ¹ng chung cho Customer, BoothOwner, Admin (phÃƒÂ¢n biÃ¡Â»â€¡t qua RoleId)"));
 
                 entity.HasIndex(e => e.Email, "User_Email_key").IsUnique();
 
@@ -1357,7 +1380,7 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.GoogleId).HasMaxLength(100);
                 entity.Property(e => e.PasswordHash)
                     .HasMaxLength(255)
-                    .HasComment("Máº­t kháº©u Ä‘Ã£ Ä‘Æ°á»£c mÃ£ hÃ³a (hash), tuyá»‡t Ä‘á»‘i khÃ´ng lÆ°u plaintext");
+                    .HasComment("MÃ¡ÂºÂ­t khÃ¡ÂºÂ©u Ã„â€˜ÃƒÂ£ Ã„â€˜Ã†Â°Ã¡Â»Â£c mÃƒÂ£ hÃƒÂ³a (hash), tuyÃ¡Â»â€¡t Ã„â€˜Ã¡Â»â€˜i khÃƒÂ´ng lÃ†Â°u plaintext");
                 entity.Property(e => e.PasswordResetOtpHash).HasMaxLength(64);
                 entity.Property(e => e.PasswordResetTokenHash).HasMaxLength(64);
                 entity.Property(e => e.Phone).HasMaxLength(20);
@@ -1365,7 +1388,7 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.Status)
                     .HasConversion<string>()
                     .HasMaxLength(20)
-                    .HasComment("Active: Ä‘ang hoáº¡t Ä‘á»™ng | Inactive: chÆ°a xÃ¡c thá»±c | Banned: bá»‹ khÃ³a bá»Ÿi Admin");
+                    .HasComment("Active: Ã„â€˜ang hoÃ¡ÂºÂ¡t Ã„â€˜Ã¡Â»â„¢ng | Inactive: chÃ†Â°a xÃƒÂ¡c thÃ¡Â»Â±c | Banned: bÃ¡Â»â€¹ khÃƒÂ³a bÃ¡Â»Å¸i Admin");
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
                 entity.Property(e => e.UserName).HasMaxLength(100);
 
@@ -1493,15 +1516,15 @@ namespace InfrastructureLayer.Data
             modelBuilder.Entity<PaymentMethod>(entity =>
             {
                 entity.HasKey(e => e.Id);
-                entity.ToTable("PaymentMethod", tb => tb.HasComment("Cáº¥u hÃ¬nh phÆ°Æ¡ng thá»©c thanh toÃ¡n Æ°u tiÃªn cá»§a ngÆ°á»i dÃ¹ng"));
+                entity.ToTable("PaymentMethod", tb => tb.HasComment("CÃ¡ÂºÂ¥u hÃƒÂ¬nh phÃ†Â°Ã†Â¡ng thÃ¡Â»Â©c thanh toÃƒÂ¡n Ã†Â°u tiÃƒÂªn cÃ¡Â»Â§a ngÃ†Â°Ã¡Â»Âi dÃƒÂ¹ng"));
 
-                // Ã‰p kiá»ƒu Enum thÃ nh string Ä‘á»ƒ Ä‘á»“ng bá»™ vá»›i cÃ¡ch lÆ°u cá»§a báº£ng Order vÃ  Payment
+                // Ãƒâ€°p kiÃ¡Â»Æ’u Enum thÃƒÂ nh string Ã„â€˜Ã¡Â»Æ’ Ã„â€˜Ã¡Â»â€œng bÃ¡Â»â„¢ vÃ¡Â»â€ºi cÃƒÂ¡ch lÃ†Â°u cÃ¡Â»Â§a bÃ¡ÂºÂ£ng Order vÃƒÂ  Payment
                 entity.Property(e => e.MethodType)
                     .HasConversion<string>()
                     .HasMaxLength(20)
                     .IsRequired();
 
-                // TrÆ°á»ng Token cho phÃ©p null náº¿u khÃ¡ch chá»‰ chá»n phÆ°Æ¡ng thá»©c Cash (Tiá»n máº·t)
+                // TrÃ†Â°Ã¡Â»Âng Token cho phÃƒÂ©p null nÃ¡ÂºÂ¿u khÃƒÂ¡ch chÃ¡Â»â€° chÃ¡Â»Ân phÃ†Â°Ã†Â¡ng thÃ¡Â»Â©c Cash (TiÃ¡Â»Ân mÃ¡ÂºÂ·t)
                 entity.Property(e => e.PaymentToken)
                     .IsRequired(false)
                     .HasMaxLength(500);
@@ -1509,13 +1532,13 @@ namespace InfrastructureLayer.Data
                 entity.HasOne(pm => pm.User)
                     .WithMany(u => u.PaymentMethods)
                     .HasForeignKey(pm => pm.UserId)
-                    .OnDelete(DeleteBehavior.Cascade); // Náº¿u xÃ³a User thÃ¬ tá»± Ä‘á»™ng xÃ³a luÃ´n PaymentMethod cá»§a ngÆ°á»i Ä‘Ã³
+                    .OnDelete(DeleteBehavior.Cascade); // NÃ¡ÂºÂ¿u xÃƒÂ³a User thÃƒÂ¬ tÃ¡Â»Â± Ã„â€˜Ã¡Â»â„¢ng xÃƒÂ³a luÃƒÂ´n PaymentMethod cÃ¡Â»Â§a ngÃ†Â°Ã¡Â»Âi Ã„â€˜ÃƒÂ³
             });
 
             //modelBuilder.Entity<User>().HasData(new User
             //{
             //    Id = Guid.Parse("00000000-0000-0000-0000-000000000001"),
-            //    FullName = "KhÃ¡ch VÃ£ng Lai",
+            //    FullName = "KhÃƒÂ¡ch VÃƒÂ£ng Lai",
             //    Email = "walkincustomer@system.local",
             //    CreatedAt = DateTime.UtcNow
             //});

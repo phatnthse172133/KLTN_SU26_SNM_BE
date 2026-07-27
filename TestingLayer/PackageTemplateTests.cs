@@ -3,9 +3,13 @@ using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
 using ApplicationLayer.Services.Packages;
+using ApplicationLayer.Services.Storage;
 using AutoMapper;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Moq;
 using static DomainLayer.Enums.GeneralEnum;
 
@@ -17,6 +21,8 @@ public class PackageTemplateTests
     private readonly Mock<IMapper> _mockMapper;
     private readonly Mock<IPackagePriceRepository> _mockPackagePrices;
     private readonly Mock<IUnitOfWork> _mockUnitOfWork;
+    private readonly Mock<IFileStorageService> _mockFileStorage;
+    private readonly Mock<ILogger<PackageService>> _mockLogger;
     private readonly PackageService _service;
 
     public PackageTemplateTests()
@@ -25,7 +31,9 @@ public class PackageTemplateTests
         _mockMapper = new Mock<IMapper>();
         _mockPackagePrices = new Mock<IPackagePriceRepository>();
         _mockUnitOfWork = new Mock<IUnitOfWork>();
-        _service = new PackageService(_mockPackages.Object, _mockPackagePrices.Object, new Moq.Mock<DomainLayer.InterfaceRepository.IGenericRepository<DomainLayer.Entities.PackagePolicy>>().Object, _mockUnitOfWork.Object, _mockMapper.Object);
+        _mockFileStorage = new Mock<IFileStorageService>();
+        _mockLogger = new Mock<ILogger<PackageService>>();
+        _service = new PackageService(_mockPackages.Object, _mockPackagePrices.Object, _mockUnitOfWork.Object, _mockMapper.Object, _mockFileStorage.Object, _mockLogger.Object);
 
         _mockPackages.Setup(r => r.AnyAsync(It.IsAny<System.Linq.Expressions.Expression<Func<Package, bool>>>()))
             .ReturnsAsync(false);
@@ -331,7 +339,6 @@ public class PackageTemplateTests
     {
         var result = _service.GetTemplates();
 
-        Assert.NotNull(result.Data);
         Assert.Equal(5, result.Data.Count);
         Assert.Contains(result.Data, t => t.Code == "MARKET_BASIC");
         Assert.Contains(result.Data, t => t.Code == "MARKET_PRO");
@@ -344,7 +351,6 @@ public class PackageTemplateTests
     public void GetTemplates_MarketBasic_HasCorrectFeatures()
     {
         var result = _service.GetTemplates();
-        Assert.NotNull(result.Data);
         var basic = result.Data.First(t => t.Code == "MARKET_BASIC");
 
         Assert.Equal(PackageType.Market, basic.PackageType);
@@ -356,7 +362,6 @@ public class PackageTemplateTests
     public void GetTemplates_MarketPro_HasMoreFeaturesThanBasic()
     {
         var result = _service.GetTemplates();
-        Assert.NotNull(result.Data);
         var basic = result.Data.First(t => t.Code == "MARKET_BASIC");
         var pro = result.Data.First(t => t.Code == "MARKET_PRO");
 
@@ -442,4 +447,17 @@ public class PackageTemplateTests
 
         _mockUnitOfWork.Verify(u => u.RollbackTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
+
+    [Theory]
+    [InlineData("MARKET_BASIC", 8)]
+    [InlineData("MARKET_PRO", 13)]
+    [InlineData("BOOTH_FREE", 8)]
+    [InlineData("BOOTH_GROWTH", 7)]
+    [InlineData("BOOTH_FEATURED", 5)]
+    public void GetFeatures_ReturnsExpectedFeaturesCount(string code, int expectedCount)
+    {
+        var features = PackageTemplateHelper.GetFeatures(code);
+        Assert.Equal(expectedCount, features.Count);
+    }
+
 }

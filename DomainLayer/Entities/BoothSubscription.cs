@@ -6,7 +6,7 @@ using static DomainLayer.Enums.GeneralEnum;
 namespace DomainLayer.Entities;
 
 
-// Lá»‹ch sá»­ Ä‘Äƒng kÃ½ gÃ³i dá»‹ch vá»¥ cá»§a gian hÃ ng
+// Lịch sử đăng ký gói dịch vụ của gian hàng
 public partial class BoothSubscription
 {
     public Guid Id { get; set; }

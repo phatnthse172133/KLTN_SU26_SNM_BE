@@ -2,9 +2,8 @@ using ApplicationLayer.Services.PayOS;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using PayOS.Models.Webhooks;
-using static System.Runtime.InteropServices.JavaScript.JSType;
-
-// For more information on enabling Web API for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
+using System;
+using System.Threading.Tasks;
 
 namespace PresentationLayer.Controllers
 {

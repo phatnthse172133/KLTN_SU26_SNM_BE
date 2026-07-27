@@ -26,8 +26,11 @@ public interface IAdminModerationService
     Task<ApiResponse<BoothModerationDetailResponse>> GetBoothDetailAsync(
         Guid boothId, CancellationToken cancellationToken = default);
 
-    Task<ApiResponse<ModerationActionResponse>> ChangeBoothStatusAsync(
-        Guid adminId, string adminName, Guid boothId, ChangeModerationStatusRequest request, CancellationToken cancellationToken = default);
+    Task<ApiResponse<ModerationActionResponse>> BanBoothAsync(
+        Guid adminId, string adminName, Guid boothId, BoothModerationActionRequest request, CancellationToken cancellationToken = default);
+
+    Task<ApiResponse<ModerationActionResponse>> RestoreBoothAsync(
+        Guid adminId, string adminName, Guid boothId, BoothModerationActionRequest request, CancellationToken cancellationToken = default);
 
     Task<ApiResponse<PaginationResp<ModerationActionHistoryResponse>>> GetBoothHistoryAsync(
         Guid boothId, int page, int pageSize, CancellationToken cancellationToken = default);

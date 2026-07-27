@@ -128,8 +128,8 @@ public class MarketOwnerDashboardRepository : IMarketOwnerDashboardRepository
         return new BoothStatusCounts(
             Active: groups.FirstOrDefault(x => x.Status == BoothStatus.Active)?.Count ?? 0,
             Inactive: groups.FirstOrDefault(x => x.Status == BoothStatus.Inactive)?.Count ?? 0,
-            Suspended: groups.FirstOrDefault(x => x.Status == BoothStatus.Suspended)?.Count ?? 0,
-            Closed: groups.FirstOrDefault(x => x.Status == BoothStatus.Closed)?.Count ?? 0
+            Suspended: groups.FirstOrDefault(x => x.Status == BoothStatus.Banned)?.Count ?? 0,
+            Closed: groups.FirstOrDefault(x => x.Status == BoothStatus.Inactive)?.Count ?? 0
         );
     }
 

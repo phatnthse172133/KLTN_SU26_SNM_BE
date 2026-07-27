@@ -35,6 +35,7 @@ namespace InfrastructureLayer.Repositories
                     PackageType = PackageType.Booth,
                     PackageId = bs.PackageId,
                     PackageName = bs.Package.PackageName,
+                    PackageImageUrl = bs.Package.ImageUrl,
                     StartDate = bs.StartDate,
                     EndDate = bs.EndDate,
                     Status = bs.Status,
@@ -60,6 +61,7 @@ namespace InfrastructureLayer.Repositories
                     PackageType = PackageType.Market,
                     PackageId = ms.PackageId,
                     PackageName = ms.Package.PackageName,
+                    PackageImageUrl = ms.Package.ImageUrl,
                     StartDate = ms.StartDate,
                     EndDate = ms.EndDate,
                     Status = ms.Status,
@@ -115,11 +117,18 @@ namespace InfrastructureLayer.Repositories
             return _context.Packages.FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted, ct);
         }
 
+        public Task<Package?> GetPackageByCodeAsync(string code, CancellationToken ct = default)
+        {
+            return _context.Packages.FirstOrDefaultAsync(
+                p => p.Code == code && !p.IsDeleted,
+                ct);
+        }
+
         public Task<PackagePolicy?> GetActivePackagePolicyAsync(Guid packageId, CancellationToken ct = default)
         {
             var now = DateTime.UtcNow;
             return _context.Set<PackagePolicy>()
-                .Where(p => p.PackageId == packageId && p.IsActive && p.EffectiveFrom <= now)
+                .Where(p => p.PackageId == packageId && p.IsActive && !p.IsDeleted && p.EffectiveFrom <= now)
                 .OrderByDescending(p => p.EffectiveFrom)
                 .ThenByDescending(p => p.CreatedAt)
                 .FirstOrDefaultAsync(ct);
@@ -179,6 +188,24 @@ namespace InfrastructureLayer.Repositories
         {
             return _context.MarketSubscriptions
                 .AnyAsync(ms => ms.MarketOwnerId == marketOwnerId && ms.Status == SubscriptionStatus.PendingPayment, ct);
+        }
+
+        public Task<MarketSubscription?> GetPendingMarketSubscriptionAsync(Guid marketOwnerId, CancellationToken ct = default)
+        {
+            return _context.MarketSubscriptions
+                .Include(ms => ms.Package)
+                .Where(ms => ms.MarketOwnerId == marketOwnerId && ms.Status == SubscriptionStatus.PendingPayment)
+                .OrderByDescending(ms => ms.CreatedAt)
+                .FirstOrDefaultAsync(ct);
+        }
+
+        public Task<BoothSubscription?> GetPendingBoothSubscriptionAsync(Guid boothId, CancellationToken ct = default)
+        {
+            return _context.BoothSubscriptions
+                .Include(bs => bs.Package)
+                .Where(bs => bs.BoothId == boothId && bs.Status == SubscriptionStatus.PendingPayment)
+                .OrderByDescending(bs => bs.CreatedAt)
+                .FirstOrDefaultAsync(ct);
         }
 
         public Task<List<BoothSubscription>> GetBoothSubscriptionHistoryAsync(Guid boothId, CancellationToken ct = default)
@@ -358,7 +385,7 @@ namespace InfrastructureLayer.Repositories
         public async Task<int> DeactivateActivePolicyAsync(Guid packageId, CancellationToken ct = default)
         {
             return await _context.PackagePolicies
-                .Where(p => p.PackageId == packageId && p.IsActive)
+                .Where(p => p.PackageId == packageId && p.IsActive && !p.IsDeleted)
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(p => p.IsActive, false)
                     .SetProperty(p => p.UpdatedAt, DateTime.UtcNow), ct);
@@ -367,10 +394,28 @@ namespace InfrastructureLayer.Repositories
         public async Task<int> ActivatePolicyAsync(Guid policyId, CancellationToken ct = default)
         {
             return await _context.PackagePolicies
-                .Where(p => p.Id == policyId && p.EffectiveFrom <= DateTime.UtcNow)
+                .Where(p => p.Id == policyId && !p.IsDeleted && p.EffectiveFrom <= DateTime.UtcNow)
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(p => p.IsActive, true)
                     .SetProperty(p => p.UpdatedAt, DateTime.UtcNow), ct);
+        }
+
+        public async Task<List<BoothSubscription>> GetExpiredBoothSubscriptionsAsync(CancellationToken ct = default)
+        {
+            var now = DateTime.UtcNow;
+            return await _context.BoothSubscriptions
+                .Include(bs => bs.Package)
+                .Where(bs => bs.Status == SubscriptionStatus.Active && bs.EndDate <= now && bs.EndDate != DateTime.MaxValue)
+                .ToListAsync(ct);
+        }
+
+        public async Task<List<MarketSubscription>> GetExpiredMarketSubscriptionsAsync(CancellationToken ct = default)
+        {
+            var now = DateTime.UtcNow;
+            return await _context.MarketSubscriptions
+                .Include(ms => ms.Package)
+                .Where(ms => ms.Status == SubscriptionStatus.Active && ms.EndDate <= now && ms.EndDate != DateTime.MaxValue)
+                .ToListAsync(ct);
         }
     }
 }

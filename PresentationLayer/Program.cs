@@ -332,6 +332,17 @@ if (string.Equals(builder.Configuration["SeedDemoData"], "true", StringCompariso
     await AISeedData.SeedAsync(app.Services);
 }
 
+// Package seeders are explicit opt-ins so a normal startup never mutates shared data.
+if (app.Configuration.GetValue<bool>("SeedData:PackageImages"))
+{
+    await InfrastructureLayer.Data.Seeders.PackageImageSeeder.SeedAsync(app.Services);
+}
+
+if (app.Configuration.GetValue<bool>("SeedData:PackagePolicies"))
+{
+    await InfrastructureLayer.Data.Seeders.PackagePolicySeeder.SeedAsync(app.Services);
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.Services

@@ -16,6 +16,7 @@ public class NightMarketResponse
     public int TotalBooth { get; set; }
     public string? ThumbnailUrl { get; set; }
     public string Status { get; set; } = string.Empty;
+    public string ModerationStatus { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }
@@ -102,4 +103,16 @@ public class GeographicBoundaryResponse
 {
     public int WidthMeters { get; set; }
     public int HeightMeters { get; set; }
+}
+
+public class NightMarketImageResponse
+{
+    public Guid Id { get; set; }
+    public Guid NightMarketId { get; set; }
+    public string ImageUrl { get; set; } = string.Empty;
+    public int DisplayOrder { get; set; }
+    public bool IsCover { get; set; }
+    public bool IsDeleted { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
 }

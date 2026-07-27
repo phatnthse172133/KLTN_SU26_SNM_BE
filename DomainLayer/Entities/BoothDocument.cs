@@ -10,7 +10,9 @@ public partial class BoothDocument
 {
     public Guid Id { get; set; }
 
-    public Guid RegistrationId { get; set; }
+    public Guid? RegistrationId { get; set; }
+
+    public Guid? BoothId { get; set; }
 
     public BoothDocumentType DocumentType { get; set; }
 
@@ -25,5 +27,7 @@ public partial class BoothDocument
 
     public DateTime UpdatedAt { get; set; }
 
-    public virtual BoothRegistration Registration { get; set; } = null!;
+    public virtual BoothRegistration? Registration { get; set; }
+
+    public virtual Booth? Booth { get; set; }
 }

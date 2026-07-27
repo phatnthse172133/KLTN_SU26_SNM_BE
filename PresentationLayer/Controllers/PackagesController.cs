@@ -45,4 +45,18 @@ public class PackagesController : ControllerBase
     public async Task<IActionResult> Delete(Guid packageId, CancellationToken cancellationToken)
         => Ok(await _service.DeleteAsync(packageId, cancellationToken));
 
+    [HttpPost("{packageId:guid}/image")]
+    [RequestSizeLimit(6 * 1024 * 1024)]
+    public async Task<IActionResult> UploadImage(Guid packageId, IFormFile file, CancellationToken cancellationToken)
+    {
+        if (file is null || file.Length == 0)
+            return BadRequest(ApiResponse<object>.Failure("Image file is required.", "IMAGE_FILE_REQUIRED"));
+
+        await using var stream = file.OpenReadStream();
+        return Ok(await _service.UploadImageAsync(packageId, stream, file.FileName, file.ContentType, file.Length, cancellationToken));
+    }
+
+    [HttpDelete("{packageId:guid}/image")]
+    public async Task<IActionResult> DeleteImage(Guid packageId, CancellationToken cancellationToken)
+        => Ok(await _service.DeleteImageAsync(packageId, cancellationToken));
 }

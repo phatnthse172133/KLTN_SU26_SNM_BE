@@ -137,5 +137,43 @@ namespace InfrastructureLayer.Repositories
 
             return result;
         }
+
+        public async Task<List<DashboardPendingComplaintModel>> GetPendingComplaintsAsync(int limit = 5)
+        {
+            return await _context.Complaints
+                .Include(c => c.Booth)
+                .Include(c => c.Customer)
+                .Where(c => c.Status == DomainLayer.Enums.GeneralEnum.ComplaintStatus.Pending)
+                .OrderByDescending(c => c.CreatedAt)
+                .Take(limit)
+                .Select(c => new DashboardPendingComplaintModel
+                {
+                    Id = c.Id,
+                    Title = c.Title,
+                    CustomerName = c.Customer != null ? c.Customer.FullName : "Unknown",
+                    BoothName = c.Booth != null ? c.Booth.BoothName : "Unknown",
+                    CreatedAt = c.CreatedAt
+                })
+                .ToListAsync();
+        }
+
+        public async Task<List<DashboardRecentRegistrationModel>> GetRecentBoothRegistrationsAsync(int limit = 5)
+        {
+            return await _context.BoothRegistrations
+                .Include(b => b.Owner)
+                .Include(b => b.RequestedNightMarket)
+                .OrderByDescending(b => b.CreatedAt)
+                .Take(limit)
+                .Select(b => new DashboardRecentRegistrationModel
+                {
+                    Id = b.Id,
+                    BoothName = b.BoothName,
+                    OwnerName = b.Owner != null ? b.Owner.FullName : "Unknown",
+                    MarketName = b.RequestedNightMarket != null ? b.RequestedNightMarket.Name : "Unknown",
+                    CreatedAt = b.CreatedAt,
+                    Status = b.Status.ToString()
+                })
+                .ToListAsync();
+        }
     }
 }

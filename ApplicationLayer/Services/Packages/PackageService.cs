@@ -4,9 +4,11 @@ using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
 using ApplicationLayer.Mappings;
+using ApplicationLayer.Services.Storage;
 using AutoMapper;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
+using Microsoft.Extensions.Logging;
 using static DomainLayer.Enums.GeneralEnum;
 
 namespace ApplicationLayer.Services.Packages;
@@ -15,17 +17,19 @@ public class PackageService : IPackageService
 {
     private readonly IGenericRepository<Package> _packages;
     private readonly IPackagePriceRepository _packagePrices;
-    private readonly IGenericRepository<PackagePolicy> _packagePolicies;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
+    private readonly IFileStorageService _fileStorage;
+    private readonly ILogger<PackageService> _logger;
 
-    public PackageService(IGenericRepository<Package> packages, IPackagePriceRepository packagePrices, IGenericRepository<PackagePolicy> packagePolicies, IUnitOfWork unitOfWork, IMapper mapper)
+    public PackageService(IGenericRepository<Package> packages, IPackagePriceRepository packagePrices, IUnitOfWork unitOfWork, IMapper mapper, IFileStorageService fileStorage, ILogger<PackageService> logger)
     {
         _packages = packages;
         _packagePrices = packagePrices;
-        _packagePolicies = packagePolicies;
         _unitOfWork = unitOfWork;
         _mapper = mapper;
+        _fileStorage = fileStorage;
+        _logger = logger;
     }
 
     public async Task<ApiResponse<PaginationResp<PackageResponse>>> GetAllAsync(PaginationReq pagination, CancellationToken cancellationToken = default)
@@ -335,101 +339,71 @@ public class PackageService : IPackageService
         return ApiResponse<PackageResponse>.SuccessResponse(_mapper.Map<PackageResponse>(package));
     }
 
-
-    public async Task<ApiResponse<PackagePolicyResponse>> CreatePolicyVersionAsync(Guid packageId, CreatePackagePolicyRequest request, CancellationToken cancellationToken = default)
-    {
-        var package = await _packages.GetByIdAsync(packageId);
-        if (package is null || package.IsDeleted)
-            throw AppException.NotFound("Package was not found.");
-
-        var policyRepo = _packagePolicies;
-
-        var exists = await policyRepo.AnyAsync(p => p.PackageId == packageId && p.Version == request.Version);
-        if (exists)
-            throw AppException.Conflict("A policy with this version already exists for this package.");
-
-        var policy = _mapper.Map<PackagePolicy>(request);
-        policy.Id = Guid.NewGuid();
-        policy.PackageId = packageId;
-        policy.IsActive = false; // Must be manually activated
-        policy.EffectiveFrom = DateTime.UtcNow;
-
-        await policyRepo.AddAsync(policy);
-        await policyRepo.SaveChangesAsync();
-
-        return ApiResponse<PackagePolicyResponse>.SuccessResponse(_mapper.Map<PackagePolicyResponse>(policy), "Policy version created successfully.");
-    }
-
-    public async Task<ApiResponse<object>> ActivatePolicyVersionAsync(Guid packageId, Guid policyId, CancellationToken cancellationToken = default)
-    {
-        var package = await _packages.GetByIdAsync(packageId);
-        if (package is null || package.IsDeleted)
-            throw AppException.NotFound("Package was not found.");
-
-        var policyRepo = _packagePolicies;
-        var targetPolicy = await policyRepo.GetByIdAsync(policyId);
-        if (targetPolicy == null || targetPolicy.PackageId != packageId)
-            throw AppException.NotFound("Policy not found for this package.");
-
-        await _unitOfWork.BeginTransactionAsync(cancellationToken);
-        try
-        {
-            // Deactivate all current policies
-            var allPolicies = await policyRepo.FindAsync(p => p.PackageId == packageId && p.IsActive);
-            foreach (var p in allPolicies)
-            {
-                p.IsActive = false;
-                p.UpdatedAt = DateTime.UtcNow;
-                policyRepo.Update(p);
-            }
-
-            // Activate target
-            targetPolicy.IsActive = true;
-            targetPolicy.EffectiveFrom = DateTime.UtcNow;
-            targetPolicy.UpdatedAt = DateTime.UtcNow;
-            policyRepo.Update(targetPolicy);
-
-            await policyRepo.SaveChangesAsync();
-            await _unitOfWork.CommitTransactionAsync(cancellationToken);
-
-            return ApiResponse<object>.SuccessResponse(null, "Policy activated successfully.");
-        }
-        catch
-        {
-            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-            throw;
-        }
-    }
-
-    public async Task<ApiResponse<PackagePolicyResponse>> GetActivePolicyAsync(Guid packageId, CancellationToken cancellationToken = default)
-    {
-        var policyRepo = _packagePolicies;
-        var activePolicy = await policyRepo.FirstOrDefaultAsync(p => p.PackageId == packageId && p.IsActive);
-
-        if (activePolicy == null)
-            throw AppException.NotFound("No active policy found for this package.");
-
-        return ApiResponse<PackagePolicyResponse>.SuccessResponse(_mapper.Map<PackagePolicyResponse>(activePolicy));
-    }
-
-    public async Task<ApiResponse<List<PackagePolicyResponse>>> GetPoliciesAsync(Guid packageId, CancellationToken cancellationToken = default)
-    {
-        var package = await _packages.GetByIdAsync(packageId);
-        if (package is null || package.IsDeleted)
-            throw AppException.NotFound("Package was not found.");
-
-        var policyRepo = _packagePolicies;
-        var policies = await policyRepo.FindAsync(p => p.PackageId == packageId);
-
-        return ApiResponse<List<PackagePolicyResponse>>.SuccessResponse(
-            _mapper.Map<List<PackagePolicyResponse>>(policies.OrderByDescending(p => p.CreatedAt).ToList())
-        );
-    }
-
     public ApiResponse<List<PackageTemplateResponse>> GetTemplates()
     {
         return ApiResponse<List<PackageTemplateResponse>>.SuccessResponse(
             PackageTemplateHelper.Templates.ToList(),
             "Package templates retrieved successfully.");
     }
+
+    public async Task<ApiResponse<PackageResponse>> UploadImageAsync(Guid packageId, Stream stream, string fileName, string contentType, long length, CancellationToken cancellationToken = default)
+    {
+        var package = await _packages.GetByIdAsync(packageId);
+        if (package is null)
+            throw AppException.NotFound("Package was not found.");
+
+        var oldImageUrl = package.ImageUrl;
+        var newUrl = await _fileStorage.SaveImageAsync("packages", stream, fileName, contentType, length, cancellationToken);
+
+        try
+        {
+            package.ImageUrl = newUrl;
+            package.UpdatedAt = DateTime.UtcNow;
+            _packages.Update(package);
+            await _packages.SaveChangesAsync();
+        }
+        catch
+        {
+            package.ImageUrl = oldImageUrl;
+            await DeleteOldImageBestEffortAsync(newUrl, cancellationToken);
+            throw;
+        }
+
+        await DeleteOldImageBestEffortAsync(oldImageUrl, cancellationToken);
+
+        return ApiResponse<PackageResponse>.SuccessResponse(_mapper.Map<PackageResponse>(package), "Package image uploaded successfully.");
+    }
+
+    public async Task<ApiResponse<object>> DeleteImageAsync(Guid packageId, CancellationToken cancellationToken = default)
+    {
+        var package = await _packages.GetByIdAsync(packageId);
+        if (package is null)
+            throw AppException.NotFound("Package was not found.");
+
+        var oldImageUrl = package.ImageUrl;
+        package.ImageUrl = null;
+        package.UpdatedAt = DateTime.UtcNow;
+        _packages.Update(package);
+        await _packages.SaveChangesAsync();
+
+        await DeleteOldImageBestEffortAsync(oldImageUrl, cancellationToken);
+
+        return ApiResponse<object>.SuccessResponse(new { package.Id }, "Package image removed successfully.");
+    }
+
+    private async Task DeleteOldImageBestEffortAsync(string? oldUrl, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(oldUrl))
+            return;
+
+        try
+        {
+            await _fileStorage.DeleteImageIfManagedAsync(oldUrl, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not remove replaced package image {ImageUrl}.", oldUrl);
+        }
+    }
+
 }

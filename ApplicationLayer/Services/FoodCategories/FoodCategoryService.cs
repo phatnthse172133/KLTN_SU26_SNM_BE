@@ -26,7 +26,7 @@ public class FoodCategoryService : IFoodCategoryService
     public async Task<ApiResponse<PaginationResp<FoodCategoryResponse>>> GetMyBoothCategoriesAsync(Guid ownerId, Guid boothId, PaginationReq pagination, CancellationToken cancellationToken = default)
     {
         var ownershipError = await ValidateBoothOwnershipAsync(ownerId, boothId);
-        if (ownershipError is not null) 
+        if (ownershipError is not null)
             throw ToBoothAccessException(ownershipError);
 
         var page = await _categories.GetActivePagedByBoothAsync(
@@ -38,7 +38,7 @@ public class FoodCategoryService : IFoodCategoryService
     public async Task<ApiResponse<FoodCategoryResponse>> GetMyBoothCategoryAsync(Guid ownerId, Guid boothId, Guid categoryId, CancellationToken cancellationToken = default)
     {
         var ownershipError = await ValidateBoothOwnershipAsync(ownerId, boothId);
-        if (ownershipError is not null) 
+        if (ownershipError is not null)
             throw ToBoothAccessException(ownershipError);
 
         var category = await _categories.GetActiveByBoothAsync(boothId, categoryId);
@@ -51,11 +51,11 @@ public class FoodCategoryService : IFoodCategoryService
     public async Task<ApiResponse<FoodCategoryResponse>> CreateAsync(Guid ownerId, Guid boothId, CreateFoodCategoryRequest request, CancellationToken cancellationToken = default)
     {
         var managementError = await ValidateBoothManagementAsync(ownerId, boothId);
-        if (managementError is not null) 
+        if (managementError is not null)
             throw ToBoothAccessException(managementError);
 
         var validationError = await ValidateAsync(boothId, request);
-        if (validationError is not null) 
+        if (validationError is not null)
             throw AppException.BadRequest(validationError);
 
         var now = DateTime.UtcNow;
@@ -75,15 +75,15 @@ public class FoodCategoryService : IFoodCategoryService
     public async Task<ApiResponse<FoodCategoryResponse>> UpdateAsync(Guid ownerId, Guid boothId, Guid categoryId, UpdateFoodCategoryRequest request, CancellationToken cancellationToken = default)
     {
         var managementError = await ValidateBoothManagementAsync(ownerId, boothId);
-        if (managementError is not null) 
+        if (managementError is not null)
             throw ToBoothAccessException(managementError);
 
         var category = await _categories.GetActiveByBoothAsync(boothId, categoryId);
-        if (category is null) 
+        if (category is null)
             throw AppException.NotFound("Food category was not found.");
 
         var validationError = await ValidateAsync(boothId, request, categoryId);
-        if (validationError is not null) 
+        if (validationError is not null)
             throw AppException.BadRequest(validationError);
 
         _mapper.Map(request, category);
@@ -98,11 +98,11 @@ public class FoodCategoryService : IFoodCategoryService
     public async Task<ApiResponse<object>> DeleteAsync(Guid ownerId, Guid boothId, Guid categoryId, CancellationToken cancellationToken = default)
     {
         var managementError = await ValidateBoothManagementAsync(ownerId, boothId);
-        if (managementError is not null) 
+        if (managementError is not null)
             throw ToBoothAccessException(managementError);
 
         var category = await _categories.GetActiveByBoothAsync(boothId, categoryId);
-        if (category is null) 
+        if (category is null)
             throw AppException.NotFound("Food category was not found.");
 
         category.UpdatedAt = DateTime.UtcNow;
@@ -115,7 +115,7 @@ public class FoodCategoryService : IFoodCategoryService
     private async Task<string?> ValidateBoothOwnershipAsync(Guid ownerId, Guid boothId)
     {
         var booth = await _booths.GetByIdAsync(boothId);
-        if (booth is null) 
+        if (booth is null)
             return "Booth was not found.";
 
 
@@ -132,7 +132,7 @@ public class FoodCategoryService : IFoodCategoryService
                 : "Booth was not found.";
         }
 
-        if (booth.Status is BoothStatus.Suspended or BoothStatus.Closed) 
+        if (booth.Status is BoothStatus.Banned or BoothStatus.Inactive)
             return "This booth cannot manage food categories in its current status.";
 
         return null;
@@ -140,11 +140,11 @@ public class FoodCategoryService : IFoodCategoryService
 
     private async Task<string?> ValidateAsync(Guid boothId, CreateFoodCategoryRequest request, Guid? excludeId = null)
     {
-        if (string.IsNullOrWhiteSpace(request.Name)) 
+        if (string.IsNullOrWhiteSpace(request.Name))
             return "Food category name is required.";
 
         var name = request.Name.Trim();
-        if (await _categories.ActiveNameExistsAsync(boothId, name, excludeId)) 
+        if (await _categories.ActiveNameExistsAsync(boothId, name, excludeId))
             return "Food category name already exists in this booth.";
 
         return null;

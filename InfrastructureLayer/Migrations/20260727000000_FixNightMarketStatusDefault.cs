@@ -12,13 +12,22 @@ public sealed class FixNightMarketStatusDefault : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
     {
+        migrationBuilder.Sql(
+            """
+            UPDATE "NightMarket"
+            SET "Status" = CASE
+                WHEN "Status" IN ('Active', 'Open', 'Upcoming') THEN 'Active'
+                ELSE 'Inactive'
+            END;
+            """);
+
         migrationBuilder.AlterColumn<string>(
             name: "Status",
             table: "NightMarket",
             type: "character varying(20)",
             maxLength: 20,
             nullable: false,
-            defaultValue: "Draft",
+            defaultValue: "Inactive",
             oldClrType: typeof(string),
             oldType: "character varying(20)",
             oldMaxLength: 20,
@@ -37,6 +46,6 @@ public sealed class FixNightMarketStatusDefault : Migration
             oldClrType: typeof(string),
             oldType: "character varying(20)",
             oldMaxLength: 20,
-            oldDefaultValue: "Draft");
+            oldDefaultValue: "Inactive");
     }
 }

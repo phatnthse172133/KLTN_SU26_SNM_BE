@@ -23,5 +23,16 @@ namespace ApplicationLayer.Services.Orders
         Task<ApiResponse<bool>> ReconcileRefundAsync(Guid boothOwnerId, long orderCode);
         Task<ApiResponse<bool>> ActiveCheckPaymentStatus(long orderCode);
         Task<bool> HasOrderWithCodeAsync(long orderCode);
+        Task<ApiResponse<PaginationResp<BoothOwnerOrderListItemResponse>>> GetBoothOwnerOrdersAsync(
+            Guid boothOwnerId, BoothOwnerOrderQuery query, CancellationToken cancellationToken = default);
+        Task<ApiResponse<BoothOwnerOrderDetailResponse>> GetBoothOwnerOrderAsync(
+            Guid boothOwnerId, long orderCode, CancellationToken cancellationToken = default);
+        Task<ApiResponse<OrderResponseDto>> CreateWalkInOrderAsync(
+            Guid boothOwnerId, CreateWalkInOrderRequest request, CancellationToken cancellationToken = default);
+        Task<ApiResponse<bool>> UpdateBoothOwnerOrderStatusAsync(
+            Guid boothOwnerId, long orderCode, UpdateBoothOwnerOrderStatusRequest request,
+            CancellationToken cancellationToken = default);
+        Task<ApiResponse<bool>> ConfirmCashPaymentAsync(
+            Guid boothOwnerId, long orderCode, CancellationToken cancellationToken = default);
     }
 }

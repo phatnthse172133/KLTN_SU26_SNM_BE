@@ -5,17 +5,17 @@ using static DomainLayer.Enums.GeneralEnum;
 namespace DomainLayer.Entities;
 
 
-// Lá»‹ch sá»­ giao dá»‹ch thanh toÃ¡n/hoÃ n tiá»n - tÃ­ch há»£p Ä‘a cá»•ng VNPay/ZaloPay/MoMo/Payos
+// Lịch sử giao dịch thanh toán/hoàn tiền - tích hợp đa cổng VNPay/ZaloPay/MoMo/Payos
 public partial class Payment
 {
     public Guid Id { get; set; }
 
     public Guid OrderId { get; set; }
 
-    // FK tá»›i User â€“ chá»§ gian hÃ ng nháº­n tiá»n
+    // FK tới User – chủ gian hàng nhận tiền
     public Guid BoothOwnerId { get; set; }
 
-    public PaymentType Type { get; set; } //Cash hoáº·c PayOS
+    public PaymentType Type { get; set; } //Cash hoặc PayOS
 
     public PaymentGateway Gateway { get; set; }
 
@@ -25,7 +25,7 @@ public partial class Payment
 
     public PaymentStatus Status { get; set; }
 
-    // Cá»•ng PayOS cáº§n cÃ¡c trÆ°á»ng nÃ y Ä‘á»ƒ lÆ°u link thanh toÃ¡n
+    // Cổng PayOS cần các trường này để lưu link thanh toán
     public string? CheckoutUrl { get; set; }
     public string? PaymentLinkId { get; set; }
     public string? GatewayRef { get; set; }
@@ -50,7 +50,7 @@ public partial class Payment
 
     public DateTime UpdatedAt { get; set; }
 
-    // Navigation: chá»§ gian hÃ ng nháº­n tiá»n
+    // Navigation: chủ gian hàng nhận tiền
     public virtual User BoothOwner { get; set; } = null!;
 
     public virtual Order Order { get; set; } = null!;

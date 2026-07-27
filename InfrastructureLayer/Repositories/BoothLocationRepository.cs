@@ -40,7 +40,13 @@ public class BoothLocationRepository : GenericRepository<BoothLocation>, IBoothL
             .Where(location =>
                 location.LayoutId == layoutId &&
                 !location.IsDeleted &&
-                location.Booth.Status == DomainLayer.Enums.GeneralEnum.BoothStatus.Active)
+                location.Booth.NightMarketId == location.Layout.NightMarketId &&
+                location.Booth.Status == DomainLayer.Enums.GeneralEnum.BoothStatus.Active &&
+                !location.Booth.NightMarket.IsDeleted &&
+                location.Booth.NightMarket.ModerationStatus == DomainLayer.Enums.GeneralEnum.ModerationStatus.Active &&
+                (location.Booth.NightMarket.Status == DomainLayer.Enums.GeneralEnum.NightMarketStatus.Upcoming ||
+                 location.Booth.NightMarket.Status == DomainLayer.Enums.GeneralEnum.NightMarketStatus.Open ||
+                 location.Booth.NightMarket.Status == DomainLayer.Enums.GeneralEnum.NightMarketStatus.Closed))
             .OrderBy(location => location.SlotNumber)
             .ToListAsync(cancellationToken);
 

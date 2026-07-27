@@ -5,6 +5,7 @@ using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
 using ApplicationLayer.Mappings;
 using ApplicationLayer.Services.Subscriptions;
+using ApplicationLayer.Services.CustomerDiscovery;
 using DomainLayer.Common;
 using DomainLayer.Entities;
 using DomainLayer.Enums;
@@ -99,6 +100,7 @@ public class NightMarketService : INightMarketService
         await EnsureCustomerMarketExistsAsync(id, cancellationToken);
         var page = await _booths.GetCustomerByNightMarketPagedAsync(
             id, pagination.Page, pagination.PageSize, cancellationToken);
+        var localTime = TimeOnly.FromDateTime(NightMarketAvailability.GetVietnamLocalTime(DateTime.UtcNow));
         var items = page.Items.Select(item => new NightMarketBoothListItemResponse
         {
             Id = item.Id,
@@ -111,6 +113,7 @@ public class NightMarketService : INightMarketService
             Longitude = item.Longitude,
             OpenTime = item.OpenTime,
             CloseTime = item.CloseTime,
+            IsOpenNow = CustomerAvailability.IsOpenNow(item, localTime),
             AverageRating = item.AverageRating,
             IsFeatured = item.IsFeatured
         }).ToList();
@@ -127,6 +130,7 @@ public class NightMarketService : INightMarketService
         await EnsureCustomerMarketExistsAsync(id, cancellationToken);
         var page = await _foodItems.GetCustomerByNightMarketPagedAsync(
             id, DateTime.UtcNow, pagination.Page, pagination.PageSize, cancellationToken);
+        var localTime = TimeOnly.FromDateTime(NightMarketAvailability.GetVietnamLocalTime(DateTime.UtcNow));
         var items = page.Items.Select(item => new NightMarketFoodListItemResponse
         {
             Id = item.Id,
@@ -138,6 +142,8 @@ public class NightMarketService : INightMarketService
             Description = item.Description,
             Price = item.Price,
             ThumbnailUrl = item.ThumbnailUrl,
+            IsAvailable = item.IsAvailable,
+            CanOrder = item.IsAvailable && CustomerAvailability.IsOpenNow(item, localTime),
             IsFeatured = item.IsFeatured
         }).ToList();
 

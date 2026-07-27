@@ -55,6 +55,7 @@ public sealed class NightMarketBoothListItemResponse
     public decimal? Longitude { get; set; }
     public TimeOnly? OpenTime { get; set; }
     public TimeOnly? CloseTime { get; set; }
+    public bool IsOpenNow { get; set; }
     public decimal? AverageRating { get; set; }
     public bool IsFeatured { get; set; }
 }
@@ -70,6 +71,8 @@ public sealed class NightMarketFoodListItemResponse
     public string? Description { get; set; }
     public decimal Price { get; set; }
     public string? ThumbnailUrl { get; set; }
+    public bool IsAvailable { get; set; }
+    public bool CanOrder { get; set; }
     public bool IsFeatured { get; set; }
 }
 

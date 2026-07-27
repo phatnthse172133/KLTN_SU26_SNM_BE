@@ -13,7 +13,16 @@ namespace InfrastructureLayer.Data
     {
         public SNMDbContext CreateDbContext(string[] args)
         {
-            var configPath = Path.Combine(Directory.GetCurrentDirectory(), "..", "PresentationLayer");
+            var currentDirectory = Directory.GetCurrentDirectory();
+            var configPath = new[]
+                {
+                    Path.GetFullPath(Path.Combine(currentDirectory, "..", "PresentationLayer")),
+                    Path.GetFullPath(Path.Combine(currentDirectory, "PresentationLayer")),
+                    AppContext.BaseDirectory
+                }
+                .FirstOrDefault(path => File.Exists(Path.Combine(path, "appsettings.json")))
+                ?? throw new DirectoryNotFoundException(
+                    "Could not locate appsettings.json for SNMDbContext design-time configuration.");
             LoadDotEnv(Path.Combine(configPath, ".env"));
 
             var configuration = new ConfigurationBuilder()

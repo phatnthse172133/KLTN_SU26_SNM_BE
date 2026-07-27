@@ -13,6 +13,9 @@ public partial class OrderDetail
 
     public Guid FoodItemId { get; set; }
 
+    // Immutable display snapshot for customer order history.
+    public string FoodNameSnapshot { get; set; } = null!;
+
     public int Quantity { get; set; }
 
     // SNAPSHOT giá tại thời điểm đặt hàng - KHÔNG tính lại từ FoodItem.Price

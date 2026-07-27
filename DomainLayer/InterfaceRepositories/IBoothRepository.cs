@@ -5,6 +5,25 @@ namespace DomainLayer.InterfaceRepository;
 
 public interface IBoothRepository : IGenericRepository<Booth>
 {
+    Task<PagedResult<CustomerBoothReadModel>> GetCustomerPagedAsync(
+        Guid? marketId,
+        string? search,
+        bool? openNow,
+        TimeOnly localTime,
+        decimal? minimumRating,
+        int page,
+        int pageSize,
+        string sort,
+        CancellationToken cancellationToken = default);
+
+    Task<CustomerBoothReadModel?> GetCustomerByIdAsync(
+        Guid boothId,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> CustomerVisibleExistsAsync(
+        Guid boothId,
+        CancellationToken cancellationToken = default);
+
     Task<PagedResult<NightMarketBoothCustomerReadModel>> GetCustomerByNightMarketPagedAsync(
         Guid nightMarketId,
         int page,

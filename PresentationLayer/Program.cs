@@ -1,11 +1,15 @@
 using ApplicationLayer.Helppers;
 using ApplicationLayer.Services.Notifications;
+using ApplicationLayer.Services.Storage;
+using ApplicationLayer.Configuration;
 using InfrastructureLayer;
 using InfrastructureLayer.Backgrounds;
 using InfrastructureLayer.Cores.JWTs;
 using InfrastructureLayer.Data;
 using InfrastructureLayer.Data.Seeders;
+using InfrastructureLayer.Storage;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -40,11 +44,20 @@ if (string.IsNullOrWhiteSpace(jwtSettings.SecretKey) || jwtSettings.SecretKey.Le
     throw new InvalidOperationException("JWT secret is missing. Set Jwt__SecretKey in PresentationLayer/.env or Jwt:SecretKey in appsettings.json (minimum 32 characters).");
 
 // Đăng ký PayIn Client với Key là "PayIn"
+builder.Services
+    .AddOptions<PayOSSettings>()
+    .Bind(builder.Configuration.GetSection(PayOSSettings.SectionName))
+    .Validate(settings => !string.IsNullOrWhiteSpace(settings.ClientId), "PayOS:ClientId is required.")
+    .Validate(settings => !string.IsNullOrWhiteSpace(settings.ApiKey), "PayOS:ApiKey is required.")
+    .Validate(settings => !string.IsNullOrWhiteSpace(settings.ChecksumKey), "PayOS:ChecksumKey is required.")
+    .Validate(settings => Uri.TryCreate(settings.ReturnUrl, UriKind.Absolute, out _), "PayOS:ReturnUrl must be an absolute URL.")
+    .Validate(settings => Uri.TryCreate(settings.CancelUrl, UriKind.Absolute, out _), "PayOS:CancelUrl must be an absolute URL.")
+    .ValidateOnStart();
+
 builder.Services.AddKeyedSingleton<PayOSClient>("PayIn", (sp, key) =>
 {
-    var config = sp.GetRequiredService<IConfiguration>();
-    var settings = config.GetSection("PayOS:PayIn");
-    return new PayOSClient(settings["ClientId"], settings["ApiKey"], settings["ChecksumKey"]);
+    var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PayOSSettings>>().Value;
+    return new PayOSClient(settings.ClientId, settings.ApiKey, settings.ChecksumKey);
 });
 
 // Đăng ký PayOut Client với Key là "PayOut"
@@ -52,7 +65,10 @@ builder.Services.AddKeyedSingleton<PayOSClient>("PayOut", (sp, key) =>
 {
     var config = sp.GetRequiredService<IConfiguration>();
     var settings = config.GetSection("PayOS:PayOut");
-    return new PayOSClient(settings["ClientId"], settings["ApiKey"], settings["ChecksumKey"]);
+    return new PayOSClient(
+        settings["ClientId"] ?? string.Empty,
+        settings["ApiKey"] ?? string.Empty,
+        settings["ChecksumKey"] ?? string.Empty);
 });
 
 //await payOSClient.Webhooks.ConfirmAsync("https://your-url.com/payos-webhook");
@@ -105,6 +121,43 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0
             });
     });
+    options.AddPolicy("AIApiPolicy", httpContext =>
+    {
+        var userId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
+        var endpoint = httpContext.Request.Path.Value?.ToLowerInvariant() ?? "ai";
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: $"{endpoint}:{userId}",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            });
+    });
+    options.AddPolicy("ChatSendPolicy", httpContext =>
+    {
+        var userId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: $"chat-send:{userId}",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 30,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            });
+    });
+    options.AddPolicy("AvatarUploadPolicy", httpContext =>
+    {
+        var userId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: $"avatar-upload:{userId}",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            });
+    });
 });
 
 
@@ -112,29 +165,38 @@ builder.Services.AddRateLimiter(options =>
 
 const string CustomerAppCorsPolicy = "CustomerAppCorsPolicy";
 
+var configuredCorsOrigins = builder.Configuration
+    .GetSection("Cors:AllowedOrigins")
+    .GetChildren()
+    .Select(section => section.Value)
+    .Where(value => !string.IsNullOrWhiteSpace(value))
+    .Cast<string>()
+    .Concat((builder.Configuration["Cors:AllowedOrigins"] ?? string.Empty)
+        .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+    .Distinct(StringComparer.OrdinalIgnoreCase)
+    .ToArray();
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(CustomerAppCorsPolicy, policy =>
     {
-        policy
-            .WithOrigins(
-                "http://localhost:3000",
-                "http://127.0.0.1:3000",
-                "http://localhost:3001",
-                "http://127.0.0.1:3001",
-                "http://localhost:8081",
-                "http://localhost:8082",
-                "http://localhost:8083",
-                "http://localhost:8084",
-                "http://localhost:19006",
-                "http://127.0.0.1:8081",
-                "http://127.0.0.1:8082",
-                "http://127.0.0.1:8083",
-                "http://127.0.0.1:8084",
-                "http://127.0.0.1:19006")
-            .AllowAnyHeader()
-            .AllowAnyMethod();
+        policy.AllowAnyHeader().AllowAnyMethod();
+
+        if (configuredCorsOrigins.Length > 0)
+            policy.WithOrigins(configuredCorsOrigins);
+
+        if (builder.Configuration.GetValue<bool>("Cors:AllowCredentials"))
+            policy.AllowCredentials();
     });
+});
+
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    // Render terminates TLS at a dynamically addressed reverse proxy. The service
+    // itself is isolated behind that proxy, so there is no stable proxy IP to list.
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
 });
 
 builder.Services.AddInfrastructure(builder.Configuration);
@@ -240,23 +302,13 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowFrontend",
-        policy =>
-        {
-            policy.WithOrigins("http://localhost:3000", "http://localhost:3001")
-                  .AllowAnyHeader()
-                  .AllowAnyMethod()
-                  .AllowCredentials();
-        });
-});
 builder.Services.AddAuthorization();
 builder.Services.AddSignalR();
 builder.Services.AddScoped<IRealtimeNotificationPublisher, SignalRNotificationPublisher>();
 builder.Services.AddScoped<ApplicationLayer.Services.Chats.IRealtimeChatPublisher, SignalRChatPublisher>();
 builder.Services.AddScoped<IFileStorageService, LocalFileStorageService>();
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddHealthChecks();
 builder.Services.AddSwaggerGen(options =>
 {
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
@@ -271,6 +323,8 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 var app = builder.Build();
+var swaggerEnabled = app.Environment.IsDevelopment()
+    || builder.Configuration.GetValue<bool>("Swagger:Enabled");
 
 // Demo data is opt-in. A normal application start must never mutate a shared database.
 if (string.Equals(builder.Configuration["SeedDemoData"], "true", StringComparison.OrdinalIgnoreCase))
@@ -284,13 +338,19 @@ if (app.Environment.IsDevelopment())
         .GetRequiredService<AutoMapper.IMapper>()
         .ConfigurationProvider
         .AssertConfigurationIsValid();
+}
+
+if (swaggerEnabled)
+{
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
+app.UseForwardedHeaders();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
-app.UseHttpsRedirection();
+if (builder.Configuration.GetValue("HttpsRedirection:Enabled", true))
+    app.UseHttpsRedirection();
 
 app.UseCors(CustomerAppCorsPolicy);
 
@@ -303,6 +363,7 @@ app.UseAuthorization();
 // Thêm Middleware
 app.UseRateLimiter();
 
+app.MapHealthChecks("/health").AllowAnonymous();
 app.MapControllers();
 app.MapHub<NotificationHub>("/hubs/notifications");
 app.MapHub<ChatHub>("/hubs/chats");

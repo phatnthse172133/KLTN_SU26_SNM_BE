@@ -5,9 +5,15 @@ namespace DomainLayer.InterfaceRepository;
 
 public interface IConversationRepository : IGenericRepository<Conversation>
 {
-    Task<Conversation?> GetByParticipantsAsync(
+    Task<Conversation?> GetByCustomerAndBoothAsync(
         Guid customerId,
-        Guid boothOwnerId,
+        Guid boothId,
+        CancellationToken cancellationToken = default);
+
+    Task<(Conversation Conversation, bool Created)> GetOrCreateCustomerBoothAsync(
+        Guid customerId,
+        Guid boothId,
+        DateTime now,
         CancellationToken cancellationToken = default);
 
     Task<Conversation?> GetOwnedAsync(

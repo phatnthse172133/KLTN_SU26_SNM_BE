@@ -34,7 +34,7 @@ public class MessageRepository : GenericRepository<Message>, IMessageRepository
                 message => message.Id == messageId
                     && message.DeletedAt == null
                     && (message.Conversation.CustomerId == userId
-                        || message.Conversation.BoothOwnerId == userId),
+                        || message.Conversation.Booth.BoothOwnerId == userId),
                 cancellationToken);
 
     public async Task<PagedResult<Message>> GetPagedByConversationAsync(
@@ -52,6 +52,7 @@ public class MessageRepository : GenericRepository<Message>, IMessageRepository
         var total = await query.CountAsync(cancellationToken);
         var items = await query
             .OrderByDescending(message => message.CreatedAt)
+            .ThenByDescending(message => message.Id)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(cancellationToken);
@@ -60,43 +61,32 @@ public class MessageRepository : GenericRepository<Message>, IMessageRepository
     }
 
     public async Task<IReadOnlyDictionary<Guid, int>> CountUnreadByConversationIdsAsync(
-        IReadOnlyDictionary<Guid, DateTime?> conversationReadTimes,
+        IReadOnlyCollection<Guid> conversationIds,
         Guid readerId,
         CancellationToken cancellationToken = default)
     {
-        if (conversationReadTimes.Count == 0)
+        if (conversationIds.Count == 0)
             return new Dictionary<Guid, int>();
 
-        var conversationIds = conversationReadTimes.Keys.ToList();
-        var candidates = await _dbSet
+        return await _dbSet
             .AsNoTracking()
             .Where(message => conversationIds.Contains(message.ConversationId)
                 && message.SenderId != readerId
+                && !message.IsRead
                 && message.DeletedAt == null)
-            .Select(message => new
-            {
-                message.ConversationId,
-                message.CreatedAt
-            })
-            .ToListAsync(cancellationToken);
-
-        return candidates
-            .Where(message =>
-                !conversationReadTimes[message.ConversationId].HasValue
-                || message.CreatedAt > conversationReadTimes[message.ConversationId]!.Value)
             .GroupBy(message => message.ConversationId)
-            .ToDictionary(group => group.Key, group => group.Count());
+            .Select(group => new { ConversationId = group.Key, Count = group.Count() })
+            .ToDictionaryAsync(item => item.ConversationId, item => item.Count, cancellationToken);
     }
 
     public Task<int> CountUnreadAsync(
         Guid conversationId,
         Guid readerId,
-        DateTime? lastReadAt,
         CancellationToken cancellationToken = default)
         => _dbSet.CountAsync(message => message.ConversationId == conversationId
             && message.SenderId != readerId
             && message.DeletedAt == null
-            && (!lastReadAt.HasValue || message.CreatedAt > lastReadAt.Value),
+            && !message.IsRead,
             cancellationToken);
 
     public Task<Message?> GetLatestVisibleByConversationAsync(
@@ -109,6 +99,7 @@ public class MessageRepository : GenericRepository<Message>, IMessageRepository
                 && (!excludingMessageId.HasValue || message.Id != excludingMessageId.Value)
                 && message.DeletedAt == null)
             .OrderByDescending(message => message.CreatedAt)
+            .ThenByDescending(message => message.Id)
             .FirstOrDefaultAsync(cancellationToken);
 
     public Task<int> MarkConversationMessagesReadAsync(

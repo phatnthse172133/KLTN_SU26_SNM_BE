@@ -76,7 +76,7 @@ public class PromotionService : IPromotionService
     public async Task<ApiResponse<PromotionResponse>> GetAsync(Guid userId, string role, Guid promotionId, CancellationToken cancellationToken = default)
     {
         var promotion = await GetPromotionAsync(promotionId, cancellationToken);
-        EnsurePromotionReadAccess(userId, role, promotion);
+        EnsurePromotionReadAccess(userId, role, promotion, DateTime.UtcNow);
         return ApiResponse<PromotionResponse>.SuccessResponse(MapPromotion(promotion));
     }
 
@@ -289,7 +289,15 @@ public class PromotionService : IPromotionService
                     TotalAmount = result.TotalAmount,
                     EligibleAmount = result.EligibleAmount,
                     DiscountAmount = result.DiscountAmount,
+                    OrderSubtotal = result.OrderSubtotal,
+                    EligibleSubtotal = result.EligibleSubtotal,
+                    CalculatedDiscount = result.CalculatedDiscount,
+                    ActualDiscount = result.ActualDiscount,
                     FinalAmount = result.FinalAmount,
+                    DiscountValue = promotion.DiscountValue,
+                    MinimumOrderAmount = promotion.MinimumOrderAmount,
+                    MaximumDiscountAmount = promotion.MaximumDiscountAmount,
+                    StartDate = promotion.StartDate,
                     EndDate = promotion.EndDate
                 });
             }
@@ -397,10 +405,15 @@ public class PromotionService : IPromotionService
         if (string.IsNullOrWhiteSpace(request.Title))
             throw AppException.BadRequest("Promotion title is required.", "INVALID_PROMOTION_VALUE");
 
+        if (string.IsNullOrWhiteSpace(request.PromotionCode))
+            throw AppException.BadRequest("Promotion code is required.", "PROMOTION_CODE_REQUIRED");
+
         if (request.StartDate >= request.EndDate || request.EndDate <= DateTime.UtcNow)
             throw AppException.BadRequest("Promotion date range is invalid.", "INVALID_DATE_RANGE");
 
         if (request.DiscountValue <= 0
+            || !Enum.IsDefined(request.DiscountType)
+            || !Enum.IsDefined(request.Scope)
             || (request.DiscountType == DiscountType.Percentage
                 && request.DiscountValue > 100))
         {
@@ -411,6 +424,8 @@ public class PromotionService : IPromotionService
 
         if (request.MinimumOrderAmount < 0
             || request.MaximumDiscountAmount <= 0
+            || (request.DiscountType == DiscountType.FixedAmount
+                && request.MaximumDiscountAmount.HasValue)
             || request.TotalUsageLimit <= 0
             || request.UsageLimitPerCustomer <= 0
             || (request.TotalUsageLimit.HasValue
@@ -526,13 +541,22 @@ public class PromotionService : IPromotionService
         }
     }
 
-    private static void EnsurePromotionReadAccess(Guid userId, string role, Promotion promotion)
+    private static void EnsurePromotionReadAccess(
+        Guid userId,
+        string role,
+        Promotion promotion,
+        DateTime utcNow)
     {
+        var isCustomerVisible = promotion.IsPublic
+            && !string.IsNullOrWhiteSpace(promotion.PromotionCode)
+            && promotion.StartDate <= utcNow
+            && promotion.EndDate >= utcNow
+            && promotion.Status is PromotionStatus.Active or PromotionStatus.Scheduled;
         var allowed = role.Equals("Admin", StringComparison.OrdinalIgnoreCase)
             || (role.Equals("BoothOwner", StringComparison.OrdinalIgnoreCase)
                 && promotion.Booth.BoothOwnerId == userId)
             || (role.Equals("Customer", StringComparison.OrdinalIgnoreCase)
-                && promotion.IsPublic);
+                && isCustomerVisible);
         if (!allowed)
         {
             throw AppException.Forbidden(
@@ -550,6 +574,13 @@ public class PromotionService : IPromotionService
     private PromotionResponse MapPromotion(Promotion promotion)
     {
         var response = _mapper.Map<PromotionResponse>(promotion);
+        if (promotion.DiscountType == DiscountType.FixedAmount
+            && promotion.DiscountValue > (promotion.MinimumOrderAmount ?? 0m))
+        {
+            response.ConfigurationWarnings =
+                ["FIXED_DISCOUNT_CAN_CREATE_FREE_ORDER"];
+        }
+
         if (promotion.Status is PromotionStatus.Active or PromotionStatus.Scheduled)
         {
             var now = DateTime.UtcNow;

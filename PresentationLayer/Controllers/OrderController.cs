@@ -27,6 +27,7 @@ namespace PresentationLayer.Controllers
 
         // POST api/<OrderController>
         [HttpPost]
+        [Authorize(Roles = "Customer,BoothOwner")]
         [EnableRateLimiting("OrderApiPolicy")]
         public async Task<IActionResult> CreateOrder([FromBody] CreateOrderDto dto)
         {
@@ -35,11 +36,31 @@ namespace PresentationLayer.Controllers
                 return BadRequest(new { message = "Giá» hÃ ng khÃ´ng cÃ³ sáº£n pháº©m nÃ o!" });
             }
 
+            if (dto.CheckoutRequestId == Guid.Empty)
+            {
+                if (!Guid.TryParse(Request.Headers["Idempotency-Key"].FirstOrDefault(), out var requestId))
+                    return BadRequest(new { message = "A GUID CheckoutRequestId or Idempotency-Key header is required." });
+                dto.CheckoutRequestId = requestId;
+            }
+
+            var role = User.FindFirstValue(ClaimTypes.Role);
+            if (role == "Customer")
+            {
+                dto.CustomerId = CurrentUserId;
+                dto.IsCreatedByBooth = false;
+            }
+            else
+            {
+                dto.BoothOwnerId = CurrentUserId;
+                dto.IsCreatedByBooth = true;
+            }
+
             var response = await _orderService.CreateOrderAsync(dto);
             return response.Success ? Ok(response) : BadRequest(response);
         }
 
         [HttpPut("update-status/{orderCode}")]
+        [Authorize(Roles = "BoothOwner")]
         public async Task<IActionResult> UpdateOrderStatus([FromRoute] long orderCode, [FromBody] UpdateOrderStatusDto dto)
         {
             if (dto == null)
@@ -47,21 +68,35 @@ namespace PresentationLayer.Controllers
                 return BadRequest(new { message = "Dá»¯ liá»‡u khÃ´ng há»£p lá»‡!" });
             }
 
+            if (dto.OrderCode != 0 && dto.OrderCode != orderCode)
+                return BadRequest(new { message = "Order code in route and body must match." });
+
+            dto.OrderCode = orderCode;
             var response = await _orderService.UpdateOrderStatusByBoothOwnerAsync(CurrentUserId, dto);
             return response.Success ? Ok(response) : BadRequest(response);
         }
 
         [HttpPut("{orderCode}/Customer/Cancel")]
+        [Authorize(Roles = "Customer")]
         public async Task<IActionResult> CancelOrderByCustomer([FromRoute] long orderCode)
         {
-            var response = await _orderService.CancelOrderByCustomer(orderCode);
+            var response = await _orderService.CancelOrderByCustomer(CurrentUserId, orderCode);
             return response.Success ? Ok(response) : BadRequest(response);
         }
 
         [HttpPut("{orderCode}/BoothOwner/Cancel")]
+        [Authorize(Roles = "BoothOwner")]
         public async Task<IActionResult> CancelOrderByBoothOwner([FromRoute] long orderCode, [FromBody] RefundQRRequest request)
         {
-            var response = await _orderService.CancelOrderByBoothOwnerAsync(orderCode, request);
+            var response = await _orderService.CancelOrderByBoothOwnerAsync(CurrentUserId, orderCode, request);
+            return response.Success ? Ok(response) : BadRequest(response);
+        }
+
+        [HttpPost("{orderCode}/BoothOwner/Refund/Reconcile")]
+        [Authorize(Roles = "BoothOwner")]
+        public async Task<IActionResult> ReconcileRefund([FromRoute] long orderCode)
+        {
+            var response = await _orderService.ReconcileRefundAsync(CurrentUserId, orderCode);
             return response.Success ? Ok(response) : BadRequest(response);
         }
 

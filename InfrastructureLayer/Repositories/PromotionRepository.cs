@@ -116,6 +116,30 @@ public class PromotionRepository : GenericRepository<Promotion>, IPromotionRepos
             cancellationToken);
     }
 
+    public async Task AcquireReservationLockAsync(
+        Guid promotionId,
+        CancellationToken cancellationToken = default)
+    {
+        if (_context.Database.CurrentTransaction is null)
+            throw new InvalidOperationException(
+                "A database transaction is required before acquiring a promotion reservation lock.");
+
+        // A row lock is shared by every application instance using PostgreSQL.
+        // It is held until commit/rollback, so the following count + insert is atomic.
+        await _context.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT 1 FROM \"Promotion\" WHERE \"Id\" = {promotionId} FOR UPDATE",
+            cancellationToken);
+    }
+
+    public Task<Promotion?> GetReservationDetailsAsync(
+        Guid promotionId,
+        CancellationToken cancellationToken = default)
+        => DetailsQuery()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                promotion => promotion.Id == promotionId,
+                cancellationToken);
+
     public async Task<PagedResult<Promotion>> GetAvailablePagedAsync(
         IReadOnlyCollection<Guid> boothIds,
         DateTime now,
@@ -127,6 +151,7 @@ public class PromotionRepository : GenericRepository<Promotion>, IPromotionRepos
             .AsNoTracking()
             .Where(promotion => boothIds.Contains(promotion.BoothId)
                 && promotion.IsPublic
+                && promotion.PromotionCode != null
                 && promotion.StartDate <= now
                 && promotion.EndDate >= now
                 && (promotion.Status == PromotionStatus.Active
@@ -151,6 +176,7 @@ public class PromotionRepository : GenericRepository<Promotion>, IPromotionRepos
             .AsNoTracking()
             .Where(promotion => boothIds.Contains(promotion.BoothId)
                 && promotion.IsPublic
+                && promotion.PromotionCode != null
                 && promotion.StartDate <= now
                 && promotion.EndDate >= now
                 && (promotion.Status == PromotionStatus.Active

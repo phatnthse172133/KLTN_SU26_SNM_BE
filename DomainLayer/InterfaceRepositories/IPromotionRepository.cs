@@ -30,6 +30,22 @@ public interface IPromotionRepository : IGenericRepository<Promotion>
         Guid? excludePromotionId = null,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Serializes promotion reservations for one promotion for the lifetime of
+    /// the caller's current PostgreSQL transaction.
+    /// </summary>
+    Task AcquireReservationLockAsync(
+        Guid promotionId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Reloads the promotion and its scope targets after the reservation lock
+    /// has been acquired, avoiding validation against a stale tracked entity.
+    /// </summary>
+    Task<Promotion?> GetReservationDetailsAsync(
+        Guid promotionId,
+        CancellationToken cancellationToken = default);
+
     Task<PagedResult<Promotion>> GetAvailablePagedAsync(
         IReadOnlyCollection<Guid> boothIds,
         DateTime now,

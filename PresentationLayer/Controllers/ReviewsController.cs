@@ -27,6 +27,14 @@ public class ReviewsController : ControllerBase
         return response.Success ? Ok(response) : BadRequest(response);
     }
 
+    [Authorize(Roles = "Customer")]
+    [HttpPatch("{reviewId:guid}")]
+    public async Task<IActionResult> Update(Guid reviewId, UpdateReviewRequest request, CancellationToken cancellationToken)
+    {
+        var response = await _service.UpdateAsync(CurrentUserId, reviewId, request, cancellationToken);
+        return response.Success ? Ok(response) : BadRequest(response);
+    }
+
     [AllowAnonymous]
     [HttpGet("booths/{boothId:guid}")]
     public async Task<IActionResult> GetByBooth(Guid boothId, [FromQuery] PaginationReq pagination, CancellationToken cancellationToken)

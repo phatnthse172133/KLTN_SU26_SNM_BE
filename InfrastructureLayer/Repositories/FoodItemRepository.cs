@@ -3,6 +3,7 @@ using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
 using InfrastructureLayer.Data;
 using Microsoft.EntityFrameworkCore;
+using System.Linq.Expressions;
 using static DomainLayer.Enums.GeneralEnum;
 
 namespace InfrastructureLayer.Repositories;
@@ -13,6 +14,88 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
     {
     }
 
+    public async Task<PagedResult<CustomerFoodReadModel>> GetCustomerPagedAsync(
+        Guid? marketId,
+        Guid? boothId,
+        Guid? categoryId,
+        string? search,
+        decimal? minPrice,
+        decimal? maxPrice,
+        bool availableOnly,
+        DateTime utcNow,
+        TimeOnly localTime,
+        int page,
+        int pageSize,
+        string sort,
+        CancellationToken cancellationToken = default)
+    {
+        if (_context.Database.ProviderName == "Microsoft.EntityFrameworkCore.InMemory")
+            return await GetCustomerPagedInMemoryAsync(
+                marketId, boothId, categoryId, search, minPrice, maxPrice,
+                availableOnly, utcNow, localTime, page, pageSize, sort, cancellationToken);
+
+        var query = CustomerVisibleQuery();
+
+        if (marketId.HasValue)
+            query = query.Where(item => item.Booth.NightMarketId == marketId.Value);
+        if (boothId.HasValue)
+            query = query.Where(item => item.BoothId == boothId.Value);
+        if (categoryId.HasValue)
+            query = query.Where(item => item.CategoryId == categoryId.Value);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var keyword = search.Trim().ToLower();
+            query = query.Where(item => item.Name.ToLower().Contains(keyword));
+        }
+
+        var projected = ProjectCustomer(query, utcNow, includeImages: false);
+        if (minPrice.HasValue)
+            projected = projected.Where(item => item.EffectivePrice >= minPrice.Value);
+        if (maxPrice.HasValue)
+            projected = projected.Where(item => item.EffectivePrice <= maxPrice.Value);
+        if (availableOnly)
+            projected = projected.Where(IsCustomerOrderableAt(localTime));
+
+        var totalCount = await projected.CountAsync(cancellationToken);
+        projected = sort.ToLowerInvariant() switch
+        {
+            "name" => projected.OrderBy(item => item.Name).ThenBy(item => item.Id),
+            "priceasc" => projected.OrderBy(item => item.EffectivePrice).ThenBy(item => item.Name).ThenBy(item => item.Id),
+            "pricedesc" => projected.OrderByDescending(item => item.EffectivePrice).ThenBy(item => item.Name).ThenBy(item => item.Id),
+            _ => projected.OrderByDescending(item => item.IsFeatured).ThenBy(item => item.Name).ThenBy(item => item.Id)
+        };
+
+        var items = await projected
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return new PagedResult<CustomerFoodReadModel>(items, totalCount);
+    }
+
+    public async Task<CustomerFoodReadModel?> GetCustomerByIdAsync(
+        Guid foodItemId,
+        DateTime utcNow,
+        CancellationToken cancellationToken = default)
+    {
+        if (_context.Database.ProviderName == "Microsoft.EntityFrameworkCore.InMemory")
+        {
+            var food = await CustomerVisibleQuery()
+                .Include(item => item.Booth).ThenInclude(booth => booth.NightMarket)
+                .Include(item => item.Category)
+                .Include(item => item.FoodPrices)
+                .Include(item => item.FoodImages)
+                .FirstOrDefaultAsync(item => item.Id == foodItemId, cancellationToken);
+            return food is null ? null : ToCustomerReadModel(food, utcNow, includeImages: true);
+        }
+
+        return await ProjectCustomer(
+                    CustomerVisibleQuery().Where(item => item.Id == foodItemId),
+                    utcNow,
+                    includeImages: true)
+                .FirstOrDefaultAsync(cancellationToken);
+    }
+
     public async Task<PagedResult<NightMarketFoodCustomerReadModel>> GetCustomerByNightMarketPagedAsync(
         Guid nightMarketId,
         DateTime utcNow,
@@ -20,16 +103,7 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
         int pageSize,
         CancellationToken cancellationToken = default)
     {
-        var query = ActiveQuery().AsNoTracking().Where(item =>
-            item.IsAvailable &&
-            !item.Category.IsDeleted &&
-            item.Booth.NightMarketId == nightMarketId &&
-            item.Booth.Status == BoothStatus.Active &&
-            !item.Booth.NightMarket.IsDeleted &&
-            item.Booth.NightMarket.ModerationStatus == ModerationStatus.Active &&
-            (item.Booth.NightMarket.Status == NightMarketStatus.Upcoming ||
-             item.Booth.NightMarket.Status == NightMarketStatus.Open ||
-             item.Booth.NightMarket.Status == NightMarketStatus.Closed));
+        var query = CustomerVisibleQuery().Where(item => item.Booth.NightMarketId == nightMarketId);
 
         var totalCount = await query.CountAsync(cancellationToken);
         var foodItems = await query
@@ -37,6 +111,7 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
             .ThenBy(item => item.Name)
             .ThenBy(item => item.Id)
             .Include(item => item.Booth)
+                .ThenInclude(booth => booth.NightMarket)
             .Include(item => item.Category)
             .Include(item => item.FoodPrices)
             .AsSplitQuery()
@@ -55,6 +130,12 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
                 item.Description,
                 FoodPriceResolver.GetCurrentPrice(item, utcNow),
                 item.ThumbnailUrl,
+                item.IsAvailable,
+                item.Booth.OpenTime,
+                item.Booth.CloseTime,
+                item.Booth.NightMarket.OpeningHours,
+                item.Booth.NightMarket.ClosingHours,
+                item.Booth.NightMarket.Status == NightMarketStatus.Open,
                 item.IsFeatured))
             .ToList();
 
@@ -90,8 +171,10 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
     public Task<FoodItem?> GetForCartAsync(
         Guid foodItemId,
         CancellationToken cancellationToken = default)
-        => ActiveQuery()
+        => _dbSet
+            .IgnoreQueryFilters()
             .Include(item => item.Booth)
+                .ThenInclude(booth => booth.NightMarket)
             .Include(item => item.Category)
             .Include(item => item.FoodPrices)
             .FirstOrDefaultAsync(item => item.Id == foodItemId, cancellationToken);
@@ -114,10 +197,16 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
 
     public async Task<IReadOnlyCollection<FoodItem>> GetAiCandidatesAsync(
         Guid? nightMarketId,
+        int maxCandidates,
         CancellationToken cancellationToken = default)
     {
+        if (maxCandidates is < 1 or > 500)
+            throw new ArgumentOutOfRangeException(nameof(maxCandidates));
+
         var query = ActiveQuery()
+            .AsNoTracking()
             .Include(item => item.Category)
+            .Include(item => item.FoodPrices)
             .Include(item => item.FoodItemTags)
                 .ThenInclude(foodItemTag => foodItemTag.FoodTag)
             .Include(item => item.Booth)
@@ -126,8 +215,12 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
                 .ThenInclude(booth => booth.Zone)
             .Where(item =>
                 item.IsAvailable
+                && !item.Category.IsDeleted
                 && item.Booth.Status == BoothStatus.Active
-                && item.Booth.NightMarket.Status == NightMarketStatus.Open
+                && (item.Booth.NightMarket.Status == NightMarketStatus.Upcoming
+                    || item.Booth.NightMarket.Status == NightMarketStatus.Open
+                    || item.Booth.NightMarket.Status == NightMarketStatus.Closed)
+                && item.Booth.NightMarket.ModerationStatus == ModerationStatus.Active
                 && !item.Booth.NightMarket.IsDeleted);
 
         if (nightMarketId.HasValue)
@@ -135,12 +228,159 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
             query = query.Where(item => item.Booth.NightMarketId == nightMarketId.Value);
         }
 
-        return await query.ToListAsync(cancellationToken);
+        return await query
+            .OrderByDescending(item => item.IsFeatured)
+            .ThenByDescending(item => item.Booth.AverageRating)
+            .ThenBy(item => item.Id)
+            .Take(maxCandidates)
+            .AsSplitQuery()
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<List<FoodItem>> GetAllFoodItemsByIdsAsync(List<Guid> foodItemIds)
     {
-        return await _dbSet.Include(f => f.FoodPrices) 
-                           .Where(f => foodItemIds.Contains(f.Id) && !f.IsDeleted && f.IsAvailable).ToListAsync();
+        return await _dbSet
+            .IgnoreQueryFilters()
+            .Include(item => item.Booth)
+                .ThenInclude(booth => booth.NightMarket)
+            .Include(item => item.Category)
+            .Include(item => item.FoodPrices)
+            .AsSplitQuery()
+            .Where(item => foodItemIds.Contains(item.Id))
+            .ToListAsync();
     }
+
+    private IQueryable<FoodItem> CustomerVisibleQuery()
+        => ActiveQuery().AsNoTracking().Where(item =>
+            item.IsAvailable &&
+            !item.Category.IsDeleted &&
+            item.Booth.Status == BoothStatus.Active &&
+            !item.Booth.NightMarket.IsDeleted &&
+            item.Booth.NightMarket.ModerationStatus == ModerationStatus.Active &&
+            (item.Booth.NightMarket.Status == NightMarketStatus.Upcoming ||
+             item.Booth.NightMarket.Status == NightMarketStatus.Open ||
+             item.Booth.NightMarket.Status == NightMarketStatus.Closed));
+
+    private static Expression<Func<CustomerFoodReadModel, bool>> IsCustomerOrderableAt(TimeOnly localTime)
+        => item =>
+            item.IsAvailable &&
+            item.MarketIsOperational &&
+            item.MarketOpenTime.HasValue &&
+            item.MarketCloseTime.HasValue &&
+            item.MarketOpenTime.Value != item.MarketCloseTime.Value &&
+            (item.MarketOpenTime.Value < item.MarketCloseTime.Value
+                ? item.MarketOpenTime.Value <= localTime && localTime < item.MarketCloseTime.Value
+                : localTime >= item.MarketOpenTime.Value || localTime < item.MarketCloseTime.Value) &&
+            ((!item.BoothOpenTime.HasValue && !item.BoothCloseTime.HasValue) ||
+             (item.BoothOpenTime.HasValue && item.BoothCloseTime.HasValue &&
+              item.BoothOpenTime.Value != item.BoothCloseTime.Value &&
+              (item.BoothOpenTime.Value < item.BoothCloseTime.Value
+                  ? item.BoothOpenTime.Value <= localTime && localTime < item.BoothCloseTime.Value
+                  : localTime >= item.BoothOpenTime.Value || localTime < item.BoothCloseTime.Value)));
+
+    private static IQueryable<CustomerFoodReadModel> ProjectCustomer(
+        IQueryable<FoodItem> query,
+        DateTime utcNow,
+        bool includeImages)
+        => FoodPriceResolver.WithCurrentPrice(query, utcNow).Select(priced => new CustomerFoodReadModel(
+            priced.FoodItem.Id,
+            priced.FoodItem.BoothId,
+            priced.FoodItem.Booth.BoothName,
+            priced.FoodItem.Booth.ThumbnailUrl,
+            priced.FoodItem.Booth.NightMarketId,
+            priced.FoodItem.Booth.NightMarket.Name,
+            priced.FoodItem.Booth.NightMarket.Address,
+            priced.FoodItem.CategoryId,
+            priced.FoodItem.Category.Name,
+            priced.FoodItem.Name,
+            priced.FoodItem.Description,
+            priced.FoodItem.Price,
+            priced.EffectivePrice,
+            priced.FoodItem.ThumbnailUrl,
+            priced.FoodItem.IsAvailable,
+            priced.FoodItem.IsFeatured,
+            priced.FoodItem.Booth.OpenTime,
+            priced.FoodItem.Booth.CloseTime,
+            priced.FoodItem.Booth.NightMarket.OpeningHours,
+            priced.FoodItem.Booth.NightMarket.ClosingHours,
+            priced.FoodItem.Booth.NightMarket.Status == NightMarketStatus.Open,
+            includeImages
+                ? priced.FoodItem.FoodImages.OrderBy(image => image.DisplayOrder).ThenBy(image => image.Id).Select(image => image.ImageUrl).ToList()
+                : new List<string>()));
+
+    private async Task<PagedResult<CustomerFoodReadModel>> GetCustomerPagedInMemoryAsync(
+        Guid? marketId,
+        Guid? boothId,
+        Guid? categoryId,
+        string? search,
+        decimal? minPrice,
+        decimal? maxPrice,
+        bool availableOnly,
+        DateTime utcNow,
+        TimeOnly localTime,
+        int page,
+        int pageSize,
+        string sort,
+        CancellationToken cancellationToken)
+    {
+        var entities = await CustomerVisibleQuery()
+            .Include(item => item.Booth).ThenInclude(booth => booth.NightMarket)
+            .Include(item => item.Category)
+            .Include(item => item.FoodPrices)
+            .ToListAsync(cancellationToken);
+
+        IEnumerable<CustomerFoodReadModel> query = entities
+            .Where(item => !marketId.HasValue || item.Booth.NightMarketId == marketId.Value)
+            .Where(item => !boothId.HasValue || item.BoothId == boothId.Value)
+            .Where(item => !categoryId.HasValue || item.CategoryId == categoryId.Value)
+            .Where(item => string.IsNullOrWhiteSpace(search)
+                || item.Name.Contains(search.Trim(), StringComparison.OrdinalIgnoreCase))
+            .Select(item => ToCustomerReadModel(item, utcNow, includeImages: false))
+            .Where(item => !minPrice.HasValue || item.EffectivePrice >= minPrice.Value)
+            .Where(item => !maxPrice.HasValue || item.EffectivePrice <= maxPrice.Value)
+            .Where(item => !availableOnly || ApplicationLayer.Services.CustomerDiscovery.CustomerAvailability.IsOpenNow(item, localTime));
+
+        var totalCount = query.Count();
+        query = sort.ToLowerInvariant() switch
+        {
+            "name" => query.OrderBy(item => item.Name).ThenBy(item => item.Id),
+            "priceasc" => query.OrderBy(item => item.EffectivePrice).ThenBy(item => item.Name).ThenBy(item => item.Id),
+            "pricedesc" => query.OrderByDescending(item => item.EffectivePrice).ThenBy(item => item.Name).ThenBy(item => item.Id),
+            _ => query.OrderByDescending(item => item.IsFeatured).ThenBy(item => item.Name).ThenBy(item => item.Id)
+        };
+
+        return new PagedResult<CustomerFoodReadModel>(
+            query.Skip((page - 1) * pageSize).Take(pageSize).ToList(),
+            totalCount);
+    }
+
+    private static CustomerFoodReadModel ToCustomerReadModel(
+        FoodItem item,
+        DateTime utcNow,
+        bool includeImages)
+        => new(
+            item.Id,
+            item.BoothId,
+            item.Booth.BoothName,
+            item.Booth.ThumbnailUrl,
+            item.Booth.NightMarketId,
+            item.Booth.NightMarket.Name,
+            item.Booth.NightMarket.Address,
+            item.CategoryId,
+            item.Category.Name,
+            item.Name,
+            item.Description,
+            item.Price,
+            FoodPriceResolver.GetCurrentPrice(item, utcNow),
+            item.ThumbnailUrl,
+            item.IsAvailable,
+            item.IsFeatured,
+            item.Booth.OpenTime,
+            item.Booth.CloseTime,
+            item.Booth.NightMarket.OpeningHours,
+            item.Booth.NightMarket.ClosingHours,
+            item.Booth.NightMarket.Status == NightMarketStatus.Open,
+            includeImages
+                ? item.FoodImages.OrderBy(image => image.DisplayOrder).ThenBy(image => image.Id).Select(image => image.ImageUrl).ToList()
+                : new List<string>());
 }

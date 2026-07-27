@@ -6,7 +6,7 @@ using AutoMapper;
 using DomainLayer.Entities;
 using DomainLayer.Common;
 using DomainLayer.InterfaceRepository;
-using static DomainLayer.Enums.GeneralEnum;
+using ApplicationLayer.Services.CustomerDiscovery;
 
 namespace ApplicationLayer.Services.Carts;
 
@@ -16,23 +16,27 @@ public class CartService : ICartService
     private readonly ICartItemRepository _cartItems;
     private readonly IFoodItemRepository _foodItems;
     private readonly IMapper _mapper;
+    private readonly TimeProvider _timeProvider;
 
     public CartService(
         ICartRepository carts,
         ICartItemRepository cartItems,
         IFoodItemRepository foodItems,
-        IMapper mapper)
+        IMapper mapper,
+        TimeProvider timeProvider)
     {
         _carts = carts;
         _cartItems = cartItems;
         _foodItems = foodItems;
         _mapper = mapper;
+        _timeProvider = timeProvider;
     }
 
     public async Task<ApiResponse<CartResponse>> GetCurrentAsync(Guid customerId, PaginationReq pagination, CancellationToken cancellationToken = default)
     {
         var cart = await GetCurrentCartAsync(customerId, cancellationToken);
         var items = await _cartItems.GetActiveByCartAsync(cart.Id, cancellationToken);
+        var utcNow = _timeProvider.GetUtcNow().UtcDateTime;
         var boothGroups = items
             .GroupBy(item => new
             {
@@ -46,14 +50,16 @@ public class CartService : ICartService
         var pagedBooths = boothGroups
             .Skip((pagination.Page - 1) * pagination.PageSize)
             .Take(pagination.PageSize)
-            .Select(group => MapBooth(group.Key.BoothId, group.Key.BoothName, group))
+            .Select(group => MapBooth(group.Key.BoothId, group.Key.BoothName, group, utcNow))
             .ToList();
 
         var response = new CartResponse
         {
             CartId = cart.Id,
             TotalItemCount = items.Sum(item => (long)item.Quantity),
-            TotalAmount = items.Sum(item => GetCurrentPrice(item.FoodItem) * item.Quantity),
+            TotalAmount = items.Sum(item => GetCurrentPrice(item.FoodItem, utcNow) * item.Quantity),
+            CanCheckout = items.Count > 0
+                && items.All(item => CustomerOrderability.Evaluate(item.FoodItem, utcNow).CanOrder),
             Booths = PaginationResp<CartBoothResponse>.Create(
                 pagedBooths,
                 boothGroups.Count,
@@ -72,7 +78,8 @@ public class CartService : ICartService
         var foodItem = await _foodItems.GetForCartAsync(request.FoodItemId, cancellationToken);
         if (foodItem is null)
             throw AppException.NotFound("Food item was not found.", "FOOD_ITEM_NOT_FOUND");
-        EnsureAvailable(foodItem);
+        var utcNow = _timeProvider.GetUtcNow().UtcDateTime;
+        EnsureOrderable(foodItem, utcNow);
 
         var cart = await _carts.GetActiveByCustomerAsync(customerId, cancellationToken)
             ?? await CreateCartAsync(customerId);
@@ -80,7 +87,7 @@ public class CartService : ICartService
             cart.Id,
             foodItem.Id,
             cancellationToken);
-        var now = DateTime.UtcNow;
+        var now = utcNow;
 
         if (cartItem is null)
         {
@@ -111,7 +118,7 @@ public class CartService : ICartService
         await _cartItems.SaveChangesAsync();
 
         return ApiResponse<CartItemResponse>.SuccessResponse(
-            MapItem(cartItem),
+            MapItem(cartItem, utcNow),
             "Item added to cart successfully.");
     }
 
@@ -125,13 +132,17 @@ public class CartService : ICartService
         if (item is null)
             throw AppException.NotFound("Cart item was not found.", "CART_ITEM_NOT_FOUND");
 
+        var utcNow = _timeProvider.GetUtcNow().UtcDateTime;
+        if (request.Quantity > item.Quantity)
+            EnsureOrderable(item.FoodItem, utcNow);
+
         item.Quantity = request.Quantity;
-        item.UpdatedAt = DateTime.UtcNow;
+        item.UpdatedAt = utcNow;
         item.Cart.UpdatedAt = item.UpdatedAt;
         await _cartItems.SaveChangesAsync();
 
         return ApiResponse<CartItemResponse>.SuccessResponse(
-            MapItem(item),
+            MapItem(item, utcNow),
             "Cart item quantity updated successfully.");
     }
 
@@ -223,14 +234,18 @@ public class CartService : ICartService
         return cart;
     }
 
-    private CartBoothResponse MapBooth(Guid boothId, string boothName, IEnumerable<CartItem> boothItems)
+    private CartBoothResponse MapBooth(
+        Guid boothId,
+        string boothName,
+        IEnumerable<CartItem> boothItems,
+        DateTime utcNow)
     {
         var items = boothItems.ToList();
         return new CartBoothResponse
         {
             BoothId = boothId,
             BoothName = boothName,
-            Subtotal = items.Sum(item => GetCurrentPrice(item.FoodItem) * item.Quantity),
+            Subtotal = items.Sum(item => GetCurrentPrice(item.FoodItem, utcNow) * item.Quantity),
             Categories = items
                 .GroupBy(item => new
                 {
@@ -246,34 +261,34 @@ public class CartService : ICartService
                     Items = group
                         .OrderBy(item => item.FoodItem.Name)
                         .ThenBy(item => item.Id)
-                        .Select(MapItem)
+                        .Select(item => MapItem(item, utcNow))
                         .ToList()
                 })
                 .ToList()
         };
     }
 
-    private CartItemResponse MapItem(CartItem item)
+    private CartItemResponse MapItem(CartItem item, DateTime utcNow)
     {
         var response = _mapper.Map<CartItemResponse>(item);
-        response.CurrentUnitPrice = GetCurrentPrice(item.FoodItem);
+        var orderability = CustomerOrderability.Evaluate(item.FoodItem, utcNow);
+        response.CurrentUnitPrice = GetCurrentPrice(item.FoodItem, utcNow);
         response.LineTotal = response.CurrentUnitPrice * item.Quantity;
+        response.CanOrder = orderability.CanOrder;
+        response.ReasonCode = orderability.ReasonCode;
         return response;
     }
 
-    private static decimal GetCurrentPrice(FoodItem foodItem)
-        => FoodPriceResolver.GetCurrentPrice(foodItem, DateTime.UtcNow);
+    private static decimal GetCurrentPrice(FoodItem foodItem, DateTime utcNow)
+        => FoodPriceResolver.GetCurrentPrice(foodItem, utcNow);
 
-    private static void EnsureAvailable(FoodItem foodItem)
+    private static void EnsureOrderable(FoodItem foodItem, DateTime utcNow)
     {
-        if (!foodItem.IsAvailable
-            || foodItem.Category.IsDeleted
-            || foodItem.Booth.Status != BoothStatus.Active)
-        {
+        var result = CustomerOrderability.Evaluate(foodItem, utcNow);
+        if (!result.CanOrder)
             throw AppException.Conflict(
-                "Food item is currently unavailable.",
-                "FOOD_ITEM_UNAVAILABLE");
-        }
+                CustomerOrderability.GetPublicMessage(result.ReasonCode!),
+                result.ReasonCode!);
     }
 
     private static void ValidateQuantity(int quantity)

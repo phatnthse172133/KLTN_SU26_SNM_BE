@@ -41,17 +41,21 @@ public class UpdateCustomerPreferenceRequest
 
 public class FoodDiscoveryRequest
 {
-    [MaxLength(1000)]
+    [MaxLength(500)]
     public string? Query { get; set; }
 
     public IReadOnlyCollection<Guid> SelectedTagIds { get; set; } = [];
+    [Range(typeof(decimal), "1", "100000000")]
     public decimal? BudgetMax { get; set; }
     public Guid? NightMarketId { get; set; }
+    [Range(typeof(decimal), "-90", "90")]
     public decimal? Latitude { get; set; }
+    [Range(typeof(decimal), "-180", "180")]
     public decimal? Longitude { get; set; }
     public bool PreferNearMe { get; set; }
     public string SortBy { get; set; } = "BestMatch";
-    public int Limit { get; set; } = 20;
+    [Range(1, 3)]
+    public int Limit { get; set; } = 3;
 }
 
 public class DiningPlanAssistantRequest
@@ -61,17 +65,19 @@ public class DiningPlanAssistantRequest
     [Range(1, 50)]
     public int GroupSize { get; set; } = 1;
 
-    [Range(0, double.MaxValue)]
+    [Range(typeof(decimal), "1", "100000000")]
     public decimal Budget { get; set; }
 
     public string DiningStyle { get; set; } = "FullMeal";
 
-    [MaxLength(1000)]
+    [MaxLength(500)]
     public string? Query { get; set; }
 
     public IReadOnlyCollection<Guid> PreferredTagIds { get; set; } = [];
     public IReadOnlyCollection<Guid> AvoidTagIds { get; set; } = [];
+    [Range(typeof(decimal), "-90", "90")]
     public decimal? Latitude { get; set; }
+    [Range(typeof(decimal), "-180", "180")]
     public decimal? Longitude { get; set; }
     public bool PreferNearMe { get; set; }
 }

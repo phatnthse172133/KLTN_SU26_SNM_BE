@@ -13,12 +13,14 @@ namespace PresentationLayer.Controllers
     [Obsolete("Use /api/webhooks/payos instead. This endpoint is kept for backward compatibility.")]
     public class WebhookController : ControllerBase
     {
-        private readonly IOrderService _orderService;
+        private readonly IPayOSWebhookDispatcher _dispatcher;
         private readonly ILogger<WebhookController> _logger;
 
-        public WebhookController(IOrderService orderService, ILogger<WebhookController> logger)
+        public WebhookController(
+            IPayOSWebhookDispatcher dispatcher,
+            ILogger<WebhookController> logger)
         {
-            _orderService = orderService;
+            _dispatcher = dispatcher;
             _logger = logger;
         }
 
@@ -26,22 +28,12 @@ namespace PresentationLayer.Controllers
         public async Task<IActionResult> ReceivePayOSWebhook([FromBody] Webhook body)
         {
             var result = await _dispatcher.DispatchAsync(body);
-
-            //var data = bodyReceived.Data;
-
-            //// Kiểm tra xem đây có phải là tín hiệu hoàn tiền hay không
-            //if (!string.IsNullOrEmpty(data.Reference) && data.Reference.StartsWith("refund_"))
-            //{
-            //    _logger.LogInformation($"[Webhook Payout] Nhận tín hiệu xử lý hoàn tiền cho ID: {data.Reference}");
-
-            //    // Gọi hàm xử lý cập nhật trạng thái sang Refunded/Paid (Hàm đã viết ở câu trước)
-            //    var result = await _orderService.ProcessPayoutWebhookAsync(bodyReceived);
-            //    return result ? Ok() : BadRequest("Xử lý webhook Payout thất bại");
-            //}
-
-            // Nếu không phải tín hiệu hoàn tiền, thì đây là tín hiệu thanh toán
-            bool isSuccess = await _orderService.ProcessPaymentWebhookAsync(bodyReceived);
-            return isSuccess ? Ok() : BadRequest("Xử lý webhook Payment thất bại");
+            return result switch
+            {
+                WebhookDispatchResult.InvalidSignature => BadRequest(new { error = -1, message = "Invalid webhook signature." }),
+                WebhookDispatchResult.NotFound => NotFound(new { error = -1, message = "Matching payment is not available yet." }),
+                _ => Ok(new { error = 0, message = "Webhook acknowledged.", result = result.ToString() })
+            };
         }
     }
 }

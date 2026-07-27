@@ -6,6 +6,7 @@ using Moq;
 using ApplicationLayer.Services.Prices;
 using ApplicationLayer.DTOs.Requests;
 using DomainLayer.Entities;
+using DomainLayer.Common;
 using DomainLayer.InterfaceRepository;
 using AutoMapper;
 using System.Collections.Generic;
@@ -244,6 +245,56 @@ public class PriceServiceTests
 
         var ex = await Assert.ThrowsAsync<AppException>(() => _priceService.CreatePackagePriceAsync(packageId, request));
         Assert.Contains("overlaps", ex.Message.ToLower());
+    }
+
+    [Fact]
+    public void FoodPriceResolver_PrefersLatestDatedPriceOverTimelessPrice()
+    {
+        var now = new DateTime(2026, 7, 27, 12, 0, 0, DateTimeKind.Utc);
+        var food = new FoodItem { Price = 50_000m };
+        food.FoodPrices.Add(new FoodPrice
+        {
+            Price = 45_000m,
+            StartDate = null,
+            EndDate = null,
+            CreatedAt = now.AddDays(-10)
+        });
+        food.FoodPrices.Add(new FoodPrice
+        {
+            Price = 35_000m,
+            StartDate = now.AddHours(-1),
+            EndDate = now.AddHours(1),
+            CreatedAt = now.AddHours(-1)
+        });
+
+        Assert.Equal(35_000m, FoodPriceResolver.GetCurrentPrice(food, now));
+    }
+
+    [Fact]
+    public void FoodPriceResolver_UsesActiveInclusiveRange_AndDeterministicCreatedAtTieBreak()
+    {
+        var now = new DateTime(2026, 7, 27, 12, 0, 0, DateTimeKind.Utc);
+        var sameStart = now.AddHours(-1);
+        var food = new FoodItem { Price = 50_000m };
+        food.FoodPrices.Add(new FoodPrice
+        {
+            Price = 10_000m, StartDate = now.AddDays(-2), EndDate = now.AddSeconds(-1), CreatedAt = now.AddDays(-2)
+        });
+        food.FoodPrices.Add(new FoodPrice
+        {
+            Price = 20_000m, StartDate = now.AddSeconds(1), EndDate = now.AddDays(1), CreatedAt = now
+        });
+        food.FoodPrices.Add(new FoodPrice
+        {
+            Price = 40_000m, StartDate = sameStart, EndDate = now, CreatedAt = now.AddMinutes(-2)
+        });
+        food.FoodPrices.Add(new FoodPrice
+        {
+            Price = 30_000m, StartDate = sameStart, EndDate = now, CreatedAt = now.AddMinutes(-1)
+        });
+
+        Assert.Equal(30_000m, FoodPriceResolver.GetCurrentPrice(food, now));
+        Assert.Equal(50_000m, FoodPriceResolver.GetCurrentPrice(food, now.AddDays(2)));
     }
 
 }

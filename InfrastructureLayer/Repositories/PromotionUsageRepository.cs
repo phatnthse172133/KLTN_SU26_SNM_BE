@@ -47,4 +47,29 @@ public class PromotionUsageRepository : GenericRepository<PromotionUsage>, IProm
                 .Where(usage => usage.Status == PromotionUsageStatus.Consumed)
                 .Sum(usage => usage.DiscountAmount));
     }
+
+    public Task<int> ConsumeReservedByOrderAsync(
+        Guid orderId,
+        DateTime updatedAt,
+        CancellationToken cancellationToken = default)
+        => _dbSet
+            .Where(usage => usage.OrderId == orderId
+                && usage.Status == PromotionUsageStatus.Reserved)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(usage => usage.Status, PromotionUsageStatus.Consumed)
+                .SetProperty(usage => usage.UpdatedAt, updatedAt),
+                cancellationToken);
+
+    public Task<int> ReleaseReservedByOrderAsync(
+        Guid orderId,
+        DateTime updatedAt,
+        CancellationToken cancellationToken = default)
+        => _dbSet
+            .Where(usage => usage.OrderId == orderId
+                && usage.Status == PromotionUsageStatus.Reserved)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(usage => usage.Status, PromotionUsageStatus.Released)
+                .SetProperty(usage => usage.ReleasedAt, updatedAt)
+                .SetProperty(usage => usage.UpdatedAt, updatedAt),
+                cancellationToken);
 }

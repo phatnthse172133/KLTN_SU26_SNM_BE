@@ -3,6 +3,7 @@ using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
 using InfrastructureLayer.Data;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using static DomainLayer.Enums.GeneralEnum;
 
 namespace InfrastructureLayer.Repositories;
@@ -26,6 +27,28 @@ public class ComplaintRepository : GenericRepository<Complaint>, IComplaintRepos
     public async Task<Complaint?> GetWithImagesByIdAsync(Guid complaintId)
         => await QueryWithImages()
             .FirstOrDefaultAsync(complaint => complaint.Id == complaintId);
+
+    public Task<Complaint?> GetCustomerWithImagesByIdAsync(Guid customerId, Guid complaintId, CancellationToken cancellationToken = default)
+        => QueryWithImages().AsNoTracking()
+            .FirstOrDefaultAsync(complaint => complaint.Id == complaintId && complaint.CustomerId == customerId, cancellationToken);
+
+    public async Task<bool> TrySaveNewComplaintAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+            return true;
+        }
+        catch (DbUpdateException exception) when (
+            exception.InnerException is PostgresException
+            {
+                SqlState: PostgresErrorCodes.UniqueViolation,
+                ConstraintName: "uq_complaint_active_customer_order_booth"
+            })
+        {
+            return false;
+        }
+    }
 
     public async Task<PagedResult<Complaint>> GetPagedWithImagesAsync(int page, int pageSize, ComplaintStatus? status = null, CancellationToken cancellationToken = default)
     {
@@ -121,6 +144,7 @@ public class ComplaintRepository : GenericRepository<Complaint>, IComplaintRepos
         var totalCount = await query.CountAsync(cancellationToken);
         var items = await query
             .OrderByDescending(x => x.complaint.CreatedAt)
+            .ThenByDescending(x => x.complaint.Id)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(x => x.complaint)
@@ -159,6 +183,7 @@ public class ComplaintRepository : GenericRepository<Complaint>, IComplaintRepos
         var totalCount = await query.CountAsync(cancellationToken);
         var items = await query
             .OrderByDescending(complaint => complaint.CreatedAt)
+            .ThenByDescending(complaint => complaint.Id)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(cancellationToken);

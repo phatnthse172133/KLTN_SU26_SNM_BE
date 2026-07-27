@@ -57,6 +57,8 @@ public class PriceService : IPriceService
 
         var now = DateTime.UtcNow;
         var foodPrice = _mapper.Map<FoodPrice>(request);
+        foodPrice.StartDate = NormalizeUtc(request.StartDate);
+        foodPrice.EndDate = NormalizeUtc(request.EndDate);
         foodPrice.Id = Guid.NewGuid();
         foodPrice.FoodItemId = foodItemId;
         foodPrice.CreatedAt = now;
@@ -78,6 +80,8 @@ public class PriceService : IPriceService
             throw AppException.NotFound("Food price was not found.");
 
         _mapper.Map(request, foodPrice);
+        foodPrice.StartDate = NormalizeUtc(request.StartDate);
+        foodPrice.EndDate = NormalizeUtc(request.EndDate);
         foodPrice.UpdatedAt = DateTime.UtcNow;
 
         _foodPrices.Update(foodPrice);

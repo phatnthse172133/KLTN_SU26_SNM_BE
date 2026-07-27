@@ -78,6 +78,8 @@ public partial class Booth
 
     public virtual ICollection<Complaint> Complaints { get; set; } = new List<Complaint>();
 
+    public virtual ICollection<Conversation> Conversations { get; set; } = new List<Conversation>();
+
     public virtual ICollection<FoodItem> FoodItems { get; set; } = new List<FoodItem>();
 
     public virtual ICollection<FoodCategory> FoodCategories { get; set; } = new List<FoodCategory>();

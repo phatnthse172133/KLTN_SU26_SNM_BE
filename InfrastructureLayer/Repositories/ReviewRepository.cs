@@ -3,6 +3,7 @@ using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
 using InfrastructureLayer.Data;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace InfrastructureLayer.Repositories;
 
@@ -45,6 +46,24 @@ public class ReviewRepository : GenericRepository<Review>, IReviewRepository
     public async Task<bool> ExistsByOrderAsync(Guid orderId)
         => await _dbSet.AnyAsync(review => review.OrderId == orderId);
 
+    public async Task<bool> TrySaveNewReviewAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+            return true;
+        }
+        catch (DbUpdateException exception) when (
+            exception.InnerException is PostgresException
+            {
+                SqlState: PostgresErrorCodes.UniqueViolation,
+                ConstraintName: "uq_review_order"
+            })
+        {
+            return false;
+        }
+    }
+
     public async Task<PagedResult<Review>> GetPagedWithReplyAsync(int page, int pageSize, CancellationToken cancellationToken = default)
         => await ToPagedAsync(QueryWithReply(), page, pageSize, cancellationToken);
 
@@ -84,7 +103,7 @@ public class ReviewRepository : GenericRepository<Review>, IReviewRepository
         }
 
         var ratings = await _dbSet
-            .Where(review => review.BoothId == boothId)
+            .Where(review => review.BoothId == boothId && review.IsVisible)
             .Select(review => review.Rating)
             .ToListAsync();
 
@@ -112,6 +131,7 @@ public class ReviewRepository : GenericRepository<Review>, IReviewRepository
         var totalCount = await query.CountAsync(cancellationToken);
         var items = await query
             .OrderByDescending(review => review.CreatedAt)
+            .ThenByDescending(review => review.Id)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(cancellationToken);

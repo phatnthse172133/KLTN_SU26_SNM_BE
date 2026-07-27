@@ -16,6 +16,8 @@ public interface INotificationService
 
     Task<ApiResponse<UnreadNotificationCountResponse>> GetUnreadCountAsync(Guid userId, CancellationToken cancellationToken = default);
 
+    Task MarkReferenceReadAsync(Guid userId, string referenceType, Guid referenceId, CancellationToken cancellationToken = default);
+
     Task NotifyAsync(NotificationMessage message, CancellationToken cancellationToken = default);
 
     Task NotifyRoleAsync(RoleNotificationMessage message, CancellationToken cancellationToken = default);

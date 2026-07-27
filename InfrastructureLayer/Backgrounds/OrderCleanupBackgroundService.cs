@@ -9,6 +9,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using static DomainLayer.Enums.GeneralEnum;
+using DomainLayer.Common;
+using ApplicationLayer.Services.PayOS;
 
 namespace InfrastructureLayer.Backgrounds
 {
@@ -42,7 +44,7 @@ namespace InfrastructureLayer.Backgrounds
             {
                 try
                 {
-                    await CleanupExpiredOrdersAsync(stoppingToken);
+                    await RunOnceAsync(stoppingToken);
                 }
                 catch (Exception ex)
                 {
@@ -51,50 +53,93 @@ namespace InfrastructureLayer.Backgrounds
             }
         }
 
-        private async Task CleanupExpiredOrdersAsync(CancellationToken stoppingToken)
+        public async Task RunOnceAsync(CancellationToken stoppingToken = default)
         {
             // BackgroundService là Singleton, 
             // nên bắt buộc phải tạo Scope riêng để dùng DbContext (Scoped service)
             using (var scope = _serviceProvider.CreateScope())
             {
                 var dbContext = scope.ServiceProvider.GetRequiredService<SNMDbContext>();
+                var payos = scope.ServiceProvider.GetRequiredService<IPayOSService>();
 
                 // Mốc thời gian ngắt: Hiện tại trừ đi 15 phút
                 var cutoffTime = DateTime.UtcNow.AddMinutes(-_orderTimeoutMinutes);
 
                 // 1. Tìm tất cả đơn hàng Placed tạo trước mốc cutoffTime
+                await using var transaction = await dbContext.Database.BeginTransactionAsync(stoppingToken);
                 var expiredOrders = await dbContext.Orders
+                    .FromSqlInterpolated($@"
+                        SELECT * FROM ""Order""
+                        WHERE ""Status"" IN ('Placed', 'Underpaid')
+                          AND ""CreatedAt"" <= {cutoffTime}
+                        ORDER BY ""CreatedAt""
+                        FOR UPDATE SKIP LOCKED
+                        LIMIT 100")
                     .Include(o => o.Payments)
-                    .Where(o => (o.Status == OrderStatus.Placed)
-                             && o.CreatedAt <= cutoffTime)
+                    .Include(o => o.PromotionUsages)
                     .ToListAsync(stoppingToken);
 
                 if (expiredOrders.Any())
                 {
                     _logger.LogInformation($"[OrderCleanupService] Phát hiện {expiredOrders.Count} đơn hàng quá hạn {_orderTimeoutMinutes} phút. Bắt đầu hủy...");
 
+                    var providerCodesToCancel = new List<long>();
                     foreach (var order in expiredOrders)
                     {
                         // 2. Chuyển trạng thái đơn sang Cancelled
                         order.Status = OrderStatus.Cancelled;
                         order.UpdatedAt = DateTime.UtcNow;
 
+                        PromotionUsageLifecycle.ReleaseReserved(
+                            order.PromotionUsages,
+                            order.UpdatedAt);
+
                         // 3. Nếu có bản ghi Payment Pending tương ứng, hủy luôn Payment
-                        var pendingPayment = order.Payments?.FirstOrDefault(p => p.Status == PaymentStatus.Pending);
-                        if (pendingPayment != null)
+                        foreach (var pendingPayment in order.Payments.Where(p => p.Status == PaymentStatus.Pending))
                         {
                             pendingPayment.Status = PaymentStatus.Cancelled;
                             pendingPayment.UpdatedAt = DateTime.UtcNow;
+                            if (pendingPayment.PayOSOrderCode.HasValue)
+                                providerCodesToCancel.Add(pendingPayment.PayOSOrderCode.Value);
+                        }
+
+                        foreach (var underpaidPayment in order.Payments.Where(p => p.Status == PaymentStatus.Underpaid))
+                        {
+                            underpaidPayment.Status = PaymentStatus.RefundProcessing;
+                            underpaidPayment.RefundAmount = underpaidPayment.Amount;
+                            underpaidPayment.RefundReference = $"refund-{underpaidPayment.Id:N}";
+                            underpaidPayment.RefundReason = "Underpaid order expired before fulfillment.";
+                            underpaidPayment.RefundRequestedAt = DateTime.UtcNow;
+                            underpaidPayment.UpdatedAt = underpaidPayment.RefundRequestedAt.Value;
                         }
                     }
 
                     // 4. Lưu thay đổi xuống Database
                     await dbContext.SaveChangesAsync(stoppingToken);
+                    await transaction.CommitAsync(stoppingToken);
+
+                    foreach (var providerCode in providerCodesToCancel.Distinct())
+                    {
+                        try
+                        {
+                            await payos.CancelPaymentLinkAsync(providerCode);
+                        }
+                        catch (Exception exception)
+                        {
+                            _logger.LogWarning(
+                                exception,
+                                "Expired order was cancelled locally but PayOS link {ProviderOrderCode} could not be cancelled.",
+                                providerCode);
+                        }
+                    }
 
                     _logger.LogInformation($"[OrderCleanupService] Đã hủy thành công {expiredOrders.Count} đơn hàng treo.");
+                }
+                else
+                {
+                    await transaction.CommitAsync(stoppingToken);
                 }
             }
         }
     }
 }
-

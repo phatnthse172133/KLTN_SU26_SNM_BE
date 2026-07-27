@@ -3,11 +3,12 @@ using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.Services.Chats;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace PresentationLayer.Controllers;
 
 [ApiController]
-[Authorize]
+[Authorize(Roles = "Customer,BoothOwner")]
 [Route("api/chats")]
 public class ChatsController : ControllerBase
 {
@@ -22,6 +23,7 @@ public class ChatsController : ControllerBase
         => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
     [HttpPost("customer-booth")]
+    [Authorize(Roles = "Customer")]
     public async Task<IActionResult> CreateCustomerBoothConversation(
         [FromBody] CreateCustomerBoothConversationRequest request,
         CancellationToken cancellationToken)
@@ -60,6 +62,7 @@ public class ChatsController : ControllerBase
             cancellationToken));
 
     [HttpPost("{conversationId:guid}/messages")]
+    [EnableRateLimiting("ChatSendPolicy")]
     public async Task<IActionResult> SendMessage(
         Guid conversationId,
         [FromBody] SendMessageRequest request,

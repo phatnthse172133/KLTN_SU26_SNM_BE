@@ -9,6 +9,7 @@ namespace ApplicationLayer.DTOs.Requests
 {
     public class CreateOrderDto
     {
+        public Guid CheckoutRequestId { get; set; }
         public Guid? CustomerId { get; set; }
         public Guid BoothOwnerId { get; set; }
         public Guid BoothId { get; set; }

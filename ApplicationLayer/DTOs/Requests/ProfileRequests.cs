@@ -27,9 +27,3 @@ public class ChangePasswordRequest
     [Required, Compare(nameof(NewPassword))]
     public string ConfirmNewPassword { get; set; } = string.Empty;
 }
-
-public class UpdateAvatarRequest
-{
-    [Required, Url, StringLength(500)]
-    public string AvatarUrl { get; set; } = string.Empty;
-}

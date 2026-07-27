@@ -21,7 +21,7 @@ public partial class Review
 
     public string? ImageUrl { get; set; }
 
-    // false: Admin ẩn review nhưng vẫn giữ dữ liệu để tính rating
+    // false: Admin hides the review; hidden reviews are excluded from public rating.
     public bool IsVisible { get; set; }
 
     public DateTime CreatedAt { get; set; }

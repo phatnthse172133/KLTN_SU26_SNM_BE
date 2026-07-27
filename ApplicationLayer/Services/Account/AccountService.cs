@@ -1,14 +1,14 @@
 using AutoMapper;
+using System.ComponentModel.DataAnnotations;
 using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
 using DomainLayer.Entities;
-using DomainLayer.InterfaceCore.JWT;
 using DomainLayer.InterfaceRepository;
 using static DomainLayer.Enums.GeneralEnum;
 using ApplicationLayer.Services.Notifications;
-using ApplicationLayer.Services.Auth;
+using ApplicationLayer.Services.Storage;
 
 using Microsoft.Extensions.Logging;
 
@@ -18,23 +18,23 @@ public class AccountService : IAccountService
 {
     private readonly IUserRepository _users;
     private readonly IGenericRepository<Role> _roles;
-    private readonly IPasswordHasher _passwordHasher;
     private readonly IMapper _mapper;
     private readonly INotificationService _notifications;
     private readonly IGenericRepository<UserStatusHistory> _history;
     private readonly IGenericRepository<EmailOutbox> _outbox;
     private readonly ILogger<AccountService> _logger;
+    private readonly IFileStorageService _fileStorage;
 
-    public AccountService(IUserRepository users, IGenericRepository<Role> roles, IPasswordHasher passwordHasher, IMapper mapper, INotificationService notifications, IGenericRepository<UserStatusHistory> history, IGenericRepository<EmailOutbox> outbox, ILogger<AccountService> logger)
+    public AccountService(IUserRepository users, IGenericRepository<Role> roles, IMapper mapper, INotificationService notifications, IGenericRepository<UserStatusHistory> history, IGenericRepository<EmailOutbox> outbox, ILogger<AccountService> logger, IFileStorageService fileStorage)
     {
         _users = users;
         _roles = roles;
-        _passwordHasher = passwordHasher;
         _mapper = mapper;
         _notifications = notifications;
         _history = history;
         _outbox = outbox;
         _logger = logger;
+        _fileStorage = fileStorage;
     }
 
     public async Task<ApiResponse<UserResponse>> GetMyAccountAsync(Guid userId, CancellationToken cancellationToken = default)
@@ -49,57 +49,100 @@ public class AccountService : IAccountService
         if (user is null)
             throw AppException.NotFound("Account was not found.");
 
-        _mapper.Map(request, user);
+        var fullName = request.FullName?.Trim();
+        if (string.IsNullOrWhiteSpace(fullName))
+            throw AppException.BadRequest("Full name is required.", "FULL_NAME_REQUIRED");
+        if (fullName.Length > 150)
+            throw AppException.BadRequest("Full name must not exceed 150 characters.", "FULL_NAME_TOO_LONG");
 
-        user.FullName = user.FullName.Trim();
-        user.Phone = string.IsNullOrWhiteSpace(user.Phone) ? null : user.Phone.Trim();
-        user.Address = string.IsNullOrWhiteSpace(user.Address) ? null : user.Address.Trim();
+        var phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim();
+        if (phone is not null && (phone.Length > 20 || !new PhoneAttribute().IsValid(phone)))
+            throw AppException.BadRequest("Phone number format is invalid.", "PHONE_INVALID");
+
+        var address = string.IsNullOrWhiteSpace(request.Address) ? null : request.Address.Trim();
+        if (address?.Length > 255)
+            throw AppException.BadRequest("Address must not exceed 255 characters.", "ADDRESS_TOO_LONG");
+
+        if (request.DoB is { } dateOfBirth && dateOfBirth > DateOnly.FromDateTime(DateTime.UtcNow))
+            throw AppException.BadRequest("Date of birth cannot be in the future.", "DATE_OF_BIRTH_INVALID");
+
+        // Explicit allow-list: security/account-owned fields can never be mass-assigned.
+        user.FullName = fullName;
+        user.Phone = phone;
+        user.Address = address;
+        user.DoB = request.DoB;
         user.UpdatedAt = DateTime.UtcNow;
 
-        _users.Update(user);
         await _users.SaveChangesAsync();
         return await ToMyAccountResponseAsync(user, "Account updated successfully.");
     }
 
-    public async Task<ApiResponse<UserResponse>> UpdateAvatarAsync(Guid userId, UpdateAvatarRequest request, CancellationToken cancellationToken = default)
+    public async Task<ApiResponse<UserResponse>> UpdateAvatarAsync(
+        Guid userId,
+        Stream stream,
+        string fileName,
+        string contentType,
+        long length,
+        CancellationToken cancellationToken = default)
     {
         var user = await _users.GetByIdAsync(userId);
         if (user is null)
             throw AppException.NotFound("Account was not found.");
 
-        user.AvatarUrl = request.AvatarUrl.Trim();
-        user.UpdatedAt = DateTime.UtcNow;
-        _users.Update(user);
+        string newAvatarUrl;
+        try
+        {
+            newAvatarUrl = await _fileStorage.SaveAvatarAsync(
+                stream, fileName, contentType, length, cancellationToken);
+        }
+        catch (AppException)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Avatar storage failed for user {UserId}.", userId);
+            throw AppException.ServiceUnavailable(
+                "Avatar upload is temporarily unavailable.",
+                "AVATAR_STORAGE_UNAVAILABLE",
+                exception);
+        }
 
-        await _users.SaveChangesAsync();
+        var oldAvatarUrl = user.AvatarUrl;
+        user.AvatarUrl = newAvatarUrl;
+        user.UpdatedAt = DateTime.UtcNow;
+        try
+        {
+            await _users.SaveChangesAsync();
+        }
+        catch
+        {
+            await TryDeleteAvatarAsync(newAvatarUrl, userId, "newly uploaded");
+            throw;
+        }
+
+        await TryDeleteAvatarAsync(oldAvatarUrl, userId, "replaced");
         return await ToMyAccountResponseAsync(user, "Avatar updated successfully.");
     }
 
-    public async Task<ApiResponse<object>> ChangePasswordAsync(Guid userId, ChangePasswordRequest request, CancellationToken cancellationToken = default)
+    private async Task TryDeleteAvatarAsync(string? avatarUrl, Guid userId, string kind)
     {
-        var user = await _users.GetByIdAsync(userId);
-
-        if (user is null)
-            throw AppException.NotFound("Account was not found.", AuthErrorCodes.AccountNotFound);
-
-        if (!_passwordHasher.VerifyPassword(request.CurrentPassword, user.PasswordHash))
-            throw AppException.BadRequest(
-                "Current password is incorrect.",
-                AuthErrorCodes.CurrentPasswordInvalid);
-
-        if (_passwordHasher.VerifyPassword(request.NewPassword, user.PasswordHash))
-            throw AppException.BadRequest(
-                "New password must be different from the current password.",
-                AuthErrorCodes.PasswordReuseNotAllowed);
-
-        user.PasswordHash = _passwordHasher.HashPassword(request.NewPassword);
-        user.RefreshTokenHash = null;
-        user.RefreshTokenExpiresAt = null;
-        user.UpdatedAt = DateTime.UtcNow;
-        _users.Update(user);
-
-        await _users.SaveChangesAsync();
-        return ApiResponse<object>.SuccessResponse(new { }, "Password changed successfully. Please sign in again.");
+        try
+        {
+            await _fileStorage.DeleteAvatarIfManagedAsync(avatarUrl);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(
+                exception,
+                "Failed to delete {AvatarKind} managed avatar for user {UserId}.",
+                kind,
+                userId);
+        }
     }
 
     public async Task<ApiResponse<PaginationResp<ManagedUserResponse>>> GetUsersAsync(UserListQuery query, CancellationToken cancellationToken = default)

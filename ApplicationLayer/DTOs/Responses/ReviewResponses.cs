@@ -27,3 +27,20 @@ public class ReviewReplyResponse
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }
+
+public class CustomerReviewHistoryResponse
+{
+    public Guid ReviewId { get; set; }
+    public Guid OrderId { get; set; }
+    public string? OrderCode { get; set; }
+    public Guid BoothId { get; set; }
+    public string? BoothName { get; set; }
+    public short Rating { get; set; }
+    public string? Content { get; set; }
+    public string? ImageUrl { get; set; }
+    public bool IsVisible { get; set; }
+    public bool HasReply { get; set; }
+    public CustomerReviewReplyResponse? Reply { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+}

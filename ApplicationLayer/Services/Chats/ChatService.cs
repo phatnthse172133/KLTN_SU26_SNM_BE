@@ -3,9 +3,11 @@ using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
 using ApplicationLayer.Mappings;
+using ApplicationLayer.Services.Notifications;
 using AutoMapper;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
+using Microsoft.Extensions.Logging;
 using static DomainLayer.Enums.GeneralEnum;
 
 namespace ApplicationLayer.Services.Chats;
@@ -18,19 +20,25 @@ public class ChatService : IChatService
     private readonly IBoothRepository _booths;
     private readonly IMapper _mapper;
     private readonly IRealtimeChatPublisher _realtime;
+    private readonly INotificationService _notifications;
+    private readonly ILogger<ChatService> _logger;
 
     public ChatService(
         IConversationRepository conversations,
         IMessageRepository messages,
         IBoothRepository booths,
         IMapper mapper,
-        IRealtimeChatPublisher realtime)
+        IRealtimeChatPublisher realtime,
+        INotificationService notifications,
+        ILogger<ChatService> logger)
     {
         _conversations = conversations;
         _messages = messages;
         _booths = booths;
         _mapper = mapper;
         _realtime = realtime;
+        _notifications = notifications;
+        _logger = logger;
     }
 
     public async Task<ApiResponse<ConversationResponse>> CreateCustomerBoothConversationAsync(
@@ -38,15 +46,11 @@ public class ChatService : IChatService
         CreateCustomerBoothConversationRequest request,
         CancellationToken cancellationToken = default)
     {
+        if (!await _booths.CustomerVisibleExistsAsync(request.BoothId, cancellationToken))
+            throw AppException.NotFound("Booth was not found.", "BOOTH_NOT_FOUND");
+
         var booth = await _booths.GetByIdAsync(request.BoothId)
             ?? throw AppException.NotFound("Booth was not found.", "BOOTH_NOT_FOUND");
-
-        if (booth.Status != BoothStatus.Active)
-        {
-            throw AppException.BadRequest(
-                "Cannot start a conversation with an inactive booth.",
-                "CHAT_BOOTH_INACTIVE");
-        }
 
         if (booth.BoothOwnerId == userId)
         {
@@ -55,39 +59,16 @@ public class ChatService : IChatService
                 "CHAT_SELF_CONVERSATION");
         }
 
-        var existing = await _conversations.GetByParticipantsAsync(
+        var (conversation, created) = await _conversations.GetOrCreateCustomerBoothAsync(
             userId,
-            booth.BoothOwnerId,
+            booth.Id,
+            DateTime.UtcNow,
             cancellationToken);
-        if (existing is not null)
-        {
-            var unreadCount = await GetUnreadCountAsync(existing, userId, cancellationToken);
-            return ApiResponse<ConversationResponse>.SuccessResponse(
-                ToConversationResponse(existing, unreadCount));
-        }
-
-        var now = DateTime.UtcNow;
-        var conversation = new Conversation
-        {
-            Id = Guid.NewGuid(),
-            CustomerId = userId,
-            BoothOwnerId = booth.BoothOwnerId,
-            Status = ConversationStatus.Active,
-            CreatedAt = now,
-            UpdatedAt = now
-        };
-
-        await _conversations.AddAsync(conversation);
-        await _conversations.SaveChangesAsync();
-
-        var created = await _conversations.GetOwnedWithUsersAsync(
-            conversation.Id,
-            userId,
-            cancellationToken) ?? conversation;
+        var unreadCount = await GetUnreadCountAsync(conversation, userId, cancellationToken);
 
         return ApiResponse<ConversationResponse>.SuccessResponse(
-            ToConversationResponse(created, 0),
-            "Conversation created successfully.");
+            ToConversationResponse(conversation, unreadCount),
+            created ? "Conversation created successfully." : "Conversation already exists.");
     }
 
     public async Task<ApiResponse<PaginationResp<ConversationResponse>>> GetConversationsAsync(
@@ -100,11 +81,8 @@ public class ChatService : IChatService
             request.Page,
             request.PageSize,
             cancellationToken);
-        var readTimes = page.Items.ToDictionary(
-            conversation => conversation.Id,
-            conversation => GetLastReadAt(conversation, userId));
         var unreadCounts = await _messages.CountUnreadByConversationIdsAsync(
-            readTimes,
+            page.Items.Select(conversation => conversation.Id).ToList(),
             userId,
             cancellationToken);
 
@@ -154,14 +132,15 @@ public class ChatService : IChatService
         SendMessageRequest request,
         CancellationToken cancellationToken = default)
     {
-        var content = NormalizeContent(request.Content);
-        var conversation = await GetOwnedConversationAsync(userId, conversationId, cancellationToken);
-        if (conversation.Status != ConversationStatus.Active)
+        if (request.Type != MessageType.Text)
         {
             throw AppException.BadRequest(
-                "Conversation is not active.",
-                "CHAT_CONVERSATION_CLOSED");
+                "Only text messages are supported.",
+                "CHAT_MESSAGE_TYPE_UNSUPPORTED");
         }
+
+        var content = NormalizeContent(request.Content);
+        var conversation = await GetOwnedConversationAsync(userId, conversationId, cancellationToken);
 
         if (request.ClientMessageId.HasValue)
         {
@@ -178,10 +157,32 @@ public class ChatService : IChatService
                         "CHAT_CLIENT_MESSAGE_ID_CONFLICT");
                 }
 
+                if (duplicated.Type != request.Type
+                    || !string.Equals(duplicated.Content, content, StringComparison.Ordinal))
+                {
+                    throw AppException.Conflict(
+                        "ClientMessageId was reused with different message content.",
+                        "CHAT_CLIENT_MESSAGE_ID_PAYLOAD_CONFLICT");
+                }
+
                 return ApiResponse<MessageResponse>.SuccessResponse(
                     _mapper.Map<MessageResponse>(duplicated),
                     "Message already exists.");
             }
+        }
+
+        if (conversation.Status != ConversationStatus.Active)
+        {
+            throw AppException.BadRequest(
+                "Conversation is not active.",
+                "CHAT_CONVERSATION_CLOSED");
+        }
+
+        if (!await _booths.CustomerVisibleExistsAsync(conversation.BoothId, cancellationToken))
+        {
+            throw AppException.BadRequest(
+                "Messages cannot be sent while the booth is unavailable.",
+                "CHAT_BOOTH_UNAVAILABLE");
         }
 
         var now = DateTime.UtcNow;
@@ -208,7 +209,30 @@ public class ChatService : IChatService
 
         var created = await _messages.GetOwnedAsync(message.Id, userId, cancellationToken) ?? message;
         var response = _mapper.Map<MessageResponse>(created);
-        await _realtime.PublishMessageCreatedAsync(conversationId, response, cancellationToken);
+        await RunPostCommitSafelyAsync(
+            () => _realtime.PublishMessageCreatedAsync(
+                conversationId,
+                response,
+                CancellationToken.None),
+            "realtime message delivery",
+            message.Id);
+
+        var receiverId = conversation.CustomerId == userId
+            ? conversation.Booth.BoothOwnerId
+            : conversation.CustomerId;
+        await RunPostCommitSafelyAsync(
+            () => _notifications.NotifyAsync(
+                new NotificationMessage(
+                    receiverId,
+                    NotificationType.NewMessage,
+                    "New chat message",
+                    $"You have a new message from {response.SenderName}.",
+                    conversation.BoothId,
+                    "Conversation",
+                    conversation.Id),
+                CancellationToken.None),
+            "chat notification creation",
+            message.Id);
 
         return ApiResponse<MessageResponse>.SuccessResponse(
             response,
@@ -236,7 +260,22 @@ public class ChatService : IChatService
             now,
             cancellationToken);
         await _conversations.SaveChangesAsync();
-        await _realtime.PublishConversationReadAsync(conversationId, userId, now, cancellationToken);
+        await RunPostCommitSafelyAsync(
+            () => _notifications.MarkReferenceReadAsync(
+                userId,
+                "Conversation",
+                conversationId,
+                CancellationToken.None),
+            "chat notification read synchronization",
+            conversationId);
+        await RunPostCommitSafelyAsync(
+            () => _realtime.PublishConversationReadAsync(
+                conversationId,
+                userId,
+                now,
+                CancellationToken.None),
+            "read receipt delivery",
+            conversationId);
 
         return ApiResponse<object>.SuccessResponse(
             new { UpdatedCount = updatedCount },
@@ -277,12 +316,15 @@ public class ChatService : IChatService
         }
 
         await _messages.SaveChangesAsync();
-        await _realtime.PublishMessageDeletedAsync(
-            message.ConversationId,
-            message.Id,
-            userId,
-            now,
-            cancellationToken);
+        await RunPostCommitSafelyAsync(
+            () => _realtime.PublishMessageDeletedAsync(
+                message.ConversationId,
+                message.Id,
+                userId,
+                now,
+                CancellationToken.None),
+            "message deletion delivery",
+            message.Id);
     }
 
     public async Task<bool> IsParticipantAsync(
@@ -307,13 +349,7 @@ public class ChatService : IChatService
         => await _messages.CountUnreadAsync(
             conversation.Id,
             userId,
-            GetLastReadAt(conversation, userId),
             cancellationToken);
-
-    private static DateTime? GetLastReadAt(Conversation conversation, Guid userId)
-        => conversation.CustomerId == userId
-            ? conversation.CustomerLastReadAt
-            : conversation.BoothOwnerLastReadAt;
 
     private ConversationResponse ToConversationResponse(Conversation conversation, int unreadCount)
     {
@@ -346,4 +382,23 @@ public class ChatService : IChatService
         => conversation.CustomerId == userId
             ? ConversationParticipantRole.Customer
             : ConversationParticipantRole.BoothOwner;
+
+    private async Task RunPostCommitSafelyAsync(
+        Func<Task> action,
+        string operation,
+        Guid resourceId)
+    {
+        try
+        {
+            await action();
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(
+                exception,
+                "Chat {Operation} failed for resource {ResourceId}; persisted chat data was retained.",
+                operation,
+                resourceId);
+        }
+    }
 }

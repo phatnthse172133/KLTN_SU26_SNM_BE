@@ -8,6 +8,7 @@ public class CartResponse
     public long TotalItemCount { get; set; }
     public PaginationResp<CartBoothResponse> Booths { get; set; } = new();
     public decimal TotalAmount { get; set; }
+    public bool CanCheckout { get; set; }
 }
 
 public class CartBoothResponse
@@ -35,4 +36,6 @@ public class CartItemResponse
     public decimal CurrentUnitPrice { get; set; }
     public decimal LineTotal { get; set; }
     public bool IsAvailable { get; set; }
+    public bool CanOrder { get; set; }
+    public string? ReasonCode { get; set; }
 }

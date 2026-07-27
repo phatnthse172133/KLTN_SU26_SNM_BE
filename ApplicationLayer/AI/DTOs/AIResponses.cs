@@ -43,8 +43,12 @@ public class FoodDiscoveryItemResponse
     public string NightMarketName { get; set; } = string.Empty;
     public string? ZoneName { get; set; }
     public string? BoothSlotCode { get; set; }
-    public decimal Rating { get; set; }
+    public decimal BoothRating { get; set; }
+    public bool CanOrder { get; set; }
+    public double? DistanceMeters { get; set; }
     public int MatchScore { get; set; }
+    public IReadOnlyCollection<string> MatchedPreferences { get; set; } = [];
+    public bool IsFallback { get; set; }
     public string Reason { get; set; } = string.Empty;
     public IReadOnlyCollection<string> Tags { get; set; } = [];
 }
@@ -102,9 +106,12 @@ public class DiningPlanOptionResponse
     public string Label { get; set; } = string.Empty;
     public Guid NightMarketId { get; set; }
     public string NightMarketName { get; set; } = string.Empty;
+    public int GroupSize { get; set; }
     public int MatchScore { get; set; }
     public decimal EstimatedTotal { get; set; }
     public decimal Budget { get; set; }
+    public decimal RemainingBudget { get; set; }
+    public double? DistanceMeters { get; set; }
     public IReadOnlyCollection<DiningPlanItemResponse> PlanPreview { get; set; } = [];
     public string Reason { get; set; } = string.Empty;
 }
@@ -125,6 +132,7 @@ public class DiningPlanReadyResponse
     public int GroupSize { get; set; }
     public decimal Budget { get; set; }
     public decimal EstimatedTotal { get; set; }
+    public decimal RemainingBudget { get; set; }
     public IReadOnlyCollection<DiningPlanItemResponse> PlanItems { get; set; } = [];
     public string Reason { get; set; } = string.Empty;
 }

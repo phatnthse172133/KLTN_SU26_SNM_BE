@@ -2,6 +2,7 @@ using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
 using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.Services.NightMarkets;
+using ApplicationLayer.Services.CustomerDiscovery;
 using ApplicationLayer.Services.Subscriptions;
 using AutoMapper;
 using DomainLayer.Common;
@@ -188,6 +189,155 @@ public sealed class NightMarketCustomerTests
 
         Assert.Equal(activeBooth.Id, Assert.Single(boothResult.Items).Id);
         Assert.Equal(25_000m, Assert.Single(foodResult.Items).Price);
+    }
+
+    [Fact]
+    public async Task CustomerFoodQuery_UsesSameEffectivePriceForListAndDetail()
+    {
+        await using var context = CreateContext();
+        var market = CreateMarket("Visible market", NightMarketStatus.Open);
+        market.OpeningHours = new TimeOnly(18, 0);
+        market.ClosingHours = new TimeOnly(23, 0);
+        var booth = CreateBooth(market.Id, BoothStatus.Active);
+        booth.OpenTime = new TimeOnly(20, 0);
+        booth.CloseTime = new TimeOnly(2, 0);
+        var category = new FoodCategory
+        {
+            Id = Guid.NewGuid(), BoothId = booth.Id, Name = "Drinks",
+            CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
+        };
+        var food = new FoodItem
+        {
+            Id = Guid.NewGuid(), BoothId = booth.Id, CategoryId = category.Id,
+            Name = "Special tea", Price = 20_000m, IsAvailable = true,
+            CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
+        };
+        food.FoodPrices.Add(new FoodPrice
+        {
+            Id = Guid.NewGuid(), FoodItemId = food.Id, Price = 15_000m,
+            StartDate = DateTime.UtcNow.AddHours(-1), EndDate = DateTime.UtcNow.AddHours(1),
+            CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
+        });
+        category.FoodItems.Add(food);
+        booth.FoodCategories.Add(category);
+        market.Booths.Add(booth);
+        context.NightMarkets.Add(market);
+        await context.SaveChangesAsync();
+
+        var result = await new FoodItemRepository(context).GetCustomerPagedAsync(
+            market.Id, booth.Id, null, " special ", 15_000m, 15_000m, false,
+            DateTime.UtcNow, new TimeOnly(21, 0), 1, 10, "priceAsc");
+        var orderableDuringIntersection = await new FoodItemRepository(context).GetCustomerPagedAsync(
+            market.Id, booth.Id, null, null, null, null, true,
+            DateTime.UtcNow, new TimeOnly(21, 0), 1, 10, "featured");
+        var orderableAfterMarketClose = await new FoodItemRepository(context).GetCustomerPagedAsync(
+            market.Id, booth.Id, null, null, null, null, true,
+            DateTime.UtcNow, new TimeOnly(1, 0), 1, 10, "featured");
+        var item = Assert.Single(result.Items);
+        var detail = await new FoodItemRepository(context).GetCustomerByIdAsync(food.Id, DateTime.UtcNow);
+
+        Assert.True(item.IsAvailable);
+        Assert.Equal(15_000m, item.EffectivePrice);
+        Assert.Equal(item.EffectivePrice, Assert.IsType<CustomerFoodReadModel>(detail).EffectivePrice);
+        Assert.True(item.IsAvailable && CustomerAvailability.IsOpenNow(item, new TimeOnly(21, 0)));
+        Assert.Single(orderableDuringIntersection.Items);
+        Assert.Empty(orderableAfterMarketClose.Items);
+    }
+
+    [Fact]
+    public async Task CustomerDirectQueries_BlockHiddenParents()
+    {
+        await using var context = CreateContext();
+        var market = CreateMarket("Suspended market", NightMarketStatus.Open);
+        market.ModerationStatus = ModerationStatus.Suspended;
+        var booth = CreateBooth(market.Id, BoothStatus.Active);
+        var category = new FoodCategory
+        {
+            Id = Guid.NewGuid(), BoothId = booth.Id, Name = "Hidden menu",
+            CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
+        };
+        var food = new FoodItem
+        {
+            Id = Guid.NewGuid(), BoothId = booth.Id, CategoryId = category.Id,
+            Name = "Hidden food", Price = 10_000m, IsAvailable = true,
+            CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
+        };
+        category.FoodItems.Add(food);
+        booth.FoodCategories.Add(category);
+        market.Booths.Add(booth);
+        context.NightMarkets.Add(market);
+        await context.SaveChangesAsync();
+
+        Assert.Null(await new BoothRepository(context).GetCustomerByIdAsync(booth.Id));
+        Assert.Null(await new FoodItemRepository(context).GetCustomerByIdAsync(food.Id, DateTime.UtcNow));
+
+        var visibleMarket = CreateMarket("Visible market", NightMarketStatus.Open);
+        var visibleBooth = CreateBooth(visibleMarket.Id, BoothStatus.Active);
+        var visibleCategory = new FoodCategory
+        {
+            Id = Guid.NewGuid(), BoothId = visibleBooth.Id, Name = "Visible category",
+            CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
+        };
+        var hiddenFood = new FoodItem
+        {
+            Id = Guid.NewGuid(), BoothId = visibleBooth.Id, CategoryId = visibleCategory.Id,
+            Name = "Temporarily hidden food", Price = 10_000m, IsAvailable = false,
+            CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
+        };
+        var visibleFood = new FoodItem
+        {
+            Id = Guid.NewGuid(), BoothId = visibleBooth.Id, CategoryId = visibleCategory.Id,
+            Name = "Visible food", Price = 12_000m, IsAvailable = true,
+            CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
+        };
+        visibleCategory.FoodItems.Add(hiddenFood);
+        visibleCategory.FoodItems.Add(visibleFood);
+        visibleBooth.FoodCategories.Add(visibleCategory);
+        visibleMarket.Booths.Add(visibleBooth);
+
+        var inactiveBooth = CreateBooth(visibleMarket.Id, BoothStatus.Inactive);
+        var inactiveCategory = new FoodCategory
+        {
+            Id = Guid.NewGuid(), BoothId = inactiveBooth.Id, Name = "Inactive booth category",
+            CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
+        };
+        var inactiveBoothFood = new FoodItem
+        {
+            Id = Guid.NewGuid(), BoothId = inactiveBooth.Id, CategoryId = inactiveCategory.Id,
+            Name = "Food under inactive booth", Price = 10_000m, IsAvailable = true,
+            CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
+        };
+        inactiveCategory.FoodItems.Add(inactiveBoothFood);
+        inactiveBooth.FoodCategories.Add(inactiveCategory);
+        visibleMarket.Booths.Add(inactiveBooth);
+        context.NightMarkets.Add(visibleMarket);
+        await context.SaveChangesAsync();
+
+        Assert.Null(await new FoodItemRepository(context).GetCustomerByIdAsync(hiddenFood.Id, DateTime.UtcNow));
+        Assert.Null(await new BoothRepository(context).GetCustomerByIdAsync(inactiveBooth.Id));
+        Assert.Null(await new FoodItemRepository(context).GetCustomerByIdAsync(inactiveBoothFood.Id, DateTime.UtcNow));
+
+        visibleMarket.IsDeleted = true;
+        await context.SaveChangesAsync();
+        Assert.Null(await new BoothRepository(context).GetCustomerByIdAsync(visibleBooth.Id));
+        Assert.Null(await new FoodItemRepository(context).GetCustomerByIdAsync(visibleFood.Id, DateTime.UtcNow));
+    }
+
+    [Fact]
+    public void CustomerAvailability_SupportsInheritedAndOvernightSchedules()
+    {
+        Assert.True(CustomerAvailability.IsOpenNow(
+            true, new TimeOnly(18, 0), new TimeOnly(23, 0), null, null, new TimeOnly(19, 0)));
+        Assert.True(CustomerAvailability.IsOpenNow(
+            true, new TimeOnly(18, 0), new TimeOnly(23, 0), new TimeOnly(20, 0), new TimeOnly(2, 0), new TimeOnly(21, 0)));
+        Assert.False(CustomerAvailability.IsOpenNow(
+            true, new TimeOnly(18, 0), new TimeOnly(23, 0), new TimeOnly(20, 0), new TimeOnly(2, 0), new TimeOnly(1, 0)));
+        Assert.False(CustomerAvailability.IsOpenNow(
+            true, new TimeOnly(18, 0), new TimeOnly(23, 0), new TimeOnly(20, 0), null, new TimeOnly(21, 0)));
+        Assert.False(CustomerAvailability.IsOpenNow(
+            false, new TimeOnly(18, 0), new TimeOnly(23, 0), null, null, new TimeOnly(19, 0)));
+        Assert.False(CustomerAvailability.IsOpenNow(
+            true, new TimeOnly(18, 0), new TimeOnly(18, 0), null, null, new TimeOnly(18, 0)));
     }
 
     [Fact]

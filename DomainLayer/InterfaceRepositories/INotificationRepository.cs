@@ -26,6 +26,13 @@ public interface INotificationRepository : IGenericRepository<Notification>
         DateTime readAt,
         CancellationToken cancellationToken = default);
 
+    Task<int> MarkReferenceAsReadAsync(
+        Guid userId,
+        string referenceType,
+        Guid referenceId,
+        DateTime readAt,
+        CancellationToken cancellationToken = default);
+
     Task<PagedResult<Notification>> GetAdminPagedBatchesAsync(
         string? keyword,
         NotificationTarget? target,

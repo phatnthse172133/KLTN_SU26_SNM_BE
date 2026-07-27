@@ -8,6 +8,7 @@ public interface IReviewRepository : IGenericRepository<Review>
     Task<Review?> GetWithReplyByIdAsync(Guid reviewId);
     Task<ReviewReply> UpsertReplyAsync(Guid reviewId, Guid boothOwnerId, string content);
     Task<bool> ExistsByOrderAsync(Guid orderId);
+    Task<bool> TrySaveNewReviewAsync(CancellationToken cancellationToken = default);
     Task<PagedResult<Review>> GetPagedWithReplyAsync(int page, int pageSize, CancellationToken cancellationToken = default);
     Task<PagedResult<Review>> GetPagedWithReplyFilteredAsync(int page, int pageSize, short? rating, bool? isVisible, Guid? boothId, string? keyword, CancellationToken cancellationToken = default);
     Task<PagedResult<Review>> GetPagedByCustomerWithReplyAsync(Guid customerId, int page, int pageSize, CancellationToken cancellationToken = default);

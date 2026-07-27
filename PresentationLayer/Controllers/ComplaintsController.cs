@@ -33,6 +33,11 @@ public class ComplaintsController : ControllerBase
     public async Task<IActionResult> GetMine([FromQuery] PaginationReq pagination, CancellationToken cancellationToken)
         => Ok(await _service.GetMineAsync(CurrentUserId, pagination, cancellationToken));
 
+    [Authorize(Roles = "Customer")]
+    [HttpGet("mine/{complaintId:guid}")]
+    public async Task<IActionResult> GetMineDetail(Guid complaintId, CancellationToken cancellationToken)
+        => Ok(await _service.GetMineDetailAsync(CurrentUserId, complaintId, cancellationToken));
+
     [Authorize(Roles = "Admin")]
     [HttpGet]
     public async Task<IActionResult> GetAll([FromQuery] AdminComplaintQueryRequest query, CancellationToken cancellationToken)

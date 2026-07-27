@@ -34,7 +34,9 @@ namespace PresentationLayer.Controllers
 
                 case WebhookDispatchResult.NotFound:
                     _logger.LogWarning("PayOS webhook: order code not found or unknown prefix.");
-                    return Ok(new { error = 0, message = "Webhook acknowledged but no matching record found." });
+                    // A link can be created immediately before its local transaction
+                    // commits. Non-2xx asks PayOS to retry instead of losing that event.
+                    return NotFound(new { error = -1, message = "Matching payment is not available yet." });
 
                 case WebhookDispatchResult.NotSuccessful:
                     _logger.LogInformation("PayOS webhook: payment not successful.");

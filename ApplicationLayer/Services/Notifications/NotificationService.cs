@@ -110,6 +110,25 @@ public class NotificationService : INotificationService
             "All notifications marked as read.");
     }
 
+    public async Task MarkReferenceReadAsync(
+        Guid userId,
+        string referenceType,
+        Guid referenceId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(referenceType))
+            return;
+
+        var updatedCount = await _notifications.MarkReferenceAsReadAsync(
+            userId,
+            referenceType.Trim(),
+            referenceId,
+            DateTime.UtcNow,
+            cancellationToken);
+        if (updatedCount > 0)
+            await PublishUnreadCountSafelyAsync(userId, cancellationToken);
+    }
+
     public async Task<ApiResponse<UnreadNotificationCountResponse>> GetUnreadCountAsync(
         Guid userId,
         CancellationToken cancellationToken = default)

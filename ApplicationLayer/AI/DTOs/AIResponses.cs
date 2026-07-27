@@ -36,6 +36,10 @@ public class FoodDiscoveryItemResponse
     public Guid FoodItemId { get; set; }
     public string FoodName { get; set; } = string.Empty;
     public string? ImageUrl { get; set; }
+    public decimal BasePrice { get; set; }
+    public decimal EffectivePrice { get; set; }
+    // Backward-compatible alias for EffectivePrice. New consumers should use
+    // BasePrice and EffectivePrice so discount presentation is unambiguous.
     public decimal Price { get; set; }
     public Guid BoothId { get; set; }
     public string BoothName { get; set; } = string.Empty;

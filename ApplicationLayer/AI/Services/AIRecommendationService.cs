@@ -131,6 +131,7 @@ public class AIRecommendationService : IAIRecommendationService
             cancellationToken);
 
         var candidates = await _foodItems.GetAiCandidatesAsync(request.NightMarketId, GetCandidateLimit(), cancellationToken);
+        var basePrices = candidates.ToDictionary(item => item.Id, item => item.Price);
         ApplyEffectivePrices(candidates);
         var marketDistances = candidates
             .GroupBy(item => item.Booth.NightMarketId)
@@ -145,7 +146,7 @@ public class AIRecommendationService : IAIRecommendationService
         var scored = candidates
             .Where(item => !request.NightMarketId.HasValue || item.Booth.NightMarketId == request.NightMarketId.Value)
             .Where(item => !intent.BudgetMax.HasValue || item.Price <= intent.BudgetMax.Value)
-            .Select(item => ToDiscoveryItem(item, intent, marketDistances))
+            .Select(item => ToDiscoveryItem(item, basePrices[item.Id], intent, marketDistances))
             .Where(item => item.MatchScore > 0)
             .ToList();
 
@@ -626,6 +627,7 @@ public class AIRecommendationService : IAIRecommendationService
 
     private FoodDiscoveryItemResponse ToDiscoveryItem(
         FoodItem item,
+        decimal basePrice,
         ResolvedIntent intent,
         IReadOnlyDictionary<Guid, double?> marketDistances)
     {
@@ -656,6 +658,8 @@ public class AIRecommendationService : IAIRecommendationService
             FoodItemId = item.Id,
             FoodName = item.Name,
             ImageUrl = item.ThumbnailUrl,
+            BasePrice = basePrice,
+            EffectivePrice = item.Price,
             Price = item.Price,
             BoothId = item.BoothId,
             BoothName = item.Booth.BoothName,

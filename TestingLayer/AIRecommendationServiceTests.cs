@@ -288,8 +288,93 @@ public class AIRecommendationServiceTests
 
         var item = Assert.Single(result.Data!.Results);
         Assert.Equal(affordable.Id, item.FoodItemId);
+        Assert.Equal(90_000m, item.BasePrice);
+        Assert.Equal(90_000m, item.EffectivePrice);
         Assert.Equal(90_000m, item.Price);
         Assert.Equal(100_000m, result.Data.ParsedIntent.BudgetMax);
+    }
+
+    [Fact]
+    public async Task FoodDiscovery_NoDiscountReturnsEqualBaseEffectiveAndLegacyPrices()
+    {
+        var tag = Tag("MILD");
+        var food = Food(50_000m, tag);
+        var service = CreateService([tag], [food], new FoodIntentDto());
+
+        var result = await service.FoodDiscoveryAsync(Guid.NewGuid(), new FoodDiscoveryRequest());
+
+        var item = Assert.Single(result.Data!.Results);
+        Assert.Equal(50_000m, item.BasePrice);
+        Assert.Equal(50_000m, item.EffectivePrice);
+        Assert.Equal(item.EffectivePrice, item.Price);
+    }
+
+    [Fact]
+    public async Task PersonalizedRecommendations_RealDiscountReturnsTruthfulPriceContract()
+    {
+        var tag = Tag("GRILLED");
+        var food = Food(55_000m, tag);
+        food.FoodPrices.Add(new FoodPrice
+        {
+            Id = Guid.NewGuid(),
+            Price = 49_000m,
+            StartDate = DateTime.UtcNow.AddDays(-1),
+            EndDate = DateTime.UtcNow.AddDays(1),
+            CreatedAt = DateTime.UtcNow
+        });
+        var service = CreateService([tag], [food], new FoodIntentDto());
+
+        var result = await service.GetPersonalizedRecommendationsAsync(Guid.NewGuid());
+
+        var item = Assert.Single(result.Data!.Results);
+        Assert.Equal(55_000m, item.BasePrice);
+        Assert.Equal(49_000m, item.EffectivePrice);
+        Assert.Equal(item.EffectivePrice, item.Price);
+
+        using var json = JsonDocument.Parse(JsonSerializer.Serialize(
+            result.Data,
+            new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        var serializedItem = json.RootElement.GetProperty("results")[0];
+        Assert.Equal(55_000m, serializedItem.GetProperty("basePrice").GetDecimal());
+        Assert.Equal(49_000m, serializedItem.GetProperty("effectivePrice").GetDecimal());
+        Assert.Equal(49_000m, serializedItem.GetProperty("price").GetDecimal());
+    }
+
+    [Fact]
+    public async Task FoodDiscovery_PriceLowToHighOrderingStillUsesEffectivePrice()
+    {
+        var tag = Tag("MILD");
+        var discounted = Food(60_000m, tag);
+        discounted.FoodPrices.Add(new FoodPrice
+        {
+            Id = Guid.NewGuid(),
+            Price = 40_000m,
+            StartDate = DateTime.UtcNow.AddDays(-1),
+            EndDate = DateTime.UtcNow.AddDays(1),
+            CreatedAt = DateTime.UtcNow
+        });
+        var regular = Food(50_000m, tag);
+        var service = CreateService([tag], [regular, discounted], new FoodIntentDto());
+
+        var result = await service.FoodDiscoveryAsync(Guid.NewGuid(), new FoodDiscoveryRequest
+        {
+            SortBy = "PriceLowToHigh",
+            Limit = 3
+        });
+
+        Assert.Equal([discounted.Id, regular.Id], result.Data!.Results.Select(item => item.FoodItemId));
+        Assert.Collection(
+            result.Data.Results,
+            item =>
+            {
+                Assert.Equal(60_000m, item.BasePrice);
+                Assert.Equal(40_000m, item.EffectivePrice);
+            },
+            item =>
+            {
+                Assert.Equal(50_000m, item.BasePrice);
+                Assert.Equal(50_000m, item.EffectivePrice);
+            });
     }
 
     [Fact]

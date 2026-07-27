@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using ApplicationLayer.AI.DTOs;
 using ApplicationLayer.AI.Services;
+using ApplicationLayer.Helppers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -30,12 +31,12 @@ public class AIController : ControllerBase
 
     [HttpGet("recommendations/me")]
     [Authorize(Roles = "Customer")]
-    public async Task<IActionResult> PersonalizedRecommendations(CancellationToken cancellationToken)
+    public async Task<ActionResult<ApiResponse<FoodDiscoveryResponse>>> PersonalizedRecommendations(CancellationToken cancellationToken)
         => Ok(await _service.GetPersonalizedRecommendationsAsync(CurrentUserId, cancellationToken));
 
     [HttpPost("food-discovery")]
     [Authorize(Roles = "Customer")]
-    public async Task<IActionResult> FoodDiscovery(FoodDiscoveryRequest request, CancellationToken cancellationToken)
+    public async Task<ActionResult<ApiResponse<FoodDiscoveryResponse>>> FoodDiscovery(FoodDiscoveryRequest request, CancellationToken cancellationToken)
         => Ok(await _service.FoodDiscoveryAsync(CurrentUserId, request, cancellationToken));
 
     [HttpPost("dining-plan-assistant")]

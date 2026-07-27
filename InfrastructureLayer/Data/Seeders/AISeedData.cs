@@ -1,5 +1,7 @@
 using DomainLayer.Entities;
+using DomainLayer.InterfaceCore.JWT;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using static DomainLayer.Enums.GeneralEnum;
@@ -49,7 +51,8 @@ public static class AISeedData
     private static readonly Guid CustomerRoleId = Guid.Parse("22222222-2222-2222-2222-222222222001");
     private static readonly Guid BoothOwnerRoleId = Guid.Parse("22222222-2222-2222-2222-222222222002");
     private static readonly Guid DemoCustomerId = Guid.Parse("22222222-2222-2222-2222-222222222101");
-    private const string DemoPasswordHash = "SNM_DEMO_HASH_REPLACE_BEFORE_REAL_LOGIN";
+    private static readonly Guid AlternateDemoCustomerId = Guid.Parse("22222222-2222-2222-2222-222222222102");
+    private const string LegacyDemoPasswordHash = "SNM_DEMO_HASH_REPLACE_BEFORE_REAL_LOGIN";
 
     private static readonly IReadOnlyCollection<MarketSeed> MarketSeeds =
     [
@@ -119,12 +122,25 @@ public static class AISeedData
         using var scope = services.CreateScope();
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<SNMDbContext>>();
         var dbContext = scope.ServiceProvider.GetRequiredService<SNMDbContext>();
+        var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+        var passwordHasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
+        var configuredPassword = configuration["SeedDemoDataPassword"];
+        var demoPasswordHash = passwordHasher.HashPassword(
+            string.IsNullOrWhiteSpace(configuredPassword)
+                ? Guid.NewGuid().ToString("N")
+                : configuredPassword);
+
+        if (string.IsNullOrWhiteSpace(configuredPassword))
+        {
+            logger.LogInformation(
+                "SeedDemoDataPassword is not configured. Demo users will be seeded with a valid but non-loginable random password.");
+        }
 
         try
         {
             await SeedTagsAsync(dbContext);
             await SeedDemoMarketsAsync(dbContext);
-            await SeedDemoUsersAsync(dbContext);
+            await SeedDemoUsersAsync(dbContext, demoPasswordHash);
             await SeedDemoBoothsAndMenuAsync(dbContext);
             await SeedDemoCustomerPreferencesAsync(dbContext);
             await SeedFoodItemTagsAsync(dbContext);
@@ -207,7 +223,7 @@ public static class AISeedData
         await dbContext.SaveChangesAsync();
     }
 
-    private static async Task SeedDemoUsersAsync(SNMDbContext dbContext)
+    private static async Task SeedDemoUsersAsync(SNMDbContext dbContext, string demoPasswordHash)
     {
         var now = DateTime.UtcNow;
         var customerRole = await dbContext.Roles.FirstOrDefaultAsync(role =>
@@ -251,11 +267,39 @@ public static class AISeedData
                 Id = DemoCustomerId,
                 RoleId = customerRoleId,
                 UserName = "demo.customer.ai",
-                PasswordHash = DemoPasswordHash,
+                PasswordHash = demoPasswordHash,
                 FullName = "Khách demo AI",
                 Email = "demo.customer.ai@snm.local",
                 Phone = "0900000101",
                 Address = "TP. Hồ Chí Minh",
+                Status = UserStatus.Active,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+        }
+
+        else
+        {
+            var demoCustomer = await dbContext.Users.SingleAsync(user => user.Id == DemoCustomerId);
+            if (demoCustomer.PasswordHash == LegacyDemoPasswordHash)
+            {
+                demoCustomer.PasswordHash = demoPasswordHash;
+                demoCustomer.UpdatedAt = now;
+            }
+        }
+
+        if (!await dbContext.Users.AnyAsync(user => user.Id == AlternateDemoCustomerId))
+        {
+            dbContext.Users.Add(new User
+            {
+                Id = AlternateDemoCustomerId,
+                RoleId = customerRoleId,
+                UserName = "demo.customer.ai.alternate",
+                PasswordHash = demoPasswordHash,
+                FullName = "Khách demo AI thay thế",
+                Email = "demo.customer.ai.alternate@snm.local",
+                Phone = "0900000102",
+                Address = "Đà Lạt",
                 Status = UserStatus.Active,
                 CreatedAt = now,
                 UpdatedAt = now
@@ -275,7 +319,7 @@ public static class AISeedData
                 Id = ownerId,
                 RoleId = boothOwnerRoleId,
                 UserName = $"demo.booth.owner.{seed.Index:00}",
-                PasswordHash = DemoPasswordHash,
+                PasswordHash = demoPasswordHash,
                 FullName = $"Chủ gian hàng demo {seed.Index:00}",
                 Email = $"demo.booth.owner.{seed.Index:00}@snm.local",
                 Phone = $"09000002{seed.Index:00}",
@@ -284,6 +328,15 @@ public static class AISeedData
                 CreatedAt = now,
                 UpdatedAt = now
             });
+        }
+
+        var legacyDemoOwners = await dbContext.Users
+            .Where(user => user.PasswordHash == LegacyDemoPasswordHash)
+            .ToListAsync();
+        foreach (var owner in legacyDemoOwners)
+        {
+            owner.PasswordHash = demoPasswordHash;
+            owner.UpdatedAt = now;
         }
 
         await dbContext.SaveChangesAsync();
@@ -395,13 +448,16 @@ public static class AISeedData
         var tags = await dbContext.FoodTags.Where(tag => !tag.IsDeleted).ToDictionaryAsync(tag => tag.Code);
         var preferenceSeeds = new[]
         {
-            ("GRILLED", CustomerPreferenceKind.Like),
-            ("SPICY", CustomerPreferenceKind.Like),
-            ("VIETNAMESE", CustomerPreferenceKind.Like),
-            ("SEAFOOD", CustomerPreferenceKind.Avoid)
+            (DemoCustomerId, "GRILLED", CustomerPreferenceKind.Like),
+            (DemoCustomerId, "SPICY", CustomerPreferenceKind.Like),
+            (DemoCustomerId, "VIETNAMESE", CustomerPreferenceKind.Like),
+            (DemoCustomerId, "SEAFOOD", CustomerPreferenceKind.Avoid),
+            (AlternateDemoCustomerId, "VEGETARIAN", CustomerPreferenceKind.Like),
+            (AlternateDemoCustomerId, "MILD", CustomerPreferenceKind.Like),
+            (AlternateDemoCustomerId, "SPICY", CustomerPreferenceKind.Avoid)
         };
 
-        foreach (var (code, kind) in preferenceSeeds)
+        foreach (var (customerId, code, kind) in preferenceSeeds)
         {
             if (!tags.TryGetValue(code, out var tag))
             {
@@ -409,7 +465,7 @@ public static class AISeedData
             }
 
             var exists = await dbContext.CustomerPreferences.AnyAsync(preference =>
-                preference.CustomerId == DemoCustomerId
+                preference.CustomerId == customerId
                 && preference.FoodTagId == tag.Id
                 && preference.PreferenceKind == kind);
             if (exists)
@@ -420,7 +476,7 @@ public static class AISeedData
             dbContext.CustomerPreferences.Add(new CustomerPreference
             {
                 Id = Guid.NewGuid(),
-                CustomerId = DemoCustomerId,
+                CustomerId = customerId,
                 FoodTagId = tag.Id,
                 PreferenceKind = kind,
                 PreferenceSource = CustomerPreferenceSource.UserSelected,

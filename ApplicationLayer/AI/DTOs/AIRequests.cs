@@ -68,6 +68,7 @@ public class DiningPlanAssistantRequest
     [Range(typeof(decimal), "1", "100000000")]
     public decimal Budget { get; set; }
 
+    [RegularExpression("^(FullMeal|LightMeal|FoodTour|DateNight|Family)$")]
     public string DiningStyle { get; set; } = "FullMeal";
 
     [MaxLength(500)]
@@ -92,6 +93,7 @@ public class ConfirmDiningPlanRequest
 public class RegenerateDiningPlanRequest
 {
     public Guid LogId { get; set; }
+    [RegularExpression("^(BestMatch|BudgetFriendly|HighRating)$")]
     public string Priority { get; set; } = "BestMatch";
 }
 

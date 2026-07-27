@@ -5,6 +5,26 @@ namespace DomainLayer.InterfaceRepository;
 
 public interface IFoodItemRepository : IGenericRepository<FoodItem>
 {
+    Task<PagedResult<CustomerFoodReadModel>> GetCustomerPagedAsync(
+        Guid? marketId,
+        Guid? boothId,
+        Guid? categoryId,
+        string? search,
+        decimal? minPrice,
+        decimal? maxPrice,
+        bool availableOnly,
+        DateTime utcNow,
+        TimeOnly localTime,
+        int page,
+        int pageSize,
+        string sort,
+        CancellationToken cancellationToken = default);
+
+    Task<CustomerFoodReadModel?> GetCustomerByIdAsync(
+        Guid foodItemId,
+        DateTime utcNow,
+        CancellationToken cancellationToken = default);
+
     Task<PagedResult<NightMarketFoodCustomerReadModel>> GetCustomerByNightMarketPagedAsync(
         Guid nightMarketId,
         DateTime utcNow,
@@ -28,6 +48,7 @@ public interface IFoodItemRepository : IGenericRepository<FoodItem>
 
     Task<IReadOnlyCollection<FoodItem>> GetAiCandidatesAsync(
         Guid? nightMarketId,
+        int maxCandidates,
         CancellationToken cancellationToken = default);
 
     Task<List<FoodItem>> GetAllFoodItemsByIdsAsync(List<Guid> foodItemIds);

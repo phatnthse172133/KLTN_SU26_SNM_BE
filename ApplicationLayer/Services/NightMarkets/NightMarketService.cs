@@ -5,6 +5,8 @@ using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
 using ApplicationLayer.Mappings;
 using ApplicationLayer.Services.Subscriptions;
+using ApplicationLayer.Services.CustomerDiscovery;
+using DomainLayer.Common;
 using DomainLayer.Entities;
 using DomainLayer.Enums;
 using DomainLayer.InterfaceRepository;
@@ -94,15 +96,63 @@ public class NightMarketService : INightMarketService
         if (market is null)
             throw AppException.NotFound("Night market was not found.");
 
-        if (market.Status != NightMarketStatus.Active && !CanViewInactiveMarket(market, viewerId, viewerRole))
-            throw AppException.NotFound("Night market was not found.");
+    public async Task<ApiResponse<PaginationResp<NightMarketBoothListItemResponse>>> GetBoothsAsync(
+        Guid id,
+        PaginationReq pagination,
+        CancellationToken cancellationToken = default)
+    {
+        await EnsureCustomerMarketExistsAsync(id, cancellationToken);
+        var page = await _booths.GetCustomerByNightMarketPagedAsync(
+            id, pagination.Page, pagination.PageSize, cancellationToken);
+        var localTime = TimeOnly.FromDateTime(NightMarketAvailability.GetVietnamLocalTime(DateTime.UtcNow));
+        var items = page.Items.Select(item => new NightMarketBoothListItemResponse
+        {
+            Id = item.Id,
+            NightMarketId = item.NightMarketId,
+            Name = item.Name,
+            Description = item.Description,
+            ThumbnailUrl = item.ThumbnailUrl,
+            SlotNumber = item.SlotNumber,
+            Latitude = item.Latitude,
+            Longitude = item.Longitude,
+            OpenTime = item.OpenTime,
+            CloseTime = item.CloseTime,
+            IsOpenNow = CustomerAvailability.IsOpenNow(item, localTime),
+            AverageRating = item.AverageRating,
+            IsFeatured = item.IsFeatured
+        }).ToList();
 
         return ApiResponse<NightMarketResponse>.SuccessResponse(_mapper.Map<NightMarketResponse>(market));
     }
 
-    private static bool CanViewInactiveMarket(NightMarket market, Guid? viewerId, string? viewerRole)
-        => string.Equals(viewerRole, "Admin", StringComparison.OrdinalIgnoreCase)
-           || (viewerId.HasValue && market.MarketOwnerId == viewerId);
+    public async Task<ApiResponse<PaginationResp<NightMarketFoodListItemResponse>>> GetFoodsAsync(
+        Guid id,
+        PaginationReq pagination,
+        CancellationToken cancellationToken = default)
+    {
+        await EnsureCustomerMarketExistsAsync(id, cancellationToken);
+        var page = await _foodItems.GetCustomerByNightMarketPagedAsync(
+            id, DateTime.UtcNow, pagination.Page, pagination.PageSize, cancellationToken);
+        var localTime = TimeOnly.FromDateTime(NightMarketAvailability.GetVietnamLocalTime(DateTime.UtcNow));
+        var items = page.Items.Select(item => new NightMarketFoodListItemResponse
+        {
+            Id = item.Id,
+            BoothId = item.BoothId,
+            BoothName = item.BoothName,
+            CategoryId = item.CategoryId,
+            CategoryName = item.CategoryName,
+            Name = item.Name,
+            Description = item.Description,
+            Price = item.Price,
+            ThumbnailUrl = item.ThumbnailUrl,
+            IsAvailable = item.IsAvailable,
+            CanOrder = item.IsAvailable && CustomerAvailability.IsOpenNow(item, localTime),
+            IsFeatured = item.IsFeatured
+        }).ToList();
+
+        return ApiResponse<PaginationResp<NightMarketFoodListItemResponse>>.SuccessResponse(
+            PaginationResp<NightMarketFoodListItemResponse>.Create(items, page.TotalCount, pagination));
+    }
 
     public async Task<ApiResponse<List<NightMarketResponse>>> GetMineAsync(Guid marketOwnerId, CancellationToken cancellationToken = default)
     {

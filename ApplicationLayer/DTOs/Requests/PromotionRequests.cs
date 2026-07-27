@@ -23,8 +23,8 @@ public class PromotionListRequest : PaginationReq
 
 public class CreatePromotionRequest
 {
-    [StringLength(50)]
-    public string? PromotionCode { get; set; }
+    [Required, StringLength(50)]
+    public string PromotionCode { get; set; } = string.Empty;
 
     [Required, StringLength(200)]
     public string Title { get; set; } = string.Empty;

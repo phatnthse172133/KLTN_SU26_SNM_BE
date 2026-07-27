@@ -1,4 +1,5 @@
 using InfrastructureLayer.Data;
+using Microsoft.Extensions.Options;
 using InfrastructureLayer.Cores.Emails;
 using InfrastructureLayer.Cores.External;
 using InfrastructureLayer.Cores.Helppers;
@@ -12,6 +13,7 @@ using ApplicationLayer.Services.Booths;
 using ApplicationLayer.Services.FoodCategories;
 using ApplicationLayer.Services.Menus;
 using ApplicationLayer.Services.NightMarkets;
+using ApplicationLayer.Services.CustomerDiscovery;
 using ApplicationLayer.Services.Complaints;
 using ApplicationLayer.Services.Reviews;
 using ApplicationLayer.Services.Zones;
@@ -48,6 +50,7 @@ using DomainLayer.InterfaceRepositories;
 using ApplicationLayer.Services.PaymentMethods;
 using ApplicationLayer.Services.Orders;
 using InfrastructureLayer.Cores.AI;
+using InfrastructureLayer.Backgrounds;
 using ApplicationLayer.AI.Services;
 
 namespace InfrastructureLayer
@@ -99,6 +102,7 @@ namespace InfrastructureLayer
             services.AddScoped<IFoodTagRepository, FoodTagRepository>();
             services.AddScoped<ICustomerPreferenceRepository, CustomerPreferenceRepository>();
             services.AddScoped<IAIRecommendationLogRepository, AIRecommendationLogRepository>();
+            services.AddScoped<IAICustomerContextRepository, AICustomerContextRepository>();
             services.Configure<JwtSettings>(configuration.GetSection(JwtSettings.SectionName));
             services.AddScoped<IJwtService, JWTService>();
             services.AddScoped<IPasswordHasher, PasswordHasher>();
@@ -116,6 +120,8 @@ namespace InfrastructureLayer
             services.AddScoped<IMenuService, MenuService>();
 
             services.AddScoped<INightMarketService, NightMarketService>();
+            services.AddScoped<ICustomerDiscoveryService, CustomerDiscoveryService>();
+            services.AddSingleton(TimeProvider.System);
             services.AddScoped<IComplaintService, ComplaintService>();
             services.AddScoped<IReviewService, ReviewService>();
             services.AddScoped<IZoneService, ZoneService>();
@@ -148,7 +154,12 @@ namespace InfrastructureLayer
             services.AddSingleton<IOnlinePresenceService, OnlinePresenceService>();
             services.Configure<AIProviderSettings>(
                 configuration.GetSection(AIProviderSettings.SectionName));
-            services.AddHttpClient<IAIProviderService, GeminiAIProviderService>();
+            services.AddHttpClient<IAIProviderService, GeminiAIProviderService>()
+                .ConfigureHttpClient((serviceProvider, client) =>
+                {
+                    var settings = serviceProvider.GetRequiredService<IOptions<AIProviderSettings>>().Value;
+                    client.Timeout = TimeSpan.FromSeconds(Math.Clamp(settings.TimeoutSeconds, 1, 30));
+                });
             services.Configure<FirebaseSettings>(
                 configuration.GetSection(FirebaseSettings.SectionName));
             services.AddHttpClient<IPushNotificationService, FirebasePushNotificationService>();
@@ -157,6 +168,7 @@ namespace InfrastructureLayer
             // PayOS configuration and service (uses PayOSClient singleton registered in Program.cs)
             services.Configure<PayOSSettings>(configuration.GetSection(PayOSSettings.SectionName));
             services.AddScoped<IPayOSService, PayOSService>();
+            services.AddScoped<IPayOSPayoutService, PayOSPayoutService>();
             services.AddScoped<DomainLayer.InterfaceRepository.ISequenceRepository, SequenceRepository>();
             services.AddScoped<IPayOSOrderCodeGenerator, PayOSOrderCodeGenerator>();
             services.AddScoped<IPayOSWebhookDispatcher, PayOSWebhookDispatcher>();
@@ -171,6 +183,7 @@ namespace InfrastructureLayer
 
             services.AddHostedService<EmailOutboxWorker>();
             services.AddHostedService<SubscriptionExpiryWorker>();
+            services.AddHostedService<OrderCleanupBackgroundService>();
 
             return services;
         }

@@ -9,6 +9,8 @@ public interface IComplaintRepository : IGenericRepository<Complaint>
     Task AddImagesAsync(IEnumerable<ComplaintImage> images);
     Task<bool> HasActiveComplaintAsync(Guid customerId, Guid boothId, Guid orderId);
     Task<Complaint?> GetWithImagesByIdAsync(Guid complaintId);
+    Task<Complaint?> GetCustomerWithImagesByIdAsync(Guid customerId, Guid complaintId, CancellationToken cancellationToken = default);
+    Task<bool> TrySaveNewComplaintAsync(CancellationToken cancellationToken = default);
     Task<PagedResult<Complaint>> GetPagedWithImagesAsync(int page, int pageSize, ComplaintStatus? status = null, CancellationToken cancellationToken = default);
     Task<PagedResult<Complaint>> GetPagedWithImagesFilteredAsync(int page, int pageSize, ComplaintStatus? status, string? keyword, Guid? boothId, CancellationToken cancellationToken = default);
     Task<PagedResult<Complaint>> GetPagedByCustomerWithImagesAsync(Guid customerId, int page, int pageSize, CancellationToken cancellationToken = default);

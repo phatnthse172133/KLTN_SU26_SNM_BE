@@ -19,6 +19,63 @@ namespace TestingLayer;
 public class AuthenticationServiceTests
 {
     [Fact]
+    public async Task ChangePassword_WrongCurrentPassword_DoesNotUpdateAccount()
+    {
+        var user = CreateUser(AuthProvider.Local, "customer@example.com");
+        var fixture = CreateFixture(new[] { user });
+        fixture.PasswordHasher
+            .Setup(hasher => hasher.VerifyPassword("wrong-password", user.PasswordHash))
+            .Returns(false);
+
+        var exception = await Assert.ThrowsAsync<AppException>(() => fixture.Service.ChangePasswordAsync(
+            user.Id,
+            new ChangePasswordRequest
+            {
+                CurrentPassword = "wrong-password",
+                NewPassword = "new-password",
+                ConfirmNewPassword = "new-password"
+            }));
+
+        Assert.Equal(AuthErrorCodes.CurrentPasswordInvalid, exception.ErrorCode);
+        fixture.Users.Verify(repository => repository.Update(It.IsAny<User>()), Times.Never);
+        fixture.Users.Verify(repository => repository.SaveChangesAsync(), Times.Never);
+    }
+
+    [Fact]
+    public async Task ChangePassword_ValidLocalAccount_RevokesRefreshToken()
+    {
+        var user = CreateUser(AuthProvider.Local, "customer@example.com");
+        user.RefreshTokenHash = "refresh-hash";
+        user.RefreshTokenExpiresAt = DateTime.UtcNow.AddDays(1);
+        var fixture = CreateFixture(new[] { user });
+        fixture.PasswordHasher
+            .Setup(hasher => hasher.VerifyPassword("current-password", user.PasswordHash))
+            .Returns(true);
+        fixture.PasswordHasher
+            .Setup(hasher => hasher.VerifyPassword("new-password", user.PasswordHash))
+            .Returns(false);
+        fixture.PasswordHasher
+            .Setup(hasher => hasher.HashPassword("new-password"))
+            .Returns("new-hash");
+
+        var response = await fixture.Service.ChangePasswordAsync(
+            user.Id,
+            new ChangePasswordRequest
+            {
+                CurrentPassword = "current-password",
+                NewPassword = "new-password",
+                ConfirmNewPassword = "new-password"
+            });
+
+        Assert.True(response.Success);
+        Assert.Equal("new-hash", user.PasswordHash);
+        Assert.Null(user.RefreshTokenHash);
+        Assert.Null(user.RefreshTokenExpiresAt);
+        fixture.Users.Verify(repository => repository.Update(user), Times.Once);
+        fixture.Users.Verify(repository => repository.SaveChangesAsync(), Times.Once);
+    }
+
+    [Fact]
     public async Task Register_DuplicateEmail_ReturnsConflictWithoutCreatingUser()
     {
         var existingUser = CreateUser(AuthProvider.Local, "customer@example.com");
@@ -245,6 +302,9 @@ public class AuthenticationServiceTests
         userRepository
             .Setup(repository => repository.AnyAsync(It.IsAny<Expression<Func<User, bool>>>() ))
             .ReturnsAsync((Expression<Func<User, bool>> predicate) => users.Any(predicate.Compile()));
+        userRepository
+            .Setup(repository => repository.GetByIdAsync(It.IsAny<Guid>()))
+            .ReturnsAsync((Guid id) => users.SingleOrDefault(user => user.Id == id));
 
         var roleRepository = new Mock<IGenericRepository<Role>>();
         var passwordHasher = new Mock<IPasswordHasher>();

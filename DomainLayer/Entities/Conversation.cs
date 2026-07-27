@@ -12,7 +12,7 @@ public partial class Conversation
 
     public Guid CustomerId { get; set; }
 
-    public Guid BoothOwnerId { get; set; }
+    public Guid BoothId { get; set; }
 
     public Guid? LastMessageId { get; set; }
 
@@ -28,9 +28,9 @@ public partial class Conversation
 
     public DateTime UpdatedAt { get; set; }
 
-    public virtual User BoothOwner { get; set; } = null!;
-
     public virtual User Customer { get; set; } = null!;
+
+    public virtual Booth Booth { get; set; } = null!;
 
     public virtual Message? LastMessage { get; set; }
 

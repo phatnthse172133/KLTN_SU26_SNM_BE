@@ -35,6 +35,15 @@ public partial class Payment
 
     public string? RefundReason { get; set; }
 
+    // Authoritative refund snapshot and PayOS payout identifiers. Destination
+    // bank data is deliberately not persisted here.
+    public decimal? RefundAmount { get; set; }
+    public string? RefundReference { get; set; }
+    public string? PayoutId { get; set; }
+    public DateTime? PayoutCreateClaimedAt { get; set; }
+    public DateTime? RefundRequestedAt { get; set; }
+    public DateTime? RefundedAt { get; set; }
+
     public DateTime? PaidAt { get; set; }
 
     public DateTime CreatedAt { get; set; }

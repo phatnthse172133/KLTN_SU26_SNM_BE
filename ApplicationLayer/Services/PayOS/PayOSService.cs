@@ -16,7 +16,10 @@ namespace ApplicationLayer.Services.PayOS
         private readonly PayOSSettings _settings;
         private readonly ILogger<PayOSService> _logger;
 
-        public PayOSService(PayOSClient client, IOptions<PayOSSettings> settings, ILogger<PayOSService> logger)
+        public PayOSService(
+            [Microsoft.Extensions.DependencyInjection.FromKeyedServices("PayIn")] PayOSClient client,
+            IOptions<PayOSSettings> settings,
+            ILogger<PayOSService> logger)
         {
             _client = client;
             _settings = settings.Value;
@@ -28,10 +31,18 @@ namespace ApplicationLayer.Services.PayOS
 
         public async Task<PayOSPaymentResponse> CreatePaymentLinkAsync(PayOSPaymentRequest request)
         {
+            EnsureConfigured();
+            if (request.Amount <= 0m || request.Amount != decimal.Truncate(request.Amount) || request.Amount > long.MaxValue)
+                throw AppException.BadRequest(
+                    "PayOS amount must be a positive whole-number VND amount.",
+                    "INVALID_PAYOS_AMOUNT");
+
             var returnUrl = string.IsNullOrEmpty(request.ReturnUrl) ? _settings.ReturnUrl : request.ReturnUrl;
             var cancelUrl = string.IsNullOrEmpty(request.CancelUrl) ? _settings.CancelUrl : request.CancelUrl;
-            var amount = (long)Math.Round(request.Amount);
-            var description = request.Description.Length > 25 ? request.Description[..25] : request.Description;
+            var amount = decimal.ToInt64(request.Amount);
+            // payOS documents a 9-character limit for bank accounts that are not
+            // directly linked through payOS. Staying within it works for both modes.
+            var description = request.Description.Length > 9 ? request.Description[..9] : request.Description;
 
             try
             {

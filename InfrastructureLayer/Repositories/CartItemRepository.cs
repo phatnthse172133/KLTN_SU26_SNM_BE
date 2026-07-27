@@ -23,10 +23,13 @@ public class CartItemRepository : GenericRepository<CartItem>, ICartItemReposito
         Guid customerId,
         Guid cartItemId,
         CancellationToken cancellationToken = default)
-        => ActiveQuery()
+        => _dbSet
+            .IgnoreQueryFilters()
+            .Where(item => !item.IsDeleted)
             .Include(item => item.Cart)
             .Include(item => item.FoodItem)
                 .ThenInclude(food => food.Booth)
+                    .ThenInclude(booth => booth.NightMarket)
             .Include(item => item.FoodItem)
                 .ThenInclude(food => food.Category)
             .Include(item => item.FoodItem)
@@ -53,9 +56,12 @@ public class CartItemRepository : GenericRepository<CartItem>, ICartItemReposito
             .ToListAsync(cancellationToken);
 
     private IQueryable<CartItem> CartItemDetailsQuery()
-        => ActiveQuery()
+        => _dbSet
+            .IgnoreQueryFilters()
+            .Where(item => !item.IsDeleted)
             .Include(item => item.FoodItem)
                 .ThenInclude(food => food.Booth)
+                    .ThenInclude(booth => booth.NightMarket)
             .Include(item => item.FoodItem)
                 .ThenInclude(food => food.Category)
             .Include(item => item.FoodItem)

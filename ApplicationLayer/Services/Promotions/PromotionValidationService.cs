@@ -10,20 +10,28 @@ namespace ApplicationLayer.Services.Promotions;
 public class PromotionValidationService : IPromotionValidationService
 {
     private readonly IPromotionUsageRepository _usages;
+    private readonly TimeProvider _timeProvider;
 
-    public PromotionValidationService(IPromotionUsageRepository usages)
+    public PromotionValidationService(
+        IPromotionUsageRepository usages,
+        TimeProvider timeProvider)
     {
         _usages = usages;
+        _timeProvider = timeProvider;
     }
 
     public async Task<PromotionValidationResponse> ValidateAsync(Guid customerId, Promotion promotion, IReadOnlyCollection<CartItem> boothItems, CancellationToken cancellationToken = default)
     {
-        if (boothItems.Count == 0 || boothItems.Any(item => item.FoodItem.BoothId != promotion.BoothId))
+        if (boothItems.Count == 0
+            || boothItems.Any(item => item.FoodItem.BoothId != promotion.BoothId))
         {
             throw AppException.BadRequest("Promotion does not belong to this booth.", "PROMOTION_BOOTH_MISMATCH");
         }
 
-        var now = DateTime.UtcNow;
+        if (boothItems.Any(item => item.Quantity <= 0))
+            throw AppException.BadRequest("Cart item quantity is invalid.", "INVALID_CART_ITEM");
+
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
         if (now < promotion.StartDate)
             throw AppException.BadRequest("Promotion has not started.", "PROMOTION_NOT_STARTED");
 
@@ -36,7 +44,16 @@ public class PromotionValidationService : IPromotionValidationService
         if (promotion.Status == PromotionStatus.Suspended)
             throw AppException.BadRequest("Promotion is suspended.", "PROMOTION_SUSPENDED");
 
-        var totalAmount = boothItems.Sum(item => GetCurrentPrice(item.FoodItem) * item.Quantity);
+        if (promotion.Status is not (PromotionStatus.Active or PromotionStatus.Scheduled))
+            throw AppException.BadRequest("Promotion is not active.", "PROMOTION_NOT_ACTIVE");
+
+        ValidatePromotionValues(promotion);
+
+        var totalAmount = boothItems.Sum(item => GetLineAmount(item, now));
+        if (totalAmount < 0)
+            throw AppException.BadRequest(
+                "Order subtotal is invalid.",
+                "INVALID_ORDER_SUBTOTAL");
         if (promotion.MinimumOrderAmount.HasValue
             && totalAmount < promotion.MinimumOrderAmount.Value)
         {
@@ -57,23 +74,33 @@ public class PromotionValidationService : IPromotionValidationService
             throw AppException.Conflict("Customer promotion usage limit has been reached.", "PROMOTION_CUSTOMER_LIMIT_REACHED");
         }
 
-        var eligibleAmount = GetEligibleAmount(promotion, boothItems);
+        var eligibleAmount = GetEligibleAmount(promotion, boothItems, now);
         if (eligibleAmount <= 0)
         {
             throw AppException.BadRequest("The cart has no items eligible for this promotion.", "PROMOTION_NO_ELIGIBLE_ITEMS");
         }
 
-        var discountAmount = promotion.DiscountType switch
+        var calculatedDiscount = promotion.DiscountType switch
         {
             DiscountType.Percentage => eligibleAmount * promotion.DiscountValue / 100m,
-            DiscountType.FixedAmount => Math.Min(promotion.DiscountValue, eligibleAmount),
+            DiscountType.FixedAmount => promotion.DiscountValue,
             _ => throw AppException.BadRequest("Promotion discount type is invalid.", "INVALID_PROMOTION_VALUE")
         };
 
-        if (promotion.MaximumDiscountAmount.HasValue)
+        var discountAmount = calculatedDiscount;
+        if (promotion.DiscountType == DiscountType.Percentage
+            && promotion.MaximumDiscountAmount.HasValue)
             discountAmount = Math.Min(discountAmount, promotion.MaximumDiscountAmount.Value);
 
+        // Financial invariants are enforced even if a persisted promotion row
+        // was created outside the application validators.
+        discountAmount = Math.Min(discountAmount, eligibleAmount);
+        discountAmount = Math.Min(discountAmount, totalAmount);
+        discountAmount = Math.Max(discountAmount, 0m);
         discountAmount = Math.Round(discountAmount, 2, MidpointRounding.AwayFromZero);
+        discountAmount = Math.Min(discountAmount, eligibleAmount);
+        discountAmount = Math.Min(discountAmount, totalAmount);
+        var finalAmount = totalAmount - discountAmount;
 
         return new PromotionValidationResponse
         {
@@ -86,11 +113,18 @@ public class PromotionValidationService : IPromotionValidationService
             TotalAmount = totalAmount,
             EligibleAmount = eligibleAmount,
             DiscountAmount = discountAmount,
-            FinalAmount = Math.Max(totalAmount - discountAmount, 0)
+            OrderSubtotal = totalAmount,
+            EligibleSubtotal = eligibleAmount,
+            CalculatedDiscount = calculatedDiscount,
+            ActualDiscount = discountAmount,
+            FinalAmount = finalAmount
         };
     }
 
-    private static decimal GetEligibleAmount(Promotion promotion, IReadOnlyCollection<CartItem> boothItems)
+    private static decimal GetEligibleAmount(
+        Promotion promotion,
+        IReadOnlyCollection<CartItem> boothItems,
+        DateTime utcNow)
     {
         var foodItemIds = promotion.PromotionFoodItems
             .Select(target => target.FoodItemId)
@@ -102,17 +136,68 @@ public class PromotionValidationService : IPromotionValidationService
         return promotion.Scope switch
         {
             PromotionScope.EntireBoothOrder => boothItems.Sum(
-                item => GetCurrentPrice(item.FoodItem) * item.Quantity),
+                item => GetLineAmount(item, utcNow)),
             PromotionScope.SpecificFoodItems => boothItems
                 .Where(item => foodItemIds.Contains(item.FoodItemId))
-                .Sum(item => GetCurrentPrice(item.FoodItem) * item.Quantity),
+                .Sum(item => GetLineAmount(item, utcNow)),
             PromotionScope.SpecificCategories => boothItems
                 .Where(item => categoryIds.Contains(item.FoodItem.CategoryId))
-                .Sum(item => GetCurrentPrice(item.FoodItem) * item.Quantity),
+                .Sum(item => GetLineAmount(item, utcNow)),
             _ => 0
         };
     }
 
-    private static decimal GetCurrentPrice(FoodItem foodItem)
-        => FoodPriceResolver.GetCurrentPrice(foodItem, DateTime.UtcNow);
+    private static void ValidatePromotionValues(Promotion promotion)
+    {
+        var invalidDiscount = promotion.DiscountValue <= 0
+            || (promotion.DiscountType == DiscountType.Percentage
+                && promotion.DiscountValue > 100)
+            || !Enum.IsDefined(promotion.DiscountType)
+            || !Enum.IsDefined(promotion.Scope);
+        var invalidLimits = promotion.MinimumOrderAmount < 0
+            || (promotion.DiscountType == DiscountType.Percentage
+                && promotion.MaximumDiscountAmount <= 0)
+            || (promotion.DiscountType == DiscountType.FixedAmount
+                && promotion.MaximumDiscountAmount.HasValue)
+            || promotion.TotalUsageLimit <= 0
+            || promotion.UsageLimitPerCustomer <= 0
+            || (promotion.TotalUsageLimit.HasValue
+                && promotion.UsageLimitPerCustomer > promotion.TotalUsageLimit);
+
+        var invalidDates = promotion.StartDate >= promotion.EndDate;
+        var invalidScope = promotion.Scope switch
+        {
+            PromotionScope.EntireBoothOrder =>
+                promotion.PromotionFoodItems.Count > 0
+                || promotion.PromotionCategories.Count > 0,
+            PromotionScope.SpecificFoodItems =>
+                promotion.PromotionFoodItems.Count == 0
+                || promotion.PromotionCategories.Count > 0
+                || promotion.PromotionFoodItems.Any(target =>
+                    target.FoodItem.BoothId != promotion.BoothId),
+            PromotionScope.SpecificCategories =>
+                promotion.PromotionCategories.Count == 0
+                || promotion.PromotionFoodItems.Count > 0
+                || promotion.PromotionCategories.Any(target =>
+                    target.Category.BoothId != promotion.BoothId),
+            _ => true
+        };
+
+        if (invalidDiscount || invalidLimits || invalidDates || invalidScope)
+            throw AppException.BadRequest("Promotion configuration is invalid.", "INVALID_PROMOTION_VALUE");
+    }
+
+    private static decimal GetCurrentPrice(FoodItem foodItem, DateTime utcNow)
+        => FoodPriceResolver.GetCurrentPrice(foodItem, utcNow);
+
+    private static decimal GetLineAmount(CartItem item, DateTime utcNow)
+    {
+        var price = GetCurrentPrice(item.FoodItem, utcNow);
+        if (price < 0)
+            throw AppException.BadRequest(
+                "An eligible item has an invalid current price.",
+                "INVALID_ORDER_SUBTOTAL");
+
+        return price * item.Quantity;
+    }
 }

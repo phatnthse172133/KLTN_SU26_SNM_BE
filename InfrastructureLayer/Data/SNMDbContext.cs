@@ -439,7 +439,12 @@ namespace InfrastructureLayer.Data
             {
                 entity.HasKey(e => e.Id).HasName("Complaints_pkey");
 
-                entity.ToTable(tb => tb.HasComment("KhiÃ¡ÂºÂ¿u nÃ¡ÂºÂ¡i cÃ¡Â»Â§a khÃƒÂ¡ch hÃƒÂ ng vÃ¡Â»Â Ã„â€˜Ã†Â¡n hÃƒÂ ng/gian hÃƒÂ ng"));
+                entity.HasIndex(e => new { e.CustomerId, e.CreatedAt }, "idx_complaint_customer_created").IsDescending(false, true);
+                entity.HasIndex(e => new { e.CustomerId, e.OrderId, e.BoothId }, "uq_complaint_active_customer_order_booth")
+                    .IsUnique()
+                    .HasFilter("\"Status\" = 'Pending'");
+
+                entity.ToTable(tb => tb.HasComment("Khiáº¿u náº¡i cá»§a khÃ¡ch hÃ ng vá» Ä‘Æ¡n hÃ ng/gian hÃ ng"));
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
@@ -494,8 +499,10 @@ namespace InfrastructureLayer.Data
 
                 entity.ToTable(tb => tb.HasComment("CuÃ¡Â»â„¢c trÃƒÂ² chuyÃ¡Â»â€¡n giÃ¡Â»Â¯a 1 khÃƒÂ¡ch hÃƒÂ ng vÃƒÂ  1 gian hÃƒÂ ng - dÃƒÂ¹ng SignalR Ã„â€˜Ã¡Â»Æ’ realtime"));
 
-                entity.HasIndex(e => new { e.CustomerId, e.BoothOwnerId }, "uq_conversation_customer_boothowner").IsUnique();
+                entity.HasIndex(e => new { e.CustomerId, e.BoothId }, "uq_conversation_customer_booth").IsUnique();
                 entity.HasIndex(e => e.LastMessageAt, "idx_conversation_last_message");
+                entity.HasIndex(e => new { e.CustomerId, e.LastMessageAt }, "idx_conversation_customer_last_message");
+                entity.HasIndex(e => new { e.BoothId, e.LastMessageAt }, "idx_conversation_booth_last_message");
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
@@ -505,10 +512,10 @@ namespace InfrastructureLayer.Data
                     .HasDefaultValue(DomainLayer.Enums.GeneralEnum.ConversationStatus.Active);
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
 
-                entity.HasOne(d => d.BoothOwner).WithMany()
-                    .HasForeignKey(d => d.BoothOwnerId)
+                entity.HasOne(d => d.Booth).WithMany(p => p.Conversations)
+                    .HasForeignKey(d => d.BoothId)
                     .OnDelete(DeleteBehavior.ClientSetNull)
-                    .HasConstraintName("Conversations_BoothOwnerId_fkey");
+                    .HasConstraintName("Conversations_BoothId_fkey");
 
                 entity.HasOne(d => d.Customer).WithMany(p => p.Conversations)
                     .HasForeignKey(d => d.CustomerId)
@@ -798,7 +805,7 @@ namespace InfrastructureLayer.Data
 
                 entity.ToTable("Message", tb => tb.HasComment("Tin nhÃ¡ÂºÂ¯n trong cuÃ¡Â»â„¢c trÃƒÂ² chuyÃ¡Â»â€¡n - truyÃ¡Â»Ân tÃ¡ÂºÂ£i qua SignalR Hub"));
 
-                entity.HasIndex(e => new { e.ConversationId, e.CreatedAt }, "idx_message_conversation");
+                entity.HasIndex(e => new { e.ConversationId, e.CreatedAt, e.Id }, "idx_message_conversation");
                 entity.HasIndex(e => new { e.SenderId, e.ClientMessageId }, "ux_message_sender_client_message")
                     .IsUnique()
                     .HasFilter("\"ClientMessageId\" IS NOT NULL");
@@ -925,6 +932,7 @@ namespace InfrastructureLayer.Data
                 entity.ToTable("Notification", tb => tb.HasComment("ThÃƒÂ´ng bÃƒÂ¡o Ã„â€˜Ã¡ÂºÂ©y (push notification qua FCM) cho ngÃ†Â°Ã¡Â»Âi dÃƒÂ¹ng"));
 
                 entity.HasIndex(e => new { e.UserId, e.CreatedAt }, "idx_notification_user").IsDescending(false, true);
+                entity.HasIndex(e => new { e.UserId, e.IsRead, e.CreatedAt }, "idx_notification_user_read").IsDescending(false, false, true);
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.BoothId).HasComment("NULL khi thÃƒÂ´ng bÃƒÂ¡o khÃƒÂ´ng gÃ¡ÂºÂ¯n vÃ¡Â»â€ºi gian hÃƒÂ ng cÃ¡Â»Â¥ thÃ¡Â»Æ’ (VD: thÃƒÂ´ng bÃƒÂ¡o hÃ¡Â»â€¡ thÃ¡Â»â€˜ng)");
@@ -983,7 +991,13 @@ namespace InfrastructureLayer.Data
 
                 entity.HasIndex(e => e.OrderCode, "Order_OrderCode_key").IsUnique();
 
+                entity.HasIndex(e => new { e.CustomerId, e.CheckoutRequestId }, "ux_order_customer_checkout_request")
+                    .IsUnique()
+                    .HasFilter("\"CheckoutRequestId\" IS NOT NULL");
+
                 entity.HasIndex(e => e.CustomerId, "idx_order_customer");
+                entity.HasIndex(e => new { e.CustomerId, e.CreatedAt }, "idx_order_customer_created").IsDescending(false, true);
+                entity.HasIndex(e => new { e.CustomerId, e.Status, e.CreatedAt }, "idx_order_customer_status_created").IsDescending(false, false, true);
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
@@ -1023,6 +1037,7 @@ namespace InfrastructureLayer.Data
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+                entity.Property(e => e.FoodNameSnapshot).HasMaxLength(200);
                 entity.Property(e => e.TotalPrice).HasPrecision(12, 2);
                 entity.Property(e => e.UnitPrice)
                     .HasPrecision(12, 2)
@@ -1055,6 +1070,14 @@ namespace InfrastructureLayer.Data
                     .IsUnique()
                     .HasFilter("\"Status\" = 'Pending' AND \"Gateway\" = 'Payos'");
 
+                entity.HasIndex(e => e.RefundReference, "ux_payments_refund_reference")
+                    .IsUnique()
+                    .HasFilter("\"RefundReference\" IS NOT NULL");
+
+                entity.HasIndex(e => e.PayoutId, "ux_payments_payout_id")
+                    .IsUnique()
+                    .HasFilter("\"PayoutId\" IS NOT NULL");
+
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.Amount).HasPrecision(12, 2);
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
@@ -1083,6 +1106,9 @@ namespace InfrastructureLayer.Data
                     .HasConversion<string>()
                     .HasMaxLength(20)
                     .HasDefaultValueSql("'Pending'::character varying");
+                entity.Property(e => e.RefundAmount).HasPrecision(12, 2);
+                entity.Property(e => e.RefundReference).HasMaxLength(100);
+                entity.Property(e => e.PayoutId).HasMaxLength(100);
                 entity.Property(e => e.Type)
                     .HasConversion<string>()
                     .HasMaxLength(20)
@@ -1239,6 +1265,8 @@ namespace InfrastructureLayer.Data
                     .HasMaxLength(20)
                     .HasDefaultValueSql("'Reserved'::character varying");
                 entity.Property(e => e.AppliedAt).HasDefaultValueSql("now()");
+                entity.Property(e => e.PromotionCodeSnapshot).HasMaxLength(50);
+                entity.Property(e => e.PromotionTitleSnapshot).HasMaxLength(200);
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
 
@@ -1263,6 +1291,9 @@ namespace InfrastructureLayer.Data
 
                 entity.HasIndex(e => e.BoothId, "idx_reviews_booth");
 
+                entity.HasIndex(e => new { e.BoothId, e.IsVisible, e.CreatedAt }, "idx_reviews_booth_visible_created").IsDescending(false, false, true);
+                entity.HasIndex(e => new { e.CustomerId, e.CreatedAt }, "idx_reviews_customer_created").IsDescending(false, true);
+
                 entity.HasIndex(e => e.OrderId, "uq_review_order").IsUnique();
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
@@ -1272,6 +1303,8 @@ namespace InfrastructureLayer.Data
                     .HasDefaultValue(true)
                     .HasComment("false: Admin Ã¡ÂºÂ©n review nhÃ†Â°ng vÃ¡ÂºÂ«n giÃ¡Â»Â¯ dÃ¡Â»Â¯ liÃ¡Â»â€¡u Ã„â€˜Ã¡Â»Æ’ tÃƒÂ­nh rating");
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+
+                entity.ToTable(table => table.HasCheckConstraint("ck_reviews_rating", "\"Rating\" BETWEEN 1 AND 5"));
 
                 entity.HasOne(d => d.Booth).WithMany(p => p.Reviews)
                     .HasForeignKey(d => d.BoothId)

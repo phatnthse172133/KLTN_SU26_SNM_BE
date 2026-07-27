@@ -22,6 +22,7 @@ public class PromotionResponse
     public DateTime EndDate { get; set; }
     public string Status { get; set; } = string.Empty;
     public int UsedCount { get; set; }
+    public IReadOnlyCollection<string> ConfigurationWarnings { get; set; } = [];
     public IReadOnlyCollection<PromotionFoodItemResponse> FoodItems { get; set; } = [];
     public IReadOnlyCollection<PromotionCategoryResponse> Categories { get; set; } = [];
     public DateTime CreatedAt { get; set; }
@@ -51,12 +52,20 @@ public class PromotionValidationResponse
     public decimal TotalAmount { get; set; }
     public decimal EligibleAmount { get; set; }
     public decimal DiscountAmount { get; set; }
+    public decimal OrderSubtotal { get; set; }
+    public decimal EligibleSubtotal { get; set; }
+    public decimal CalculatedDiscount { get; set; }
+    public decimal ActualDiscount { get; set; }
     public decimal FinalAmount { get; set; }
 }
 
 public class AvailablePromotionResponse : PromotionValidationResponse
 {
     public string BoothName { get; set; } = string.Empty;
+    public decimal DiscountValue { get; set; }
+    public decimal? MinimumOrderAmount { get; set; }
+    public decimal? MaximumDiscountAmount { get; set; }
+    public DateTime StartDate { get; set; }
     public DateTime EndDate { get; set; }
 }
 

@@ -13,10 +13,14 @@ namespace ApplicationLayer.Services.Orders
     public interface IOrderService
     {
         Task<ApiResponse<OrderResponseDto>> CreateOrderAsync(CreateOrderDto dto);
+        Task<ApiResponse<PaginationResp<CustomerOrderHistoryResponse>>> GetCustomerHistoryAsync(Guid customerId, CustomerOrderHistoryRequest request, CancellationToken cancellationToken = default);
+        Task<ApiResponse<CustomerOrderDetailResponse>> GetCustomerDetailAsync(Guid customerId, Guid orderId, CancellationToken cancellationToken = default);
         Task<ApiResponse<SupplementalPaymentResponseDto>> PayRemainingAmountAsync(Guid actorId, long orderCode);
         Task<WebhookDispatchResult> ProcessPaymentWebhookAsync(PayOSWebhookData verifiedData);
         Task<ApiResponse<bool>> UpdateOrderStatusByBoothOwnerAsync(Guid boothOwnerId, UpdateOrderStatusDto dto);
-        Task<ApiResponse<bool>> CancelOrder(long orderCode);
+        Task<ApiResponse<bool>> CancelOrderByCustomer(Guid customerId, long orderCode);
+        Task<ApiResponse<bool>> CancelOrderByBoothOwnerAsync(Guid boothOwnerId, long orderCode, RefundQRRequest request);
+        Task<ApiResponse<bool>> ReconcileRefundAsync(Guid boothOwnerId, long orderCode);
         Task<ApiResponse<bool>> ActiveCheckPaymentStatus(long orderCode);
         Task<bool> HasOrderWithCodeAsync(long orderCode);
         Task<ApiResponse<PaginationResp<BoothOwnerOrderListItemResponse>>> GetBoothOwnerOrdersAsync(

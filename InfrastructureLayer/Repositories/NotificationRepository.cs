@@ -71,6 +71,24 @@ public class NotificationRepository : GenericRepository<Notification>, INotifica
                     .SetProperty(notification => notification.UpdatedAt, readAt),
                 cancellationToken);
 
+    public Task<int> MarkReferenceAsReadAsync(
+        Guid userId,
+        string referenceType,
+        Guid referenceId,
+        DateTime readAt,
+        CancellationToken cancellationToken = default)
+        => ActiveQuery()
+            .Where(notification => notification.UserId == userId
+                && !notification.IsRead
+                && notification.ReferenceType == referenceType
+                && notification.ReferenceId == referenceId)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(notification => notification.IsRead, true)
+                    .SetProperty(notification => notification.ReadAt, readAt)
+                    .SetProperty(notification => notification.UpdatedAt, readAt),
+                cancellationToken);
+
     public async Task<PagedResult<Notification>> GetAdminPagedBatchesAsync(
         string? keyword,
         NotificationTarget? target,

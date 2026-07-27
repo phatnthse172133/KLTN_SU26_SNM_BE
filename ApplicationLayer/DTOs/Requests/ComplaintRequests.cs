@@ -6,15 +6,17 @@ namespace ApplicationLayer.DTOs.Requests;
 
 public class CreateComplaintRequest
 {
+    // Kept for backward compatibility; the service derives the authoritative booth from OrderId.
     public Guid BoothId { get; set; }
     public Guid OrderId { get; set; }
 
-    [Required, StringLength(200)]
+    [Required, StringLength(200, MinimumLength = 3)]
     public string Title { get; set; } = string.Empty;
 
-    [Required, StringLength(2000)]
+    [Required, StringLength(2000, MinimumLength = 10)]
     public string Description { get; set; } = string.Empty;
 
+    [MaxLength(5)]
     public List<ComplaintImageRequest> Images { get; set; } = new();
 }
 

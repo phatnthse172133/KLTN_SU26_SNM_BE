@@ -1,9 +1,12 @@
 using System.Security.Claims;
 using ApplicationLayer.DTOs.Requests;
+using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
 using ApplicationLayer.Services.Account;
+using ApplicationLayer.Services.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace PresentationLayer.Controllers;
 
@@ -13,13 +16,16 @@ namespace PresentationLayer.Controllers;
 public class AccountController : ControllerBase
 {
     private readonly IAccountService _service;
-    public AccountController(IAccountService service)
+    private readonly IAuthService _authService;
+    public AccountController(IAccountService service, IAuthService authService)
     {
         _service = service;
+        _authService = authService;
     }
 
     private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
+    [Authorize(Roles = "Customer")]
     [HttpGet]
     public async Task<IActionResult> GetMyAccount(CancellationToken cancellationToken)
     {
@@ -27,6 +33,7 @@ public class AccountController : ControllerBase
         return response.Success ? Ok(response) : NotFound(response);
     }
 
+    [Authorize(Roles = "Customer")]
     [HttpPut]
     public async Task<IActionResult> UpdateMyAccount(UpdateProfileRequest request, CancellationToken cancellationToken)
     {
@@ -34,17 +41,34 @@ public class AccountController : ControllerBase
         return response.Success ? Ok(response) : NotFound(response);
     }
 
-    [HttpPut("avatar")]
-    public async Task<IActionResult> UpdateAvatar(UpdateAvatarRequest request, CancellationToken cancellationToken)
+    [Authorize(Roles = "Customer")]
+    [HttpPost("avatar")]
+    [EnableRateLimiting("AvatarUploadPolicy")]
+    [Consumes("multipart/form-data")]
+    // Allow multipart framing overhead; the storage service enforces a 5 MB file cap.
+    [RequestSizeLimit(6 * 1024 * 1024)]
+    public async Task<IActionResult> UpdateAvatar(
+        IFormFile? file,
+        CancellationToken cancellationToken)
     {
-        var response = await _service.UpdateAvatarAsync(CurrentUserId, request, cancellationToken);
+        if (file is null)
+            throw AppException.BadRequest("Avatar file is required.", "AVATAR_FILE_REQUIRED");
+
+        await using var stream = file.OpenReadStream();
+        var response = await _service.UpdateAvatarAsync(
+            CurrentUserId,
+            stream,
+            file.FileName,
+            file.ContentType,
+            file.Length,
+            cancellationToken);
         return response.Success ? Ok(response) : NotFound(response);
     }
 
     [HttpPost("change-password")]
     public async Task<IActionResult> ChangePassword(ChangePasswordRequest request, CancellationToken cancellationToken)
     {
-        var response = await _service.ChangePasswordAsync(CurrentUserId, request, cancellationToken);
+        var response = await _authService.ChangePasswordAsync(CurrentUserId, request, cancellationToken);
         return response.Success ? Ok(response) : BadRequest(response);
     }
 

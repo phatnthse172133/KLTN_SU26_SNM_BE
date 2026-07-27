@@ -296,7 +296,8 @@ namespace DomainLayer.Enums
             Payos = 1,
             VNPay = 2,
             MoMo = 3,
-            ZaloPay = 4
+            ZaloPay = 4,
+            None = 5 // Khong can cong thanh toan (vi du don duoc giam 100%)
         }
 
         public enum PaymentStatus
@@ -312,11 +313,12 @@ namespace DomainLayer.Enums
         {
             Placed = 0,          // Đơn hàng mới đã được hệ thống ghi nhận
             Preparing = 1,       // Quầy đang chuẩn bị món
-            ReadyForPickup = 2,  // Món đã xong, chờ khách đến lấy
-            Completed = 3,       // Khách đã lấy món -> Hoàn thành đơn
-            Cancelled = 4,        // Đơn bị hủy (Do khách hủy hoặc quầy hết nguyên liệu)
-            Underpaid = 5,        // Thanh toán thiếu (Phát hiện gian lận hoặc lỗi dòng tiền)
-            Refunded = 6,         // Đơn đã được hoàn tiền cho khách
+            ReadyForPickup = 2,  // Món đã xong, chờ khách đến lấy (hoàn thành món nhưng chưa trả tiền cho quầy nếu customer chọn
+                                 // Cash)
+            Completed = 3,       // Khách đã lấy món -> Hoàn thành đơn (đã trả tiền cho quầy nếu customer chọn Cash)
+            Cancelled = 4,       // Đơn bị hủy (Do khách hủy hoặc quầy hết nguyên liệu)
+            Underpaid = 5        // Đã nhận tiền nhưng thấp hơn FinalAmount, chờ thanh toán bổ sung/xử lý
+            //Refunded = 6,         // Đơn đã được hoàn tiền cho khách
         }
 
         //public enum PayOrderStatus

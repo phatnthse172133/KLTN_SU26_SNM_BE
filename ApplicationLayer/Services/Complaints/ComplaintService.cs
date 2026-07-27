@@ -46,22 +46,41 @@ public class ComplaintService : IComplaintService
 
     public async Task<ApiResponse<ComplaintResponse>> CreateAsync(Guid customerId, CreateComplaintRequest request, CancellationToken cancellationToken = default)
     {
-        await ValidateOrderForBoothAsync(customerId, request.OrderId, request.BoothId);
+        var title = TextHelper.NormalizeOptionalText(request.Title);
+        var description = TextHelper.NormalizeOptionalText(request.Description);
+        if (title is null || title.Length < 3)
+            throw AppException.BadRequest("Complaint title must contain at least 3 characters.", "COMPLAINT_TITLE_INVALID");
+        if (title.Length > 200)
+            throw AppException.BadRequest("Complaint title cannot exceed 200 characters.", "COMPLAINT_TITLE_INVALID");
+        if (description is null || description.Length < 10)
+            throw AppException.BadRequest("Complaint description must contain at least 10 characters.", "COMPLAINT_DESCRIPTION_INVALID");
+        if (description.Length > 2000)
+            throw AppException.BadRequest("Complaint description cannot exceed 2000 characters.", "COMPLAINT_DESCRIPTION_INVALID");
+        var requestedImages = request.Images ?? [];
+        if (requestedImages.Count > 5)
+            throw AppException.BadRequest("A complaint can contain at most 5 images.", "COMPLAINT_IMAGE_LIMIT");
 
-        if (await _complaints.HasActiveComplaintAsync(customerId, request.BoothId, request.OrderId))
+        var boothId = await GetAuthoritativeBoothIdAsync(customerId, request.OrderId, cancellationToken);
+        if (request.BoothId != Guid.Empty && request.BoothId != boothId)
+            throw AppException.BadRequest("The booth does not match the order.", "ORDER_BOOTH_MISMATCH");
+
+        if (await _complaints.HasActiveComplaintAsync(customerId, boothId, request.OrderId))
             throw AppException.Conflict("There is already an active complaint for this order and booth.");
 
         var now = DateTime.UtcNow;
         var complaint = _mapper.Map<Complaint>(request);
         complaint.Id = Guid.NewGuid();
         complaint.CustomerId = customerId;
+        complaint.BoothId = boothId;
+        complaint.Title = title;
+        complaint.Description = description;
         complaint.Status = ComplaintStatus.Pending;
         complaint.CreatedAt = now;
         complaint.UpdatedAt = now;
 
         await _complaints.AddAsync(complaint);
 
-        var images = request.Images
+        var images = requestedImages
             .Where(i => !string.IsNullOrWhiteSpace(i.ImageUrl))
             .Select(i => new ComplaintImage
             {
@@ -78,11 +97,12 @@ public class ComplaintService : IComplaintService
             await _complaints.AddImagesAsync(images);
         }
 
-        await _complaints.SaveChangesAsync();
+        if (!await _complaints.TrySaveNewComplaintAsync(cancellationToken))
+            throw AppException.Conflict("There is already an active complaint for this order and booth.", "ACTIVE_COMPLAINT_EXISTS");
         var booth = await _booths.GetByIdAsync(complaint.BoothId);
         if (booth is not null)
         {
-            await _notifications.NotifyAsync(new NotificationMessage(
+            await TryNotifyAsync(new NotificationMessage(
                 booth.BoothOwnerId,
                 NotificationType.ComplaintSubmitted,
                 "New booth complaint",
@@ -97,7 +117,7 @@ public class ComplaintService : IComplaintService
                     orderId = complaint.OrderId
                 })), cancellationToken);
         }
-        await _notifications.NotifyRoleAsync(new RoleNotificationMessage(
+        await TryNotifyRoleAsync(new RoleNotificationMessage(
             "Admin",
             NotificationType.ComplaintSubmitted,
             "New complaint submitted",
@@ -117,7 +137,7 @@ public class ComplaintService : IComplaintService
             var market = await _nightMarkets.GetActiveByIdAsync(booth.NightMarketId, cancellationToken);
             if (market?.MarketOwnerId is Guid marketOwnerId)
             {
-                await _notifications.NotifyAsync(new NotificationMessage(
+                await TryNotifyAsync(new NotificationMessage(
                     marketOwnerId,
                     NotificationType.ComplaintSubmitted,
                     "New complaint in your market",
@@ -145,6 +165,15 @@ public class ComplaintService : IComplaintService
             customerId, pagination.Page, pagination.PageSize, cancellationToken);
         return ApiResponse<PaginationResp<ComplaintResponse>>.SuccessResponse(
             _mapper.MapPage<Complaint, ComplaintResponse>(page, pagination));
+    }
+
+    public async Task<ApiResponse<ComplaintResponse>> GetMineDetailAsync(Guid customerId, Guid complaintId, CancellationToken cancellationToken = default)
+    {
+        var complaint = await _complaints.GetCustomerWithImagesByIdAsync(customerId, complaintId, cancellationToken);
+        if (complaint is null)
+            throw AppException.NotFound("Complaint was not found.", "COMPLAINT_NOT_FOUND");
+
+        return ApiResponse<ComplaintResponse>.SuccessResponse(ToResponse(complaint));
     }
 
     public async Task<ApiResponse<PaginationResp<ComplaintResponse>>> GetAllAsync(PaginationReq pagination, ComplaintStatus? status = null, CancellationToken cancellationToken = default)
@@ -432,17 +461,14 @@ public class ComplaintService : IComplaintService
         return ApiResponse<ComplaintResponse>.SuccessResponse(ToResponse(updated!), "Complaint status updated successfully.");
     }
 
-    private async Task ValidateOrderForBoothAsync(Guid customerId, Guid orderId, Guid boothId)
+    private async Task<Guid> GetAuthoritativeBoothIdAsync(Guid customerId, Guid orderId, CancellationToken cancellationToken)
     {
-        if (await _booths.GetByIdAsync(boothId) is null)
-            throw AppException.NotFound("Booth was not found.");
-
         var order = await _orders.GetByCustomerAsync(customerId, orderId);
         if (order is null)
             throw AppException.NotFound("Order was not found.");
 
-        if (!await _orders.ContainsBoothItemsAsync(orderId, boothId))
-            throw AppException.BadRequest("Order does not contain items from this booth.");
+        return await _orders.GetBoothIdForCustomerOrderAsync(customerId, orderId, cancellationToken)
+            ?? throw AppException.BadRequest("Order has no booth items.", "ORDER_HAS_NO_ITEMS");
     }
 
     private static void ValidateStatusTransition(ComplaintStatus currentStatus, ComplaintStatus nextStatus)
@@ -491,6 +517,30 @@ public class ComplaintService : IComplaintService
 
     private ComplaintResponse ToResponse(Complaint complaint)
         => _mapper.Map<ComplaintResponse>(complaint);
+
+    private async Task TryNotifyAsync(NotificationMessage message, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _notifications.NotifyAsync(message, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            Console.Error.WriteLine($"Complaint was persisted but notification delivery failed: {exception.Message}");
+        }
+    }
+
+    private async Task TryNotifyRoleAsync(RoleNotificationMessage message, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _notifications.NotifyRoleAsync(message, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            Console.Error.WriteLine($"Complaint was persisted but role notification delivery failed: {exception.Message}");
+        }
+    }
 
     public async Task<ApiResponse<ComplaintCountsResponse>> GetCountsAsync(CancellationToken cancellationToken = default)
     {

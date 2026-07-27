@@ -29,7 +29,7 @@ public class AISettingsService : IAISettingsService
         var enableExternal = dbSettings.TryGetValue("AIProvider.EnableExternalProvider", out var e) && bool.TryParse(e, out var parsed) ? parsed : configSettings.EnableExternalProvider;
         var model = dbSettings.TryGetValue("AIProvider.Model", out var m) ? m : configSettings.Model;
         var baseUrl = dbSettings.TryGetValue("AIProvider.BaseUrl", out var b) ? b : configSettings.BaseUrl;
-        var hasApiKey = dbSettings.TryGetValue("AIProvider.ApiKey", out var k) ? !string.IsNullOrWhiteSpace(k) : !string.IsNullOrWhiteSpace(configSettings.ApiKey);
+        var hasApiKey = !string.IsNullOrWhiteSpace(configSettings.ApiKey);
 
         var response = new AISettingsResponse
         {
@@ -46,26 +46,34 @@ public class AISettingsService : IAISettingsService
     {
         if (string.IsNullOrWhiteSpace(request.Provider))
             throw AppException.BadRequest("Provider is required.");
+        if (!request.Provider.Equals("Gemini", StringComparison.OrdinalIgnoreCase))
+            throw AppException.BadRequest("Only the configured Gemini provider is supported.");
 
         if (string.IsNullOrWhiteSpace(request.Model))
             throw AppException.BadRequest("Model is required.");
+        if (request.Model.Length > 100 || request.Model.Any(character => !char.IsLetterOrDigit(character) && character is not '.' and not '_' and not '-'))
+            throw AppException.BadRequest("Model contains unsupported characters.");
 
         if (string.IsNullOrWhiteSpace(request.BaseUrl))
             throw AppException.BadRequest("Base URL is required.");
+        if (!Uri.TryCreate(request.BaseUrl, UriKind.Absolute, out var baseUri)
+            || baseUri.Scheme != Uri.UriSchemeHttps
+            || !baseUri.Host.Equals("generativelanguage.googleapis.com", StringComparison.OrdinalIgnoreCase))
+            throw AppException.BadRequest("Gemini BaseUrl must use the official HTTPS host.");
+        if (!string.IsNullOrWhiteSpace(request.ApiKey))
+            throw AppException.BadRequest("API keys must be configured through AIProvider__ApiKey, not stored in the database.");
 
         await SaveSettingAsync("AIProvider.Provider", request.Provider, cancellationToken);
         await SaveSettingAsync("AIProvider.EnableExternalProvider", request.EnableExternalProvider.ToString().ToLowerInvariant(), cancellationToken);
         await SaveSettingAsync("AIProvider.Model", request.Model, cancellationToken);
         await SaveSettingAsync("AIProvider.BaseUrl", request.BaseUrl, cancellationToken);
-
-        if (!string.IsNullOrWhiteSpace(request.ApiKey))
-        {
-            await SaveSettingAsync("AIProvider.ApiKey", request.ApiKey, cancellationToken);
-        }
+        var legacyApiKey = await _settingsRepo.FirstOrDefaultAsync(setting => setting.Key == "AIProvider.ApiKey");
+        if (legacyApiKey is not null)
+            _settingsRepo.Delete(legacyApiKey);
 
         await _settingsRepo.SaveChangesAsync();
 
-        var hasApiKey = await _settingsRepo.AnyAsync(s => s.Key == "AIProvider.ApiKey" && s.Value != "");
+        var hasApiKey = !string.IsNullOrWhiteSpace(_settings.CurrentValue.ApiKey);
 
         var response = new AISettingsResponse
         {

@@ -74,10 +74,25 @@ public class LocalFileStorageService : IFileStorageService
         if (!AllowedExtensions.Contains(extension))
             throw AppException.BadRequest("Please select a JPG, PNG, or WEBP image.", "AVATAR_FILE_TYPE_NOT_ALLOWED");
 
-        // Read magic bytes
+        // Buffer within the enforced cap so non-seekable input is supported and the
+        // declared multipart length cannot be used to bypass the actual size limit.
+        await using var bufferedStream = new MemoryStream();
+        var copyBuffer = new byte[81920];
+        int read;
+        while ((read = await stream.ReadAsync(copyBuffer.AsMemory(), cancellationToken)) > 0)
+        {
+            if (bufferedStream.Length + read > MaxFileSize)
+                throw AppException.PayloadTooLarge("The selected image must be 5 MB or smaller.", "AVATAR_FILE_TOO_LARGE");
+
+            await bufferedStream.WriteAsync(copyBuffer.AsMemory(0, read), cancellationToken);
+        }
+        if (bufferedStream.Length == 0)
+            throw AppException.BadRequest("Avatar file is required.", "AVATAR_FILE_REQUIRED");
+
+        bufferedStream.Position = 0;
         var headerBuffer = new byte[12];
-        var bytesRead = await stream.ReadAsync(headerBuffer.AsMemory(0, 12), cancellationToken);
-        stream.Position = 0;
+        var bytesRead = await bufferedStream.ReadAsync(headerBuffer.AsMemory(0, 12), cancellationToken);
+        bufferedStream.Position = 0;
 
         // Detect actual image type from signature
         string? detectedType = null;
@@ -114,9 +129,16 @@ public class LocalFileStorageService : IFileStorageService
         Directory.CreateDirectory(fullPath);
 
         var fullFilePath = Path.Combine(fullPath, randomFileName);
-        await using (var fileStream = new FileStream(fullFilePath, FileMode.Create))
+        try
         {
-            await stream.CopyToAsync(fileStream, cancellationToken);
+            await using var fileStream = new FileStream(fullFilePath, FileMode.CreateNew);
+            await bufferedStream.CopyToAsync(fileStream, cancellationToken);
+        }
+        catch
+        {
+            if (File.Exists(fullFilePath))
+                File.Delete(fullFilePath);
+            throw;
         }
 
         return $"/uploads/{relativePath}";
@@ -134,7 +156,16 @@ public class LocalFileStorageService : IFileStorageService
         if (string.IsNullOrWhiteSpace(fileName))
             return Task.CompletedTask;
 
-        var fullPath = Path.Combine(StorageRoot, AvatarFolder, fileName);
+        var extension = Path.GetExtension(fileName);
+        var generatedName = Path.GetFileNameWithoutExtension(fileName);
+        if (!AllowedExtensions.Contains(extension) ||
+            !Guid.TryParseExact(generatedName, "N", out _))
+        {
+            return Task.CompletedTask;
+        }
+
+        var wwwrootPath = _env.WebRootPath ?? Path.Combine(_env.ContentRootPath, "wwwroot");
+        var fullPath = Path.Combine(wwwrootPath, AvatarFolder, fileName);
 
         // Ensure the resolved path is within the avatar folder (prevent path traversal)
         var fullDir = Path.GetFullPath(Path.Combine(StorageRoot, AvatarFolder));

@@ -29,6 +29,9 @@ public sealed record NightMarketBoothCustomerReadModel(
     decimal? Longitude,
     TimeOnly? OpenTime,
     TimeOnly? CloseTime,
+    TimeOnly? MarketOpenTime,
+    TimeOnly? MarketCloseTime,
+    bool MarketIsOperational,
     decimal? AverageRating,
     bool IsFeatured);
 
@@ -42,4 +45,10 @@ public sealed record NightMarketFoodCustomerReadModel(
     string? Description,
     decimal Price,
     string? ThumbnailUrl,
+    bool IsAvailable,
+    TimeOnly? BoothOpenTime,
+    TimeOnly? BoothCloseTime,
+    TimeOnly? MarketOpenTime,
+    TimeOnly? MarketCloseTime,
+    bool MarketIsOperational,
     bool IsFeatured);

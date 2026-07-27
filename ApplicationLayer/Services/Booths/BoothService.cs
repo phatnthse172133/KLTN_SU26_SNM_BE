@@ -44,6 +44,7 @@ public class BoothService : IBoothService
         if (booth is null)
             throw AppException.NotFound("You do not have a booth.");
 
+        ValidateOpeningHours(request.OpenTime, request.CloseTime);
         _mapper.Map(request, booth);
         booth.BoothName = booth.BoothName.Trim(); booth.UpdatedAt = DateTime.UtcNow;
 
@@ -70,6 +71,7 @@ public class BoothService : IBoothService
         if (request.ZoneId.HasValue && (await _zones.GetActiveByIdAsync(request.ZoneId.Value))?.NightMarketId != booth.NightMarketId)
             throw AppException.BadRequest("The assigned zone does not belong to this booth's night market.");
 
+        ValidateOpeningHours(request.OpenTime, request.CloseTime);
         _mapper.Map(request, booth);
         booth.BoothName = booth.BoothName.Trim(); booth.UpdatedAt = DateTime.UtcNow;
 
@@ -77,5 +79,17 @@ public class BoothService : IBoothService
         if (booth.Status == DomainLayer.Enums.GeneralEnum.BoothStatus.Inactive)
             await _locations.ReleaseAsync(booth.Id, DateTime.UtcNow, cancellationToken);
         return ApiResponse<BoothResponse>.SuccessResponse(_mapper.Map<BoothResponse>(booth), "Booth updated successfully by the administrator.");
+    }
+
+    private static void ValidateOpeningHours(TimeOnly? openTime, TimeOnly? closeTime)
+    {
+        if (openTime.HasValue != closeTime.HasValue)
+            throw AppException.BadRequest(
+                "Booth opening and closing times must be provided together.",
+                "BOOTH_HOURS_INCOMPLETE");
+        if (openTime.HasValue && openTime.Value == closeTime!.Value)
+            throw AppException.BadRequest(
+                "Booth opening and closing times must be different.",
+                "INVALID_BOOTH_HOURS");
     }
 }

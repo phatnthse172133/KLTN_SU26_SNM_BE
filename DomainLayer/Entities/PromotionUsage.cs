@@ -14,6 +14,10 @@ public partial class PromotionUsage
 
     public decimal DiscountAmount { get; set; }
 
+    public string? PromotionCodeSnapshot { get; set; }
+
+    public string PromotionTitleSnapshot { get; set; } = null!;
+
     public PromotionUsageStatus Status { get; set; }
 
     public DateTime AppliedAt { get; set; }

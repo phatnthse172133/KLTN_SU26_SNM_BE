@@ -9,45 +9,6 @@ namespace ApplicationLayer.Mappings
     {
         public MappingProfile()
         {
-            CreateMap<UpdateProfileRequest, User>()
-                .ForMember(d => d.Id, o => o.Ignore())
-                .ForMember(d => d.Email, o => o.Ignore())
-                .ForMember(d => d.UserName, o => o.Ignore())
-                .ForMember(d => d.PasswordHash, o => o.Ignore())
-                .ForMember(d => d.RoleId, o => o.Ignore())
-                .ForMember(d => d.Status, o => o.Ignore())
-                .ForMember(d => d.AvatarUrl, o => o.Ignore())
-                .ForMember(d => d.CreatedAt, o => o.Ignore())
-                .ForMember(d => d.UpdatedAt, o => o.Ignore())
-                .ForMember(d => d.AuthProvider, o => o.Ignore())
-                .ForMember(d => d.GoogleId, o => o.Ignore())
-                .ForMember(d => d.RefreshTokenHash, o => o.Ignore())
-                .ForMember(d => d.RefreshTokenExpiresAt, o => o.Ignore())
-                .ForMember(d => d.EmailVerificationTokenHash, o => o.Ignore())
-                .ForMember(d => d.EmailVerificationTokenExpiresAt, o => o.Ignore())
-                .ForMember(d => d.PasswordResetOtpHash, o => o.Ignore())
-                .ForMember(d => d.PasswordResetOtpExpiresAt, o => o.Ignore())
-                .ForMember(d => d.PasswordResetTokenHash, o => o.Ignore())
-                .ForMember(d => d.PasswordResetTokenExpiresAt, o => o.Ignore())
-                .ForMember(d => d.Booth, o => o.Ignore())
-                .ForMember(d => d.Carts, o => o.Ignore())
-                .ForMember(d => d.Complaints, o => o.Ignore())
-                .ForMember(d => d.Conversations, o => o.Ignore())
-                .ForMember(d => d.Messages, o => o.Ignore())
-                .ForMember(d => d.Notifications, o => o.Ignore())
-                .ForMember(d => d.DeviceTokens, o => o.Ignore())
-                .ForMember(d => d.Orders, o => o.Ignore())
-                .ForMember(d => d.Payments, o => o.Ignore())
-                .ForMember(d => d.PromotionUsages, o => o.Ignore())
-                .ForMember(d => d.ReviewReplies, o => o.Ignore())
-                .ForMember(d => d.Reviews, o => o.Ignore())
-                .ForMember(d => d.CustomerPreferences, o => o.Ignore())
-                .ForMember(d => d.AIRecommendationLogs, o => o.Ignore())
-                .ForMember(d => d.MarketSubscriptions, o => o.Ignore())
-                .ForMember(d => d.Role, o => o.Ignore())
-                .ForMember(d => d.BoothRegistrations, o => o.Ignore())
-                .ForMember(d => d.PaymentMethods, o => o.Ignore());
-
             CreateMap<CartItem, CartItemResponse>()
                 .ForMember(d => d.CartItemId, o => o.MapFrom(s => s.Id))
                 .ForMember(d => d.FoodName, o => o.MapFrom(s => s.FoodItem.Name))
@@ -58,7 +19,9 @@ namespace ApplicationLayer.Mappings
                     && !s.FoodItem.Category.IsDeleted
                     && s.FoodItem.Booth.Status == DomainLayer.Enums.GeneralEnum.BoothStatus.Active))
                 .ForMember(d => d.CurrentUnitPrice, o => o.Ignore())
-                .ForMember(d => d.LineTotal, o => o.Ignore());
+                .ForMember(d => d.LineTotal, o => o.Ignore())
+                .ForMember(d => d.CanOrder, o => o.Ignore())
+                .ForMember(d => d.ReasonCode, o => o.Ignore());
 
             CreateMap<CreatePromotionRequest, Promotion>()
                 .ForMember(d => d.Id, o => o.Ignore())
@@ -92,6 +55,7 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.UsedCount, o => o.MapFrom(s =>
                     s.PromotionUsages.Count(usage =>
                         usage.Status != DomainLayer.Enums.GeneralEnum.PromotionUsageStatus.Released)))
+                .ForMember(d => d.ConfigurationWarnings, o => o.Ignore())
                 .ForMember(d => d.FoodItems, o => o.MapFrom(s => s.PromotionFoodItems))
                 .ForMember(d => d.Categories, o => o.MapFrom(s => s.PromotionCategories));
 
@@ -462,12 +426,16 @@ namespace ApplicationLayer.Mappings
 
             CreateMap<User, ConversationUserResponse>()
                 .ForMember(d => d.UserId, o => o.MapFrom(s => s.Id));
+            CreateMap<Booth, ConversationBoothResponse>()
+                .ForMember(d => d.BoothId, o => o.MapFrom(s => s.Id));
             CreateMap<Message, MessageResponse>()
                 .ForMember(d => d.SenderName, o => o.MapFrom(s => s.Sender.FullName))
                 .ForMember(d => d.SenderAvatarUrl, o => o.MapFrom(s => s.Sender.AvatarUrl));
             CreateMap<Conversation, ConversationResponse>()
                 .ForMember(d => d.Customer, o => o.MapFrom(s => s.Customer))
-                .ForMember(d => d.BoothOwner, o => o.MapFrom(s => s.BoothOwner))
+                .ForMember(d => d.BoothOwnerId, o => o.MapFrom(s => s.Booth.BoothOwnerId))
+                .ForMember(d => d.BoothOwner, o => o.MapFrom(s => s.Booth.BoothOwner))
+                .ForMember(d => d.Booth, o => o.MapFrom(s => s.Booth))
                 .ForMember(d => d.UnreadCount, o => o.Ignore());
         }
     }

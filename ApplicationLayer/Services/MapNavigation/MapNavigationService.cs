@@ -78,16 +78,17 @@ public class MapNavigationService : IMapNavigationService
 
     public async Task<ApiResponse<ShortestPathResponse>> FindRouteToBoothAsync(Guid layoutId, Guid fromNodeId, Guid boothId, CancellationToken cancellationToken = default)
     {
-        await EnsureLayoutAsync(layoutId, cancellationToken);
+        var layout = await EnsureLayoutAsync(layoutId, cancellationToken);
         var nodes = await _nodes.GetByLayoutAsync(layoutId, accessibleOnly: true, cancellationToken);
 
         var byId = nodes.ToDictionary(x => x.Id);
         if (!byId.TryGetValue(fromNodeId, out var from)) 
             throw AppException.BadRequest("The starting node is invalid or inaccessible.");
 
-        var booth = await _booths.GetByIdAsync(boothId) ?? throw AppException.NotFound("Booth was not found.");
-        if (booth.Status != DomainLayer.Enums.GeneralEnum.BoothStatus.Active)
-            throw AppException.NotFound("Booth was not found.");
+        var booth = await _booths.GetCustomerByIdAsync(boothId, cancellationToken)
+            ?? throw AppException.NotFound("Booth was not found.", "BOOTH_NOT_FOUND");
+        if (booth.MarketId != layout.NightMarketId)
+            throw AppException.NotFound("Booth was not found.", "BOOTH_NOT_FOUND");
 
         var location = await _locations.GetCurrentByBoothAsync(boothId, cancellationToken)
             ?? throw AppException.NotFound("The booth does not have an active location.");
@@ -102,7 +103,7 @@ public class MapNavigationService : IMapNavigationService
         {
             LayoutId = layoutId,
             FromNode = new() { NodeId = from.Id, NodeName = from.NodeName },
-            Destination = new() { BoothId = booth.Id, BoothName = booth.BoothName, NodeId = location.LayoutNodeId },
+            Destination = new() { BoothId = booth.Id, BoothName = booth.Name, NodeId = location.LayoutNodeId },
             TotalDistance = distance,
             EstimatedWalkingMinutes = Math.Max(1, (int)Math.Ceiling((double)distance / 80d)),
             Path = ids.Select((id, index) => new RoutePathNodeResponse

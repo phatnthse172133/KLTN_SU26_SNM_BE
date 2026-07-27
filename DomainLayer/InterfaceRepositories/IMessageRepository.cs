@@ -22,14 +22,13 @@ public interface IMessageRepository : IGenericRepository<Message>
         CancellationToken cancellationToken = default);
 
     Task<IReadOnlyDictionary<Guid, int>> CountUnreadByConversationIdsAsync(
-        IReadOnlyDictionary<Guid, DateTime?> conversationReadTimes,
+        IReadOnlyCollection<Guid> conversationIds,
         Guid readerId,
         CancellationToken cancellationToken = default);
 
     Task<int> CountUnreadAsync(
         Guid conversationId,
         Guid readerId,
-        DateTime? lastReadAt,
         CancellationToken cancellationToken = default);
 
     Task<Message?> GetLatestVisibleByConversationAsync(

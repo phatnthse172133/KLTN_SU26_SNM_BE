@@ -9,6 +9,13 @@ public class ConversationUserResponse
     public string? AvatarUrl { get; set; }
 }
 
+public class ConversationBoothResponse
+{
+    public Guid BoothId { get; set; }
+    public string BoothName { get; set; } = string.Empty;
+    public string? ThumbnailUrl { get; set; }
+}
+
 public class MessageResponse
 {
     public Guid Id { get; set; }
@@ -31,11 +38,13 @@ public class ConversationResponse
     public Guid Id { get; set; }
     public Guid CustomerId { get; set; }
     public Guid BoothOwnerId { get; set; }
+    public Guid BoothId { get; set; }
     public string Status { get; set; } = string.Empty;
     public DateTime? LastMessageAt { get; set; }
     public MessageResponse? LastMessage { get; set; }
     public ConversationUserResponse Customer { get; set; } = new();
     public ConversationUserResponse BoothOwner { get; set; } = new();
+    public ConversationBoothResponse Booth { get; set; } = new();
     public int UnreadCount { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }

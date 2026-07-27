@@ -1,12 +1,11 @@
 using System.Security.Claims;
-using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.Services.Chats;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 
 namespace PresentationLayer.Hubs;
 
-[Authorize]
+[Authorize(Roles = "Customer,BoothOwner")]
 public class ChatHub : Hub
 {
     private readonly IChatService _chatService;
@@ -33,15 +32,6 @@ public class ChatHub : Hub
             Context.ConnectionId,
             ConversationGroupName(conversationId),
             Context.ConnectionAborted);
-
-    public async Task SendMessage(Guid conversationId, SendMessageRequest request)
-    {
-        await _chatService.SendMessageAsync(
-            CurrentUserId(),
-            conversationId,
-            request,
-            Context.ConnectionAborted);
-    }
 
     public async Task MarkConversationRead(Guid conversationId)
     {

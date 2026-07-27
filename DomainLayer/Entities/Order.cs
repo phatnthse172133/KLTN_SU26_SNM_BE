@@ -16,6 +16,9 @@ public partial class Order
 
     public long OrderCode { get; set; }
 
+    // Nullable only for legacy rows created before checkout idempotency existed.
+    public Guid? CheckoutRequestId { get; set; }
+
     public OrderStatus Status { get; set; } //Trạng thái làm món
 
     //public PayOrderStatus PayStatus { get; set; }

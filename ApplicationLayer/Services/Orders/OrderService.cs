@@ -5,10 +5,15 @@ using ApplicationLayer.Helppers;
 using ApplicationLayer.Services.Notifications;
 using ApplicationLayer.Services.PayOS;
 using ApplicationLayer.Services.Promotions;
+using ApplicationLayer.Services.CustomerDiscovery;
+using ApplicationLayer.Services.PayOS;
+using DomainLayer.Common;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using PayOS;
+using PayOS.Models.V1.Payouts.Batch;
 using PayOS.Models.Webhooks;
 using System;
 using System.Collections.Generic;
@@ -23,7 +28,8 @@ namespace ApplicationLayer.Services.Orders
     {
         private readonly IOrderRepository _orderRepo;
         private readonly IPromotionRepository _promotionRepo;
-        private readonly IPromotionValidationService _promotionValidation;
+        private readonly IPromotionValidationService _validation;
+        private readonly IPayOSPayoutService _payouts;
         private readonly IPayOSService _payos;
         private readonly IRealtimeNotificationPublisher _notificationPublisher;
         private readonly IFoodItemRepository _foodItemRepo;
@@ -31,670 +37,647 @@ namespace ApplicationLayer.Services.Orders
         private readonly IConfiguration _config;
         private readonly IPayOSOrderCodeGenerator _orderCodeGenerator;
         private readonly IBoothRepository _boothRepo;
+        private readonly IPromotionUsageRepository _promotionUsages;
+        private readonly INotificationService? _notifications;
 
-        public OrderService(
-            IOrderRepository orderRepo,
-            IPromotionRepository promotionRepo,
-            IPromotionValidationService promotionValidation,
-            IPayOSService payos,
-            IRealtimeNotificationPublisher notificationPublisher,
-            IFoodItemRepository foodItemRepo,
-            ILogger<OrderService> logger,
-            IConfiguration config,
-            IPayOSOrderCodeGenerator orderCodeGenerator,
-            IBoothRepository boothRepo)
+        public OrderService(IOrderRepository orderRepo,
+                            IPromotionRepository promotionRepo,
+                            IPromotionValidationService validation,
+                            IPayOSPayoutService payouts,
+                             IRealtimeNotificationPublisher notificationPublisher,
+                             IFoodItemRepository foodItemRepo,
+                             ILogger<OrderService> logger,
+                             IConfiguration config,
+                             IPayOSService payos,
+                             IPayOSOrderCodeGenerator orderCodeGenerator,
+                             IBoothRepository boothRepo,
+                             IPromotionUsageRepository promotionUsages,
+                             INotificationService? notifications = null)
         {
             _orderRepo = orderRepo;
             _promotionRepo = promotionRepo;
-            _promotionValidation = promotionValidation;
-            _payos = payos;
+            _validation = validation;
+            _payouts = payouts;
             _notificationPublisher = notificationPublisher;
             _foodItemRepo = foodItemRepo;
             _config = config;
             _logger = logger;
+            _payos = payos;
             _orderCodeGenerator = orderCodeGenerator;
             _boothRepo = boothRepo;
+            _promotionUsages = promotionUsages;
+            _notifications = notifications;
         }
 
-        //Dành cho customer lẫn khách vang lai (Walk-in) đặt món, trả về link thanh toán nếu chọn online
+        //DÃ nh cho customer láº«n khÃ¡ch vang lai (Walk-in) Ä‘áº·t mÃ³n, tráº£ vá» link thanh toÃ¡n náº¿u chá»n online
+
+        public async Task<ApiResponse<PaginationResp<CustomerOrderHistoryResponse>>> GetCustomerHistoryAsync(
+            Guid customerId,
+            CustomerOrderHistoryRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            if (request.Status.HasValue && !Enum.IsDefined(request.Status.Value))
+                throw AppException.BadRequest("Order status is invalid.", "INVALID_ORDER_STATUS");
+
+            var page = await _orderRepo.GetCustomerHistoryAsync(customerId, request.Status, request.Page, request.PageSize, cancellationToken);
+            var items = page.Items.Select(order => new CustomerOrderHistoryResponse
+            {
+                OrderId = order.OrderId,
+                OrderCode = order.OrderCode,
+                BoothId = order.BoothId,
+                BoothName = order.BoothName,
+                OrderStatus = order.OrderStatus,
+                PaymentStatus = order.PaymentStatus,
+                FinalAmount = order.FinalAmount,
+                CreatedAt = order.CreatedAt,
+                ItemCount = order.ItemCount
+            }).ToList();
+
+            return ApiResponse<PaginationResp<CustomerOrderHistoryResponse>>.SuccessResponse(
+                PaginationResp<CustomerOrderHistoryResponse>.Create(items, page.TotalCount, request));
+        }
+
+        public async Task<ApiResponse<CustomerOrderDetailResponse>> GetCustomerDetailAsync(
+            Guid customerId,
+            Guid orderId,
+            CancellationToken cancellationToken = default)
+        {
+            var order = await _orderRepo.GetCustomerDetailAsync(customerId, orderId, cancellationToken)
+                ?? throw AppException.NotFound("Order was not found.", "ORDER_NOT_FOUND");
+
+            return ApiResponse<CustomerOrderDetailResponse>.SuccessResponse(new CustomerOrderDetailResponse
+            {
+                OrderId = order.OrderId,
+                OrderCode = order.OrderCode,
+                Booth = new CustomerOrderBoothResponse { BoothId = order.BoothId, BoothName = order.BoothName },
+                Items = order.Items.Select(item => new CustomerOrderItemResponse
+                {
+                    FoodItemId = item.FoodItemId,
+                    FoodName = item.FoodName,
+                    Quantity = item.Quantity,
+                    UnitPrice = item.UnitPrice,
+                    LineTotal = item.LineTotal
+                }).ToList(),
+                Subtotal = order.Subtotal,
+                Promotion = order.Promotion is null ? null : new CustomerOrderPromotionResponse
+                {
+                    PromotionId = order.Promotion.PromotionId,
+                    PromotionCode = order.Promotion.PromotionCode,
+                    PromotionTitle = order.Promotion.PromotionTitle,
+                    DiscountAmount = order.Promotion.DiscountAmount
+                },
+                DiscountAmount = order.DiscountAmount,
+                FinalAmount = order.FinalAmount,
+                OrderStatus = order.OrderStatus,
+                Payments = order.Payments.Select(payment => new CustomerOrderPaymentResponse
+                {
+                    PaymentId = payment.PaymentId,
+                    Type = payment.Type,
+                    Gateway = payment.Gateway,
+                    Status = payment.Status,
+                    Amount = payment.Amount,
+                    RefundAmount = payment.RefundAmount,
+                    PaidAt = payment.PaidAt,
+                    RefundRequestedAt = payment.RefundRequestedAt,
+                    RefundedAt = payment.RefundedAt,
+                    CreatedAt = payment.CreatedAt
+                }).ToList(),
+                CreatedAt = order.CreatedAt,
+                UpdatedAt = order.UpdatedAt
+            });
+        }
+
         public async Task<ApiResponse<OrderResponseDto>> CreateOrderAsync(CreateOrderDto dto)
         {
-            // 0. Guard: reject orders for booths in deleted markets
-            var booth = await _boothRepo.GetByOwnerIdAsync(dto.BoothOwnerId);
-            if (booth is null)
-                return ApiResponse<OrderResponseDto>.Failure("Booth not found.", "BOOTH_NOT_FOUND");
-            if (booth.Status != BoothStatus.Active)
-                return ApiResponse<OrderResponseDto>.Failure("This booth is not currently active. Orders cannot be placed.", "BOOTH_NOT_ACTIVE");
-            if (booth.NightMarket is null || booth.NightMarket.IsDeleted)
-                return ApiResponse<OrderResponseDto>.Failure("This night market is no longer available. Orders cannot be placed.", "MARKET_UNAVAILABLE");
+            if (dto.Items is null || dto.Items.Count == 0)
+                throw AppException.BadRequest("The order must contain at least one item.", "ORDER_ITEMS_REQUIRED");
+            if (dto.CheckoutRequestId == Guid.Empty)
+                throw AppException.BadRequest("CheckoutRequestId is required.", "CHECKOUT_REQUEST_ID_REQUIRED");
+            if (dto.Items.Any(item => item.FoodItemId == Guid.Empty || item.Quantity <= 0))
+                throw AppException.BadRequest("Every order item must have a valid food id and quantity.", "INVALID_ORDER_ITEM");
+            if (dto.Items.Select(item => item.FoodItemId).Distinct().Count() != dto.Items.Count)
+                throw AppException.BadRequest("Duplicate food items are not allowed.", "DUPLICATE_ORDER_ITEM");
 
-            // 1. Sinh mã đơn hàng dạng Số nguyên (Duy nhất) vì PayOS ép buộc mã đơn là kiểu long/int
-            long uniqueOrderCode = await _orderCodeGenerator.GenerateAsync(PayOSOrderSource.Order);
+            var customerId = dto.CustomerId;
+            if (dto.IsCreatedByBooth && customerId is null)
+                customerId = Guid.Parse(_config["SystemSettings:WalkInCustomerId"]
+                    ?? "00000000-0000-0000-0000-000000000001");
+            if (customerId is null)
+                throw AppException.BadRequest("Customer id is required.", "CUSTOMER_ID_REQUIRED");
 
-            // XỬ LÝ KHÁCH HÀNG VÃNG LAI: Nếu chủ quầy đặt hộ và không có CustomerId cụ thể
-            Guid? finalCustomerId = dto.CustomerId;
-            if (dto.IsCreatedByBooth && finalCustomerId == null)
+            var utcNow = DateTime.UtcNow;
+            var foodIds = dto.Items.Select(item => item.FoodItemId).ToList();
+            var foods = await _foodItemRepo.GetAllFoodItemsByIdsAsync(foodIds);
+            if (foods.Count != foodIds.Count)
+                throw AppException.NotFound("One or more food items do not exist.", "FOOD_ITEM_NOT_FOUND");
+
+            var foodsById = foods.ToDictionary(food => food.Id);
+            var boothIds = foods.Select(food => food.BoothId).Distinct().ToList();
+            if (boothIds.Count != 1 || boothIds[0] != dto.BoothId)
+                throw AppException.BadRequest("All order items must belong to the selected booth.", "MULTIPLE_BOOTHS_NOT_ALLOWED");
+
+            var booth = foods[0].Booth;
+            if (booth.BoothOwnerId != dto.BoothOwnerId)
+                throw AppException.BadRequest("The booth information is invalid.", "BOOTH_MISMATCH");
+
+            foreach (var item in dto.Items)
             {
-                // Đọc từ file appsettings.json ra, nếu file config lỗi thì dùng giá trị mặc định để backup
-                var walkInIdString = _config["SystemSettings:WalkInCustomerId"]
-                                     ?? "00000000-0000-0000-0000-000000000001";
-                finalCustomerId = Guid.Parse(walkInIdString);
+                var food = foodsById[item.FoodItemId];
+                var orderability = CustomerOrderability.Evaluate(food, utcNow);
+                if (!orderability.CanOrder)
+                    throw AppException.Conflict(
+                        CustomerOrderability.GetPublicMessage(orderability.ReasonCode!),
+                        orderability.ReasonCode!);
+                if (item.UnitPrice != FoodPriceResolver.GetCurrentPrice(food, utcNow))
+                    throw AppException.Conflict(
+                        $"The price of '{food.Name}' has changed. Refresh the cart.",
+                        "PRICE_CHANGED");
             }
-            if (!finalCustomerId.HasValue)
-                return ApiResponse<OrderResponseDto>.Failure(
-                    "CustomerId is required for customer-created orders.",
-                    "CUSTOMER_ID_REQUIRED");
 
-            // 2. Khởi tạo đối tượng Order chính
+            var orderCode = await _orderCodeGenerator.GenerateAsync(PayOSOrderSource.Order);
             var order = new Order
             {
                 Id = Guid.NewGuid(),
-                CustomerId = finalCustomerId.Value,
-                BoothOwnerId = dto.BoothOwnerId,
-                OrderCode = uniqueOrderCode,
+                CustomerId = customerId.Value,
+                BoothOwnerId = booth.BoothOwnerId,
+                OrderCode = orderCode,
+                CheckoutRequestId = dto.CheckoutRequestId,
                 Note = dto.Note,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow,
-                Status = OrderStatus.Placed
+                Status = OrderStatus.Placed,
+                CreatedAt = utcNow,
+                UpdatedAt = utcNow
             };
 
-            // 3. Duyệt danh sách món ăn + Topping để lưu chi tiết và tính tổng tiền thực tế
-            decimal calculatedTotalAmount = 0;
-
-            //REAL
-            var foodIds = dto.Items.Select(i => i.FoodItemId).ToList();
-            var foodItemsFromDb = await _foodItemRepo.GetAllFoodItemsByIdsAsync(foodIds);
-
-            //TEST (tạm thời comment 2 dòng trên và 4 dòng dưới để test PayOS, tránh lỗi null ref khi chưa có món ăn thực tế trong DB)
-
-
-            foreach (var itemDto in dto.Items)
+            foreach (var item in dto.Items)
             {
-                var dbFoodItem = foodItemsFromDb.FirstOrDefault(f => f.Id == itemDto.FoodItemId);
-                if (dbFoodItem == null) return ApiResponse<OrderResponseDto>.Failure("Món ăn không tồn tại hoặc đã bị xóa khỏi thực đơn!");
-
-                decimal realUnitPrice = dbFoodItem.Price;
-                decimal itemTotalPrice = realUnitPrice * itemDto.Quantity;
-                //decimal realUnitPrice = itemDto.UnitPrice;
-                //decimal itemTotalPrice = realUnitPrice * itemDto.Quantity;
-
-                var orderDetail = new OrderDetail
+                var food = foodsById[item.FoodItemId];
+                var unitPrice = FoodPriceResolver.GetCurrentPrice(food, utcNow);
+                order.OrderDetails.Add(new OrderDetail
                 {
                     Id = Guid.NewGuid(),
-                    FoodItemId = itemDto.FoodItemId,
-                    Quantity = itemDto.Quantity,
-                    UnitPrice = realUnitPrice, // Snapshot giá món
-                    TotalPrice = itemTotalPrice,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
-                };
-
-                // Xử lý đống Topping đi kèm của món ăn đó (Nếu có)
-                //foreach (var toppingDto in itemDto.Toppings)
-                //{
-                //    var orderDetailTopping = new OrderDetailTopping
-                //    {
-                //        Id = Guid.NewGuid(),
-                //        ToppingItemId = toppingDto.ToppingItemId,
-                //        ToppingName = toppingDto.ToppingName,
-                //        UnitPrice = toppingDto.UnitPrice, // Snapshot giá topping
-                //    };
-
-                //    orderDetail.OrderDetailToppings.Add(orderDetailTopping);
-
-                //    // Cộng dồn tiền Topping vào tổng tiền của món (Nhân với số lượng món ăn đặt)
-                //    itemTotalPrice += (toppingDto.UnitPrice * itemDto.Quantity);
-                //}
-
-                // Cập nhật lại chính xác TotalPrice của OrderDetail sau khi có topping
-                //orderDetail.TotalPrice = itemTotalPrice;
-
-                // Cộng vào tổng tiền lớn của cả Đơn hàng
-                calculatedTotalAmount += itemTotalPrice;
-
-                // Add vào Collection có sẵn trong Entity Order
-                order.OrderDetails.Add(orderDetail);
+                    FoodItemId = food.Id,
+                    FoodNameSnapshot = food.Name,
+                    Quantity = item.Quantity,
+                    UnitPrice = unitPrice,
+                    TotalPrice = unitPrice * item.Quantity,
+                    CreatedAt = utcNow,
+                    UpdatedAt = utcNow
+                });
             }
 
-            // 4. Áp đặt số tiền cuối cùng cho Đơn hàng
-            decimal discountAmount = 0;
+            order.TotalAmount = order.OrderDetails.Sum(detail => detail.TotalPrice);
+            Promotion? promotion = null;
+            IReadOnlyCollection<CartItem>? validationItems = null;
             if (!string.IsNullOrWhiteSpace(dto.PromotionCode))
             {
-                var promotion = await _promotionRepo.GetByCodeAsync(dto.BoothId, dto.PromotionCode);
-                if (promotion is null)
-                    return ApiResponse<OrderResponseDto>.Failure(
-                        "The promotion code is invalid or unavailable.",
-                        "PROMOTION_NOT_FOUND");
-
-                try
+                promotion = await _promotionRepo.GetByCodeAsync(dto.BoothId, dto.PromotionCode)
+                    ?? throw AppException.NotFound("Promotion was not found.", "PROMOTION_NOT_FOUND");
+                validationItems = dto.Items.Select(item => new CartItem
                 {
-                    var validationItems = dto.Items.Select(itemDto =>
-                    {
-                        var food = foodItemsFromDb.First(f => f.Id == itemDto.FoodItemId);
-                        return new CartItem
-                        {
-                            FoodItemId = itemDto.FoodItemId,
-                            Quantity = itemDto.Quantity,
-                            FoodItem = food
-                        };
-                    }).ToList();
-                    var validationResult = await _promotionValidation.ValidateAsync(
-                        finalCustomerId.Value,
-                        promotion,
-                        validationItems);
-                    discountAmount = validationResult.DiscountAmount;
-                    order.PromotionUsages.Add(new PromotionUsage
-                    {
-                        Id = Guid.NewGuid(),
-                        PromotionId = promotion.Id,
-                        OrderId = order.Id,
-                        CustomerId = finalCustomerId.Value,
-                        DiscountAmount = discountAmount,
-                        Status = PromotionUsageStatus.Reserved,
-                        AppliedAt = DateTime.UtcNow,
-                        CreatedAt = DateTime.UtcNow,
-                        UpdatedAt = DateTime.UtcNow
-                    });
-                }
-                catch (AppException ex)
+                    FoodItemId = item.FoodItemId,
+                    Quantity = item.Quantity,
+                    FoodItem = foodsById[item.FoodItemId]
+                }).ToList();
+                var preview = await _validation.ValidateAsync(customerId.Value, promotion, validationItems);
+                order.DiscountAmount = preview.DiscountAmount;
+                order.PromotionUsages.Add(new PromotionUsage
                 {
-                    return ApiResponse<OrderResponseDto>.Failure(ex.Message, ex.ErrorCode);
-                }
+                    Id = Guid.NewGuid(),
+                    PromotionId = promotion.Id,
+                    OrderId = order.Id,
+                    CustomerId = customerId.Value,
+                    DiscountAmount = preview.DiscountAmount,
+                    PromotionCodeSnapshot = promotion.PromotionCode,
+                    PromotionTitleSnapshot = promotion.Title,
+                    Status = PromotionUsageStatus.Reserved,
+                    AppliedAt = utcNow,
+                    CreatedAt = utcNow,
+                    UpdatedAt = utcNow
+                });
             }
 
-            order.TotalAmount = calculatedTotalAmount;
-            order.DiscountAmount = discountAmount;
-            order.FinalAmount = calculatedTotalAmount - discountAmount;
-            if (order.FinalAmount < 0) order.FinalAmount = 0; // Tránh tiền bị âm
+            if (order.TotalAmount < 0m
+                || order.DiscountAmount < 0m
+                || order.DiscountAmount > order.TotalAmount)
+            {
+                throw AppException.Conflict(
+                    "The order financial totals are invalid. Refresh the cart and retry.",
+                    "ORDER_FINANCIAL_INVARIANT_VIOLATION");
+            }
 
-            // 5. Khởi tạo bản ghi lịch sử giao dịch ở bảng Payment
+            order.FinalAmount = order.TotalAmount - order.DiscountAmount;
+            var isZeroPaymentOrder = order.FinalAmount == 0m;
+            if (isZeroPaymentOrder)
+            {
+                // A fully discounted order is financially settled without an
+                // external provider. It follows the same operational state as
+                // a successfully paid PayOS order.
+                order.Status = OrderStatus.Preparing;
+                PromotionUsageLifecycle.ConsumeReserved(
+                    order.PromotionUsages,
+                    utcNow);
+            }
+
             var payment = new Payment
             {
                 Id = Guid.NewGuid(),
                 OrderId = order.Id,
-                BoothOwnerId = dto.BoothOwnerId,
+                BoothOwnerId = booth.BoothOwnerId,
                 Amount = order.FinalAmount,
                 Type = dto.PaymentMethod,
-                Gateway = dto.PaymentMethod == PaymentType.PayOS
-                    ? PaymentGateway.Payos
-                    : PaymentGateway.BankTransfer,
-                Status = PaymentStatus.Pending, 
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
+                Gateway = isZeroPaymentOrder
+                    ? PaymentGateway.None
+                    : dto.PaymentMethod == PaymentType.PayOS
+                        ? PaymentGateway.Payos
+                        : PaymentGateway.BankTransfer,
+                Status = isZeroPaymentOrder ? PaymentStatus.Paid : PaymentStatus.Pending,
+                PayOSOrderCode = dto.PaymentMethod == PaymentType.PayOS && !isZeroPaymentOrder
+                    ? orderCode
+                    : null,
+                PaidAt = isZeroPaymentOrder ? utcNow : null,
+                CreatedAt = utcNow,
+                UpdatedAt = utcNow
             };
             order.Payments.Add(payment);
 
-            // 6. RẼ NHÁNH LOGIC THANH TOÁN
             string? checkoutUrl = null;
-            NotificationListItemResponse? newOrderNotification = null;
-
-            if (dto.PaymentMethod == PaymentType.Cash)
+            var payosLinkCreated = false;
+            await _orderRepo.BeginTransactionAsync();
+            try
             {
-                if (!dto.IsCreatedByBooth)
+                await _orderRepo.AcquireCheckoutLockAsync(customerId.Value, dto.CheckoutRequestId);
+                var existingOrder = await _orderRepo.GetByCheckoutRequestAsync(customerId.Value, dto.CheckoutRequestId);
+                if (existingOrder is not null)
                 {
-                    newOrderNotification = new NotificationListItemResponse
+                    await _orderRepo.RollbackTransactionAsync();
+                    var existingPayment = existingOrder.Payments
+                        .OrderByDescending(existing => existing.CreatedAt)
+                        .FirstOrDefault();
+                    return ApiResponse<OrderResponseDto>.SuccessResponse(new OrderResponseDto
                     {
-                        Id = Guid.NewGuid(),
-                        BoothId = order.BoothOwnerId,
-                        Type = "ORDER_NEW",
-                        Title = "New cash order",
-                        Content = $"Order #{order.OrderCode} was placed for {order.FinalAmount:N0} VND.",
-                        IsRead = false,
-                        ReferenceType = "Order",
-                        ReferenceId = order.Id,
-                        CreatedAt = DateTime.UtcNow
-                    };
+                        OrderId = existingOrder.Id,
+                        OrderCode = existingOrder.OrderCode,
+                        Status = existingOrder.Status,
+                        PaymentUrl = existingPayment?.CheckoutUrl
+                    }, "The existing idempotent checkout result was returned.");
                 }
-            }
-            else if (dto.PaymentMethod == PaymentType.PayOS)
-            {
-                try
+
+                if (promotion is not null)
                 {
-                    var payosResp = await _payos.CreatePaymentLinkAsync(new PayOSPaymentRequest
+                    await _promotionRepo.AcquireReservationLockAsync(promotion.Id);
+                    var lockedPromotion = await _promotionRepo.GetReservationDetailsAsync(promotion.Id)
+                        ?? throw AppException.Conflict(
+                            "Promotion is no longer available. Please retry.",
+                            "PROMOTION_CHANGED");
+                    var finalValidation = await _validation.ValidateAsync(
+                        customerId.Value,
+                        lockedPromotion,
+                        validationItems!);
+                    if (finalValidation.DiscountAmount != order.DiscountAmount)
+                        throw AppException.Conflict(
+                            "Promotion terms changed during checkout. Please retry.",
+                            "PROMOTION_CHANGED");
+                }
+
+                // Promotion quota must be finalized under its PostgreSQL row lock
+                // before creating an external money intent. Otherwise two different
+                // checkout keys can both create PayOS links while only one may reserve
+                // the last promotion slot.
+                if (dto.PaymentMethod == PaymentType.PayOS && !isZeroPaymentOrder)
+                {
+                    var link = await _payos.CreatePaymentLinkAsync(new PayOSPaymentRequest
                     {
-                        OrderCode = uniqueOrderCode,
+                        OrderCode = orderCode,
                         Amount = order.FinalAmount,
-                        Description = $"Process {uniqueOrderCode}",
+                        Description = $"SNM{orderCode % 1_000_000}"
                     });
+                    checkoutUrl = link.CheckoutUrl;
+                    payment.CheckoutUrl = link.CheckoutUrl;
+                    payment.PaymentLinkId = link.PaymentLinkId;
+                    payosLinkCreated = true;
+                }
 
-                    payment.CheckoutUrl = payosResp.CheckoutUrl;
-                    payment.PaymentLinkId = payosResp.PaymentLinkId;
-                    payment.PayOSOrderCode = uniqueOrderCode;
-                    checkoutUrl = payosResp.CheckoutUrl;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Failed to create PayOS payment link for order creation");
-                    return ApiResponse<OrderResponseDto>.Failure("Failed to create payment link. Please try again later.", "PAYMENT_LINK_FAILED");
-                }
+                await _orderRepo.AddAsync(order);
+                await _orderRepo.SaveChangesAsync();
+                await _orderRepo.CommitTransactionAsync();
             }
-
-            // 7. Lưu trọn gói Đơn hàng + Chi tiết đơn + Topping + Lịch sử Payment vào DB (Chỉ 1 lần Save duy nhất)
-            await _orderRepo.AddAsync(order);
-            await _orderRepo.SaveChangesAsync();
-            if (newOrderNotification is not null)
+            catch
             {
-                try
-                {
-                    await _notificationPublisher.PublishAsync(
-                        order.BoothOwnerId, newOrderNotification, unreadCount: 1);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(
-                        ex,
-                        "Order {OrderCode} was saved, but its realtime notification could not be delivered.",
-                        order.OrderCode);
-                }
+                await _orderRepo.RollbackTransactionAsync();
+                if (payosLinkCreated)
+                    await TryCancelPayOSLinkAsync(orderCode);
+                throw;
             }
 
-            // 8. Trả kết quả về cho Controller
-            return ApiResponse<OrderResponseDto>.SuccessResponse(
-                new OrderResponseDto
-                {
-                    OrderId = order.Id,
-                    OrderCode = order.OrderCode,
-                    Status = order.Status,
-                    PaymentUrl = checkoutUrl
-                },
-                "Order created successfully."
-            );
+            if (dto.PaymentMethod == PaymentType.Cash || isZeroPaymentOrder)
+                await TryPublishOrderCreatedAsync(order, utcNow, isZeroPaymentOrder);
+
+            return ApiResponse<OrderResponseDto>.SuccessResponse(new OrderResponseDto
+            {
+                OrderId = order.Id,
+                OrderCode = order.OrderCode,
+                Status = order.Status,
+                PaymentUrl = checkoutUrl
+            }, "Order created successfully.");
         }
 
-        public async Task<ApiResponse<SupplementalPaymentResponseDto>> PayRemainingAmountAsync(Guid actorId, long orderCode)
+
+        public async Task<ApiResponse<SupplementalPaymentResponseDto>> PayRemainingAmountAsync(
+            Guid actorId,
+            long orderCode)
         {
-            var order = await _orderRepo.GetOrderByCodeAsync(orderCode);
-            if (order == null)
-                return ApiResponse<SupplementalPaymentResponseDto>.Failure("Order not found.", "ORDER_NOT_FOUND");
-
+            throw AppException.Conflict(
+                "Supplemental PayOS payments are disabled because the current model cannot preserve both expected and actually received amounts.",
+                "SUPPLEMENTAL_PAYMENT_NOT_SUPPORTED");
+#pragma warning disable CS0162
+            var order = await _orderRepo.GetOrderByCodeAsync(orderCode)
+                ?? throw AppException.NotFound("Order was not found.", "ORDER_NOT_FOUND");
             if (order.CustomerId != actorId && order.BoothOwnerId != actorId)
-                return ApiResponse<SupplementalPaymentResponseDto>.Failure("You do not have permission to perform this action on this order.", "ORDER_ACCESS_DENIED");
-
+                throw AppException.Forbidden("You cannot access this order.", "ORDER_ACCESS_DENIED");
             if (order.Status != OrderStatus.Underpaid)
-                return ApiResponse<SupplementalPaymentResponseDto>.Failure("Order is not in Underpaid status.", "ORDER_NOT_UNDERPAID");
+                throw AppException.Conflict("Order is not underpaid.", "ORDER_NOT_UNDERPAID");
 
             await _orderRepo.BeginTransactionAsync();
-            long? createdPayOSOrderCode = null;
+            long? createdCode = null;
             try
             {
                 await _orderRepo.AcquireSupplementalPaymentLockAsync(order.Id);
-
-                // Reload order inside transaction to get consistent state
-                order = await _orderRepo.GetOrderByCodeAsync(orderCode);
-                if (order == null)
-                {
-                    await _orderRepo.RollbackTransactionAsync();
-                    return ApiResponse<SupplementalPaymentResponseDto>.Failure("Order not found.", "ORDER_NOT_FOUND");
-                }
-
-                if (order.CustomerId != actorId && order.BoothOwnerId != actorId)
-                {
-                    await _orderRepo.RollbackTransactionAsync();
-                    return ApiResponse<SupplementalPaymentResponseDto>.Failure(
-                        "You do not have permission to perform this action on this order.",
-                        "ORDER_ACCESS_DENIED");
-                }
-
-                if (order.Status != OrderStatus.Underpaid)
-                {
-                    await _orderRepo.RollbackTransactionAsync();
-                    return ApiResponse<SupplementalPaymentResponseDto>.Failure(
-                        "Order is not in Underpaid status.",
-                        "ORDER_NOT_UNDERPAID");
-                }
-
-                var totalPaid = await _orderRepo.GetTotalPaidAmountAsync(orderCode);
-                var remaining = order.FinalAmount - totalPaid;
-
+                var existing = await _orderRepo.GetPendingPayOSPaymentByOrderIdAsync(order.Id);
+                var totalPaid = await _orderRepo.GetTotalPaidAmountAsync(order.OrderCode);
+                var remaining = Math.Max(order.FinalAmount - totalPaid, 0m);
                 if (remaining <= 0)
+                    throw AppException.Conflict("Order has no remaining balance.", "ORDER_ALREADY_PAID");
+
+                if (existing is not null && !string.IsNullOrWhiteSpace(existing.CheckoutUrl))
                 {
                     await _orderRepo.RollbackTransactionAsync();
-                    return ApiResponse<SupplementalPaymentResponseDto>.Failure("Order is already fully paid.", "ORDER_ALREADY_FULLY_PAID");
-                }
-
-                // Check for existing pending PayOS payment — return its link if still valid
-                var existingPending = await _orderRepo.GetPendingPayOSPaymentByOrderIdAsync(order.Id);
-                if (existingPending != null && !string.IsNullOrEmpty(existingPending.CheckoutUrl))
-                {
-                    await _orderRepo.RollbackTransactionAsync();
-                    return ApiResponse<SupplementalPaymentResponseDto>.SuccessResponse(
-                        new SupplementalPaymentResponseDto
-                        {
-                            OrderId = order.Id,
-                            OrderCode = order.OrderCode,
-                            RemainingAmount = existingPending.Amount,
-                            TotalPaid = totalPaid,
-                            FinalAmount = order.FinalAmount,
-                            PaymentUrl = existingPending.CheckoutUrl,
-                            PayOSOrderCode = existingPending.PayOSOrderCode ?? 0
-                        },
-                        "A pending supplemental payment link already exists for this order."
-                    );
-                }
-
-                var supplementalOrderCode = await _orderCodeGenerator.GenerateAsync(PayOSOrderSource.Order);
-
-                PayOSPaymentResponse payosResp;
-                try
-                {
-                    payosResp = await _payos.CreatePaymentLinkAsync(new PayOSPaymentRequest
+                    return ApiResponse<SupplementalPaymentResponseDto>.SuccessResponse(new()
                     {
-                        OrderCode = supplementalOrderCode,
-                        Amount = remaining,
-                        Description = $"Supplement {orderCode}",
+                        OrderId = order.Id,
+                        OrderCode = order.OrderCode,
+                        RemainingAmount = existing.Amount,
+                        TotalPaid = totalPaid,
+                        FinalAmount = order.FinalAmount,
+                        PaymentUrl = existing.CheckoutUrl,
+                        PayOSOrderCode = existing.PayOSOrderCode ?? 0
                     });
-                    createdPayOSOrderCode = supplementalOrderCode;
-                }
-                catch (Exception ex)
-                {
-                    await _orderRepo.RollbackTransactionAsync();
-                    _logger.LogError(ex, "Failed to create supplemental payment link for order {OrderCode}", orderCode);
-                    return ApiResponse<SupplementalPaymentResponseDto>.Failure(
-                        "Failed to create supplemental payment link. Please try again later.",
-                        "SUPPLEMENTAL_PAYMENT_LINK_FAILED");
                 }
 
+                createdCode = await _orderCodeGenerator.GenerateAsync(PayOSOrderSource.Order);
+                var link = await _payos.CreatePaymentLinkAsync(new PayOSPaymentRequest
+                {
+                    OrderCode = createdCode.Value,
+                    Amount = remaining,
+                    Description = $"SNM{createdCode.Value % 1_000_000}"
+                });
                 var now = DateTime.UtcNow;
-                var payment = existingPending ?? new Payment
+                var payment = new Payment
                 {
                     Id = Guid.NewGuid(),
                     OrderId = order.Id,
                     BoothOwnerId = order.BoothOwnerId,
-                    CreatedAt = now
+                    Amount = remaining,
+                    Type = PaymentType.PayOS,
+                    Gateway = PaymentGateway.Payos,
+                    Status = PaymentStatus.Pending,
+                    CheckoutUrl = link.CheckoutUrl,
+                    PaymentLinkId = link.PaymentLinkId,
+                    PayOSOrderCode = createdCode.Value,
+                    CreatedAt = now,
+                    UpdatedAt = now
                 };
-                payment.Amount = remaining;
-                payment.Type = PaymentType.PayOS;
-                payment.Gateway = PaymentGateway.Payos;
-                payment.Status = PaymentStatus.Pending;
-                payment.CheckoutUrl = payosResp.CheckoutUrl;
-                payment.PaymentLinkId = payosResp.PaymentLinkId;
-                payment.PayOSOrderCode = supplementalOrderCode;
-                payment.UpdatedAt = now;
-
-                if (existingPending is null)
-                    await _orderRepo.AddPaymentAsync(payment);
+                await _orderRepo.AddPaymentAsync(payment);
                 await _orderRepo.SaveChangesAsync();
                 await _orderRepo.CommitTransactionAsync();
-                createdPayOSOrderCode = null;
 
-                return ApiResponse<SupplementalPaymentResponseDto>.SuccessResponse(
-                    new SupplementalPaymentResponseDto
-                    {
-                        OrderId = order.Id,
-                        OrderCode = order.OrderCode,
-                        RemainingAmount = remaining,
-                        TotalPaid = totalPaid,
-                        FinalAmount = order.FinalAmount,
-                        PaymentUrl = payosResp.CheckoutUrl,
-                        PayOSOrderCode = supplementalOrderCode
-                    },
-                    "Supplemental payment link created successfully."
-                );
+                return ApiResponse<SupplementalPaymentResponseDto>.SuccessResponse(new()
+                {
+                    OrderId = order.Id,
+                    OrderCode = order.OrderCode,
+                    RemainingAmount = remaining,
+                    TotalPaid = totalPaid,
+                    FinalAmount = order.FinalAmount,
+                    PaymentUrl = link.CheckoutUrl,
+                    PayOSOrderCode = createdCode.Value
+                });
             }
-            catch (Exception ex)
+            catch
             {
                 await _orderRepo.RollbackTransactionAsync();
-                if (createdPayOSOrderCode.HasValue)
-                {
-                    try
-                    {
-                        await _payos.CancelPaymentLinkAsync(createdPayOSOrderCode.Value);
-                    }
-                    catch (Exception cancelException)
-                    {
-                        _logger.LogWarning(
-                            cancelException,
-                            "Failed to cancel orphan supplemental PayOS link {PayOSOrderCode}",
-                            createdPayOSOrderCode.Value);
-                    }
-                }
-                _logger.LogError(ex, "Error creating supplemental payment for order {OrderCode}", orderCode);
-                return ApiResponse<SupplementalPaymentResponseDto>.Failure(
-                    "An error occurred while processing the supplemental payment.",
-                    "SUPPLEMENTAL_PAYMENT_LINK_FAILED");
+                if (createdCode.HasValue)
+                    await TryCancelPayOSLinkAsync(createdCode.Value);
+                throw;
             }
+#pragma warning restore CS0162
         }
 
-        public async Task<WebhookDispatchResult> ProcessPaymentWebhookAsync(PayOSWebhookData verifiedData)
-        {
-            if (verifiedData == null)
-            {
-                _logger.LogWarning("Webhook received null verified data.");
-                return WebhookDispatchResult.InvalidSignature;
-            }
 
+        public async Task<WebhookDispatchResult> ProcessPaymentWebhookAsync(
+            PayOSWebhookData verifiedData)
+        {
+            if (verifiedData is null)
+                return WebhookDispatchResult.InvalidSignature;
+            if (!verifiedData.IsSuccessful)
+                return WebhookDispatchResult.NotSuccessful;
+
+            // Resolve supplemental provider codes without tracking an Order, then take
+            // the Order row lock before reading or mutating any state. Cleanup and both
+            // cancellation paths use the same Order -> Payment lock order.
+            var orderCode = await _orderRepo.GetOrderCodeByPayOSOrderCodeAsync(verifiedData.OrderCode)
+                ?? verifiedData.OrderCode;
+            var now = DateTime.UtcNow;
+            await _orderRepo.BeginTransactionAsync();
             try
             {
-                if (!verifiedData.IsSuccessful)
+                var order = await _orderRepo.GetOrderByCodeForUpdateAsync(orderCode);
+                if (order is null)
                 {
-                    _logger.LogInformation("Webhook received non-success code: {Code} for order {OrderCode}. Skipping order update.", verifiedData.Code, verifiedData.OrderCode);
-                    return WebhookDispatchResult.NotSuccessful;
-                }
-
-                // Try to find a Payment by PayOSOrderCode first (supplemental payment flow)
-                var paymentByCode = await _orderRepo.GetPaymentByPayOSOrderCodeAsync(verifiedData.OrderCode);
-                Order? order;
-
-                if (paymentByCode != null && paymentByCode.Order != null)
-                {
-                    order = paymentByCode.Order;
-                    _logger.LogInformation("Webhook matched Payment {PaymentId} by PayOSOrderCode {OrderCode} for Order #{RealOrderCode}.",
-                        paymentByCode.Id, verifiedData.OrderCode, order.OrderCode);
-                }
-                else
-                {
-                    order = await _orderRepo.GetOrderByCodeAsync(verifiedData.OrderCode);
-                }
-
-                if (order == null)
-                {
-                    _logger.LogWarning("No order or payment found matching OrderCode: {OrderCode} from Webhook.", verifiedData.OrderCode);
+                    await _orderRepo.RollbackTransactionAsync();
                     return WebhookDispatchResult.NotFound;
                 }
 
-                if (order.Status != OrderStatus.Placed && order.Status != OrderStatus.Underpaid)
+                var targetPayment = order.Payments
+                    .Where(payment => payment.PayOSOrderCode == verifiedData.OrderCode
+                        || (payment.PayOSOrderCode is null && order.OrderCode == verifiedData.OrderCode))
+                    .OrderByDescending(payment => payment.CreatedAt)
+                    .FirstOrDefault();
+                if (targetPayment is null)
                 {
-                    _logger.LogInformation("Order #{OrderCode} already processed (current status: {Status}). Skipping duplicate.", order.OrderCode, order.Status);
+                    await _orderRepo.RollbackTransactionAsync();
+                    return WebhookDispatchResult.NotFound;
+                }
+
+                if (!string.IsNullOrWhiteSpace(targetPayment.PaymentLinkId)
+                    && !string.IsNullOrWhiteSpace(verifiedData.PaymentLinkId)
+                    && !string.Equals(targetPayment.PaymentLinkId, verifiedData.PaymentLinkId, StringComparison.Ordinal))
+                {
+                    await _orderRepo.RollbackTransactionAsync();
+                    _logger.LogError(
+                        "PayOS webhook payment-link mismatch for provider order {OrderCode}.",
+                        verifiedData.OrderCode);
+                    return WebhookDispatchResult.Conflict;
+                }
+
+                if (order.Status == OrderStatus.Cancelled)
+                {
+                    if (targetPayment.Status is PaymentStatus.Pending or PaymentStatus.Cancelled)
+                    {
+                        targetPayment.Status = PaymentStatus.RefundProcessing;
+                        targetPayment.GatewayRef = verifiedData.Reference;
+                        targetPayment.RefundAmount = verifiedData.Amount;
+                        targetPayment.RefundReference = $"refund-{targetPayment.Id:N}";
+                        targetPayment.RefundReason = "Verified payment received after order cancellation.";
+                        targetPayment.RefundRequestedAt = now;
+                        targetPayment.UpdatedAt = now;
+                        await _orderRepo.SaveChangesAsync();
+                    }
+                    await _orderRepo.CommitTransactionAsync();
+                    return WebhookDispatchResult.OrderHandled;
+                }
+
+                if (order.Status is OrderStatus.Preparing
+                    or OrderStatus.ReadyForPickup
+                    or OrderStatus.Completed)
+                {
+                    await _orderRepo.RollbackTransactionAsync();
                     return WebhookDispatchResult.AlreadyProcessed;
                 }
 
-                var now = DateTime.UtcNow;
-
-                // Underpaid flow: first webhook with insufficient amount, or supplemental payment for an already-Underpaid order
-                if (order.Status == OrderStatus.Underpaid)
+                var amountMatches = verifiedData.Amount == targetPayment.Amount;
+                var paymentRows = amountMatches
+                    ? await _orderRepo.UpdatePendingPaymentStatusByIdAsync(
+                        targetPayment.Id,
+                        PaymentStatus.Paid,
+                        verifiedData.Reference,
+                        now,
+                        now)
+                    : await _orderRepo.MarkPendingPaymentForRefundAsync(
+                        targetPayment.Id,
+                        verifiedData.Amount,
+                        verifiedData.Reference,
+                        now);
+                if (paymentRows == 0)
                 {
-                    // Supplemental payment for an already-underpaid order
-                    await _orderRepo.BeginTransactionAsync();
-                    try
-                    {
-                        // Mark the pending payment as paid with the received amount
-                        var paymentRows = await _orderRepo.UpdatePaymentToPaidWithAmountAsync(
-                            order.OrderCode, verifiedData.Amount, verifiedData.PaymentLinkId!, verifiedData.Reference, now, now);
-                        if (paymentRows == 0)
-                        {
-                            await _orderRepo.RollbackTransactionAsync();
-                            _logger.LogInformation("Order #{OrderCode} supplemental webhook: no pending Payment record found. Skipping.", order.OrderCode);
-                            return WebhookDispatchResult.AlreadyProcessed;
-                        }
-
-                        // Check if total paid amount now covers the order
-                        var totalPaid = await _orderRepo.GetTotalPaidAmountAsync(order.OrderCode);
-
-                        if (totalPaid >= order.FinalAmount)
-                        {
-                            // Fully paid — transition to Preparing
-                            var orderRows = await _orderRepo.UpdateOrderFromUnderpaidToPreparingAsync(order.OrderCode, now);
-                            if (orderRows == 0)
-                            {
-                                await _orderRepo.RollbackTransactionAsync();
-                                _logger.LogInformation("Order #{OrderCode} no longer Underpaid (concurrent update). Skipping.", order.OrderCode);
-                                return WebhookDispatchResult.AlreadyProcessed;
-                            }
-                        }
-
-                        await _orderRepo.CommitTransactionAsync();
-                    }
-                    catch
-                    {
-                        await _orderRepo.RollbackTransactionAsync();
-                        throw;
-                    }
-
-                    // Send notification
-                    var totalPaidAfter = await _orderRepo.GetTotalPaidAmountAsync(order.OrderCode);
-                    var notificationType = totalPaidAfter >= order.FinalAmount ? "ORDER_PAID" : "ORDER_UNDERPAID";
-                    var notificationTitle = totalPaidAfter >= order.FinalAmount ? "Order paid (supplemental)" : "Order still underpaid";
-                    var notificationContent = totalPaidAfter >= order.FinalAmount
-                        ? $"Order #{order.OrderCode} has been fully paid via supplemental payment. Total received: {totalPaidAfter:N0}, Required: {order.FinalAmount:N0}"
-                        : $"Order #{order.OrderCode} received supplemental payment of {verifiedData.Amount:N0}. Total received so far: {totalPaidAfter:N0}, Required: {order.FinalAmount:N0}";
-
-                    var supplementalNotification = new NotificationListItemResponse
-                    {
-                        Id = Guid.NewGuid(),
-                        BoothId = order.BoothOwnerId,
-                        Type = notificationType,
-                        Title = notificationTitle,
-                        Content = notificationContent,
-                        IsRead = false,
-                        ReferenceType = "Order",
-                        ReferenceId = order.Id,
-                        CreatedAt = now
-                    };
-
-                    try
-                    {
-                        await _notificationPublisher.PublishAsync(order.BoothOwnerId, supplementalNotification, unreadCount: 1);
-                    }
-                    catch (Exception notifEx)
-                    {
-                        _logger.LogError(notifEx, "Order #{OrderCode} supplemental notification failed after commit. Order status already persisted.", order.OrderCode);
-                    }
-                    return WebhookDispatchResult.OrderHandled;
+                    await _orderRepo.RollbackTransactionAsync();
+                    return WebhookDispatchResult.AlreadyProcessed;
                 }
 
-                // order.Status == Placed — first webhook
-                // Underpaid: amount received is less than order total
-                if (verifiedData.Amount < order.FinalAmount)
+                if (!amountMatches)
                 {
-                    await _orderRepo.BeginTransactionAsync();
-                    try
-                    {
-                        var rowsAffected = await _orderRepo.UpdateOrderToUnderpaidAsync(order.OrderCode, now);
-                        if (rowsAffected == 0)
-                        {
-                            await _orderRepo.RollbackTransactionAsync();
-                            _logger.LogInformation("Order #{OrderCode} already processed by concurrent webhook. Skipping.", order.OrderCode);
-                            return WebhookDispatchResult.AlreadyProcessed;
-                        }
-
-                        // Mark payment as paid with the partial amount received
-                        var paymentRows = await _orderRepo.UpdatePaymentToPaidWithAmountAsync(
-                            order.OrderCode, verifiedData.Amount, verifiedData.PaymentLinkId!, verifiedData.Reference, now, now);
-                        if (paymentRows == 0)
-                        {
-                            await _orderRepo.RollbackTransactionAsync();
-                            _logger.LogError("Order #{OrderCode} webhook: no pending Payment record found after marking order as Underpaid. Rolling back.", order.OrderCode);
-                            return WebhookDispatchResult.NotFound;
-                        }
-
-                        await _orderRepo.CommitTransactionAsync();
-                    }
-                    catch
+                    var cancelledRows = await _orderRepo.UpdateOrderStatusIfPlacedAsync(
+                        order.OrderCode,
+                        OrderStatus.Cancelled,
+                        now);
+                    if (cancelledRows == 0)
                     {
                         await _orderRepo.RollbackTransactionAsync();
-                        throw;
-                    }
-
-                    var underpaidNotification = new NotificationListItemResponse
-                    {
-                        Id = Guid.NewGuid(),
-                        BoothId = order.BoothOwnerId,
-                        Type = "ORDER_UNDERPAID",
-                        Title = "Order underpaid",
-                        Content = $"Order {order.OrderCode} received insufficient payment. Required: {order.FinalAmount:N0}, Received: {verifiedData.Amount:N0}",
-                        IsRead = false,
-                        ReferenceType = "Order",
-                        ReferenceId = order.Id,
-                        CreatedAt = now
-                    };
-
-                    try
-                    {
-                        await _notificationPublisher.PublishAsync(order.BoothOwnerId, underpaidNotification, unreadCount: 1);
-                    }
-                    catch (Exception notifEx)
-                    {
-                        _logger.LogError(notifEx, "Order #{OrderCode} underpaid notification failed after commit. Order status already persisted.", order.OrderCode);
-                    }
-                    return WebhookDispatchResult.OrderHandled;
-                }
-
-                // Exact or overpaid: proceed with order activation
-                if (verifiedData.Amount > order.FinalAmount)
-                {
-                    _logger.LogWarning("Order #{OrderCode} overpaid. Required: {Required}, Received: {Received}. Proceeding with order.", order.OrderCode, order.FinalAmount, verifiedData.Amount);
-                }
-
-                await _orderRepo.BeginTransactionAsync();
-                try
-                {
-                    // Atomic conditional update: only transitions Placed → Preparing
-                    var orderRows = await _orderRepo.UpdateOrderStatusIfPlacedAsync(order.OrderCode, OrderStatus.Preparing, now);
-                    if (orderRows == 0)
-                    {
-                        await _orderRepo.RollbackTransactionAsync();
-                        _logger.LogInformation("Order #{OrderCode} already processed by concurrent webhook. Skipping.", order.OrderCode);
                         return WebhookDispatchResult.AlreadyProcessed;
                     }
 
-                    // Update payment record within the same transaction
-                    var paymentRows = await _orderRepo.UpdatePaymentToPaidAsync(order.OrderCode, verifiedData.PaymentLinkId, verifiedData.Reference, now, now);
-                    if (paymentRows == 0)
-                    {
-                        await _orderRepo.RollbackTransactionAsync();
-                        _logger.LogError("Order #{OrderCode} webhook: no pending Payment record found. Rolling back order status update to keep Order and Payment consistent.", order.OrderCode);
-                        return WebhookDispatchResult.NotFound;
-                    }
-
+                    await _promotionUsages.ConsumeReservedByOrderAsync(order.Id, now);
                     await _orderRepo.CommitTransactionAsync();
+                    _logger.LogError(
+                        "PayOS amount mismatch for provider order {ProviderOrderCode}. Expected {ExpectedAmount}, received {ActualAmount}; payment moved to refund processing.",
+                        verifiedData.OrderCode,
+                        targetPayment.Amount,
+                        verifiedData.Amount);
+                    return WebhookDispatchResult.OrderHandled;
                 }
-                catch
+
+                var orderRows = await _orderRepo.UpdateOrderStatusIfPlacedAsync(
+                    order.OrderCode,
+                    OrderStatus.Preparing,
+                    now);
+
+                if (orderRows == 0)
                 {
                     await _orderRepo.RollbackTransactionAsync();
-                    throw;
+                    return WebhookDispatchResult.AlreadyProcessed;
                 }
 
-                // Publish notification only after commit
-                var paidNotification = new NotificationListItemResponse
-                {
-                    Id = Guid.NewGuid(),
-                    BoothId = order.BoothOwnerId,
-                    Type = "ORDER_PAID",
-                    Title = "Order paid",
-                    Content = $"Order #{order.OrderCode} has been paid successfully via PayOS. Amount: {order.FinalAmount:N0}",
-                    IsRead = false,
-                    ReferenceType = "Order",
-                    ReferenceId = order.Id,
-                    CreatedAt = now
-                };
-
-                try
-                {
-                    await _notificationPublisher.PublishAsync(order.BoothOwnerId, paidNotification, unreadCount: 1);
-                }
-                catch (Exception notifEx)
-                {
-                    _logger.LogError(notifEx, "Order #{OrderCode} paid notification failed after commit. Order status already persisted.", verifiedData.OrderCode);
-                }
-                return WebhookDispatchResult.OrderHandled;
+                await _promotionUsages.ConsumeReservedByOrderAsync(order.Id, now);
+                await _orderRepo.CommitTransactionAsync();
             }
-            catch (Exception ex)
+            catch
             {
-                _logger.LogError(ex, "Error processing webhook for order {OrderCode}", verifiedData.OrderCode);
+                await _orderRepo.RollbackTransactionAsync();
                 throw;
             }
+
+            var completedOrder = await _orderRepo.GetOrderByCodeAsync(orderCode);
+            if (completedOrder is not null)
+                await TryPublishPaymentSucceededAsync(completedOrder, now);
+            return WebhookDispatchResult.OrderHandled;
         }
 
+#if false // PayOS Webhook is a PayIn contract and must never finalize a payout.
+        public async Task<bool> ProcessPayoutWebhookAsync(Webhook webhookBody)
+        {
+            // 1. Kiểm tra tính hợp lệ của Webhook (Verify chữ ký/checksum của PayOS để tránh hacker giả lập)
+            WebhookData verifiedData = await _payOutClient.Webhooks.VerifyAsync(webhookBody);
+            if (verifiedData == null)
+            {
+                _logger.LogWarning("Webhook nhận được dữ liệu không hợp lệ hoặc chữ ký giả mạo.");
+                return true;
+            }
+
+            // 2. Trích xuất thông tin mã đơn hàng từ referenceId 
+            // referenceId dạng: "refund_123456_ticks" -> tách chuỗi lấy 123456
+            if (string.IsNullOrEmpty(verifiedData.Reference))
+            {
+                _logger.LogWarning("Webhook Payout không chứa thông tin reference.");
+                return true;
+            }
+
+            var parts = verifiedData.Reference.Split('_');
+            if (parts.Length < 2 || !long.TryParse(parts[1], out long orderCode))
+            {
+                _logger.LogWarning($"Webhook Payout nhận được referenceId không hợp lệ: {verifiedData.Reference}");
+                return true;
+            }
+
+            var order = await _orderRepo.GetOrderByCodeAsync(orderCode);
+            if (order == null)
+            {
+                _logger.LogWarning($"Không tìm thấy đơn hàng nào khớp với OrderCode: {orderCode} từ Webhook Payout.");
+                return true;
+            }
+
+            var payment = order.Payments
+                               .OrderByDescending(p => p.CreatedAt)
+                               .FirstOrDefault(p => p.Status == PaymentStatus.RefundProcessing);
+
+            if (payment != null)
+            {
+                // 3. Nếu PayOS báo lệnh Payout thành công -> Chuyển sang Refunded
+                if (verifiedData.Description != null && verifiedData.Description.ToLower() == "success")
+                {
+                    payment.Status = PaymentStatus.Refunded;
+                    payment.UpdatedAt = DateTime.UtcNow;
+
+                    _logger.LogInformation($"Webhook: Đơn hàng #{orderCode} đã được hoàn tiền THÀNH CÔNG.");
+                }
+                // Nếu PayOS báo lệnh Payout thất bại (ví dụ tài khoản đích bị khóa ngầm)
+                else
+                {
+                    payment.Status = PaymentStatus.Paid; // Trả về Paid vì thực tế tiền vẫn đang ở ví của quán, chưa đi được
+                    payment.UpdatedAt = DateTime.UtcNow;
+
+                    _logger.LogError($"Webhook: Lỗi hoàn tiền đơn #{orderCode}");
+                }
+
+                _orderRepo.Update(order);
+                await _orderRepo.SaveChangesAsync();
+            }
+            else
+            {
+                _logger.LogWarning($"Tìm thấy đơn #{orderCode} nhưng không có bản ghi thanh toán nào ở trạng thái chờ hoàn tiền.");
+            }
+
+            return true; // Trả về 200 để báo cho PayOS biết hệ thống đã nhận được dữ liệu
+        }
+
+#endif
         //public async Task<bool> RejectOrderAsync(RejectOrderDto dto)
         //{
         //    // 1. Tìm đơn hàng cần hủy trong Database
@@ -805,7 +788,51 @@ namespace ApplicationLayer.Services.Orders
             // 2. BẢO MẬT: Kiểm tra xem đơn này có thuộc về quầy của ông này không
             if (order.BoothOwnerId != boothOwnerId)
             {
-                return ApiResponse<bool>.Failure("Bạn không có quyền chỉnh sửa đơn hàng của quầy khác!");
+                return ApiResponse<bool>.Failure("Báº¡n khÃ´ng cÃ³ quyá»n chá»‰nh sá»­a Ä‘Æ¡n hÃ ng cá»§a quáº§y khÃ¡c!");
+            }
+
+            if (order.Status == OrderStatus.Cancelled || order.Status == OrderStatus.Completed)
+            {
+                return ApiResponse<bool>.Failure($"Đơn hàng đã đóng (Trạng thái hiện tại: {order.Status}). Không thể chỉnh sửa thêm.");
+            }
+
+            //Xử lý dựa trên loại thanh toán: Nếu là tiền mặt thì khi quầy bấm "Hoàn thành" thì tự động cập nhật Payment sang Paid, nếu là PayOS thì phải chờ Webhook từ PayOS về mới được phép hoàn thành
+            var transitionAllowed = (order.Status, dto.NewStatus) switch
+            {
+                (OrderStatus.Placed, OrderStatus.Preparing) => true,
+                (OrderStatus.Preparing, OrderStatus.ReadyForPickup) => true,
+                (OrderStatus.ReadyForPickup, OrderStatus.Completed) => true,
+                _ => false
+            };
+            if (!transitionAllowed)
+            {
+                return ApiResponse<bool>.Failure(
+                    $"Invalid order transition: {order.Status} -> {dto.NewStatus}.",
+                    "INVALID_ORDER_STATUS_TRANSITION",
+                    false);
+            }
+
+            var payment = order.Payments.OrderByDescending(p => p.CreatedAt)
+                                            .FirstOrDefault();
+
+            if (payment == null)
+            {
+                return ApiResponse<bool>.Failure("Không tìm thấy thông tin thanh toán của đơn hàng!");
+            }
+
+            if (dto.NewStatus == OrderStatus.Preparing)
+            {
+                if (payment.Type == PaymentType.PayOS)
+                {
+                    // Nếu khách trả thiếu -> Chủ quán bấm nút này đồng nghĩa với việc CHẤP NHẬN BÙ TIỀN THIẾU
+                    if (payment.Status == PaymentStatus.Underpaid)
+                        return ApiResponse<bool>.Failure("Underpaid PayOS orders require manual refund and cannot be accepted.");
+                    // Nếu khách chưa thanh toán đồng nào -> CHẶN TUYỆT ĐỐI không cho làm món
+                    else if (payment.Status != PaymentStatus.Paid)
+                    {
+                        return ApiResponse<bool>.Failure("Khách đặt online chưa thanh toán thành công. Không thể duyệt làm món!");
+                    }
+                }
             }
 
             // 3. Chống gian lận tiền bạc
@@ -822,6 +849,14 @@ namespace ApplicationLayer.Services.Orders
             // 4. Cập nhật trạng thái
             order.Status = dto.NewStatus;
             order.UpdatedAt = DateTime.UtcNow;
+
+            if (payment.Status == PaymentStatus.Paid
+                && dto.NewStatus is OrderStatus.Preparing or OrderStatus.Completed)
+            {
+                PromotionUsageLifecycle.ConsumeReserved(
+                    order.PromotionUsages,
+                    order.UpdatedAt);
+            }
 
             _orderRepo.Update(order);
             await _orderRepo.SaveChangesAsync();
@@ -855,21 +890,21 @@ namespace ApplicationLayer.Services.Orders
 
                 if (!string.IsNullOrEmpty(title))
                 {
-                    var customerNotification = new NotificationListItemResponse
+                    var notificationType = order.Status switch
                     {
-                        Id = Guid.NewGuid(),
-                        BoothId = order.BoothOwnerId,
-                        Type = $"ORDER_{order.Status.ToString().ToUpper()}", // ORDER_PREPARING, ORDER_READY, ORDER_COMPLETED
-                        Title = title,
-                        Content = content,
-                        IsRead = false,
-                        ReferenceType = "Order",
-                        ReferenceId = order.Id,
-                        CreatedAt = DateTime.UtcNow
+                        OrderStatus.Preparing => NotificationType.OrderPreparing,
+                        OrderStatus.ReadyForPickup => NotificationType.OrderReady,
+                        OrderStatus.Completed => NotificationType.OrderCompleted,
+                        _ => NotificationType.Order
                     };
 
-                    // Bắn đích danh vào Group SignalR của khách hàng (Tên group chính là CustomerId)
-                    await _notificationPublisher.PublishAsync(order.CustomerId, customerNotification, unreadCount: 1);
+                    // Báº¯n Ä‘Ã­ch danh vÃ o Group SignalR cá»§a khÃ¡ch hÃ ng (TÃªn group chÃ­nh lÃ  CustomerId)
+                    await PublishPersistedNotificationAsync(
+                        order.CustomerId,
+                        notificationType,
+                        title,
+                        content,
+                        order.Id);
                 }
             }
 
@@ -877,27 +912,50 @@ namespace ApplicationLayer.Services.Orders
         }
 
         //Khách chủ động hủy đơn hàng trước khi quầy nhận đơn (Chỉ áp dụng cho khách đặt qua App, không áp dụng cho khách vãng lai)
-        public async Task<ApiResponse<bool>> CancelOrder(long orderCode)
+        public async Task<ApiResponse<bool>> CancelOrderByCustomer(Guid customerId, long orderCode)
         {
-            var order = await _orderRepo.GetOrderByCodeAsync(orderCode);
-            if (order == null) return ApiResponse<bool>.Failure("Đơn hàng không tồn tại", data: false);
+            await _orderRepo.BeginTransactionAsync();
+            var order = await _orderRepo.GetOrderByCodeForUpdateAsync(orderCode);
+            if (order is not null && order.CustomerId != customerId)
+            {
+                await _orderRepo.RollbackTransactionAsync();
+                throw AppException.Forbidden("You cannot cancel another customer's order.", "ORDER_ACCESS_DENIED");
+            }
+            if (order is null)
+            {
+                await _orderRepo.RollbackTransactionAsync();
+                return ApiResponse<bool>.Failure("Order does not exist.", "ORDER_NOT_FOUND", false);
+            }
+            if (order == null) return ApiResponse<bool>.Failure("ÄÆ¡n hÃ ng khÃ´ng tá»“n táº¡i", data: false);
+
+            // Chá»‰ cho phÃ©p há»§y khi Ä‘Æ¡n Ä‘ang á»Ÿ tráº¡ng thÃ¡i chá» thanh toÃ¡n (Pending)
 
             // Chỉ cho phép hủy khi đơn đang ở trạng thái chờ thanh toán (Pending)
             
             if (order.Status != OrderStatus.Placed)
             {
-                return ApiResponse<bool>.Failure($"Đơn hàng không thể hủy ở trạng thái {order.Status}", data: false);
+                await _orderRepo.RollbackTransactionAsync();
+                return ApiResponse<bool>.Failure($"ÄÆ¡n hÃ ng khÃ´ng thá»ƒ há»§y á»Ÿ tráº¡ng thÃ¡i {order.Status}", data: false);
             }
 
             var payment = order.Payments
                                .OrderByDescending(p => p.CreatedAt)
-                               .FirstOrDefault(p => p.Status == PaymentStatus.Pending); // Vừa lọc Pending vừa lấy cái đầu tiên
+                               .FirstOrDefault(); // lấy cái đầu tiên
+
+            if (payment == null)
+            {
+                await _orderRepo.RollbackTransactionAsync();
+                return ApiResponse<bool>.Failure("Không tìm thấy bản ghi thanh toán Pending để hủy đơn", data: false);
+            }
 
             try
             {
-                // 1. GỌI SANG PAYOS ĐỂ HỦY LINK THANH TOÁN (Chặn không cho quét QR nữa)
-                // Hàm này bắt buộc truyền OrderCode (kiểu long/int) và lý do hủy tùy ý
-                if (payment != null)
+                try
+                {
+                    // Chủ động gọi PayOS đóng link thanh toán, chặn không cho quét QR nữa
+                    await _payos.CancelPaymentLinkAsync(order.OrderCode);
+                }
+                catch (Exception ex)
                 {
                     await _payos.CancelPaymentLinkAsync(order.OrderCode);
                     
@@ -909,19 +967,515 @@ namespace ApplicationLayer.Services.Orders
                 order.Status = OrderStatus.Cancelled;
                 order.UpdatedAt = DateTime.UtcNow;
 
+                // Only an unpaid reservation is returned to the quota pool.
+                // Paid/consumed promotions remain historical usage after cancellation.
+                if (payment.Status == PaymentStatus.Cancelled)
+                    PromotionUsageLifecycle.ReleaseReserved(
+                        order.PromotionUsages,
+                        order.UpdatedAt);
+
                 _orderRepo.Update(order);
                 await _orderRepo.SaveChangesAsync();
+                await _orderRepo.CommitTransactionAsync();
 
                 return ApiResponse<bool>.SuccessResponse(true, "Hủy đơn hàng thành công");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Lỗi xảy ra khi hủy đơn hàng #{orderCode}");
-                return ApiResponse<bool>.Failure("Lỗi khi đồng bộ hủy đơn với PayOS. Vui lòng thử lại sau.", "CANCEL_ORDER_PAYOS_FAILED", data: false);
+                await _orderRepo.RollbackTransactionAsync();
+                _logger.LogError(ex, $"Lỗi xảy ra khi cập nhật DB hủy đơn hàng #{orderCode}");
+                return ApiResponse<bool>.Failure($"Lỗi hệ thống khi cập nhật trạng thái hủy đơn. Lỗi: {ex.Message}", data: false);
             }
         }
 
+        //Chủ quán hủy đơn hàng (Chỉ áp dụng cho quầy, không áp dụng cho khách đặt qua App)
+        //Có 2 trường hợp :
+        //1) Nếu khách trả tiền mặt thì quầy hủy là xong,
+        //2) Nếu khách trả online thì quầy hủy phải chạy luồng hoàn tiền sang PayOS
+#if false // Replaced by the recoverable implementation below.
+        public async Task<ApiResponse<bool>> CancelOrderByBoothOwnerLegacyAsync(Guid boothOwnerId, long orderCode, RefundQRRequest request)
+        {
+            // 1. Kiểm tra request hợp lệ ngay từ đầu
+            if (request == null) return ApiResponse<bool>.Failure("Dữ liệu yêu cầu không hợp lệ.", data: false);
+
+            var order = await _orderRepo.GetOrderByCodeAsync(orderCode);
+            if (order is not null && order.BoothOwnerId != boothOwnerId)
+                throw AppException.Forbidden("You cannot cancel an order owned by another booth.", "ORDER_ACCESS_DENIED");
+            if (order == null) return ApiResponse<bool>.Failure("Đơn hàng không tồn tại", data: false);
+
+            // Chủ quán KHÔNG được hủy đơn đã hoàn thành hoặc đã hủy
+            if (order.Status == OrderStatus.Completed || order.Status == OrderStatus.Cancelled)
+            {
+                return ApiResponse<bool>.Failure("Đơn hàng đã hoàn tất hoặc đã được hủy trước đó.", data: false);
+            }
+
+            // Tìm bản ghi thanh toán thành công (nếu có)
+            var paidPayment = order.Payments
+                                   .OrderByDescending(p => p.CreatedAt)
+                                   .FirstOrDefault(p => p.Status == PaymentStatus.Paid || p.Status == PaymentStatus.Underpaid);
+
+            string notificationTitle;
+            string notificationContent;
+            var requiresExternalRefund = paidPayment is not null
+                && paidPayment.Gateway != PaymentGateway.None
+                && paidPayment.Amount > 0m;
+
+            // LUỒNG 1: ĐƠN HÀNG ĐÃ THANH TOÁN ONLINE -> KHỞI TẠO HOÀN TIỀN
+            if (paidPayment is { Gateway: PaymentGateway.None, Amount: 0m })
+            {
+                paidPayment.Status = PaymentStatus.Cancelled;
+                paidPayment.RefundReason = request.RefundReason;
+                paidPayment.UpdatedAt = DateTime.UtcNow;
+                order.Status = OrderStatus.Cancelled;
+                order.UpdatedAt = paidPayment.UpdatedAt;
+
+                _orderRepo.Update(order);
+                await _orderRepo.SaveChangesAsync();
+
+                notificationTitle = "Fully discounted order cancelled";
+                notificationContent = $"Order #{order.OrderCode} was cancelled. No refund is required.";
+            }
+            else if (paidPayment != null)
+            {
+                if (string.IsNullOrEmpty(request.AccountNumber) || string.IsNullOrEmpty(request.BankBin))
+                {
+                    return ApiResponse<bool>.Failure("Đơn hàng đã thanh toán. Vui lòng cung cấp đầy đủ Số tài khoản và Mã ngân hàng để hoàn tiền.", data: false);
+                }
+
+                try
+                {
+                    long refundAmount = paidPayment.Status == PaymentStatus.Underpaid
+                            ? (long)paidPayment.Amount //Số tiền thực tế khách đã trả (trường hợp thanh toán thiếu)
+                            : (long)order.FinalAmount; //Số tiền cần hoàn lại cho khách (thanh toán đầy đủ)
+
+                    var referenceId = $"refund_{order.OrderCode}_{DateTime.UtcNow.Ticks}"; // Thêm Ticks để tránh trùng ID khi gọi lại nếu lỗi
+                    var payoutRequest = new PayoutBatchRequest
+                    {
+                        ReferenceId = referenceId,
+                        Category = new List<string> { "refund" },
+                        ValidateDestination = true,
+                        Payouts = new List<PayoutBatchItem>
+                        {
+                            new PayoutBatchItem
+                            {
+                                ReferenceId = $"{referenceId}_item",
+                                Amount = refundAmount,
+                                Description = $"Refund #{order.OrderCode}",
+                                ToBin = request.BankBin,
+                                ToAccountNumber = request.AccountNumber
+                            }
+                        }
+                    };
+
+                    // Gọi lệnh Payout sang PayOS
+                    var payoutResult = await _payOutClient.Payouts.Batch.CreateAsync(payoutRequest);
+                    _logger.LogInformation($"Yêu cầu Payout hoàn tiền đã được gửi lên PayOS cho đơn #{order.OrderCode}. Payout ID: {payoutResult.Id}");
+
+                    //if (payoutResult != null && (payoutResult. == "COMPLETED" || payoutResult.Status == "SUCCESS"))
+                    //{
+                    //    // Tiền đã sang ngay lập tức -> Chuyển thẳng sang Refunded!
+                    //    paidPayment.Status = PaymentStatus.Refunded;
+                    //}
+                    //else
+                    //{
+                    //    // Trường hợp lệnh đã ghi nhận nhưng bên Ngân hàng đang giữ lại xử lý
+                    //    paidPayment.Status = PaymentStatus.RefundProcessing;
+                    //}
+
+                    paidPayment.Status = PaymentStatus.RefundProcessing;
+
+                    // CHÚ Ý: Lúc này tiền chưa về tài khoản khách ngay, trạng thái đúng phải là RefundProcessing
+                    //paidPayment.Status = PaymentStatus.RefundProcessing;
+                    paidPayment.RefundReason = request.RefundReason;
+                    paidPayment.UpdatedAt = DateTime.UtcNow;
+
+                    // Đơn hàng vật lý thì có thể chuyển sang Cancelled ngay lập tức để nhà bếp giải phóng đơn
+                    order.Status = OrderStatus.Cancelled;
+                    //order.Note = $"Chủ quán hủy đơn. Lý do: {request.RefundReason}. Đang chờ PayOS xử lý hoàn tiền.";
+                    order.UpdatedAt = DateTime.UtcNow;
+
+                    _orderRepo.Update(order);
+                    await _orderRepo.SaveChangesAsync();
+
+                    notificationTitle = "Đơn hàng đã bị hủy & Đang hoàn tiền";
+                    notificationContent = $"Đơn hàng #{order.OrderCode} đã bị hủy. Lệnh hoàn tiền {refundAmount:N0}đ đang được xử lý qua PayOS. Lý do: {request.RefundReason}";
+
+                    // Gửi thông báo cho khách hàng
+                    //var notificationPayload = new NotificationListItemResponse
+                    //{
+                    //    Id = Guid.NewGuid(),
+                    //    BoothId = order.BoothOwnerId,
+                    //    Type = "ORDER_CANCELLED",
+                    //    Title = "Đơn hàng đã bị hủy & Đang hoàn tiền",
+                    //    Content = $"Đơn hàng #{order.OrderCode} đã bị hủy. Lệnh hoàn tiền {order.FinalAmount:N0}đ đang được xử lý. Lý do: {request.RefundReason}",
+                    //    IsRead = false,
+                    //    ReferenceType = "Order",
+                    //    ReferenceId = order.Id,
+                    //    CreatedAt = DateTime.UtcNow
+                    //};
+                    //await _notificationPublisher.PublishAsync(order.CustomerId, notificationPayload, unreadCount: 1);
+
+                    //return ApiResponse<bool>.SuccessResponse(true, "Chủ quán hủy đơn thành công. Hệ thống đang tiến hành hoàn tiền qua PayOS.");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"Lỗi khi gọi API hoàn tiền PayOS cho đơn #{order.OrderCode}");
+                    _logger.LogError($"Data (nếu có): {ex.Data}");
+                    _logger.LogError($"Full Exception details: {ex}");
+                    return ApiResponse<bool>.Failure($"Gọi lệnh hoàn tiền sang PayOS thất bại. Vui lòng kiểm tra lại số tài khoản khách hoặc số dư ví PayOS. Lỗi: {ex.Message}", data: false);
+                }
+            }
+            else
+            {
+                // LUỒNG 2: ĐƠN HÀNG CHƯA THANH TOÁN (CASH HOẶC PAYOS CHƯA QUÉT MÃ)
+                // Cập nhật tất cả các bản ghi thanh toán chưa thành công thành Cancelled
+                var unPaidPayments = order.Payments.Where(p => p.Status == PaymentStatus.Pending).ToList();
+                foreach (var p in unPaidPayments)
+                {
+                    p.Status = PaymentStatus.Cancelled;
+                    p.RefundReason = request.RefundReason;
+                    p.UpdatedAt = DateTime.UtcNow;
+                }
+
+                order.Status = OrderStatus.Cancelled;
+                //order.Note = $"Chủ quán hủy đơn chưa thanh toán. Lý do: {request.RefundReason}";
+                order.UpdatedAt = DateTime.UtcNow;
+
+                PromotionUsageLifecycle.ReleaseReserved(
+                    order.PromotionUsages,
+                    order.UpdatedAt);
+
+                _orderRepo.Update(order);
+                await _orderRepo.SaveChangesAsync();
+
+                notificationTitle = "Đơn hàng đã bị hủy";
+                notificationContent = $"Đơn hàng #{order.OrderCode} đã bị hủy bởi chủ quán. Lý do: {request.RefundReason}";
+            }
+
+            // Gửi thông báo cho khách hàng
+            await PublishPersistedNotificationAsync(
+                order.CustomerId,
+                requiresExternalRefund
+                    ? NotificationType.RefundPending
+                    : NotificationType.OrderCancelled,
+                notificationTitle,
+                notificationContent,
+                order.Id);
+
+            return ApiResponse<bool>.SuccessResponse(true, requiresExternalRefund
+                ? "Chủ quán hủy đơn thành công. Hệ thống đang tiến hành hoàn tiền qua PayOS."
+                : "Đơn hàng đã được hủy thành công.");
+        }
+
+
         //Tình huống khách đặt món payos, trả tiền, nhưng mạng lỗi và webhook không về kịp, khách bấm nút "Tôi đã thanh toán" trên FE để xác nhận, thì gọi API này để kiểm tra trạng thái thực tế từ PayOS
+#endif
+        public async Task<ApiResponse<bool>> CancelOrderByBoothOwnerAsync(
+            Guid boothOwnerId,
+            long orderCode,
+            RefundQRRequest request)
+        {
+            if (request is null)
+                return ApiResponse<bool>.Failure("Refund request is required.", "REFUND_REQUEST_REQUIRED", false);
+
+            Order? order = null;
+            Payment? refundPayment = null;
+            var transactionOpen = false;
+            var needsPayout = false;
+            var newlyCancelled = false;
+
+            try
+            {
+                await _orderRepo.BeginTransactionAsync();
+                transactionOpen = true;
+                order = await _orderRepo.GetOrderByCodeForUpdateAsync(orderCode);
+
+                if (order is null)
+                    return await RollbackFailureAsync("Order was not found.", "ORDER_NOT_FOUND");
+                if (order.BoothOwnerId != boothOwnerId)
+                    throw AppException.Forbidden("You cannot cancel an order owned by another booth.", "ORDER_ACCESS_DENIED");
+
+                refundPayment = order.Payments
+                    .OrderByDescending(payment => payment.CreatedAt)
+                    .FirstOrDefault(payment => payment.Status is PaymentStatus.RefundProcessing or PaymentStatus.Refunded);
+
+                if (refundPayment?.Status == PaymentStatus.Refunded)
+                {
+                    await _orderRepo.CommitTransactionAsync();
+                    transactionOpen = false;
+                    return ApiResponse<bool>.SuccessResponse(true, "Refund was already completed.");
+                }
+
+                if (order.Status == OrderStatus.Completed)
+                    return await RollbackFailureAsync("Completed orders cannot be cancelled.", "REFUND_NOT_ALLOWED");
+
+                if (refundPayment is not null)
+                {
+                    await _orderRepo.CommitTransactionAsync();
+                    transactionOpen = false;
+                    return await DispatchOrReconcileRefundAsync(refundPayment, orderCode, request);
+                }
+
+                if (order.Status == OrderStatus.Cancelled)
+                    return await RollbackFailureAsync("Order was already cancelled without a pending refund.", "REFUND_NOT_ALLOWED");
+
+                var paidPayment = order.Payments
+                    .OrderByDescending(payment => payment.CreatedAt)
+                    .FirstOrDefault(payment => payment.Status is PaymentStatus.Paid or PaymentStatus.Underpaid);
+                var now = DateTime.UtcNow;
+
+                needsPayout = paidPayment is not null
+                    && paidPayment.Gateway == PaymentGateway.Payos
+                    && paidPayment.Amount > 0m;
+
+                if (needsPayout)
+                {
+                    if (string.IsNullOrWhiteSpace(request.BankBin)
+                        || string.IsNullOrWhiteSpace(request.AccountNumber))
+                        return await RollbackFailureAsync(
+                            "Bank BIN and account number are required for an online refund.",
+                            "REFUND_DESTINATION_REQUIRED");
+                    if (paidPayment!.Amount != decimal.Truncate(paidPayment.Amount)
+                        || paidPayment.Amount > long.MaxValue)
+                        return await RollbackFailureAsync("Refund amount is invalid for VND payout.", "REFUND_AMOUNT_INVALID");
+
+                    paidPayment.Status = PaymentStatus.RefundProcessing;
+                    paidPayment.RefundAmount = paidPayment.Amount;
+                    paidPayment.RefundReference = $"refund-{paidPayment.Id:N}";
+                    paidPayment.RefundReason = request.RefundReason;
+                    paidPayment.RefundRequestedAt = now;
+                    paidPayment.UpdatedAt = now;
+                    refundPayment = paidPayment;
+                }
+                else if (paidPayment is not null)
+                {
+                    // Cash and fully-discounted orders never enter PayOS payout.
+                    paidPayment.Status = PaymentStatus.Cancelled;
+                    paidPayment.RefundReason = request.RefundReason;
+                    paidPayment.UpdatedAt = now;
+                }
+                else
+                {
+                    foreach (var payment in order.Payments.Where(payment => payment.Status == PaymentStatus.Pending))
+                    {
+                        payment.Status = PaymentStatus.Cancelled;
+                        payment.RefundReason = request.RefundReason;
+                        payment.UpdatedAt = now;
+                    }
+
+                    PromotionUsageLifecycle.ReleaseReserved(order.PromotionUsages, now);
+                }
+
+                order.Status = OrderStatus.Cancelled;
+                order.UpdatedAt = now;
+                _orderRepo.Update(order);
+                await _orderRepo.SaveChangesAsync();
+                await _orderRepo.CommitTransactionAsync();
+                transactionOpen = false;
+                newlyCancelled = true;
+            }
+            catch
+            {
+                if (transactionOpen)
+                    await _orderRepo.RollbackTransactionAsync();
+                throw;
+            }
+
+            if (newlyCancelled && order is not null)
+                await TryPublishCancellationAsync(order, request.RefundReason, needsPayout);
+
+            if (!needsPayout || refundPayment is null)
+                return ApiResponse<bool>.SuccessResponse(true, "Order was cancelled successfully.");
+
+            return await DispatchOrReconcileRefundAsync(refundPayment, orderCode, request);
+
+            async Task<ApiResponse<bool>> RollbackFailureAsync(string message, string code)
+            {
+                await _orderRepo.RollbackTransactionAsync();
+                transactionOpen = false;
+                return ApiResponse<bool>.Failure(message, code, false);
+            }
+        }
+
+        public async Task<ApiResponse<bool>> ReconcileRefundAsync(Guid boothOwnerId, long orderCode)
+        {
+            var order = await _orderRepo.GetOrderByCodeAsync(orderCode);
+            if (order is null)
+                return ApiResponse<bool>.Failure("Order was not found.", "ORDER_NOT_FOUND", false);
+            if (order.BoothOwnerId != boothOwnerId)
+                throw AppException.Forbidden("You cannot access another booth's refund.", "ORDER_ACCESS_DENIED");
+
+            var payment = order.Payments
+                .OrderByDescending(candidate => candidate.CreatedAt)
+                .FirstOrDefault(candidate => candidate.Status is PaymentStatus.RefundProcessing or PaymentStatus.Refunded);
+            if (payment is null)
+                return ApiResponse<bool>.Failure("Order has no refund to reconcile.", "REFUND_NOT_ALLOWED", false);
+            if (payment.Status == PaymentStatus.Refunded)
+                return ApiResponse<bool>.SuccessResponse(true, "Refund was already completed.");
+
+            return await DispatchOrReconcileRefundAsync(payment, orderCode, request: null);
+        }
+
+        private async Task<ApiResponse<bool>> DispatchOrReconcileRefundAsync(
+            Payment payment,
+            long orderCode,
+            RefundQRRequest? request)
+        {
+            if (payment.RefundAmount is null || string.IsNullOrWhiteSpace(payment.RefundReference))
+                return ApiResponse<bool>.Failure(
+                    "Refund record is incomplete and requires manual review.",
+                    "PAYOUT_RECONCILIATION_REQUIRED",
+                    false);
+
+            try
+            {
+                PayOSPayoutSnapshot? snapshot;
+                if (!string.IsNullOrWhiteSpace(payment.PayoutId))
+                {
+                    snapshot = await _payouts.GetAsync(payment.PayoutId);
+                    return await ApplyPayoutSnapshotAsync(orderCode, payment.Id, snapshot, allowCompletion: true);
+                }
+
+                // Always query first. This closes the timeout gap where PayOS accepted
+                // the previous request but the application did not receive its response.
+                snapshot = await _payouts.FindByReferenceAsync(payment.RefundReference);
+                if (snapshot is not null)
+                    return await ApplyPayoutSnapshotAsync(orderCode, payment.Id, snapshot, allowCompletion: true);
+
+                if (request is null
+                    || string.IsNullOrWhiteSpace(request.BankBin)
+                    || string.IsNullOrWhiteSpace(request.AccountNumber))
+                    return ApiResponse<bool>.Failure(
+                        "No provider payout was found. Resubmit the cancellation with the refund destination.",
+                        "PAYOUT_RECONCILIATION_REQUIRED",
+                        false);
+
+                var claimTime = DateTime.UtcNow;
+                var claimed = await _orderRepo.TryClaimPayoutCreationAsync(
+                    payment.Id,
+                    claimTime,
+                    claimTime.AddMinutes(-5));
+                if (claimed == 0)
+                    return ApiResponse<bool>.Failure(
+                        "Another worker is dispatching this payout. Reconcile before retrying.",
+                        "REFUND_ALREADY_PROCESSING",
+                        false);
+
+                snapshot = await _payouts.CreateAsync(new PayOSPayoutCommand(
+                    payment.RefundReference,
+                    payment.Id.ToString("N"),
+                    decimal.ToInt64(payment.RefundAmount.Value),
+                    $"Refund order {orderCode}",
+                    request.BankBin.Trim(),
+                    request.AccountNumber.Trim()));
+
+                // Creation only proves that the provider accepted the command. A later
+                // signed status query is required before RefundProcessing -> Refunded.
+                await ApplyPayoutSnapshotAsync(orderCode, payment.Id, snapshot, allowCompletion: false);
+                return ApiResponse<bool>.SuccessResponse(true, "Order was cancelled and the refund is processing.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "PayOS payout outcome is unknown for order {OrderCode}; reconciliation is required.", orderCode);
+                return ApiResponse<bool>.Failure(
+                    "Order is cancelled, but the payout outcome is unknown. Reconcile before retrying.",
+                    "PAYOUT_RECONCILIATION_REQUIRED",
+                    false);
+            }
+        }
+
+        private async Task<ApiResponse<bool>> ApplyPayoutSnapshotAsync(
+            long orderCode,
+            Guid paymentId,
+            PayOSPayoutSnapshot snapshot,
+            bool allowCompletion)
+        {
+            var transactionOpen = false;
+            try
+            {
+                await _orderRepo.BeginTransactionAsync();
+                transactionOpen = true;
+                var order = await _orderRepo.GetOrderByCodeForUpdateAsync(orderCode);
+                var payment = order?.Payments.FirstOrDefault(candidate => candidate.Id == paymentId);
+                if (payment is null)
+                {
+                    await _orderRepo.RollbackTransactionAsync();
+                    return ApiResponse<bool>.Failure("Refund payment was not found.", "REFUND_NOT_FOUND", false);
+                }
+
+                if (!string.Equals(payment.RefundReference, snapshot.ReferenceId, StringComparison.Ordinal)
+                    || payment.RefundAmount != snapshot.Amount)
+                {
+                    await _orderRepo.RollbackTransactionAsync();
+                    return ApiResponse<bool>.Failure(
+                        "Provider payout does not match the authoritative refund.",
+                        "PAYOUT_DATA_MISMATCH",
+                        false);
+                }
+
+                payment.PayoutId ??= snapshot.PayoutId;
+                payment.UpdatedAt = DateTime.UtcNow;
+                var refundCompleted = payment.Status != PaymentStatus.Refunded
+                    && allowCompletion
+                    && snapshot.Outcome == PayOSPayoutOutcome.Succeeded;
+                if (allowCompletion && snapshot.Outcome == PayOSPayoutOutcome.Succeeded)
+                {
+                    payment.Status = PaymentStatus.Refunded;
+                    payment.RefundedAt = payment.UpdatedAt;
+                }
+
+                await _orderRepo.SaveChangesAsync();
+                await _orderRepo.CommitTransactionAsync();
+                transactionOpen = false;
+
+                if (refundCompleted)
+                {
+                    await PublishPersistedNotificationAsync(
+                        order!.CustomerId,
+                        NotificationType.RefundCompleted,
+                        "Refund completed",
+                        $"The refund for order #{order.OrderCode} has been completed.",
+                        order.Id);
+                }
+
+                if (snapshot.Outcome == PayOSPayoutOutcome.Failed)
+                    return ApiResponse<bool>.Failure(
+                        "PayOS reports that the payout failed; manual review is required.",
+                        "PAYOUT_PROVIDER_REJECTED",
+                        false);
+                return ApiResponse<bool>.SuccessResponse(
+                    true,
+                    payment.Status == PaymentStatus.Refunded
+                        ? "Refund completed."
+                        : "Refund is still processing.");
+            }
+            catch
+            {
+                if (transactionOpen)
+                    await _orderRepo.RollbackTransactionAsync();
+                throw;
+            }
+        }
+
+        private async Task TryPublishCancellationAsync(Order order, string? reason, bool refundProcessing)
+        {
+            try
+            {
+                await PublishPersistedNotificationAsync(
+                    order.CustomerId,
+                    refundProcessing
+                        ? NotificationType.RefundPending
+                        : NotificationType.OrderCancelled,
+                    refundProcessing ? "Order cancelled - refund processing" : "Order cancelled",
+                    $"Order #{order.OrderCode} was cancelled. Reason: {reason}",
+                    order.Id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Order {OrderCode} was cancelled but its notification could not be published.", order.OrderCode);
+            }
+        }
+
         public async Task<ApiResponse<bool>> ActiveCheckPaymentStatus(long orderCode)
         {
             var order = await _orderRepo.GetOrderByCodeAsync(orderCode);
@@ -935,14 +1489,42 @@ namespace ApplicationLayer.Services.Orders
 
             try
             {
-                // 1. Actively check PayOS payment status (don't wait for webhook)
+                // 1. CHỦ ĐỘNG GỌI SANG PAYOS ĐỂ KIỂM TRA (Không đợi Webhook)
                 var paymentInfo = await _payos.GetPaymentStatusAsync(orderCode);
-                if (paymentInfo == null)
-                    return ApiResponse<bool>.Failure("Could not retrieve payment status from PayOS.", data: false);
+                if (paymentInfo is null)
+                    return ApiResponse<bool>.Failure(
+                        "PayOS payment status is unavailable.",
+                        "PAYOS_STATUS_UNAVAILABLE",
+                        false);
 
                 // 2. If PayOS reports payment received (PAID)
-                if (paymentInfo.Status == "Paid")
+                if (paymentInfo.Status.Equals("Paid", StringComparison.OrdinalIgnoreCase))
                 {
+                    if (order.Status == OrderStatus.Cancelled)
+                    {
+                        var latePayment = order.Payments
+                            .OrderByDescending(payment => payment.CreatedAt)
+                            .FirstOrDefault();
+                        if (latePayment is not null)
+                        {
+                            latePayment.Status = PaymentStatus.RefundProcessing;
+                            // Preserve the original payment intent. The provider-confirmed
+                            // received amount is snapshotted separately for refund.
+                            latePayment.RefundAmount = paymentInfo.AmountPaid;
+                            latePayment.RefundReference = $"refund-{latePayment.Id:N}";
+                            latePayment.GatewayRef = paymentInfo.FirstTransactionReference;
+                            latePayment.RefundReason = "Payment confirmed after cancellation.";
+                            latePayment.RefundRequestedAt = DateTime.UtcNow;
+                            latePayment.UpdatedAt = latePayment.RefundRequestedAt.Value;
+                            await _orderRepo.SaveChangesAsync();
+                        }
+
+                        return ApiResponse<bool>.Failure(
+                            "Payment arrived after cancellation and requires refund.",
+                            "LATE_PAYMENT_REFUND_REQUIRED",
+                            false);
+                    }
+
                     if (paymentInfo.AmountPaid < (long)Math.Round(order.FinalAmount))
                     {
                         order.Status = OrderStatus.Underpaid;
@@ -950,19 +1532,12 @@ namespace ApplicationLayer.Services.Orders
                         _orderRepo.Update(order);
                         await _orderRepo.SaveChangesAsync();
 
-                        var warningPayload = new NotificationListItemResponse
-                        {
-                            Id = Guid.NewGuid(),
-                            BoothId = order.BoothOwnerId,
-                            Type = "ORDER_UNDERPAID",
-                            Title = "Order underpaid!",
-                            Content = $"Order {order.OrderCode} payment verification detected underpayment. Required: {order.FinalAmount:N0}d, Received: {paymentInfo.AmountPaid:N0}d",
-                            IsRead = false,
-                            ReferenceType = "Order",
-                            ReferenceId = order.Id,
-                            CreatedAt = DateTime.UtcNow
-                        };
-                        await _notificationPublisher.PublishAsync(order.BoothOwnerId, warningPayload, unreadCount: 1);
+                        await PublishPersistedNotificationAsync(
+                            order.BoothOwnerId,
+                            NotificationType.PaymentFailed,
+                            "Order underpaid!",
+                            $"Order {order.OrderCode} payment verification detected underpayment. Required: {order.FinalAmount:N0}d, Received: {paymentInfo.AmountPaid:N0}d",
+                            order.Id);
 
                         return ApiResponse<bool>.Failure("You paid less than the required amount. Please contact the booth to resolve.", data: false);
                     }
@@ -983,6 +1558,10 @@ namespace ApplicationLayer.Services.Orders
                         payment.UpdatedAt = DateTime.UtcNow;
                     }
 
+                    PromotionUsageLifecycle.ConsumeReserved(
+                        order.PromotionUsages,
+                        order.UpdatedAt);
+
                     _orderRepo.Update(order);
                     await _orderRepo.SaveChangesAsync();
 
@@ -995,21 +1574,12 @@ namespace ApplicationLayer.Services.Orders
                         ? $"Đơn hàng #{order.OrderCode} (từng bị hủy do quá hạn) vừa được đối soát thanh toán thành công qua PayOS. Số tiền: {order.FinalAmount:N0}đ"
                         : $"Đơn hàng #{order.OrderCode} đã được thanh toán thành công qua PayOS. Số tiền: {order.FinalAmount:N0}đ";
 
-                    // Bắn SignalR báo cho chủ quầy "Ting Ting"
-                    var notificationPayload = new NotificationListItemResponse
-                    {
-                        Id = Guid.NewGuid(),
-                        BoothId = order.BoothOwnerId,
-                        Type = "ORDER_PAID",          // Type dành cho đơn đã thanh toán online thành công
-                        Title = notificationTitle,
-                        Content = notificationContent,
-                        IsRead = false,
-                        ReferenceType = "Order",      // Định danh kiểu tham chiếu
-                        ReferenceId = order.Id,       // Id của đơn hàng để FE click vào là xem được luôn
-                        CreatedAt = DateTime.UtcNow
-                    };
-
-                    await _notificationPublisher.PublishAsync(order.BoothOwnerId, notificationPayload, unreadCount: 1);
+                    await PublishPersistedNotificationAsync(
+                        order.BoothOwnerId,
+                        NotificationType.PaymentSucceeded,
+                        notificationTitle,
+                        notificationContent,
+                        order.Id);
 
                     return ApiResponse<bool>.SuccessResponse(true, "Bạn đã thanh toán thành công! Chủ quán đang chuẩn bị đơn hàng.");
                 }
@@ -1115,294 +1685,112 @@ namespace ApplicationLayer.Services.Orders
         //    }
         //}
 
-        public async Task<ApiResponse<PaginationResp<BoothOwnerOrderListItemResponse>>> GetBoothOwnerOrdersAsync(
-            Guid boothOwnerId,
-            BoothOwnerOrderQuery query,
-            CancellationToken cancellationToken = default)
+        private async Task TryCancelPayOSLinkAsync(long orderCode)
         {
-            if (query.FromDate.HasValue && query.ToDate.HasValue && query.FromDate > query.ToDate)
-                throw AppException.BadRequest("The start date must be before the end date.", "INVALID_DATE_RANGE");
-
-            _ = await _boothRepo.GetByOwnerIdAsync(boothOwnerId, cancellationToken)
-                ?? throw AppException.NotFound("No booth is assigned to this account.", "BOOTH_NOT_FOUND");
-
-            var toDate = query.ToDate;
-            if (toDate.HasValue && toDate.Value.TimeOfDay == TimeSpan.Zero)
-                toDate = toDate.Value.Date.AddDays(1).AddTicks(-1);
-
-            var page = await _orderRepo.GetByBoothOwnerPagedAsync(
-                boothOwnerId, query.Keyword, query.Status, query.PaymentStatus,
-                query.FromDate, toDate, query.Page, query.PageSize, cancellationToken);
-            var items = page.Items.Select(MapBoothOwnerOrderListItem).ToList();
-
-            return ApiResponse<PaginationResp<BoothOwnerOrderListItemResponse>>.SuccessResponse(
-                PaginationResp<BoothOwnerOrderListItemResponse>.Create(
-                    items, page.TotalCount,
-                    new PaginationReq { Page = query.Page, PageSize = query.PageSize }));
-        }
-
-        public async Task<ApiResponse<BoothOwnerOrderDetailResponse>> GetBoothOwnerOrderAsync(
-            Guid boothOwnerId,
-            long orderCode,
-            CancellationToken cancellationToken = default)
-        {
-            var order = await _orderRepo.GetByBoothOwnerAndCodeAsync(
-                boothOwnerId, orderCode, cancellationToken)
-                ?? throw AppException.NotFound("Order not found.", "ORDER_NOT_FOUND");
-            var payment = LatestPayment(order);
-
-            var response = new BoothOwnerOrderDetailResponse
-            {
-                OrderCode = order.OrderCode,
-                CustomerName = GetCustomerName(order),
-                IsWalkInCustomer = IsWalkInCustomer(order.CustomerId),
-                ItemCount = order.OrderDetails.Sum(detail => detail.Quantity),
-                TotalAmount = order.TotalAmount,
-                DiscountAmount = order.DiscountAmount,
-                FinalAmount = order.FinalAmount,
-                PaymentMethod = payment?.Type,
-                PaymentStatus = payment?.Status,
-                Status = order.Status,
-                CreatedAt = order.CreatedAt,
-                UpdatedAt = order.UpdatedAt,
-                Note = order.Note,
-                Items = order.OrderDetails.Select(detail => new BoothOwnerOrderItemResponse
-                {
-                    FoodItemName = detail.FoodItem.Name,
-                    ImageUrl = detail.FoodItem.ThumbnailUrl,
-                    Quantity = detail.Quantity,
-                    UnitPrice = detail.UnitPrice,
-                    TotalPrice = detail.TotalPrice
-                }).ToList()
-            };
-
-            return ApiResponse<BoothOwnerOrderDetailResponse>.SuccessResponse(response);
-        }
-
-        public async Task<ApiResponse<OrderResponseDto>> CreateWalkInOrderAsync(
-            Guid boothOwnerId,
-            CreateWalkInOrderRequest request,
-            CancellationToken cancellationToken = default)
-        {
-            if (request.Items.Count == 0)
-                throw AppException.BadRequest("Add at least one item to the order.", "ORDER_ITEMS_REQUIRED");
-
-            if (!Enum.IsDefined(request.PaymentMethod))
-                throw AppException.BadRequest("The selected payment method is invalid.", "INVALID_PAYMENT_METHOD");
-
-            var booth = await _boothRepo.GetByOwnerIdAsync(boothOwnerId, cancellationToken)
-                ?? throw AppException.NotFound("No booth is assigned to this account.", "BOOTH_NOT_FOUND");
-
-            if (booth.Status != BoothStatus.Active)
-                throw AppException.Conflict("This booth is not currently active.", "BOOTH_NOT_ACTIVE");
-            if (booth.NightMarket is null || booth.NightMarket.IsDeleted)
-                throw AppException.Conflict("This night market is no longer available.", "MARKET_UNAVAILABLE");
-
-            var normalizedItems = request.Items
-                .GroupBy(item => item.FoodItemId)
-                .Select(group => new CreateWalkInOrderItemRequest
-                {
-                    FoodItemId = group.Key,
-                    Quantity = group.Sum(item => item.Quantity)
-                })
-                .ToList();
-
-            if (normalizedItems.Any(item => item.FoodItemId == Guid.Empty || item.Quantity is < 1 or > 100))
-                throw AppException.BadRequest("One or more order items are invalid.", "INVALID_ORDER_ITEM");
-
-            var foodIds = normalizedItems.Select(item => item.FoodItemId).ToList();
-            var foods = await _foodItemRepo.GetActiveByIdsAndBoothAsync(
-                booth.Id, foodIds, cancellationToken);
-            if (foods.Count != foodIds.Count)
-                throw AppException.Conflict(
-                    "One or more items are unavailable or do not belong to this booth.",
-                    "ORDER_ITEM_UNAVAILABLE");
-
-            return await CreateOrderAsync(new CreateOrderDto
-            {
-                CustomerId = null,
-                BoothOwnerId = boothOwnerId,
-                BoothId = booth.Id,
-                Note = request.Note?.Trim(),
-                PaymentMethod = request.PaymentMethod,
-                PromotionCode = null,
-                IsCreatedByBooth = true,
-                Items = normalizedItems.Select(item => new CartItemDto
-                {
-                    FoodItemId = item.FoodItemId,
-                    Quantity = item.Quantity,
-                    UnitPrice = 0
-                }).ToList()
-            });
-        }
-
-        public async Task<ApiResponse<bool>> UpdateBoothOwnerOrderStatusAsync(
-            Guid boothOwnerId,
-            long orderCode,
-            UpdateBoothOwnerOrderStatusRequest request,
-            CancellationToken cancellationToken = default)
-        {
-            var order = await _orderRepo.GetByBoothOwnerAndCodeAsync(
-                boothOwnerId, orderCode, cancellationToken)
-                ?? throw AppException.NotFound("Order not found.", "ORDER_NOT_FOUND");
-
-            if (!IsValidTransition(order.Status, request.NewStatus))
-                throw AppException.Conflict(
-                    $"The order cannot move from {order.Status} to {request.NewStatus}.",
-                    "INVALID_ORDER_STATUS_TRANSITION");
-            if (request.NewStatus == OrderStatus.Cancelled && string.IsNullOrWhiteSpace(request.Reason))
-                throw AppException.BadRequest("A cancellation reason is required.", "CANCELLATION_REASON_REQUIRED");
-
-            var payment = LatestPayment(order);
-            if (request.NewStatus == OrderStatus.Preparing
-                && payment?.Type == PaymentType.PayOS
-                && payment.Status != PaymentStatus.Paid)
-                throw AppException.Conflict(
-                    "Online payment must be confirmed before preparation starts.", "PAYMENT_REQUIRED");
-            if (request.NewStatus == OrderStatus.Completed
-                && !order.Payments.Any(item => item.Status == PaymentStatus.Paid))
-                throw AppException.Conflict(
-                    "Payment must be confirmed before completing the order.", "PAYMENT_REQUIRED");
-
-            if (request.NewStatus == OrderStatus.Cancelled)
-            {
-                order.Note = string.IsNullOrWhiteSpace(order.Note)
-                    ? $"Cancellation reason: {request.Reason!.Trim()}"
-                    : $"{order.Note}\nCancellation reason: {request.Reason!.Trim()}";
-                order.Status = OrderStatus.Cancelled;
-                order.UpdatedAt = DateTime.UtcNow;
-                _orderRepo.Update(order);
-                await _orderRepo.SaveChangesAsync();
-            }
-            else
-            {
-                var affected = await _orderRepo.UpdateBoothOwnerOrderStatusAsync(
-                    boothOwnerId, orderCode, order.Status, request.NewStatus,
-                    DateTime.UtcNow, cancellationToken);
-                if (affected == 0)
-                    throw AppException.Conflict(
-                        "The order was updated by another request. Refresh and try again.",
-                        "ORDER_STATUS_CONFLICT");
-            }
-
-            await PublishOrderStatusAsync(order, request.NewStatus);
-            return ApiResponse<bool>.SuccessResponse(true, "Order status updated successfully.");
-        }
-
-        public async Task<ApiResponse<bool>> ConfirmCashPaymentAsync(
-            Guid boothOwnerId,
-            long orderCode,
-            CancellationToken cancellationToken = default)
-        {
-            var order = await _orderRepo.GetByBoothOwnerAndCodeAsync(
-                boothOwnerId, orderCode, cancellationToken)
-                ?? throw AppException.NotFound("Order not found.", "ORDER_NOT_FOUND");
-            var payment = LatestPayment(order)
-                ?? throw AppException.NotFound("Payment record not found.", "PAYMENT_NOT_FOUND");
-
-            if (payment.Type != PaymentType.Cash)
-                throw AppException.Conflict(
-                    "Only cash payments can be confirmed manually.", "INVALID_PAYMENT_METHOD");
-            if (payment.Status == PaymentStatus.Paid)
-                throw AppException.Conflict(
-                    "This cash payment has already been confirmed.", "PAYMENT_ALREADY_CONFIRMED");
-            if (order.Status is OrderStatus.Cancelled or OrderStatus.Refunded)
-                throw AppException.Conflict(
-                    "Payment cannot be confirmed for this order.", "ORDER_NOT_PAYABLE");
-
-            payment.Status = PaymentStatus.Paid;
-            payment.PaidAt = DateTime.UtcNow;
-            payment.UpdatedAt = DateTime.UtcNow;
-            await _orderRepo.SaveChangesAsync();
-            return ApiResponse<bool>.SuccessResponse(true, "Cash payment confirmed successfully.");
-        }
-
-        private BoothOwnerOrderListItemResponse MapBoothOwnerOrderListItem(Order order)
-        {
-            var payment = LatestPayment(order);
-            return new BoothOwnerOrderListItemResponse
-            {
-                OrderCode = order.OrderCode,
-                CustomerName = GetCustomerName(order),
-                IsWalkInCustomer = IsWalkInCustomer(order.CustomerId),
-                ItemCount = order.OrderDetails.Sum(detail => detail.Quantity),
-                TotalAmount = order.TotalAmount,
-                DiscountAmount = order.DiscountAmount,
-                FinalAmount = order.FinalAmount,
-                PaymentMethod = payment?.Type,
-                PaymentStatus = payment?.Status,
-                Status = order.Status,
-                CreatedAt = order.CreatedAt,
-                UpdatedAt = order.UpdatedAt
-            };
-        }
-
-        private static Payment? LatestPayment(Order order)
-            => order.Payments.OrderByDescending(payment => payment.CreatedAt).FirstOrDefault();
-
-        private bool IsWalkInCustomer(Guid customerId)
-        {
-            var configured = _config["SystemSettings:WalkInCustomerId"]
-                ?? "00000000-0000-0000-0000-000000000001";
-            return Guid.TryParse(configured, out var walkInId) && customerId == walkInId;
-        }
-
-        private string GetCustomerName(Order order)
-            => IsWalkInCustomer(order.CustomerId)
-                ? "Walk-in customer"
-                : order.Customer?.FullName ?? "Customer information unavailable";
-
-        private static bool IsValidTransition(OrderStatus current, OrderStatus next)
-            => (current, next) switch
-            {
-                (OrderStatus.Placed, OrderStatus.Preparing) => true,
-                (OrderStatus.Placed, OrderStatus.Cancelled) => true,
-                (OrderStatus.Preparing, OrderStatus.ReadyForPickup) => true,
-                (OrderStatus.ReadyForPickup, OrderStatus.Completed) => true,
-                _ => false
-            };
-
-        private async Task PublishOrderStatusAsync(Order order, OrderStatus newStatus)
-        {
-            if (IsWalkInCustomer(order.CustomerId))
-                return;
-
-            var (title, content) = newStatus switch
-            {
-                OrderStatus.Preparing => ("Your order is being prepared", $"Order #{order.OrderCode} is now being prepared."),
-                OrderStatus.ReadyForPickup => ("Your order is ready", $"Order #{order.OrderCode} is ready for pickup."),
-                OrderStatus.Completed => ("Order completed", $"Order #{order.OrderCode} has been completed."),
-                OrderStatus.Cancelled => ("Order cancelled", $"Order #{order.OrderCode} has been cancelled."),
-                _ => (string.Empty, string.Empty)
-            };
-            if (string.IsNullOrEmpty(title))
-                return;
-
             try
             {
+                await _payos.CancelPaymentLinkAsync(orderCode);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogWarning(
+                    exception,
+                    "Failed to cancel orphan PayOS link {OrderCode}.",
+                    orderCode);
+            }
+        }
+
+        private async Task PublishPersistedNotificationAsync(
+            Guid userId,
+            NotificationType type,
+            string title,
+            string content,
+            Guid orderId)
+        {
+            try
+            {
+                if (_notifications is not null)
+                {
+                    await _notifications.NotifyAsync(new NotificationMessage(
+                        userId,
+                        type,
+                        title,
+                        content,
+                        null,
+                        "Order",
+                        orderId));
+                    return;
+                }
+
+                // Compatibility fallback for isolated legacy tests/hosts that have not
+                // registered the persisted notification service yet.
                 await _notificationPublisher.PublishAsync(
-                    order.CustomerId,
+                    userId,
                     new NotificationListItemResponse
                     {
                         Id = Guid.NewGuid(),
-                        BoothId = order.BoothOwnerId,
-                        Type = $"ORDER_{newStatus.ToString().ToUpperInvariant()}",
+                        Type = type.ToString(),
                         Title = title,
                         Content = content,
                         IsRead = false,
                         ReferenceType = "Order",
-                        ReferenceId = order.Id,
+                        ReferenceId = orderId,
                         CreatedAt = DateTime.UtcNow
                     },
-                    unreadCount: 1);
+                    1);
             }
-            catch (Exception ex)
+            catch (Exception exception)
             {
                 _logger.LogWarning(
-                    ex,
-                    "Order {OrderCode} status changed to {OrderStatus}, but its realtime notification could not be delivered.",
-                    order.OrderCode,
-                    newStatus);
+                    exception,
+                    "Order {OrderId} was committed but {NotificationType} notification delivery failed.",
+                    orderId,
+                    type);
+            }
+        }
+
+        private async Task TryPublishOrderCreatedAsync(
+            Order order,
+            DateTime utcNow,
+            bool isZeroPaymentOrder)
+        {
+            try
+            {
+                await PublishPersistedNotificationAsync(
+                    order.BoothOwnerId,
+                    NotificationType.OrderCreated,
+                    isZeroPaymentOrder
+                        ? "Có đơn hàng được giảm 100%"
+                        : "Có đơn hàng tiền mặt mới",
+                    $"Đơn #{order.OrderCode}, số tiền {order.FinalAmount:N0}đ.",
+                    order.Id);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogError(
+                    exception,
+                    "Order {OrderCode} committed but notification failed.",
+                    order.OrderCode);
+            }
+        }
+
+        private async Task TryPublishPaymentSucceededAsync(Order order, DateTime utcNow)
+        {
+            try
+            {
+                await PublishPersistedNotificationAsync(
+                    order.BoothOwnerId,
+                    NotificationType.PaymentSucceeded,
+                    "Đơn hàng đã thanh toán",
+                    $"Đơn #{order.OrderCode} đã thanh toán {order.FinalAmount:N0}đ.",
+                    order.Id);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogError(
+                    exception,
+                    "Payment committed for order {OrderCode} but notification failed.",
+                    order.OrderCode);
             }
         }
 

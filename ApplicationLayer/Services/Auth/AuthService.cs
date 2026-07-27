@@ -341,6 +341,41 @@ public class AuthService : IAuthService
         return ApiResponse<object>.SuccessResponse(new { }, "Password reset successfully. Please sign in again.");
     }
 
+    public async Task<ApiResponse<object>> ChangePasswordAsync(
+        Guid userId,
+        ChangePasswordRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await _userRepository.GetByIdAsync(userId);
+        if (user is null)
+            throw AppException.NotFound("Account was not found.", AuthErrorCodes.AccountNotFound);
+
+        if (user.AuthProvider == AuthProvider.Google)
+            throw AppException.BadRequest(
+                "This account uses Google sign-in and does not have a local password.",
+                AuthErrorCodes.PasswordResetNotAllowed);
+
+        if (!_passwordHasher.VerifyPassword(request.CurrentPassword, user.PasswordHash))
+            throw AppException.BadRequest(
+                "Current password is incorrect.",
+                AuthErrorCodes.CurrentPasswordInvalid);
+
+        if (_passwordHasher.VerifyPassword(request.NewPassword, user.PasswordHash))
+            throw AppException.BadRequest(
+                "New password must be different from the current password.",
+                AuthErrorCodes.PasswordReuseNotAllowed);
+
+        user.PasswordHash = _passwordHasher.HashPassword(request.NewPassword);
+        ClearRefreshToken(user);
+        user.UpdatedAt = DateTime.UtcNow;
+        _userRepository.Update(user);
+        await _userRepository.SaveChangesAsync();
+
+        return ApiResponse<object>.SuccessResponse(
+            new { },
+            "Password changed successfully. Please sign in again.");
+    }
+
     public async Task<ApiResponse<AuthResponse>> RefreshTokenAsync(RefreshTokenRequest request, CancellationToken cancellationToken = default)
     {
         var tokenHash = _jwtService.HashToken(request.RefreshToken);

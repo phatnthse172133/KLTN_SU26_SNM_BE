@@ -43,6 +43,10 @@ var jwtSettings = builder.Configuration.GetSection(JwtSettings.SectionName).Get<
 if (string.IsNullOrWhiteSpace(jwtSettings.SecretKey) || jwtSettings.SecretKey.Length < 32)
     throw new InvalidOperationException("JWT secret is missing. Set Jwt__SecretKey in PresentationLayer/.env or Jwt:SecretKey in appsettings.json (minimum 32 characters).");
 
+if (string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("DefaultConnection")))
+    throw new InvalidOperationException(
+        "Database connection is missing. Set ConnectionStrings__DefaultConnection.");
+
 // Đăng ký PayIn Client với Key là "PayIn"
 builder.Services
     .AddOptions<PayOSSettings>()
@@ -51,8 +55,7 @@ builder.Services
     .Validate(settings => !string.IsNullOrWhiteSpace(settings.ApiKey), "PayOS:ApiKey is required.")
     .Validate(settings => !string.IsNullOrWhiteSpace(settings.ChecksumKey), "PayOS:ChecksumKey is required.")
     .Validate(settings => Uri.TryCreate(settings.ReturnUrl, UriKind.Absolute, out _), "PayOS:ReturnUrl must be an absolute URL.")
-    .Validate(settings => Uri.TryCreate(settings.CancelUrl, UriKind.Absolute, out _), "PayOS:CancelUrl must be an absolute URL.")
-    .ValidateOnStart();
+    .Validate(settings => Uri.TryCreate(settings.CancelUrl, UriKind.Absolute, out _), "PayOS:CancelUrl must be an absolute URL.");
 
 builder.Services.AddKeyedSingleton<PayOSClient>("PayIn", (sp, key) =>
 {

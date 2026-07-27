@@ -19,9 +19,10 @@ public static class FoodPriceResolver
     public static IQueryable<FoodItemWithEffectivePrice> WithCurrentPrice(
         IQueryable<FoodItem> foodItems,
         DateTime utcNow)
-        => foodItems.Select(foodItem => new FoodItemWithEffectivePrice(
-            foodItem,
-            foodItem.FoodPrices
+        => foodItems.Select(foodItem => new FoodItemWithEffectivePrice
+        {
+            FoodItem = foodItem,
+            EffectivePrice = foodItem.FoodPrices
                 .Where(price =>
                     !price.IsDeleted &&
                     (!price.StartDate.HasValue || price.StartDate.Value <= utcNow) &&
@@ -30,7 +31,12 @@ public static class FoodPriceResolver
                 .ThenByDescending(price => price.StartDate)
                 .ThenByDescending(price => price.CreatedAt)
                 .Select(price => (decimal?)price.Price)
-                .FirstOrDefault() ?? foodItem.Price));
+                .FirstOrDefault() ?? foodItem.Price
+        });
 }
 
-public sealed record FoodItemWithEffectivePrice(FoodItem FoodItem, decimal EffectivePrice);
+public sealed class FoodItemWithEffectivePrice
+{
+    public required FoodItem FoodItem { get; init; }
+    public decimal EffectivePrice { get; init; }
+}

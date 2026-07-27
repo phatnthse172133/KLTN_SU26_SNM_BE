@@ -48,24 +48,25 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
             query = query.Where(item => item.Name.ToLower().Contains(keyword));
         }
 
-        var projected = ProjectCustomer(query, utcNow, includeImages: false);
-        if (minPrice.HasValue)
-            projected = projected.Where(item => item.EffectivePrice >= minPrice.Value);
-        if (maxPrice.HasValue)
-            projected = projected.Where(item => item.EffectivePrice <= maxPrice.Value);
         if (availableOnly)
-            projected = projected.Where(IsCustomerOrderableAt(localTime));
+            query = query.Where(IsCustomerOrderableAt(localTime));
 
-        var totalCount = await projected.CountAsync(cancellationToken);
-        projected = sort.ToLowerInvariant() switch
+        var priced = FoodPriceResolver.WithCurrentPrice(query, utcNow);
+        if (minPrice.HasValue)
+            priced = priced.Where(item => item.EffectivePrice >= minPrice.Value);
+        if (maxPrice.HasValue)
+            priced = priced.Where(item => item.EffectivePrice <= maxPrice.Value);
+
+        var totalCount = await priced.CountAsync(cancellationToken);
+        priced = sort.ToLowerInvariant() switch
         {
-            "name" => projected.OrderBy(item => item.Name).ThenBy(item => item.Id),
-            "priceasc" => projected.OrderBy(item => item.EffectivePrice).ThenBy(item => item.Name).ThenBy(item => item.Id),
-            "pricedesc" => projected.OrderByDescending(item => item.EffectivePrice).ThenBy(item => item.Name).ThenBy(item => item.Id),
-            _ => projected.OrderByDescending(item => item.IsFeatured).ThenBy(item => item.Name).ThenBy(item => item.Id)
+            "name" => priced.OrderBy(item => item.FoodItem.Name).ThenBy(item => item.FoodItem.Id),
+            "priceasc" => priced.OrderBy(item => item.EffectivePrice).ThenBy(item => item.FoodItem.Name).ThenBy(item => item.FoodItem.Id),
+            "pricedesc" => priced.OrderByDescending(item => item.EffectivePrice).ThenBy(item => item.FoodItem.Name).ThenBy(item => item.FoodItem.Id),
+            _ => priced.OrderByDescending(item => item.FoodItem.IsFeatured).ThenBy(item => item.FoodItem.Name).ThenBy(item => item.FoodItem.Id)
         };
 
-        var items = await projected
+        var items = await ProjectCustomer(priced, includeImages: false)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(cancellationToken);
@@ -90,8 +91,9 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
         }
 
         return await ProjectCustomer(
-                    CustomerVisibleQuery().Where(item => item.Id == foodItemId),
-                    utcNow,
+                    FoodPriceResolver.WithCurrentPrice(
+                        CustomerVisibleQuery().Where(item => item.Id == foodItemId),
+                        utcNow),
                     includeImages: true)
                 .FirstOrDefaultAsync(cancellationToken);
     }
@@ -261,28 +263,27 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
              item.Booth.NightMarket.Status == NightMarketStatus.Open ||
              item.Booth.NightMarket.Status == NightMarketStatus.Closed));
 
-    private static Expression<Func<CustomerFoodReadModel, bool>> IsCustomerOrderableAt(TimeOnly localTime)
+    private static Expression<Func<FoodItem, bool>> IsCustomerOrderableAt(TimeOnly localTime)
         => item =>
             item.IsAvailable &&
-            item.MarketIsOperational &&
-            item.MarketOpenTime.HasValue &&
-            item.MarketCloseTime.HasValue &&
-            item.MarketOpenTime.Value != item.MarketCloseTime.Value &&
-            (item.MarketOpenTime.Value < item.MarketCloseTime.Value
-                ? item.MarketOpenTime.Value <= localTime && localTime < item.MarketCloseTime.Value
-                : localTime >= item.MarketOpenTime.Value || localTime < item.MarketCloseTime.Value) &&
-            ((!item.BoothOpenTime.HasValue && !item.BoothCloseTime.HasValue) ||
-             (item.BoothOpenTime.HasValue && item.BoothCloseTime.HasValue &&
-              item.BoothOpenTime.Value != item.BoothCloseTime.Value &&
-              (item.BoothOpenTime.Value < item.BoothCloseTime.Value
-                  ? item.BoothOpenTime.Value <= localTime && localTime < item.BoothCloseTime.Value
-                  : localTime >= item.BoothOpenTime.Value || localTime < item.BoothCloseTime.Value)));
+            item.Booth.NightMarket.Status == NightMarketStatus.Open &&
+            item.Booth.NightMarket.OpeningHours.HasValue &&
+            item.Booth.NightMarket.ClosingHours.HasValue &&
+            item.Booth.NightMarket.OpeningHours.Value != item.Booth.NightMarket.ClosingHours.Value &&
+            (item.Booth.NightMarket.OpeningHours.Value < item.Booth.NightMarket.ClosingHours.Value
+                ? item.Booth.NightMarket.OpeningHours.Value <= localTime && localTime < item.Booth.NightMarket.ClosingHours.Value
+                : localTime >= item.Booth.NightMarket.OpeningHours.Value || localTime < item.Booth.NightMarket.ClosingHours.Value) &&
+            ((!item.Booth.OpenTime.HasValue && !item.Booth.CloseTime.HasValue) ||
+             (item.Booth.OpenTime.HasValue && item.Booth.CloseTime.HasValue &&
+              item.Booth.OpenTime.Value != item.Booth.CloseTime.Value &&
+              (item.Booth.OpenTime.Value < item.Booth.CloseTime.Value
+                  ? item.Booth.OpenTime.Value <= localTime && localTime < item.Booth.CloseTime.Value
+                  : localTime >= item.Booth.OpenTime.Value || localTime < item.Booth.CloseTime.Value)));
 
     private static IQueryable<CustomerFoodReadModel> ProjectCustomer(
-        IQueryable<FoodItem> query,
-        DateTime utcNow,
+        IQueryable<FoodItemWithEffectivePrice> query,
         bool includeImages)
-        => FoodPriceResolver.WithCurrentPrice(query, utcNow).Select(priced => new CustomerFoodReadModel(
+        => query.Select(priced => new CustomerFoodReadModel(
             priced.FoodItem.Id,
             priced.FoodItem.BoothId,
             priced.FoodItem.Booth.BoothName,

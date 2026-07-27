@@ -29,6 +29,7 @@ RUN /tools/dotnet-ef migrations bundle \
     --configuration Release \
     --target-runtime linux-x64 \
     --output /app/publish/efbundle
+RUN chmod +x /app/publish/efbundle
 
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
 WORKDIR /app
@@ -43,4 +44,4 @@ COPY --from=publish --chown=$APP_UID:$APP_UID /app/publish/ ./
 
 USER $APP_UID
 
-ENTRYPOINT ["sh", "-c", "exec dotnet PresentationLayer.dll --urls http://0.0.0.0:${PORT:-8080}"]
+ENTRYPOINT ["sh", "-c", "./efbundle && exec dotnet PresentationLayer.dll --urls http://0.0.0.0:${PORT:-8080}"]

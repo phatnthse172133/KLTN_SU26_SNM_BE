@@ -1,4 +1,5 @@
 using ApplicationLayer.DTOs.Requests;
+using ApplicationLayer.Exceptions;
 using ApplicationLayer.Mappings;
 using ApplicationLayer.Services.CustomerDiscovery;
 using ApplicationLayer.Services.MapNavigation;
@@ -177,6 +178,43 @@ public sealed class IntegrationDemoDataSeederTests
         Assert.Equal(
             new[] { IntegrationDemoDataSeeder.NodeId(1), IntegrationDemoDataSeeder.NodeId(2), IntegrationDemoDataSeeder.NodeId(3), IntegrationDemoDataSeeder.NodeId(4) },
             boothTwoRoute.Data.Path.Select(x => x.NodeId));
+    }
+
+    [Fact]
+    public async Task SeededDataset_DisconnectedDestination_ReturnsStableRouteNotFoundError()
+    {
+        await using var provider = Provider();
+        await IntegrationDemoDataSeeder.SeedAsync(provider);
+        await using var scope = provider.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SNMDbContext>();
+        var destinationNodeId = IntegrationDemoDataSeeder.NodeId(4);
+        var destinationEdges = await db.LayoutEdges
+            .Where(x => x.LayoutId == IntegrationDemoDataSeeder.LayoutId
+                && (x.FromNodeId == destinationNodeId || x.ToNodeId == destinationNodeId))
+            .ToListAsync();
+        db.LayoutEdges.RemoveRange(destinationEdges);
+        await db.SaveChangesAsync();
+
+        var mapper = new MapperConfiguration(
+            config => config.AddProfile<MappingProfile>(),
+            NullLoggerFactory.Instance).CreateMapper();
+        var navigation = new MapNavigationService(
+            new NightMarketRepository(db),
+            new MarketLayoutRepository(db),
+            new ZoneRepository(db),
+            new LayoutNodeRepository(db),
+            new LayoutEdgeRepository(db),
+            new BoothLocationRepository(db),
+            new BoothRepository(db),
+            mapper);
+
+        var error = await Assert.ThrowsAsync<AppException>(() => navigation.FindRouteToBoothAsync(
+            IntegrationDemoDataSeeder.LayoutId,
+            IntegrationDemoDataSeeder.MainEntranceNodeId,
+            IntegrationDemoDataSeeder.BoothId(2)));
+
+        Assert.Equal(404, error.StatusCode);
+        Assert.Equal("ROUTE_NOT_FOUND", error.ErrorCode);
     }
 
     private static ServiceProvider Provider()

@@ -1,6 +1,7 @@
 using ApplicationLayer.Exceptions;
 using InfrastructureLayer.Storage;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
 using Moq;
 
 namespace TestingLayer;
@@ -18,7 +19,13 @@ public sealed class LocalFileStorageServiceTests : IDisposable
         var environment = new Mock<IWebHostEnvironment>();
         environment.SetupGet(value => value.ContentRootPath).Returns(_rootPath);
         environment.SetupGet(value => value.WebRootPath).Returns(Path.Combine(_rootPath, "wwwroot"));
-        _storage = new LocalFileStorageService(environment.Object);
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["UploadStorage:RootPath"] = Path.Combine(_rootPath, "wwwroot", "uploads")
+            })
+            .Build();
+        _storage = new LocalFileStorageService(environment.Object, configuration);
     }
 
     [Fact]

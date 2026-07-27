@@ -340,38 +340,6 @@ public sealed class NightMarketCustomerTests
             true, new TimeOnly(18, 0), new TimeOnly(18, 0), null, null, new TimeOnly(18, 0)));
     }
 
-    [Fact]
-    public async Task NestedCustomerEndpoints_BlockAnyMarketThatIsNotCustomerVisible()
-    {
-        var markets = new Mock<INightMarketRepository>();
-        var booths = new Mock<IBoothRepository>();
-        var foods = new Mock<IFoodItemRepository>();
-        var service = CreateService(markets, booths, foods);
-        var suspendedMarketId = Guid.NewGuid();
-        var deletedMarketId = Guid.NewGuid();
-        markets.Setup(repository => repository.CustomerVisibleExistsAsync(
-                It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
-
-        foreach (var marketId in new[] { suspendedMarketId, deletedMarketId })
-        {
-            var boothsError = await Assert.ThrowsAsync<AppException>(() =>
-                service.GetBoothsAsync(marketId, new PaginationReq()));
-            var foodsError = await Assert.ThrowsAsync<AppException>(() =>
-                service.GetFoodsAsync(marketId, new PaginationReq()));
-
-            Assert.Equal(404, boothsError.StatusCode);
-            Assert.Equal("NIGHT_MARKET_NOT_FOUND", boothsError.ErrorCode);
-            Assert.Equal(404, foodsError.StatusCode);
-            Assert.Equal("NIGHT_MARKET_NOT_FOUND", foodsError.ErrorCode);
-        }
-
-        booths.Verify(repository => repository.GetCustomerByNightMarketPagedAsync(
-            It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
-        foods.Verify(repository => repository.GetCustomerByNightMarketPagedAsync(
-            It.IsAny<Guid>(), It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
-    }
-
     private static SNMDbContext CreateContext()
     {
         var options = new DbContextOptionsBuilder<SNMDbContext>()

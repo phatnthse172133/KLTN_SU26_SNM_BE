@@ -78,7 +78,12 @@ namespace DomainLayer.Enums
         public enum NightMarketStatus
         {
             Active = 1,
-            Inactive = 2
+            Inactive = 2,
+            Open = Active,
+            Draft = 0,
+            Upcoming = 3,
+            Closed = 4,
+            Cancelled = 5
         }
 
         public enum ModerationStatus
@@ -307,6 +312,8 @@ namespace DomainLayer.Enums
             Failed = 2, // Thanh toán thất bại
             Refunded = 3, // Đã hoàn tiền cho khách
             Cancelled = 4,
+            RefundProcessing = 5, // Đang xử lý hoàn tiền
+            Underpaid = 6 // Thanh toán thiếu
         }
 
         public enum OrderStatus
@@ -317,8 +324,8 @@ namespace DomainLayer.Enums
                                  // Cash)
             Completed = 3,       // Khách đã lấy món -> Hoàn thành đơn (đã trả tiền cho quầy nếu customer chọn Cash)
             Cancelled = 4,       // Đơn bị hủy (Do khách hủy hoặc quầy hết nguyên liệu)
-            Underpaid = 5        // Đã nhận tiền nhưng thấp hơn FinalAmount, chờ thanh toán bổ sung/xử lý
-            //Refunded = 6,         // Đơn đã được hoàn tiền cho khách
+            Underpaid = 5,       // Đã nhận tiền nhưng thấp hơn FinalAmount, chờ thanh toán bổ sung/xử lý
+            Refunded = 6         // Đơn đã được hoàn tiền cho khách
         }
 
         //public enum PayOrderStatus

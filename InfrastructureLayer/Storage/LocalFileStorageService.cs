@@ -164,8 +164,7 @@ public class LocalFileStorageService : IFileStorageService
             return Task.CompletedTask;
         }
 
-        var wwwrootPath = _env.WebRootPath ?? Path.Combine(_env.ContentRootPath, "wwwroot");
-        var fullPath = Path.Combine(wwwrootPath, AvatarFolder, fileName);
+        var fullPath = Path.Combine(StorageRoot, AvatarFolder, fileName);
 
         // Ensure the resolved path is within the avatar folder (prevent path traversal)
         var fullDir = Path.GetFullPath(Path.Combine(StorageRoot, AvatarFolder));

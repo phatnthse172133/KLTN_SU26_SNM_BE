@@ -31,7 +31,6 @@ namespace ApplicationLayer.Services.PayOS
 
         public async Task<PayOSPaymentResponse> CreatePaymentLinkAsync(PayOSPaymentRequest request)
         {
-            EnsureConfigured();
             if (request.Amount <= 0m || request.Amount != decimal.Truncate(request.Amount) || request.Amount > long.MaxValue)
                 throw AppException.BadRequest(
                     "PayOS amount must be a positive whole-number VND amount.",

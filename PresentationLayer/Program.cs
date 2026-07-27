@@ -35,7 +35,7 @@ var envPath = Path.Combine(AppContext.BaseDirectory, ".env");
 if (!File.Exists(envPath))
     envPath = Path.Combine(Directory.GetCurrentDirectory(), ".env");
 if (File.Exists(envPath))
-    DotNetEnv.Env.Load(envPath);
+    SNMContextFactory.LoadDotEnv(envPath);
 
 // Re-add environment variables so .env values take effect
 builder.Configuration.AddEnvironmentVariables();
@@ -345,7 +345,7 @@ var swaggerEnabled = app.Environment.IsDevelopment()
     || builder.Configuration.GetValue<bool>("Swagger:Enabled");
 
 // Demo data is opt-in. A normal application start must never mutate a shared database.
-if (string.Equals(builder.Configuration["SeedDemoData"], "true", StringComparison.OrdinalIgnoreCase))
+if (AISeedData.IsEnabled(builder.Configuration))
 {
     await AISeedData.SeedAsync(app.Services);
 }

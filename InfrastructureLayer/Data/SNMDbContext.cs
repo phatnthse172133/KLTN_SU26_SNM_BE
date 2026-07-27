@@ -229,8 +229,7 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.Status)
                     .HasConversion<string>()
                     .HasMaxLength(20)
-                    .HasDefaultValueSql("'Pending'::character varying")
-                    .HasComment("Pending: chÃ¡Â»Â Admin duyÃ¡Â»â€¡t | Active: hoÃ¡ÂºÂ¡t Ã„â€˜Ã¡Â»â„¢ng | Inactive: tÃ¡ÂºÂ¡m ngÃ¡Â»Â«ng | Suspended: bÃ¡Â»â€¹ khÃƒÂ³a do vi phÃ¡ÂºÂ¡m");
+                    .HasComment("Active | Inactive | Banned");
                 entity.Property(e => e.ThumbnailUrl).HasMaxLength(500);
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
 

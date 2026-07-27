@@ -43,7 +43,7 @@ namespace InfrastructureLayer.Data
             return new SNMDbContext(optionsBuilder.Options);
         }
 
-        private static void LoadDotEnv(string path)
+        public static void LoadDotEnv(string path)
         {
             if (!File.Exists(path))
             {
@@ -66,7 +66,10 @@ namespace InfrastructureLayer.Data
 
                 var key = line[..separatorIndex].Trim();
                 var value = line[(separatorIndex + 1)..].Trim().Trim('"');
-                Environment.SetEnvironmentVariable(key, value);
+                if (Environment.GetEnvironmentVariable(key) is null)
+                {
+                    Environment.SetEnvironmentVariable(key, value);
+                }
             }
         }
     }

@@ -167,11 +167,9 @@ namespace InfrastructureLayer.Migrations
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .ValueGeneratedOnAdd()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
-                        .HasDefaultValueSql("'Pending'::character varying")
-                        .HasComment("Pending: chá» Admin duyá»‡t | Active: hoáº¡t Ä‘á»™ng | Inactive: táº¡m ngá»«ng | Suspended: bá»‹ khÃ³a do vi pháº¡m");
+                        .HasComment("Active | Inactive | Banned");
 
                     b.Property<string>("ThumbnailUrl")
                         .HasMaxLength(500)

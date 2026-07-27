@@ -10,16 +10,17 @@ namespace InfrastructureLayer.Data.Seeders;
 
 public static class AISeedData
 {
+    public static bool IsEnabled(IConfiguration configuration)
+        => string.Equals(configuration["SeedDemoData"], "true", StringComparison.OrdinalIgnoreCase);
+
     private static readonly IReadOnlyCollection<FoodTagSeed> TagSeeds =
     [
         new("11111111-1111-1111-1111-111111111001", "Spicy", "SPICY", FoodTagGroup.Taste, "Cay"),
-        new("11111111-1111-1111-1111-111111111002", "Sweet", "SWEET", FoodTagGroup.Taste, "Ngọt"),
         new("11111111-1111-1111-1111-111111111003", "Mild", "MILD", FoodTagGroup.Taste, "Vị nhẹ"),
         new("11111111-1111-1111-1111-111111111004", "Grilled", "GRILLED", FoodTagGroup.CookingMethod, "Đồ nướng"),
         new("11111111-1111-1111-1111-111111111005", "Fried", "FRIED", FoodTagGroup.CookingMethod, "Đồ chiên"),
         new("11111111-1111-1111-1111-111111111006", "Soup", "SOUP", FoodTagGroup.CookingMethod, "Món nước"),
         new("11111111-1111-1111-1111-111111111007", "Hot", "HOT", FoodTagGroup.Temperature, "Món nóng"),
-        new("11111111-1111-1111-1111-111111111008", "Cold", "COLD", FoodTagGroup.Temperature, "Món lạnh"),
         new("11111111-1111-1111-1111-111111111009", "FullMeal", "FULLMEAL", FoodTagGroup.MealPurpose, "Ăn no"),
         new("11111111-1111-1111-1111-111111111010", "Snack", "SNACK", FoodTagGroup.MealPurpose, "Ăn vặt"),
         new("11111111-1111-1111-1111-111111111011", "Drink", "DRINK", FoodTagGroup.MealPurpose, "Đồ uống"),
@@ -29,23 +30,11 @@ public static class AISeedData
         new("11111111-1111-1111-1111-111111111015", "Beef", "BEEF", FoodTagGroup.Ingredient, "Bò"),
         new("11111111-1111-1111-1111-111111111016", "Pork", "PORK", FoodTagGroup.Ingredient, "Heo"),
         new("11111111-1111-1111-1111-111111111017", "Seafood", "SEAFOOD", FoodTagGroup.Ingredient, "Hải sản"),
-        new("11111111-1111-1111-1111-111111111018", "Egg", "EGG", FoodTagGroup.Ingredient, "Trứng"),
         new("11111111-1111-1111-1111-111111111019", "Noodle", "NOODLE", FoodTagGroup.Ingredient, "Mì / bún / phở"),
         new("11111111-1111-1111-1111-111111111020", "Rice", "RICE", FoodTagGroup.Ingredient, "Cơm"),
-        new("11111111-1111-1111-1111-111111111021", "Vegetarian", "VEGETARIAN", FoodTagGroup.Dietary, "Món chay"),
-        new("11111111-1111-1111-1111-111111111022", "NoSeafood", "NOSEAFOOD", FoodTagGroup.Dietary, "Không hải sản"),
         new("11111111-1111-1111-1111-111111111023", "BudgetFriendly", "BUDGETFRIENDLY", FoodTagGroup.Budget, "Giá tốt"),
         new("11111111-1111-1111-1111-111111111024", "MidRange", "MIDRANGE", FoodTagGroup.Budget, "Giá trung bình"),
-        new("11111111-1111-1111-1111-111111111025", "Premium", "PREMIUM", FoodTagGroup.Budget, "Giá cao"),
-        new("11111111-1111-1111-1111-111111111026", "Vietnamese", "VIETNAMESE", FoodTagGroup.Other, "Món Việt"),
-        new("11111111-1111-1111-1111-111111111027", "Korean", "KOREAN", FoodTagGroup.Other, "Món Hàn"),
-        new("11111111-1111-1111-1111-111111111028", "Thai", "THAI", FoodTagGroup.Other, "Món Thái"),
-        new("11111111-1111-1111-1111-111111111029", "Japanese", "JAPANESE", FoodTagGroup.Other, "Món Nhật"),
-        new("11111111-1111-1111-1111-111111111030", "Western", "WESTERN", FoodTagGroup.Other, "Món Âu/Mỹ"),
-        new("11111111-1111-1111-1111-111111111031", "Cambodian", "CAMBODIAN", FoodTagGroup.Other, "Món Campuchia"),
-        new("11111111-1111-1111-1111-111111111032", "DalatSpecialty", "DALATSPECIALTY", FoodTagGroup.Other, "Đặc sản Đà Lạt"),
-        new("11111111-1111-1111-1111-111111111033", "StreetFood", "STREETFOOD", FoodTagGroup.Other, "Ẩm thực đường phố"),
-        new("11111111-1111-1111-1111-111111111034", "Fruit", "FRUIT", FoodTagGroup.Ingredient, "Trái cây")
+        new("11111111-1111-1111-1111-111111111026", "Vietnamese", "VIETNAMESE", FoodTagGroup.Other, "Món Việt")
     ];
 
     private static readonly Guid CustomerRoleId = Guid.Parse("22222222-2222-2222-2222-222222222001");
@@ -74,21 +63,10 @@ public static class AISeedData
             "Hồ Thị Kỷ, Phường 1, Quận 10, TP. Hồ Chí Minh",
             10.7637m,
             106.6707m,
-            new TimeOnly(15, 0),
-            new TimeOnly(23, 30),
+            new TimeOnly(0, 0),
+            new TimeOnly(23, 59),
             520,
             220),
-        new(
-            Guid.Parse("33333333-3333-3333-3333-333333333003"),
-            "Chợ đêm Đà Lạt",
-            "Không gian ẩm thực đêm quanh khu chợ Đà Lạt và đường Nguyễn Thị Minh Khai, nổi bật với bánh tráng nướng, sữa đậu nành, xiên nướng và đặc sản lạnh.",
-            "Nguyễn Thị Minh Khai, Phường 1, Đà Lạt, Lâm Đồng",
-            11.9419m,
-            108.4376m,
-            new TimeOnly(17, 0),
-            new TimeOnly(23, 0),
-            460,
-            300)
     ];
 
     private static readonly IReadOnlyCollection<ZoneSeed> ZoneSeeds =
@@ -98,10 +76,7 @@ public static class AISeedData
         new(Guid.Parse("44444444-4444-4444-4444-444444444003"), Guid.Parse("33333333-3333-3333-3333-333333333001"), "Cánh Tây - Phan Chu Trinh", "Khu hàng lưu niệm, đồ khô và các quầy ăn tối bên hông chợ.", "#2B6CB0"),
         new(Guid.Parse("44444444-4444-4444-4444-444444444004"), Guid.Parse("33333333-3333-3333-3333-333333333002"), "Lối chợ hoa", "Khu đầu tuyến gần các sạp hoa, nhiều đồ uống và món ăn nhẹ.", "#8B5CF6"),
         new(Guid.Parse("44444444-4444-4444-4444-444444444005"), Guid.Parse("33333333-3333-3333-3333-333333333002"), "Hẻm ẩm thực Campuchia", "Cụm món Campuchia và món nướng đặc trưng của phố Hồ Thị Kỷ.", "#B56A00"),
-        new(Guid.Parse("44444444-4444-4444-4444-444444444006"), Guid.Parse("33333333-3333-3333-3333-333333333002"), "Khu chè và đồ uống", "Khu tráng miệng, chè, trà tắc, nước mát và món lạnh.", "#2F7D52"),
-        new(Guid.Parse("44444444-4444-4444-4444-444444444007"), Guid.Parse("33333333-3333-3333-3333-333333333003"), "Dốc chợ Đà Lạt", "Khu bánh tráng nướng, sữa đậu nành và món nóng trên trục dốc chợ.", "#D9713C"),
-        new(Guid.Parse("44444444-4444-4444-4444-444444444008"), Guid.Parse("33333333-3333-3333-3333-333333333003"), "Quảng trường chợ", "Không gian trung tâm đông khách, tiện gom nhóm và bắt đầu lộ trình.", "#2F6B4F"),
-        new(Guid.Parse("44444444-4444-4444-4444-444444444009"), Guid.Parse("33333333-3333-3333-3333-333333333003"), "Khu đặc sản lạnh", "Khu trái cây, kem bơ, dâu lắc và đồ uống đặc sản Đà Lạt.", "#2B6CB0")
+        new(Guid.Parse("44444444-4444-4444-4444-444444444006"), Guid.Parse("33333333-3333-3333-3333-333333333002"), "Khu chè và đồ uống", "Khu tráng miệng, chè, trà tắc, nước mát và món lạnh.", "#2F7D52")
     ];
 
     private static readonly IReadOnlyCollection<BoothSeed> BoothSeeds =
@@ -111,10 +86,7 @@ public static class AISeedData
         new(3, Guid.Parse("33333333-3333-3333-3333-333333333001"), Guid.Parse("44444444-4444-4444-4444-444444444003"), "BT-PCT-03", "Quầy demo chè và nước mát", "Chè, nước sâm, trà tắc và món tráng miệng mát.", 4.4m, 150, 64),
         new(4, Guid.Parse("33333333-3333-3333-3333-333333333002"), Guid.Parse("44444444-4444-4444-4444-444444444005"), "HTK-KH-01", "Quầy demo món Campuchia Hồ Thị Kỷ", "Bún num bò chóc, bò nướng lá lốt và các món đậm vị trong khu Hồ Thị Kỷ.", 4.8m, 78, 86),
         new(5, Guid.Parse("33333333-3333-3333-3333-333333333002"), Guid.Parse("44444444-4444-4444-4444-444444444004"), "HTK-HOA-02", "Quầy demo xiên nướng Hồ Thị Kỷ", "Xiên nướng, bánh tráng và món ăn vặt nóng cho nhóm bạn.", 4.6m, 120, 50),
-        new(6, Guid.Parse("33333333-3333-3333-3333-333333333002"), Guid.Parse("44444444-4444-4444-4444-444444444006"), "HTK-NUOC-03", "Quầy demo chè - trà tắc Hồ Thị Kỷ", "Chè Thái, trà tắc, nước mát và món lạnh giá tốt.", 4.5m, 172, 80),
-        new(7, Guid.Parse("33333333-3333-3333-3333-333333333003"), Guid.Parse("44444444-4444-4444-4444-444444444007"), "DL-DOC-01", "Quầy demo bánh tráng nướng Đà Lạt", "Bánh tráng nướng, khoai lang nướng và sữa đậu nành nóng.", 4.9m, 66, 92),
-        new(8, Guid.Parse("33333333-3333-3333-3333-333333333003"), Guid.Parse("44444444-4444-4444-4444-444444444008"), "DL-QT-02", "Quầy demo lẩu - xiên nóng Đà Lạt", "Món nóng phù hợp thời tiết Đà Lạt, có combo ăn nhóm.", 4.6m, 118, 118),
-        new(9, Guid.Parse("33333333-3333-3333-3333-333333333003"), Guid.Parse("44444444-4444-4444-4444-444444444009"), "DL-DS-03", "Quầy demo kem bơ - dâu lắc", "Kem bơ, dâu lắc, sữa chua phô mai và đồ lạnh đặc sản.", 4.7m, 176, 96)
+        new(6, Guid.Parse("33333333-3333-3333-3333-333333333002"), Guid.Parse("44444444-4444-4444-4444-444444444006"), "HTK-NUOC-03", "Quầy demo chè - trà tắc Hồ Thị Kỷ", "Chè Thái, trà tắc, nước mát và món lạnh giá tốt.", 4.5m, 172, 80)
     ];
 
     public static async Task SeedAsync(IServiceProvider services)
@@ -140,15 +112,23 @@ public static class AISeedData
         {
             await SeedTagsAsync(dbContext);
             await SeedDemoMarketsAsync(dbContext);
-            await SeedDemoUsersAsync(dbContext, demoPasswordHash);
+            await SeedDemoUsersAsync(
+                dbContext,
+                demoPasswordHash,
+                configuredPassword,
+                passwordHasher);
             await SeedDemoBoothsAndMenuAsync(dbContext);
             await SeedDemoCustomerPreferencesAsync(dbContext);
             await SeedFoodItemTagsAsync(dbContext);
             await dbContext.SaveChangesAsync();
+            await SeedEffectivePricesAsync(dbContext);
+            await SeedDemoHistoryAsync(dbContext);
+            await dbContext.SaveChangesAsync();
         }
         catch (Exception exception)
         {
-            logger.LogWarning(exception, "AI seed data could not be applied.");
+            logger.LogError(exception, "AI seed data could not be applied.");
+            throw;
         }
     }
 
@@ -220,10 +200,33 @@ public static class AISeedData
             });
         }
 
+        // Known demo records converge on every explicit seed run. The second market stays
+        // orderable throughout the day so staging acceptance is independent of server time.
+        foreach (var seed in MarketSeeds)
+        {
+            var market = await dbContext.NightMarkets.FindAsync(seed.Id);
+            if (market is null)
+            {
+                continue;
+            }
+
+            market.OpeningHours = seed.OpenTime;
+            market.ClosingHours = seed.CloseTime;
+            market.TotalBooth = BoothSeeds.Count(booth => booth.MarketId == seed.Id);
+            market.Status = NightMarketStatus.Open;
+            market.ModerationStatus = ModerationStatus.Active;
+            market.IsDeleted = false;
+            market.UpdatedAt = now;
+        }
+
         await dbContext.SaveChangesAsync();
     }
 
-    private static async Task SeedDemoUsersAsync(SNMDbContext dbContext, string demoPasswordHash)
+    private static async Task SeedDemoUsersAsync(
+        SNMDbContext dbContext,
+        string demoPasswordHash,
+        string? configuredPassword,
+        IPasswordHasher passwordHasher)
     {
         var now = DateTime.UtcNow;
         var customerRole = await dbContext.Roles.FirstOrDefaultAsync(role =>
@@ -281,7 +284,7 @@ public static class AISeedData
         else
         {
             var demoCustomer = await dbContext.Users.SingleAsync(user => user.Id == DemoCustomerId);
-            if (demoCustomer.PasswordHash == LegacyDemoPasswordHash)
+            if (ShouldSynchronizeDemoPassword(demoCustomer.PasswordHash, configuredPassword, passwordHasher))
             {
                 demoCustomer.PasswordHash = demoPasswordHash;
                 demoCustomer.UpdatedAt = now;
@@ -305,12 +308,28 @@ public static class AISeedData
                 UpdatedAt = now
             });
         }
+        else
+        {
+            var alternateCustomer = await dbContext.Users.SingleAsync(user => user.Id == AlternateDemoCustomerId);
+            if (ShouldSynchronizeDemoPassword(alternateCustomer.PasswordHash, configuredPassword, passwordHasher))
+            {
+                alternateCustomer.PasswordHash = demoPasswordHash;
+                alternateCustomer.UpdatedAt = now;
+            }
+        }
 
         foreach (var seed in BoothSeeds)
         {
             var ownerId = OwnerId(seed.Index);
-            if (await dbContext.Users.AnyAsync(user => user.Id == ownerId))
+            var existingOwner = await dbContext.Users.SingleOrDefaultAsync(user => user.Id == ownerId);
+            if (existingOwner is not null)
             {
+                if (ShouldSynchronizeDemoPassword(existingOwner.PasswordHash, configuredPassword, passwordHasher))
+                {
+                    existingOwner.PasswordHash = demoPasswordHash;
+                    existingOwner.UpdatedAt = now;
+                }
+
                 continue;
             }
 
@@ -330,16 +349,32 @@ public static class AISeedData
             });
         }
 
-        var legacyDemoOwners = await dbContext.Users
-            .Where(user => user.PasswordHash == LegacyDemoPasswordHash)
-            .ToListAsync();
-        foreach (var owner in legacyDemoOwners)
+        await dbContext.SaveChangesAsync();
+    }
+
+    private static bool ShouldSynchronizeDemoPassword(
+        string currentHash,
+        string? configuredPassword,
+        IPasswordHasher passwordHasher)
+    {
+        if (string.IsNullOrWhiteSpace(configuredPassword))
         {
-            owner.PasswordHash = demoPasswordHash;
-            owner.UpdatedAt = now;
+            return currentHash == LegacyDemoPasswordHash;
         }
 
-        await dbContext.SaveChangesAsync();
+        if (currentHash == LegacyDemoPasswordHash)
+        {
+            return true;
+        }
+
+        try
+        {
+            return !passwordHasher.VerifyPassword(configuredPassword, currentHash);
+        }
+        catch (Exception)
+        {
+            return true;
+        }
     }
 
     private static async Task SeedDemoBoothsAndMenuAsync(SNMDbContext dbContext)
@@ -382,8 +417,8 @@ public static class AISeedData
                 SlotNumber = seed.Code,
                 MapPositionX = seed.X,
                 MapPositionY = seed.Y,
-                OpenTime = new TimeOnly(17, 0),
-                CloseTime = new TimeOnly(23, 0),
+                OpenTime = seed.MarketId == MarketSeeds.Last().Id ? new TimeOnly(0, 0) : new TimeOnly(17, 0),
+                CloseTime = seed.MarketId == MarketSeeds.Last().Id ? new TimeOnly(23, 59) : new TimeOnly(23, 0),
                 AverageRating = seed.Rating,
                 IsFeatured = seed.Index is 4 or 7,
                 PackageName = "Demo AI",
@@ -391,6 +426,22 @@ public static class AISeedData
                 CreatedAt = now,
                 UpdatedAt = now
             });
+        }
+
+        await dbContext.SaveChangesAsync();
+
+        foreach (var seed in BoothSeeds)
+        {
+            var booth = await dbContext.Booths.FindAsync(BoothId(seed.Index));
+            if (booth is null)
+            {
+                continue;
+            }
+
+            booth.OpenTime = seed.MarketId == MarketSeeds.Last().Id ? new TimeOnly(0, 0) : new TimeOnly(17, 0);
+            booth.CloseTime = seed.MarketId == MarketSeeds.Last().Id ? new TimeOnly(23, 59) : new TimeOnly(23, 0);
+            booth.Status = BoothStatus.Active;
+            booth.UpdatedAt = now;
         }
 
         await dbContext.SaveChangesAsync();
@@ -452,8 +503,8 @@ public static class AISeedData
             (DemoCustomerId, "SPICY", CustomerPreferenceKind.Like),
             (DemoCustomerId, "VIETNAMESE", CustomerPreferenceKind.Like),
             (DemoCustomerId, "SEAFOOD", CustomerPreferenceKind.Avoid),
-            (AlternateDemoCustomerId, "VEGETARIAN", CustomerPreferenceKind.Like),
-            (AlternateDemoCustomerId, "MILD", CustomerPreferenceKind.Like),
+            (AlternateDemoCustomerId, "DESSERT", CustomerPreferenceKind.Like),
+            (AlternateDemoCustomerId, "DRINK", CustomerPreferenceKind.Like),
             (AlternateDemoCustomerId, "SPICY", CustomerPreferenceKind.Avoid)
         };
 
@@ -482,6 +533,139 @@ public static class AISeedData
                 PreferenceSource = CustomerPreferenceSource.UserSelected,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
+            });
+        }
+    }
+
+    private static async Task SeedEffectivePricesAsync(SNMDbContext dbContext)
+    {
+        var priceId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaa0001");
+        if (await dbContext.FoodPrices.AnyAsync(price => price.Id == priceId))
+        {
+            return;
+        }
+
+        var now = DateTime.UtcNow;
+        dbContext.FoodPrices.Add(new FoodPrice
+        {
+            Id = priceId,
+            FoodItemId = FoodId(4, 2),
+            Price = 49000m,
+            StartDate = now.AddDays(-1),
+            EndDate = now.AddYears(5),
+            IsDeleted = false,
+            CreatedAt = now,
+            UpdatedAt = now
+        });
+    }
+
+    private static async Task SeedDemoHistoryAsync(SNMDbContext dbContext)
+    {
+        await SeedCustomerHistoryAsync(
+            dbContext,
+            customerId: DemoCustomerId,
+            boothIndex: 5,
+            foodId: FoodId(5, 3),
+            orderId: Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbb0001"),
+            orderCode: 904000001,
+            paymentId: Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccc0001"),
+            detailId: Guid.Parse("dddddddd-dddd-dddd-dddd-dddddddd0001"),
+            reviewId: Guid.Parse("eeeeeeee-eeee-eeee-eeee-eeeeeeee0001"),
+            ageInDays: 7);
+
+        await SeedCustomerHistoryAsync(
+            dbContext,
+            customerId: AlternateDemoCustomerId,
+            boothIndex: 3,
+            foodId: FoodId(3, 1),
+            orderId: Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbb0002"),
+            orderCode: 904000002,
+            paymentId: Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccc0002"),
+            detailId: Guid.Parse("dddddddd-dddd-dddd-dddd-dddddddd0002"),
+            reviewId: Guid.Parse("eeeeeeee-eeee-eeee-eeee-eeeeeeee0002"),
+            ageInDays: 5);
+    }
+
+    private static async Task SeedCustomerHistoryAsync(
+        SNMDbContext dbContext,
+        Guid customerId,
+        int boothIndex,
+        Guid foodId,
+        Guid orderId,
+        long orderCode,
+        Guid paymentId,
+        Guid detailId,
+        Guid reviewId,
+        int ageInDays)
+    {
+        var food = await dbContext.FoodItems.FirstAsync(item => item.Id == foodId);
+        var occurredAt = DateTime.UtcNow.AddDays(-ageInDays);
+
+        if (!await dbContext.Orders.AnyAsync(order => order.Id == orderId))
+        {
+            dbContext.Orders.Add(new Order
+            {
+                Id = orderId,
+                CustomerId = customerId,
+                BoothOwnerId = OwnerId(boothIndex),
+                OrderCode = orderCode,
+                CheckoutRequestId = Guid.Parse($"ffffffff-ffff-ffff-ffff-ffffffff000{(customerId == DemoCustomerId ? 1 : 2)}"),
+                Status = OrderStatus.Completed,
+                TotalAmount = food.Price,
+                DiscountAmount = 0,
+                FinalAmount = food.Price,
+                Note = "Controlled AI staging history",
+                CreatedAt = occurredAt,
+                UpdatedAt = occurredAt
+            });
+        }
+
+        if (!await dbContext.OrderDetails.AnyAsync(detail => detail.Id == detailId))
+        {
+            dbContext.OrderDetails.Add(new OrderDetail
+            {
+                Id = detailId,
+                OrderId = orderId,
+                FoodItemId = foodId,
+                FoodNameSnapshot = food.Name,
+                Quantity = 1,
+                UnitPrice = food.Price,
+                TotalPrice = food.Price,
+                CreatedAt = occurredAt,
+                UpdatedAt = occurredAt
+            });
+        }
+
+        if (!await dbContext.Payments.AnyAsync(payment => payment.Id == paymentId))
+        {
+            dbContext.Payments.Add(new Payment
+            {
+                Id = paymentId,
+                OrderId = orderId,
+                BoothOwnerId = OwnerId(boothIndex),
+                Type = PaymentType.Cash,
+                Gateway = PaymentGateway.None,
+                Amount = food.Price,
+                Status = PaymentStatus.Paid,
+                PaidAt = occurredAt,
+                CreatedAt = occurredAt,
+                UpdatedAt = occurredAt
+            });
+        }
+
+        if (!await dbContext.Reviews.AnyAsync(review => review.Id == reviewId))
+        {
+            dbContext.Reviews.Add(new Review
+            {
+                Id = reviewId,
+                BoothId = BoothId(boothIndex),
+                CustomerId = customerId,
+                OrderId = orderId,
+                Rating = 5,
+                Content = "Controlled AI staging review",
+                IsVisible = true,
+                CreatedAt = occurredAt.AddHours(1),
+                UpdatedAt = occurredAt.AddHours(1)
             });
         }
     }
@@ -526,6 +710,7 @@ public static class AISeedData
         var codes = new HashSet<string>();
 
         AddIf(text, codes, "SPICY", "cay", "spicy", "sa te");
+        AddIf(text, codes, "MILD", "nhẹ", "mild", "dễ uống");
         AddIf(text, codes, "GRILLED", "nuong", "nướng", "bbq");
         AddIf(text, codes, "FRIED", "chien", "chiên", "ran");
         AddIf(text, codes, "SOUP", "bun", "bún", "pho", "phở", "mi", "mì", "nuoc", "nước");
@@ -535,6 +720,7 @@ public static class AISeedData
         AddIf(text, codes, "BEEF", "bo", "bò");
         AddIf(text, codes, "PORK", "heo", "pork", "thit nuong", "thịt nướng");
         AddIf(text, codes, "SEAFOOD", "hai san", "hải sản", "tom", "tôm", "muc", "mực");
+        AddIf(text, codes, "SHAREABLE", "chia sẻ", "ăn nhóm", "nhóm bạn");
         AddIf(text, codes, "RICE", "com", "cơm");
         AddIf(text, codes, "NOODLE", "bun", "bún", "pho", "phở", "mi", "mì");
 
@@ -567,43 +753,37 @@ public static class AISeedData
             [
                 new("Mực nướng sa tế", "Mực nướng nóng, vị cay nhẹ, hợp ăn nhóm tại khu Phan Bội Châu.", 85000m),
                 new("Tôm nướng muối ớt", "Tôm nướng vỏ giòn, cay mặn kiểu chợ đêm.", 95000m),
-                new("Sò điệp nướng mỡ hành", "Hải sản nướng thơm, dùng như món chia sẻ.", 70000m),
                 new("Nước sâm lạnh", "Đồ uống mát, cân bằng món nướng.", 18000m)
             ],
             2 =>
             [
                 new("Cơm tấm sườn bì", "Món Việt ăn no, phù hợp khách cần bữa chính.", 65000m),
                 new("Bún thịt nướng chả giò", "Bún thịt nướng, rau sống, chả giò giòn.", 60000m),
-                new("Gỏi cuốn tôm thịt", "Món nhẹ, dễ chia sẻ trước bữa chính.", 35000m),
                 new("Trà tắc", "Đồ uống lạnh giá tốt.", 15000m)
             ],
             3 =>
             [
                 new("Chè ba màu", "Món tráng miệng lạnh phổ biến ở TP.HCM.", 25000m),
                 new("Chè Thái sầu riêng", "Vị ngọt béo, dùng sau món nướng hoặc món cay.", 35000m),
-                new("Nước sâm rong biển", "Đồ uống mát, hợp đi chợ đêm.", 18000m),
-                new("Trái cây dầm", "Tráng miệng lạnh, nhiều trái cây.", 30000m)
+                new("Nước sâm rong biển", "Đồ uống mát, hợp đi chợ đêm.", 18000m)
             ],
             4 =>
             [
                 new("Bún num bò chóc", "Món Campuchia đặc trưng tại khu Hồ Thị Kỷ, vị đậm và hơi cay.", 65000m),
                 new("Bò nướng lá lốt", "Món nướng nóng, thơm lá lốt, phù hợp ăn nhóm.", 55000m),
-                new("Gà nướng sả ớt", "Gà nướng cay nhẹ, dùng với rau và nước chấm.", 70000m),
                 new("Trà tắc xí muội", "Đồ uống lạnh phổ biến ở phố ẩm thực.", 18000m)
             ],
             5 =>
             [
                 new("Xiên bò nướng", "Xiên nướng nóng, dễ chia sẻ cho nhóm bạn.", 25000m),
                 new("Bánh tráng nướng trứng", "Món ăn vặt nóng kiểu street food Việt.", 30000m),
-                new("Gà xiên nướng cay", "Gà xiên sa tế, hợp khẩu vị thích cay.", 22000m),
-                new("Khoai tây lắc phô mai", "Món chiên ăn vặt, giá tốt.", 28000m)
+                new("Gà xiên nướng cay", "Gà xiên sa tế, hợp khẩu vị thích cay.", 22000m)
             ],
             6 =>
             [
                 new("Chè Thái", "Chè lạnh nhiều topping, hợp sau món cay.", 30000m),
                 new("Trà tắc mật ong", "Đồ uống lạnh, chua ngọt dễ uống.", 18000m),
-                new("Sữa chua nếp cẩm", "Tráng miệng lạnh, vị ngọt nhẹ.", 28000m),
-                new("Nước mía tắc", "Đồ uống đường phố giá tốt.", 15000m)
+                new("Sữa chua nếp cẩm", "Tráng miệng lạnh, vị ngọt nhẹ.", 28000m)
             ],
             7 =>
             [

@@ -1,5 +1,6 @@
 using DomainLayer.Entities;
 using DomainLayer.Enums;
+using DomainLayer.Common;
 using System;
 using System.Threading.Tasks;
 using static DomainLayer.Enums.GeneralEnum;
@@ -24,4 +25,25 @@ public interface IOrderRepository : IGenericRepository<Order>
     Task<Payment?> GetPaymentByPayOSOrderCodeAsync(long payOSOrderCode);
     Task<Payment?> GetPendingPayOSPaymentByOrderIdAsync(Guid orderId);
     Task AddPaymentAsync(Payment payment);
+    Task<PagedResult<Order>> GetByBoothOwnerPagedAsync(
+        Guid boothOwnerId,
+        string? keyword,
+        OrderStatus? status,
+        PaymentStatus? paymentStatus,
+        DateTime? fromDate,
+        DateTime? toDate,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default);
+    Task<Order?> GetByBoothOwnerAndCodeAsync(
+        Guid boothOwnerId,
+        long orderCode,
+        CancellationToken cancellationToken = default);
+    Task<int> UpdateBoothOwnerOrderStatusAsync(
+        Guid boothOwnerId,
+        long orderCode,
+        OrderStatus expectedStatus,
+        OrderStatus newStatus,
+        DateTime updatedAt,
+        CancellationToken cancellationToken = default);
 }

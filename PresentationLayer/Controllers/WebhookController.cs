@@ -2,9 +2,8 @@ using ApplicationLayer.Services.PayOS;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using PayOS.Models.Webhooks;
-using static System.Runtime.InteropServices.JavaScript.JSType;
-
-// For more information on enabling Web API for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
+using System;
+using System.Threading.Tasks;
 
 namespace PresentationLayer.Controllers
 {
@@ -13,12 +12,12 @@ namespace PresentationLayer.Controllers
     [Obsolete("Use /api/webhooks/payos instead. This endpoint is kept for backward compatibility.")]
     public class WebhookController : ControllerBase
     {
-        private readonly IOrderService _orderService;
+        private readonly IPayOSWebhookDispatcher _dispatcher;
         private readonly ILogger<WebhookController> _logger;
 
-        public WebhookController(IOrderService orderService, ILogger<WebhookController> logger)
+        public WebhookController(IPayOSWebhookDispatcher dispatcher, ILogger<WebhookController> logger)
         {
-            _orderService = orderService;
+            _dispatcher = dispatcher;
             _logger = logger;
         }
 
@@ -27,21 +26,37 @@ namespace PresentationLayer.Controllers
         {
             var result = await _dispatcher.DispatchAsync(body);
 
-            //var data = bodyReceived.Data;
+            switch (result)
+            {
+                case WebhookDispatchResult.InvalidSignature:
+                    _logger.LogWarning("PayOS webhook (legacy): invalid signature.");
+                    return BadRequest(new { error = -1, message = "Invalid webhook signature." });
 
-            //// Kiểm tra xem đây có phải là tín hiệu hoàn tiền hay không
-            //if (!string.IsNullOrEmpty(data.Reference) && data.Reference.StartsWith("refund_"))
-            //{
-            //    _logger.LogInformation($"[Webhook Payout] Nhận tín hiệu xử lý hoàn tiền cho ID: {data.Reference}");
+                case WebhookDispatchResult.NotFound:
+                    _logger.LogWarning("PayOS webhook (legacy): order code not found or unknown prefix.");
+                    return Ok(new { error = 0, message = "Webhook acknowledged but no matching record found." });
 
-            //    // Gọi hàm xử lý cập nhật trạng thái sang Refunded/Paid (Hàm đã viết ở câu trước)
-            //    var result = await _orderService.ProcessPayoutWebhookAsync(bodyReceived);
-            //    return result ? Ok() : BadRequest("Xử lý webhook Payout thất bại");
-            //}
+                case WebhookDispatchResult.NotSuccessful:
+                    _logger.LogInformation("PayOS webhook (legacy): payment not successful.");
+                    return Ok(new { error = 0, message = "Webhook acknowledged but payment not successful." });
 
-            // Nếu không phải tín hiệu hoàn tiền, thì đây là tín hiệu thanh toán
-            bool isSuccess = await _orderService.ProcessPaymentWebhookAsync(bodyReceived);
-            return isSuccess ? Ok() : BadRequest("Xử lý webhook Payment thất bại");
+                case WebhookDispatchResult.AlreadyProcessed:
+                    _logger.LogInformation("PayOS webhook (legacy): already processed, skipping.");
+                    return Ok(new { error = 0, message = "Webhook already processed." });
+
+                case WebhookDispatchResult.Conflict:
+                    _logger.LogCritical("PayOS webhook (legacy): conflict -- order code {OrderCode} exists in multiple domains. Manual resolution required.", body?.Data?.OrderCode);
+                    return Ok(new { error = 0, message = "Webhook acknowledged. Conflict detected -- manual resolution required." });
+
+                case WebhookDispatchResult.SubscriptionHandled:
+                case WebhookDispatchResult.OrderHandled:
+                    _logger.LogInformation("PayOS webhook (legacy): handled successfully ({Result}).", result);
+                    return Ok(new { error = 0, message = "Webhook handled successfully." });
+
+                default:
+                    _logger.LogWarning("PayOS webhook (legacy): unknown result {Result}.", result);
+                    return Ok(new { error = 0, message = "Webhook acknowledged." });
+            }
         }
     }
 }

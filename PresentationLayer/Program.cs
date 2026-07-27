@@ -1,10 +1,12 @@
 using ApplicationLayer.Helppers;
 using ApplicationLayer.Services.Notifications;
+using ApplicationLayer.Services.Storage;
 using InfrastructureLayer;
 using InfrastructureLayer.Backgrounds;
 using InfrastructureLayer.Cores.JWTs;
 using InfrastructureLayer.Data;
 using InfrastructureLayer.Data.Seeders;
+using InfrastructureLayer.Storage;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -39,20 +41,19 @@ var jwtSettings = builder.Configuration.GetSection(JwtSettings.SectionName).Get<
 if (string.IsNullOrWhiteSpace(jwtSettings.SecretKey) || jwtSettings.SecretKey.Length < 32)
     throw new InvalidOperationException("JWT secret is missing. Set Jwt__SecretKey in PresentationLayer/.env or Jwt:SecretKey in appsettings.json (minimum 32 characters).");
 
-// Đăng ký PayIn Client với Key là "PayIn"
-builder.Services.AddKeyedSingleton<PayOSClient>("PayIn", (sp, key) =>
+// Payment gateway client. Credentials come from environment/user-secrets;
+// no secrets are stored in source control.
+builder.Services.AddSingleton<PayOSClient>(sp =>
 {
     var config = sp.GetRequiredService<IConfiguration>();
-    var settings = config.GetSection("PayOS:PayIn");
-    return new PayOSClient(settings["ClientId"], settings["ApiKey"], settings["ChecksumKey"]);
-});
-
-// Đăng ký PayOut Client với Key là "PayOut"
-builder.Services.AddKeyedSingleton<PayOSClient>("PayOut", (sp, key) =>
-{
-    var config = sp.GetRequiredService<IConfiguration>();
-    var settings = config.GetSection("PayOS:PayOut");
-    return new PayOSClient(settings["ClientId"], settings["ApiKey"], settings["ChecksumKey"]);
+    var settings = config.GetSection("PayOS");
+    var clientId = settings["ClientId"]
+        ?? throw new InvalidOperationException("PayOS ClientId is not configured.");
+    var apiKey = settings["ApiKey"]
+        ?? throw new InvalidOperationException("PayOS ApiKey is not configured.");
+    var checksumKey = settings["ChecksumKey"]
+        ?? throw new InvalidOperationException("PayOS ChecksumKey is not configured.");
+    return new PayOSClient(clientId, apiKey, checksumKey);
 });
 
 //await payOSClient.Webhooks.ConfirmAsync("https://your-url.com/payos-webhook");

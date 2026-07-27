@@ -11,8 +11,8 @@ namespace ApplicationLayer.DTOs.Responses
     {
         public Guid OrderId { get; set; }
         public long OrderCode { get; set; }
-        public OrderStatus Status { get; set; } // "Placed" hoáº·c "PendingPayment"
-        public string? PaymentUrl { get; set; } // Chá»‰ cÃ³ náº¿u chá»n thanh toÃ¡n PayOS
+        public OrderStatus Status { get; set; } // "Placed" hoặc "PendingPayment"
+        public string? PaymentUrl { get; set; } // Chỉ có nếu chọn thanh toán PayOS
     }
 
     public class UpdateOrderStatusDto

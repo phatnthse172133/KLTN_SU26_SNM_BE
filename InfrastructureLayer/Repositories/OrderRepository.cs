@@ -124,4 +124,85 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
     {
         await _context.Payments.AddAsync(payment);
     }
+
+    public async Task<DomainLayer.Common.PagedResult<Order>> GetByBoothOwnerPagedAsync(
+        Guid boothOwnerId,
+        string? keyword,
+        OrderStatus? status,
+        PaymentStatus? paymentStatus,
+        DateTime? fromDate,
+        DateTime? toDate,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        var query = _dbSet
+            .AsNoTracking()
+            .Include(order => order.Customer)
+            .Include(order => order.OrderDetails)
+            .Include(order => order.Payments)
+            .Where(order => order.BoothOwnerId == boothOwnerId);
+
+        if (!string.IsNullOrWhiteSpace(keyword))
+        {
+            var normalized = keyword.Trim().ToLower();
+            query = query.Where(order =>
+                order.OrderCode.ToString().Contains(normalized)
+                || order.Customer.FullName.ToLower().Contains(normalized));
+        }
+
+        if (status.HasValue)
+            query = query.Where(order => order.Status == status.Value);
+
+        if (paymentStatus.HasValue)
+            query = query.Where(order =>
+                order.Payments.OrderByDescending(payment => payment.CreatedAt)
+                    .Select(payment => payment.Status)
+                    .FirstOrDefault() == paymentStatus.Value);
+
+        if (fromDate.HasValue)
+            query = query.Where(order => order.CreatedAt >= fromDate.Value);
+
+        if (toDate.HasValue)
+            query = query.Where(order => order.CreatedAt <= toDate.Value);
+
+        var total = await query.CountAsync(cancellationToken);
+        var items = await query
+            .OrderByDescending(order => order.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return new DomainLayer.Common.PagedResult<Order>(items, total);
+    }
+
+    public Task<Order?> GetByBoothOwnerAndCodeAsync(
+        Guid boothOwnerId,
+        long orderCode,
+        CancellationToken cancellationToken = default)
+        => _dbSet
+            .Include(order => order.Customer)
+            .Include(order => order.Payments)
+            .Include(order => order.OrderDetails)
+                .ThenInclude(detail => detail.FoodItem)
+            .FirstOrDefaultAsync(
+                order => order.BoothOwnerId == boothOwnerId && order.OrderCode == orderCode,
+                cancellationToken);
+
+    public Task<int> UpdateBoothOwnerOrderStatusAsync(
+        Guid boothOwnerId,
+        long orderCode,
+        OrderStatus expectedStatus,
+        OrderStatus newStatus,
+        DateTime updatedAt,
+        CancellationToken cancellationToken = default)
+        => _dbSet
+            .Where(order =>
+                order.BoothOwnerId == boothOwnerId
+                && order.OrderCode == orderCode
+                && order.Status == expectedStatus)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(order => order.Status, newStatus)
+                .SetProperty(order => order.UpdatedAt, updatedAt),
+                cancellationToken);
 }

@@ -13,14 +13,22 @@ namespace ApplicationLayer.Services.Orders
     public interface IOrderService
     {
         Task<ApiResponse<OrderResponseDto>> CreateOrderAsync(CreateOrderDto dto);
-        Task<bool> ProcessPaymentWebhookAsync(Webhook webhookBody);
-        Task<bool> ProcessPayoutWebhookAsync(Webhook webhookBody);
         Task<ApiResponse<SupplementalPaymentResponseDto>> PayRemainingAmountAsync(Guid actorId, long orderCode);
         Task<WebhookDispatchResult> ProcessPaymentWebhookAsync(PayOSWebhookData verifiedData);
         Task<ApiResponse<bool>> UpdateOrderStatusByBoothOwnerAsync(Guid boothOwnerId, UpdateOrderStatusDto dto);
-        Task<ApiResponse<bool>> CancelOrderByCustomer(long orderCode);
-        Task<ApiResponse<bool>> CancelOrderByBoothOwnerAsync(long orderCode, RefundQRRequest request);
+        Task<ApiResponse<bool>> CancelOrder(long orderCode);
         Task<ApiResponse<bool>> ActiveCheckPaymentStatus(long orderCode);
         Task<bool> HasOrderWithCodeAsync(long orderCode);
+        Task<ApiResponse<PaginationResp<BoothOwnerOrderListItemResponse>>> GetBoothOwnerOrdersAsync(
+            Guid boothOwnerId, BoothOwnerOrderQuery query, CancellationToken cancellationToken = default);
+        Task<ApiResponse<BoothOwnerOrderDetailResponse>> GetBoothOwnerOrderAsync(
+            Guid boothOwnerId, long orderCode, CancellationToken cancellationToken = default);
+        Task<ApiResponse<OrderResponseDto>> CreateWalkInOrderAsync(
+            Guid boothOwnerId, CreateWalkInOrderRequest request, CancellationToken cancellationToken = default);
+        Task<ApiResponse<bool>> UpdateBoothOwnerOrderStatusAsync(
+            Guid boothOwnerId, long orderCode, UpdateBoothOwnerOrderStatusRequest request,
+            CancellationToken cancellationToken = default);
+        Task<ApiResponse<bool>> ConfirmCashPaymentAsync(
+            Guid boothOwnerId, long orderCode, CancellationToken cancellationToken = default);
     }
 }

@@ -26,8 +26,10 @@ public static class NightMarketAvailability
             return new NightMarketAvailabilityResult(false, "Hours unavailable");
 
         var localTime = TimeOnly.FromDateTime(GetVietnamLocalTime(utcNow));
-        var isOpen = market.OpeningHours.Value <= localTime &&
-                     localTime < market.ClosingHours.Value;
+        var isOpen = IsWithinSchedule(
+            market.OpeningHours.Value,
+            market.ClosingHours.Value,
+            localTime);
 
         return isOpen
             ? new NightMarketAvailabilityResult(
@@ -36,6 +38,16 @@ public static class NightMarketAvailability
             : new NightMarketAvailabilityResult(
                 false,
                 $"Closed - Opens at {market.OpeningHours.Value:HH:mm}");
+    }
+
+    public static bool IsWithinSchedule(TimeOnly opening, TimeOnly closing, TimeOnly localTime)
+    {
+        if (opening == closing)
+            return false;
+
+        return opening < closing
+            ? opening <= localTime && localTime < closing
+            : localTime >= opening || localTime < closing;
     }
 }
 

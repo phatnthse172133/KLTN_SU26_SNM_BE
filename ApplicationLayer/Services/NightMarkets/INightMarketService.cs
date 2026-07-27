@@ -6,6 +6,8 @@ namespace ApplicationLayer.Services.NightMarkets;
 
 public interface INightMarketService
 {
+    Task<ApiResponse<PaginationResp<NightMarketListItemResponse>>> GetCustomerAllAsync(NightMarketListRequest request, CancellationToken cancellationToken = default);
+    Task<ApiResponse<NightMarketDetailResponse>> GetCustomerAsync(Guid id, CancellationToken cancellationToken = default);
     Task<ApiResponse<PaginationResp<NightMarketResponse>>> GetAllAsync(NightMarketListRequest request, bool isAdmin = false, CancellationToken cancellationToken = default);
     Task<ApiResponse<List<NightMarketResponse>>> GetMineAsync(Guid marketOwnerId, CancellationToken cancellationToken = default);
     Task<ApiResponse<NightMarketResponse>> GetAsync(Guid id, Guid? viewerId = null, string? viewerRole = null, CancellationToken cancellationToken = default);

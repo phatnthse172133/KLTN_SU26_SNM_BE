@@ -345,9 +345,9 @@ var swaggerEnabled = app.Environment.IsDevelopment()
     || builder.Configuration.GetValue<bool>("Swagger:Enabled");
 
 // Demo data is opt-in. A normal application start must never mutate a shared database.
-if (AISeedData.IsEnabled(builder.Configuration))
+if (IntegrationDemoDataSeeder.IsEnabled(builder.Configuration))
 {
-    await AISeedData.SeedAsync(app.Services);
+    await IntegrationDemoDataSeeder.SeedAsync(app.Services);
 }
 
 // Package seeders are explicit opt-ins so a normal startup never mutates shared data.

@@ -27,7 +27,9 @@ public class NightMarketsController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetAll([FromQuery] NightMarketListRequest request, CancellationToken cancellationToken = default)
     {
-        return Ok(await _service.GetAllAsync(request, IsAdmin, cancellationToken));
+        return IsAdmin
+            ? Ok(await _service.GetAllAsync(request, true, cancellationToken))
+            : Ok(await _service.GetCustomerAllAsync(request, cancellationToken));
     }
 
     [AllowAnonymous]
@@ -41,6 +43,9 @@ public class NightMarketsController : ControllerBase
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> Get(Guid id, CancellationToken cancellationToken)
     {
+        if (!IsAdmin)
+            return Ok(await _service.GetCustomerAsync(id, cancellationToken));
+
         var response = await _service.GetAsync(id, OptionalUserId, CurrentUserRole, cancellationToken);
         return response.Success ? Ok(response) : NotFound(response);
     }

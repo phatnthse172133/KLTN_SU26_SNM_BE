@@ -118,6 +118,37 @@ public sealed class NightMarketCustomerTests
     }
 
     [Fact]
+    public async Task CustomerList_OpenNowSupportsOvernightSchedule()
+    {
+        await using var context = CreateContext();
+        var overnight = CreateMarket("Overnight market", NightMarketStatus.Active);
+        overnight.OpeningHours = new TimeOnly(18, 0);
+        overnight.ClosingHours = new TimeOnly(2, 0);
+        context.NightMarkets.Add(overnight);
+        await context.SaveChangesAsync();
+
+        var repository = new NightMarketRepository(context);
+        var afterMidnight = await repository.GetCustomerPagedAsync(
+            null, true, new TimeOnly(1, 0), 1, 20, "name", true);
+        var afternoon = await repository.GetCustomerPagedAsync(
+            null, true, new TimeOnly(15, 0), 1, 20, "name", true);
+
+        Assert.Contains(afterMidnight.Items, market => market.Id == overnight.Id);
+        Assert.DoesNotContain(afternoon.Items, market => market.Id == overnight.Id);
+    }
+
+    [Fact]
+    public void Availability_SupportsOvernightScheduleAndExclusiveClosingBoundary()
+    {
+        Assert.True(NightMarketAvailability.IsWithinSchedule(
+            new TimeOnly(18, 0), new TimeOnly(2, 0), new TimeOnly(1, 59)));
+        Assert.False(NightMarketAvailability.IsWithinSchedule(
+            new TimeOnly(18, 0), new TimeOnly(2, 0), new TimeOnly(2, 0)));
+        Assert.False(NightMarketAvailability.IsWithinSchedule(
+            new TimeOnly(18, 0), new TimeOnly(18, 0), new TimeOnly(18, 0)));
+    }
+
+    [Fact]
     public void Availability_UsesVietnamTimeAndDoesNotFakeMissingHours()
     {
         var scheduled = CreateReadModel(

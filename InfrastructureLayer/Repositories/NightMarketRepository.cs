@@ -3,6 +3,7 @@ using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
 using InfrastructureLayer.Data;
 using Microsoft.EntityFrameworkCore;
+using System.Linq.Expressions;
 using static DomainLayer.Enums.GeneralEnum;
 
 namespace InfrastructureLayer.Repositories;
@@ -33,24 +34,10 @@ public class NightMarketRepository : GenericRepository<NightMarket>, INightMarke
                 market.Address.ToLower().Contains(normalizedKeyword));
         }
 
-        if (openNow == true)
+        if (openNow.HasValue)
         {
-            query = query.Where(market =>
-                market.Status == NightMarketStatus.Active &&
-                market.OpeningHours.HasValue &&
-                market.ClosingHours.HasValue &&
-                market.OpeningHours.Value <= localTime &&
-                localTime < market.ClosingHours.Value);
-        }
-        else if (openNow == false)
-        {
-            query = query.Where(market =>
-                market.Status == NightMarketStatus.Inactive ||
-                (market.Status == NightMarketStatus.Active &&
-                 market.OpeningHours.HasValue &&
-                 market.ClosingHours.HasValue &&
-                 (localTime < market.OpeningHours.Value ||
-                  localTime >= market.ClosingHours.Value)));
+            var isOpen = IsCustomerOpenAt(localTime);
+            query = query.Where(openNow.Value ? isOpen : Negate(isOpen));
         }
 
         var totalCount = await query.CountAsync(cancellationToken);
@@ -136,6 +123,19 @@ public class NightMarketRepository : GenericRepository<NightMarket>, INightMarke
             !market.IsDeleted &&
             market.ModerationStatus == ModerationStatus.Active &&
             market.Status == NightMarketStatus.Active);
+
+    private static Expression<Func<NightMarket, bool>> IsCustomerOpenAt(TimeOnly localTime)
+        => market =>
+            market.Status == NightMarketStatus.Active &&
+            market.OpeningHours.HasValue &&
+            market.ClosingHours.HasValue &&
+            market.OpeningHours.Value != market.ClosingHours.Value &&
+            (market.OpeningHours.Value < market.ClosingHours.Value
+                ? market.OpeningHours.Value <= localTime && localTime < market.ClosingHours.Value
+                : localTime >= market.OpeningHours.Value || localTime < market.ClosingHours.Value);
+
+    private static Expression<Func<NightMarket, bool>> Negate(Expression<Func<NightMarket, bool>> predicate)
+        => Expression.Lambda<Func<NightMarket, bool>>(Expression.Not(predicate.Body), predicate.Parameters);
 
     private static IQueryable<NightMarketCustomerReadModel> ProjectCustomer(IQueryable<NightMarket> query)
         => query.Select(market => new NightMarketCustomerReadModel(

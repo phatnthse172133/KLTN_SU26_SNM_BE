@@ -18,6 +18,7 @@ using PayOS;
 using PresentationLayer.Hubs;
 using PresentationLayer.Middlewares;
 using PresentationLayer.Filters;
+using InfrastructureLayer.Health;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.RateLimiting;
@@ -324,7 +325,8 @@ builder.Services.AddScoped<IRealtimeNotificationPublisher, SignalRNotificationPu
 builder.Services.AddScoped<ApplicationLayer.Services.Chats.IRealtimeChatPublisher, SignalRChatPublisher>();
 builder.Services.AddScoped<IFileStorageService, LocalFileStorageService>();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddHealthChecks();
+builder.Services.AddHealthChecks()
+    .AddCheck<DatabaseReadinessHealthCheck>("postgresql", tags: ["ready"]);
 builder.Services.AddSwaggerGen(options =>
 {
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
@@ -390,7 +392,16 @@ app.UseAuthorization();
 // Thêm Middleware
 app.UseRateLimiter();
 
-app.MapHealthChecks("/health").AllowAnonymous();
+// Liveness intentionally checks only whether the process can serve HTTP.
+app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = _ => false
+}).AllowAnonymous();
+// Readiness validates dependencies required by data-backed endpoints.
+app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = registration => registration.Tags.Contains("ready")
+}).AllowAnonymous();
 app.MapControllers();
 app.MapHub<NotificationHub>("/hubs/notifications");
 app.MapHub<ChatHub>("/hubs/chats");

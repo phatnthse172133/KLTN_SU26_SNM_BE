@@ -1,6 +1,11 @@
+using ApplicationLayer.AI;
+using ApplicationLayer.AI.Services;
+using DomainLayer.InterfaceRepository;
 using InfrastructureLayer.Data;
 using InfrastructureLayer.Repositories;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Moq;
 using Npgsql;
 using static DomainLayer.Enums.GeneralEnum;
 
@@ -85,6 +90,9 @@ public class PostgresHomeDiscoveryTests
             null, new TimeOnly(20, 0), 200);
         var booths = await new BoothRepository(context).GetCustomerPagedAsync(
             null, null, null, new TimeOnly(20, 0), null, 1, 6, "featured");
+        var foodTagRepository = new FoodTagRepository(context);
+        var foodTags = await foodTagRepository.GetPagedTagsAsync(null, null, 1, 100);
+        var aiHome = await CreateAiService(foodTagRepository).GetHomeAsync(null);
 
         Assert.NotNull(markets.Items);
         Assert.NotNull(foods.Items);
@@ -93,6 +101,10 @@ public class PostgresHomeDiscoveryTests
         Assert.NotNull(foodsByPriceDescending.Items);
         Assert.NotNull(aiOrderableFoods);
         Assert.NotNull(booths.Items);
+        Assert.NotNull(foodTags.Items);
+        Assert.NotNull(aiHome.Data);
+        Assert.NotNull(aiHome.Data!.PopularTags);
+        Assert.Equal(5, aiHome.Data.DiningStyles.Count);
 
         if (!expectEmpty)
             return;
@@ -103,8 +115,22 @@ public class PostgresHomeDiscoveryTests
         Assert.Empty(foodsByPrice.Items);
         Assert.Empty(foodsByPriceDescending.Items);
         Assert.Empty(booths.Items);
+        Assert.Empty(foodTags.Items);
+        Assert.Empty(aiHome.Data!.PopularTags);
         Assert.Equal(0, markets.TotalCount);
         Assert.Equal(0, foods.TotalCount);
         Assert.Equal(0, booths.TotalCount);
+        Assert.Equal(0, foodTags.TotalCount);
     }
+
+    private static AIRecommendationService CreateAiService(FoodTagRepository foodTags)
+        => new(
+            new Mock<IFoodItemRepository>().Object,
+            foodTags,
+            new Mock<ICustomerPreferenceRepository>().Object,
+            new Mock<IAIRecommendationLogRepository>().Object,
+            new Mock<IAIProviderService>().Object,
+            new Mock<IAICustomerContextRepository>().Object,
+            Options.Create(new AIProviderSettings { EnableExternalProvider = false }),
+            TimeProvider.System);
 }

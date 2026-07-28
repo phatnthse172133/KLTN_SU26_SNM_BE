@@ -45,11 +45,18 @@ public sealed class IntegrationDemoDataSeederTests
         Assert.Equal(ModerationStatus.Active, market.ModerationStatus);
         Assert.InRange(market.Latitude!.Value, -90, 90);
         Assert.InRange(market.Longitude!.Value, -180, 180);
+        Assert.EndsWith("/market-v2.jpg", market.ThumbnailUrl, StringComparison.Ordinal);
         Assert.Equal(2, await db.NightMarketImages.CountAsync(x => x.NightMarketId == market.Id));
+        Assert.Contains(await db.NightMarketImages.Where(x => x.NightMarketId == market.Id).ToListAsync(),
+            image => image.IsCover && image.ImageUrl.EndsWith("/market-v2.jpg", StringComparison.Ordinal));
         var foodImageUrls = await db.FoodItems.Where(x => x.Booth.NightMarketId == market.Id)
             .Select(x => x.ThumbnailUrl).ToListAsync();
         Assert.Equal(20, foodImageUrls.Distinct().Count());
-        Assert.DoesNotContain(foodImageUrls, url => url is null || url.EndsWith("/food.svg", StringComparison.Ordinal));
+        Assert.DoesNotContain(foodImageUrls, url => url is null || !url.EndsWith("-v2.jpg", StringComparison.Ordinal));
+        var boothImageUrls = await db.Booths.Where(x => x.NightMarketId == market.Id)
+            .Select(x => x.ThumbnailUrl).ToListAsync();
+        Assert.Equal(5, boothImageUrls.Distinct().Count());
+        Assert.All(boothImageUrls, url => Assert.EndsWith("-v2.jpg", url, StringComparison.Ordinal));
 
         var ratings = await db.Booths.Where(x => x.NightMarketId == market.Id)
             .OrderBy(x => x.BoothCode).Select(x => x.AverageRating).ToListAsync();

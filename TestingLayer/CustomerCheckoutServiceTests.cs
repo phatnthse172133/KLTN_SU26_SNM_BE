@@ -1,3 +1,4 @@
+using System.Text.Json;
 using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
@@ -12,6 +13,21 @@ namespace TestingLayer;
 
 public sealed class CustomerCheckoutServiceTests
 {
+    [Theory]
+    [InlineData("PayOS", PaymentType.PayOS)]
+    [InlineData("Cash", PaymentType.Cash)]
+    public void CheckoutRequest_AcceptsTheStringPaymentContractUsedByTheCustomerApp(
+        string wireValue,
+        PaymentType expected)
+    {
+        var request = JsonSerializer.Deserialize<CheckoutCartBoothRequest>(
+            $$"""{"checkoutRequestId":"{{Guid.NewGuid()}}","boothId":"{{Guid.NewGuid()}}","paymentMethod":"{{wireValue}}"}""",
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.NotNull(request);
+        Assert.Equal(expected, request.PaymentMethod);
+    }
+
     [Fact]
     public async Task Checkout_UsesAuthoritativeCartQuantityAndCurrentPrice_ThenRemovesBoothItems()
     {

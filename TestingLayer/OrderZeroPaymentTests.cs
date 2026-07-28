@@ -147,6 +147,66 @@ public class OrderZeroPaymentTests
     }
 
     [Fact]
+    public async Task CashOrder_UsesNoExternalPaymentGateway_AndStaysPendingUntilBoothCollection()
+    {
+        var customerId = Guid.NewGuid();
+        var ownerId = Guid.NewGuid();
+        var boothId = Guid.NewGuid();
+        var food = CreateOrderableFood(boothId, ownerId, 45_000m);
+        var orders = new Mock<IOrderRepository>();
+        Order? savedOrder = null;
+        orders.Setup(repository => repository.AddAsync(It.IsAny<Order>()))
+            .Callback<Order>(order => savedOrder = order)
+            .Returns(Task.CompletedTask);
+        orders.Setup(repository => repository.BeginTransactionAsync()).Returns(Task.CompletedTask);
+        orders.Setup(repository => repository.CommitTransactionAsync()).Returns(Task.CompletedTask);
+        orders.Setup(repository => repository.RollbackTransactionAsync()).Returns(Task.CompletedTask);
+        orders.Setup(repository => repository.SaveChangesAsync()).ReturnsAsync(1);
+        var foods = new Mock<IFoodItemRepository>();
+        foods.Setup(repository => repository.GetAllFoodItemsByIdsAsync(It.IsAny<List<Guid>>()))
+            .ReturnsAsync([food]);
+        var payos = new Mock<IPayOSService>();
+        var codeGenerator = new Mock<IPayOSOrderCodeGenerator>();
+        codeGenerator.Setup(generator => generator.GenerateAsync(PayOSOrderSource.Order))
+            .ReturnsAsync(100_000_000_000_003L);
+
+        var service = new OrderService(
+            orders.Object,
+            Mock.Of<IPromotionRepository>(),
+            Mock.Of<IPromotionValidationService>(),
+            Mock.Of<IPayOSPayoutService>(),
+            Mock.Of<IRealtimeNotificationPublisher>(),
+            foods.Object,
+            Mock.Of<ILogger<OrderService>>(),
+            new ConfigurationBuilder().Build(),
+            payos.Object,
+            codeGenerator.Object,
+            Mock.Of<IBoothRepository>(),
+            Mock.Of<IPromotionUsageRepository>(),
+            Mock.Of<INotificationService>());
+
+        var response = await service.CreateOrderAsync(new CreateOrderDto
+        {
+            CheckoutRequestId = Guid.NewGuid(),
+            CustomerId = customerId,
+            BoothId = boothId,
+            BoothOwnerId = ownerId,
+            PaymentMethod = PaymentType.Cash,
+            Items = [new CartItemDto { FoodItemId = food.Id, Quantity = 1, UnitPrice = 45_000m }]
+        });
+
+        Assert.NotNull(savedOrder);
+        Assert.Equal(OrderStatus.Placed, savedOrder.Status);
+        var payment = Assert.Single(savedOrder.Payments);
+        Assert.Equal(PaymentType.Cash, payment.Type);
+        Assert.Equal(PaymentGateway.None, payment.Gateway);
+        Assert.Equal(PaymentStatus.Pending, payment.Status);
+        Assert.Null(payment.CheckoutUrl);
+        Assert.Null(response.Data!.PaymentUrl);
+        payos.Verify(provider => provider.CreatePaymentLinkAsync(It.IsAny<PayOSPaymentRequest>()), Times.Never);
+    }
+
+    [Fact]
     public async Task CancellingZeroPaymentOrder_DoesNotRequireRefundBankDetails()
     {
         var order = new Order

@@ -288,7 +288,7 @@ namespace ApplicationLayer.Services.Orders
                     ? PaymentGateway.None
                     : dto.PaymentMethod == PaymentType.PayOS
                         ? PaymentGateway.Payos
-                        : PaymentGateway.BankTransfer,
+                        : PaymentGateway.None,
                 Status = isZeroPaymentOrder ? PaymentStatus.Paid : PaymentStatus.Pending,
                 PayOSOrderCode = dto.PaymentMethod == PaymentType.PayOS && !isZeroPaymentOrder
                     ? orderCode

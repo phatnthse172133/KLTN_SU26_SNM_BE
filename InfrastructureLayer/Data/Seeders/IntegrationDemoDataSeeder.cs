@@ -25,6 +25,7 @@ public static class IntegrationDemoDataSeeder
     private static readonly Guid ZoneBId = Id("202");
 
     private const string AssetRoot = "/images/demo/phase035";
+    private const string MarketCoverUrl = $"{AssetRoot}/market-v2.jpg";
 
     private static readonly BoothSeed[] Booths =
     [
@@ -199,13 +200,24 @@ public static class IntegrationDemoDataSeeder
                 Address = "Khu đô thị Đại học Quốc gia TP.HCM, TP. Thủ Đức, TP. Hồ Chí Minh",
                 Latitude = 10.87530m, Longitude = 106.80050m, OpeningHours = new TimeOnly(0, 0), ClosingHours = new TimeOnly(23, 59),
                 TotalBooth = Booths.Length, BoundaryWidthMeters = 180, BoundaryHeightMeters = 120,
-                ThumbnailUrl = $"{AssetRoot}/market.svg", Status = NightMarketStatus.Active, ModerationStatus = ModerationStatus.Active,
+                ThumbnailUrl = MarketCoverUrl, Status = NightMarketStatus.Active, ModerationStatus = ModerationStatus.Active,
                 IsDeleted = false, CreatedAt = now, UpdatedAt = now
             });
         }
 
-        await AddIfMissingAsync(db.NightMarketImages, MarketImageId(1), () => new NightMarketImage { Id = MarketImageId(1), NightMarketId = MarketId, ImageUrl = $"{AssetRoot}/market.svg", DisplayOrder = 1, IsCover = true, CreatedAt = now, UpdatedAt = now });
+        await AddIfMissingAsync(db.NightMarketImages, MarketImageId(1), () => new NightMarketImage { Id = MarketImageId(1), NightMarketId = MarketId, ImageUrl = MarketCoverUrl, DisplayOrder = 1, IsCover = true, CreatedAt = now, UpdatedAt = now });
         await AddIfMissingAsync(db.NightMarketImages, MarketImageId(2), () => new NightMarketImage { Id = MarketImageId(2), NightMarketId = MarketId, ImageUrl = $"{AssetRoot}/market-gallery.svg", DisplayOrder = 2, IsCover = false, CreatedAt = now, UpdatedAt = now });
+
+        // Treat controlled demo seeding as an idempotent media migration as well:
+        // rows created by earlier releases must stop serving the generic SVG cover.
+        var market = db.NightMarkets.Local.SingleOrDefault(x => x.Id == MarketId)
+            ?? await db.NightMarkets.SingleAsync(x => x.Id == MarketId, ct);
+        var marketCover = db.NightMarketImages.Local.SingleOrDefault(x => x.Id == MarketImageId(1))
+            ?? await db.NightMarketImages.SingleAsync(x => x.Id == MarketImageId(1), ct);
+        market.ThumbnailUrl = MarketCoverUrl;
+        market.UpdatedAt = now;
+        marketCover.ImageUrl = MarketCoverUrl;
+        marketCover.UpdatedAt = now;
 
         await AddIfMissingAsync(db.Zones, ZoneAId, () => new Zone { Id = ZoneAId, NightMarketId = MarketId, ZoneName = "Khu A — Đồ nướng & Hải sản", Description = "Các quầy món nóng ở phía bắc layout.", Color = "#E76F51", Status = ZoneStatus.Active, CreatedAt = now, UpdatedAt = now });
         await AddIfMissingAsync(db.Zones, ZoneBId, () => new Zone { Id = ZoneBId, NightMarketId = MarketId, ZoneName = "Khu B — Tráng miệng & Ăn vặt", Description = "Các quầy đồ uống, món ngọt và ăn vặt.", Color = "#2A9D8F", Status = ZoneStatus.Active, CreatedAt = now, UpdatedAt = now });
@@ -232,12 +244,25 @@ public static class IntegrationDemoDataSeeder
                 Id = BoothId(booth.Index), RegistrationId = RegistrationId(booth.Index), NightMarketId = MarketId,
                 BoothOwnerId = OwnerId(booth.Index), ZoneId = booth.ZoneId, BoothName = booth.Name,
                 BoothCode = $"DEMO-{booth.Index:00}", Description = booth.Description, PhoneNumber = $"0900035{booth.Index:000}",
-                SlotNumber = booth.Slot, ThumbnailUrl = $"{AssetRoot}/booth-{booth.Index}.svg", MapPositionX = booth.X, MapPositionY = booth.Y,
+                SlotNumber = booth.Slot, ThumbnailUrl = FoodAssetUrl(booth.Index, 1), MapPositionX = booth.X, MapPositionY = booth.Y,
                 OpenTime = booth.Open, CloseTime = booth.Close, AverageRating = 0, IsFeatured = booth.Featured,
                 PackageName = "Demo Integration", Status = BoothStatus.Active, CreatedAt = now, UpdatedAt = now
             });
-            await AddIfMissingAsync(db.BoothImages, BoothImageId(booth.Index, 1), () => new BoothImage { Id = BoothImageId(booth.Index, 1), BoothId = BoothId(booth.Index), ImageUrl = $"{AssetRoot}/booth-{booth.Index}.svg", DisplayOrder = 1, CreatedAt = now, UpdatedAt = now });
-            await AddIfMissingAsync(db.BoothImages, BoothImageId(booth.Index, 2), () => new BoothImage { Id = BoothImageId(booth.Index, 2), BoothId = BoothId(booth.Index), ImageUrl = $"{AssetRoot}/market-gallery.svg", DisplayOrder = 2, CreatedAt = now, UpdatedAt = now });
+            await AddIfMissingAsync(db.BoothImages, BoothImageId(booth.Index, 1), () => new BoothImage { Id = BoothImageId(booth.Index, 1), BoothId = BoothId(booth.Index), ImageUrl = FoodAssetUrl(booth.Index, 1), DisplayOrder = 1, CreatedAt = now, UpdatedAt = now });
+            await AddIfMissingAsync(db.BoothImages, BoothImageId(booth.Index, 2), () => new BoothImage { Id = BoothImageId(booth.Index, 2), BoothId = BoothId(booth.Index), ImageUrl = FoodAssetUrl(booth.Index, 2), DisplayOrder = 2, CreatedAt = now, UpdatedAt = now });
+
+            var boothEntity = db.Booths.Local.SingleOrDefault(x => x.Id == BoothId(booth.Index))
+                ?? await db.Booths.SingleAsync(x => x.Id == BoothId(booth.Index), ct);
+            var boothCover = db.BoothImages.Local.SingleOrDefault(x => x.Id == BoothImageId(booth.Index, 1))
+                ?? await db.BoothImages.SingleAsync(x => x.Id == BoothImageId(booth.Index, 1), ct);
+            var boothGallery = db.BoothImages.Local.SingleOrDefault(x => x.Id == BoothImageId(booth.Index, 2))
+                ?? await db.BoothImages.SingleAsync(x => x.Id == BoothImageId(booth.Index, 2), ct);
+            boothEntity.ThumbnailUrl = FoodAssetUrl(booth.Index, 1);
+            boothEntity.UpdatedAt = now;
+            boothCover.ImageUrl = FoodAssetUrl(booth.Index, 1);
+            boothCover.UpdatedAt = now;
+            boothGallery.ImageUrl = FoodAssetUrl(booth.Index, 2);
+            boothGallery.UpdatedAt = now;
         }
         await db.SaveChangesAsync(ct);
 
@@ -259,7 +284,7 @@ public static class IntegrationDemoDataSeeder
                 var seed = Menus[boothIndex - 1][foodIndex - 1];
                 var capturedBooth = boothIndex;
                 var capturedFood = foodIndex;
-                var foodAssetUrl = $"{AssetRoot}/food-{capturedBooth}-{capturedFood}.svg";
+                var foodAssetUrl = FoodAssetUrl(capturedBooth, capturedFood);
                 await AddIfMissingAsync(db.FoodItems, FoodId(capturedBooth, capturedFood), () => new FoodItem { Id = FoodId(capturedBooth, capturedFood), BoothId = BoothId(capturedBooth), CategoryId = CategoryId(capturedBooth), Name = seed.Name, Description = $"{seed.Name} — dữ liệu món ăn demo.", Price = seed.Price, ThumbnailUrl = foodAssetUrl, IsAvailable = !(capturedBooth == 5 && capturedFood == 4), IsFeatured = capturedFood == 1, CreatedAt = now, UpdatedAt = now });
                 await AddIfMissingAsync(db.FoodImages, FoodImageId(capturedBooth, capturedFood), () => new FoodImage { Id = FoodImageId(capturedBooth, capturedFood), FoodItemId = FoodId(capturedBooth, capturedFood), ImageUrl = foodAssetUrl, DisplayOrder = 1, CreatedAt = now, UpdatedAt = now });
 
@@ -293,7 +318,14 @@ public static class IntegrationDemoDataSeeder
                 await AddIfMissingAsync(db.Orders, orderId, () => new Order { Id = orderId, CustomerId = customerId, BoothOwnerId = OwnerId(boothIndex), OrderCode = 935000000 + sequence, CheckoutRequestId = CheckoutId(sequence), Status = OrderStatus.Completed, TotalAmount = amount, DiscountAmount = 0, FinalAmount = amount, Note = "Đơn hoàn tất phục vụ review demo Phase 03.5", CreatedAt = occurredAt, UpdatedAt = occurredAt });
                 await AddIfMissingAsync(db.OrderDetails, OrderDetailId(sequence), () => new OrderDetail { Id = OrderDetailId(sequence), OrderId = orderId, FoodItemId = FoodId(boothIndex, 1), FoodNameSnapshot = Menus[boothIndex - 1][0].Name, Quantity = 1, UnitPrice = amount, TotalPrice = amount, CreatedAt = occurredAt, UpdatedAt = occurredAt });
                 await AddIfMissingAsync(db.Payments, PaymentId(sequence), () => new Payment { Id = PaymentId(sequence), OrderId = orderId, BoothOwnerId = OwnerId(boothIndex), Type = PaymentType.Cash, Gateway = PaymentGateway.None, Amount = amount, Status = PaymentStatus.Paid, PaidAt = occurredAt, CreatedAt = occurredAt, UpdatedAt = occurredAt });
-                await AddIfMissingAsync(db.Reviews, ReviewId(sequence), () => new Review { Id = ReviewId(sequence), BoothId = BoothId(boothIndex), CustomerId = customerId, OrderId = orderId, Rating = rating, Content = $"Đánh giá demo hợp lệ cho quầy {Booths[boothIndex - 1].Name}.", ImageUrl = sequence == 1 ? $"{AssetRoot}/food-1-1.svg" : null, IsVisible = true, CreatedAt = occurredAt.AddHours(1), UpdatedAt = occurredAt.AddHours(1) });
+                await AddIfMissingAsync(db.Reviews, ReviewId(sequence), () => new Review { Id = ReviewId(sequence), BoothId = BoothId(boothIndex), CustomerId = customerId, OrderId = orderId, Rating = rating, Content = $"Đánh giá demo hợp lệ cho quầy {Booths[boothIndex - 1].Name}.", ImageUrl = sequence == 1 ? FoodAssetUrl(1, 1) : null, IsVisible = true, CreatedAt = occurredAt.AddHours(1), UpdatedAt = occurredAt.AddHours(1) });
+                if (sequence == 1)
+                {
+                    var review = db.Reviews.Local.SingleOrDefault(x => x.Id == ReviewId(sequence))
+                        ?? await db.Reviews.SingleAsync(x => x.Id == ReviewId(sequence), ct);
+                    review.ImageUrl = FoodAssetUrl(1, 1);
+                    review.UpdatedAt = now;
+                }
                 sequence++;
             }
         }
@@ -335,6 +367,8 @@ public static class IntegrationDemoDataSeeder
     }
 
     private static Guid Id(string suffix) => Guid.Parse($"d3500000-0000-0000-0000-{suffix.PadLeft(12, '0')}");
+    private static string FoodAssetUrl(int boothIndex, int foodIndex)
+        => $"{AssetRoot}/food-{boothIndex}-{foodIndex}-v2.jpg";
     public static Guid BoothId(int i) => Id($"4{i:00}");
     public static Guid FoodId(int booth, int food) => Id($"5{booth:00}{food:00}");
     public static Guid NodeId(int i) => Id($"3{i:00}");

@@ -181,6 +181,121 @@ public sealed class IntegrationDemoDataSeederTests
     }
 
     [Fact]
+    public async Task SeededDataset_FoodDiscoveryFiltersSortsPagingAndDetail_AreBusinessConsistent()
+    {
+        await using var provider = Provider();
+        await IntegrationDemoDataSeeder.SeedAsync(provider);
+        await using var scope = provider.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SNMDbContext>();
+        var discovery = new CustomerDiscoveryService(
+            new BoothRepository(db),
+            new FoodItemRepository(db),
+            new NightMarketRepository(db),
+            new FixedTimeProvider());
+
+        var all = await discovery.GetFoodsAsync(new CustomerFoodQueryRequest
+        {
+            Page = 1, PageSize = 100, Sort = "featured"
+        });
+        Assert.Equal(20, await db.FoodItems.CountAsync());
+        Assert.Equal(19, all.Data!.Total);
+        Assert.Equal(19, all.Data.Items.Select(x => x.Id).Distinct().Count());
+        Assert.All(all.Data.Items, food => Assert.True(food.IsAvailable));
+        Assert.All(all.Data.Items, food => Assert.Equal(IntegrationDemoDataSeeder.MarketId, food.MarketId));
+
+        var market = await discovery.GetFoodsAsync(new CustomerFoodQueryRequest
+        {
+            MarketId = IntegrationDemoDataSeeder.MarketId, Page = 1, PageSize = 100
+        });
+        Assert.Equal(all.Data.Total, market.Data!.Total);
+
+        var selected = all.Data.Items.First();
+        var search = await discovery.GetFoodsAsync(new CustomerFoodQueryRequest
+        {
+            Search = selected.Name, Page = 1, PageSize = 20
+        });
+        Assert.Contains(search.Data!.Items, food => food.Id == selected.Id);
+        var noMatch = await discovery.GetFoodsAsync(new CustomerFoodQueryRequest
+        {
+            Search = "mon-khong-ton-tai-05", Page = 1, PageSize = 20
+        });
+        Assert.Empty(noMatch.Data!.Items);
+
+        foreach (var categoryId in all.Data.Items.Select(x => x.CategoryId).Distinct().Take(2))
+        {
+            var category = await discovery.GetFoodsAsync(new CustomerFoodQueryRequest
+            {
+                CategoryId = categoryId, Page = 1, PageSize = 100
+            });
+            Assert.NotEmpty(category.Data!.Items);
+            Assert.All(category.Data.Items, food => Assert.Equal(categoryId, food.CategoryId));
+        }
+
+        var orderedPrices = all.Data.Items.Select(x => x.EffectivePrice).OrderBy(x => x).ToArray();
+        var lowerBound = orderedPrices[orderedPrices.Length / 3];
+        var upperBound = orderedPrices[orderedPrices.Length * 2 / 3];
+        var ranged = await discovery.GetFoodsAsync(new CustomerFoodQueryRequest
+        {
+            MinPrice = lowerBound, MaxPrice = upperBound, Page = 1, PageSize = 100
+        });
+        Assert.NotEmpty(ranged.Data!.Items);
+        Assert.All(ranged.Data.Items, food => Assert.InRange(food.EffectivePrice, lowerBound, upperBound));
+
+        var invalidRange = await Assert.ThrowsAsync<AppException>(() => discovery.GetFoodsAsync(
+            new CustomerFoodQueryRequest { MinPrice = 100_000, MaxPrice = 50_000 }));
+        Assert.Equal(400, invalidRange.StatusCode);
+        Assert.Equal("INVALID_PRICE_RANGE", invalidRange.ErrorCode);
+
+        var available = await discovery.GetFoodsAsync(new CustomerFoodQueryRequest
+        {
+            AvailableOnly = true, Page = 1, PageSize = 100
+        });
+        Assert.NotEmpty(available.Data!.Items);
+        Assert.All(available.Data.Items, food =>
+        {
+            Assert.True(food.IsAvailable);
+            Assert.True(food.CanOrder);
+        });
+
+        var byName = await discovery.GetFoodsAsync(new CustomerFoodQueryRequest
+        {
+            Sort = "name", Page = 1, PageSize = 100
+        });
+        Assert.Equal(byName.Data!.Items.OrderBy(x => x.Name).Select(x => x.Id), byName.Data.Items.Select(x => x.Id));
+        var priceAsc = await discovery.GetFoodsAsync(new CustomerFoodQueryRequest
+        {
+            Sort = "priceAsc", Page = 1, PageSize = 100
+        });
+        Assert.Equal(priceAsc.Data!.Items.OrderBy(x => x.EffectivePrice).ThenBy(x => x.Name).Select(x => x.Id), priceAsc.Data.Items.Select(x => x.Id));
+        var priceDesc = await discovery.GetFoodsAsync(new CustomerFoodQueryRequest
+        {
+            Sort = "priceDesc", Page = 1, PageSize = 100
+        });
+        Assert.Equal(priceDesc.Data!.Items.OrderByDescending(x => x.EffectivePrice).ThenBy(x => x.Name).Select(x => x.Id), priceDesc.Data.Items.Select(x => x.Id));
+
+        var firstPage = await discovery.GetFoodsAsync(new CustomerFoodQueryRequest { Page = 1, PageSize = 3 });
+        var secondPage = await discovery.GetFoodsAsync(new CustomerFoodQueryRequest { Page = 2, PageSize = 3 });
+        Assert.Equal(7, firstPage.Data!.TotalPages);
+        Assert.Empty(firstPage.Data.Items.Select(x => x.Id).Intersect(secondPage.Data!.Items.Select(x => x.Id)));
+
+        var normal = all.Data.Items.First(x => x.BasePrice == x.EffectivePrice);
+        var reduced = all.Data.Items.First(x => x.EffectivePrice < x.BasePrice);
+        var nonOrderable = all.Data.Items.First(x => !x.CanOrder);
+        Assert.Equal(normal.Id, (await discovery.GetFoodAsync(normal.Id)).Data!.Id);
+        Assert.True((await discovery.GetFoodAsync(reduced.Id)).Data!.EffectivePrice < reduced.BasePrice);
+        var nonOrderableDetail = (await discovery.GetFoodAsync(nonOrderable.Id)).Data!;
+        Assert.True(nonOrderableDetail.IsAvailable);
+        Assert.False(nonOrderableDetail.CanOrder);
+        Assert.Equal(nonOrderable.BoothId, nonOrderableDetail.Booth.Id);
+        Assert.Equal(nonOrderable.MarketId, nonOrderableDetail.Market.Id);
+
+        var hiddenFoodId = await db.FoodItems.Where(x => !x.IsAvailable).Select(x => x.Id).SingleAsync();
+        var hiddenError = await Assert.ThrowsAsync<AppException>(() => discovery.GetFoodAsync(hiddenFoodId));
+        Assert.Equal(404, hiddenError.StatusCode);
+        Assert.DoesNotContain(all.Data.Items, food => food.Id == hiddenFoodId);
+    }
+
+    [Fact]
     public async Task SeededDataset_DisconnectedDestination_ReturnsStableRouteNotFoundError()
     {
         await using var provider = Provider();

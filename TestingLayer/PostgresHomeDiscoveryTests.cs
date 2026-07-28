@@ -1,7 +1,11 @@
 using ApplicationLayer.AI;
 using ApplicationLayer.AI.Services;
+using ApplicationLayer.DTOs.Requests;
+using ApplicationLayer.Exceptions;
+using ApplicationLayer.Services.CustomerDiscovery;
 using DomainLayer.InterfaceRepository;
 using InfrastructureLayer.Data;
+using InfrastructureLayer.Data.Seeders;
 using InfrastructureLayer.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -13,6 +17,69 @@ namespace TestingLayer;
 
 public class PostgresHomeDiscoveryTests
 {
+    [Fact]
+    [Trait("Category", "PostgreSQLIntegration")]
+    public async Task AppliedSeededDatabase_Phase05FoodDiscoveryContracts_AreVerified()
+    {
+        var connectionString = Environment.GetEnvironmentVariable("SNM_APPLIED_POSTGRES");
+        if (string.IsNullOrWhiteSpace(connectionString)) return;
+
+        var options = new DbContextOptionsBuilder<SNMDbContext>().UseNpgsql(connectionString).Options;
+        await using var context = new SNMDbContext(options);
+        Assert.Equal(20, await context.FoodItems.CountAsync(x => x.Booth.NightMarketId == IntegrationDemoDataSeeder.MarketId));
+        var discovery = new CustomerDiscoveryService(new BoothRepository(context), new FoodItemRepository(context),
+            new NightMarketRepository(context), new Phase05TimeProvider());
+
+        var all = await discovery.GetFoodsAsync(new CustomerFoodQueryRequest
+        {
+            MarketId = IntegrationDemoDataSeeder.MarketId, Page = 1, PageSize = 100
+        });
+        Assert.Equal(19, all.Data!.Total);
+        Assert.All(all.Data.Items, x => Assert.Equal(IntegrationDemoDataSeeder.MarketId, x.MarketId));
+
+        var first = all.Data.Items.First();
+        var booth = await discovery.GetFoodsAsync(new CustomerFoodQueryRequest { BoothId = first.BoothId, Page = 1, PageSize = 100 });
+        Assert.NotEmpty(booth.Data!.Items);
+        Assert.All(booth.Data.Items, x => Assert.Equal(first.BoothId, x.BoothId));
+        var search = await discovery.GetFoodsAsync(new CustomerFoodQueryRequest { Search = first.Name, Page = 1, PageSize = 20 });
+        Assert.Contains(search.Data!.Items, x => x.Id == first.Id);
+        Assert.Empty((await discovery.GetFoodsAsync(new CustomerFoodQueryRequest
+            { Search = "phase05-khong-ton-tai", Page = 1, PageSize = 20 })).Data!.Items);
+
+        foreach (var categoryId in all.Data.Items.Select(x => x.CategoryId).Distinct().Take(2))
+        {
+            var category = await discovery.GetFoodsAsync(new CustomerFoodQueryRequest { CategoryId = categoryId, Page = 1, PageSize = 100 });
+            Assert.All(category.Data!.Items, x => Assert.Equal(categoryId, x.CategoryId));
+        }
+
+        var prices = all.Data.Items.Select(x => x.EffectivePrice).OrderBy(x => x).ToArray();
+        var min = prices[prices.Length / 3];
+        var max = prices[prices.Length * 2 / 3];
+        var ranged = await discovery.GetFoodsAsync(new CustomerFoodQueryRequest { MinPrice = min, MaxPrice = max, Page = 1, PageSize = 100 });
+        Assert.All(ranged.Data!.Items, x => Assert.InRange(x.EffectivePrice, min, max));
+        var invalid = await Assert.ThrowsAsync<AppException>(() => discovery.GetFoodsAsync(
+            new CustomerFoodQueryRequest { MinPrice = max, MaxPrice = min - 1 }));
+        Assert.Equal("INVALID_PRICE_RANGE", invalid.ErrorCode);
+
+        var available = await discovery.GetFoodsAsync(new CustomerFoodQueryRequest { AvailableOnly = true, Page = 1, PageSize = 100 });
+        Assert.All(available.Data!.Items, x => Assert.True(x.IsAvailable && x.CanOrder));
+        var asc = await discovery.GetFoodsAsync(new CustomerFoodQueryRequest { Sort = "priceAsc", Page = 1, PageSize = 100 });
+        Assert.Equal(asc.Data!.Items.OrderBy(x => x.EffectivePrice).ThenBy(x => x.Name).Select(x => x.Id), asc.Data.Items.Select(x => x.Id));
+        var desc = await discovery.GetFoodsAsync(new CustomerFoodQueryRequest { Sort = "priceDesc", Page = 1, PageSize = 100 });
+        Assert.Equal(desc.Data!.Items.OrderByDescending(x => x.EffectivePrice).ThenBy(x => x.Name).Select(x => x.Id), desc.Data.Items.Select(x => x.Id));
+
+        var page1 = await discovery.GetFoodsAsync(new CustomerFoodQueryRequest { MarketId = IntegrationDemoDataSeeder.MarketId, Page = 1, PageSize = 3 });
+        var page2 = await discovery.GetFoodsAsync(new CustomerFoodQueryRequest { MarketId = IntegrationDemoDataSeeder.MarketId, Page = 2, PageSize = 3 });
+        Assert.Equal(7, page1.Data!.TotalPages);
+        Assert.Empty(page1.Data.Items.Select(x => x.Id).Intersect(page2.Data!.Items.Select(x => x.Id)));
+
+        var normal = all.Data.Items.First(x => x.BasePrice == x.EffectivePrice);
+        var reduced = all.Data.Items.First(x => x.EffectivePrice < x.BasePrice);
+        Assert.Equal(normal.BasePrice, (await discovery.GetFoodAsync(normal.Id)).Data!.EffectivePrice);
+        Assert.True((await discovery.GetFoodAsync(reduced.Id)).Data!.EffectivePrice < reduced.BasePrice);
+        Assert.Contains(all.Data.Items, x => !x.CanOrder);
+    }
+
     [Fact]
     [Trait("Category", "PostgreSQLIntegration")]
     public async Task LatestMigrations_HomeDiscoveryQueries_ReturnEmptyPagesOnPostgres()
@@ -133,4 +200,9 @@ public class PostgresHomeDiscoveryTests
             new Mock<IAICustomerContextRepository>().Object,
             Options.Create(new AIProviderSettings { EnableExternalProvider = false }),
             TimeProvider.System);
+
+    private sealed class Phase05TimeProvider : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => new(2026, 7, 28, 12, 0, 0, TimeSpan.Zero);
+    }
 }

@@ -377,7 +377,8 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
             .Select(item => ToCustomerReadModel(item, utcNow, includeImages: false))
             .Where(item => !minPrice.HasValue || item.EffectivePrice >= minPrice.Value)
             .Where(item => !maxPrice.HasValue || item.EffectivePrice <= maxPrice.Value)
-            .Where(item => !availableOnly || ApplicationLayer.Services.CustomerDiscovery.CustomerAvailability.IsOpenNow(item, localTime));
+            .Where(item => !availableOnly || (item.IsAvailable &&
+                ApplicationLayer.Services.CustomerDiscovery.CustomerAvailability.IsOpenNow(item, localTime)));
 
         var totalCount = query.Count();
         query = sort.ToLowerInvariant() switch

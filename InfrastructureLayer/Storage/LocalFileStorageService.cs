@@ -53,7 +53,9 @@ public class LocalFileStorageService : IFileStorageService
         }
         else
         {
-            _storageRootPath = env.WebRootPath ?? Path.Combine(env.ContentRootPath, "wwwroot");
+            var webRoot = env.WebRootPath ?? Path.Combine(env.ContentRootPath, "wwwroot");
+            _storageRootPath = Path.Combine(webRoot, "uploads");
+            Directory.CreateDirectory(_storageRootPath);
         }
     }
 

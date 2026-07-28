@@ -115,6 +115,7 @@ namespace InfrastructureLayer
             services.AddScoped<IBoothService, BoothService>();
 
             services.AddScoped<IOrderService, OrderService>();
+            services.AddScoped<ICustomerCheckoutService, CustomerCheckoutService>();
 
             services.AddScoped<IFoodCategoryService, FoodCategoryService>();
             services.AddScoped<IMenuService, MenuService>();

@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.OpenApi.Models;
 using PayOS;
 using PresentationLayer.Hubs;
@@ -384,6 +385,18 @@ if (builder.Configuration.GetValue("HttpsRedirection:Enabled", true))
 app.UseCors(CustomerAppCorsPolicy);
 
 app.UseStaticFiles();
+
+var uploadRoot = builder.Configuration["UploadStorage:RootPath"];
+if (!string.IsNullOrWhiteSpace(uploadRoot))
+{
+    var absoluteUploadRoot = Path.GetFullPath(uploadRoot);
+    Directory.CreateDirectory(absoluteUploadRoot);
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new PhysicalFileProvider(absoluteUploadRoot),
+        RequestPath = "/uploads"
+    });
+}
 
 app.UseAuthentication();
 

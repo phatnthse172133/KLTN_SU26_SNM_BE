@@ -132,7 +132,9 @@ public class MapNavigationService : IMapNavigationService
         var graph = nodeIds.ToDictionary(x => x, _ => new List<(Guid To, decimal Weight)>());
         foreach (var edge in edges)
         {
-            if (!graph.ContainsKey(edge.FromNodeId) || !graph.ContainsKey(edge.ToNodeId)) continue;
+            // Corrupt/legacy zero or negative weights must never enter Dijkstra:
+            // walking edges are physical distances and therefore strictly positive.
+            if (edge.Distance <= 0 || !graph.ContainsKey(edge.FromNodeId) || !graph.ContainsKey(edge.ToNodeId)) continue;
             graph[edge.FromNodeId].Add((edge.ToNodeId, edge.Distance));
             if (edge.IsBidirectional) graph[edge.ToNodeId].Add((edge.FromNodeId, edge.Distance));
         }

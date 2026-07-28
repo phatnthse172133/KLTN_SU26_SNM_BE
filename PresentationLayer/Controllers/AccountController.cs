@@ -65,6 +65,14 @@ public class AccountController : ControllerBase
         return response.Success ? Ok(response) : NotFound(response);
     }
 
+    [Authorize(Roles = "Customer")]
+    [HttpDelete("avatar")]
+    public async Task<IActionResult> RemoveAvatar(CancellationToken cancellationToken)
+    {
+        var response = await _service.RemoveAvatarAsync(CurrentUserId, cancellationToken);
+        return Ok(response);
+    }
+
     [HttpPost("change-password")]
     public async Task<IActionResult> ChangePassword(ChangePasswordRequest request, CancellationToken cancellationToken)
     {

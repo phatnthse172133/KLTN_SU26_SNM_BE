@@ -46,6 +46,10 @@ public sealed class IntegrationDemoDataSeederTests
         Assert.InRange(market.Latitude!.Value, -90, 90);
         Assert.InRange(market.Longitude!.Value, -180, 180);
         Assert.Equal(2, await db.NightMarketImages.CountAsync(x => x.NightMarketId == market.Id));
+        var foodImageUrls = await db.FoodItems.Where(x => x.Booth.NightMarketId == market.Id)
+            .Select(x => x.ThumbnailUrl).ToListAsync();
+        Assert.Equal(20, foodImageUrls.Distinct().Count());
+        Assert.DoesNotContain(foodImageUrls, url => url is null || url.EndsWith("/food.svg", StringComparison.Ordinal));
 
         var ratings = await db.Booths.Where(x => x.NightMarketId == market.Id)
             .OrderBy(x => x.BoothCode).Select(x => x.AverageRating).ToListAsync();

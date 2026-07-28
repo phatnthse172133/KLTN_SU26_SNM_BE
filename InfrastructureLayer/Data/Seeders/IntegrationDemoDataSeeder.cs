@@ -259,8 +259,18 @@ public static class IntegrationDemoDataSeeder
                 var seed = Menus[boothIndex - 1][foodIndex - 1];
                 var capturedBooth = boothIndex;
                 var capturedFood = foodIndex;
-                await AddIfMissingAsync(db.FoodItems, FoodId(capturedBooth, capturedFood), () => new FoodItem { Id = FoodId(capturedBooth, capturedFood), BoothId = BoothId(capturedBooth), CategoryId = CategoryId(capturedBooth), Name = seed.Name, Description = $"{seed.Name} — dữ liệu món ăn demo.", Price = seed.Price, ThumbnailUrl = $"{AssetRoot}/food.svg", IsAvailable = !(capturedBooth == 5 && capturedFood == 4), IsFeatured = capturedFood == 1, CreatedAt = now, UpdatedAt = now });
-                await AddIfMissingAsync(db.FoodImages, FoodImageId(capturedBooth, capturedFood), () => new FoodImage { Id = FoodImageId(capturedBooth, capturedFood), FoodItemId = FoodId(capturedBooth, capturedFood), ImageUrl = $"{AssetRoot}/food.svg", DisplayOrder = 1, CreatedAt = now, UpdatedAt = now });
+                var foodAssetUrl = $"{AssetRoot}/food-{capturedBooth}-{capturedFood}.svg";
+                await AddIfMissingAsync(db.FoodItems, FoodId(capturedBooth, capturedFood), () => new FoodItem { Id = FoodId(capturedBooth, capturedFood), BoothId = BoothId(capturedBooth), CategoryId = CategoryId(capturedBooth), Name = seed.Name, Description = $"{seed.Name} — dữ liệu món ăn demo.", Price = seed.Price, ThumbnailUrl = foodAssetUrl, IsAvailable = !(capturedBooth == 5 && capturedFood == 4), IsFeatured = capturedFood == 1, CreatedAt = now, UpdatedAt = now });
+                await AddIfMissingAsync(db.FoodImages, FoodImageId(capturedBooth, capturedFood), () => new FoodImage { Id = FoodImageId(capturedBooth, capturedFood), FoodItemId = FoodId(capturedBooth, capturedFood), ImageUrl = foodAssetUrl, DisplayOrder = 1, CreatedAt = now, UpdatedAt = now });
+
+                // Seed runs are also migrations for controlled demo data: repair
+                // legacy rows that all pointed at the same generic food.svg.
+                var food = db.FoodItems.Local.SingleOrDefault(x => x.Id == FoodId(capturedBooth, capturedFood))
+                    ?? await db.FoodItems.SingleAsync(x => x.Id == FoodId(capturedBooth, capturedFood), ct);
+                var image = db.FoodImages.Local.SingleOrDefault(x => x.Id == FoodImageId(capturedBooth, capturedFood))
+                    ?? await db.FoodImages.SingleAsync(x => x.Id == FoodImageId(capturedBooth, capturedFood), ct);
+                food.ThumbnailUrl = foodAssetUrl;
+                image.ImageUrl = foodAssetUrl;
             }
         }
         await db.SaveChangesAsync(ct);
@@ -283,7 +293,7 @@ public static class IntegrationDemoDataSeeder
                 await AddIfMissingAsync(db.Orders, orderId, () => new Order { Id = orderId, CustomerId = customerId, BoothOwnerId = OwnerId(boothIndex), OrderCode = 935000000 + sequence, CheckoutRequestId = CheckoutId(sequence), Status = OrderStatus.Completed, TotalAmount = amount, DiscountAmount = 0, FinalAmount = amount, Note = "Đơn hoàn tất phục vụ review demo Phase 03.5", CreatedAt = occurredAt, UpdatedAt = occurredAt });
                 await AddIfMissingAsync(db.OrderDetails, OrderDetailId(sequence), () => new OrderDetail { Id = OrderDetailId(sequence), OrderId = orderId, FoodItemId = FoodId(boothIndex, 1), FoodNameSnapshot = Menus[boothIndex - 1][0].Name, Quantity = 1, UnitPrice = amount, TotalPrice = amount, CreatedAt = occurredAt, UpdatedAt = occurredAt });
                 await AddIfMissingAsync(db.Payments, PaymentId(sequence), () => new Payment { Id = PaymentId(sequence), OrderId = orderId, BoothOwnerId = OwnerId(boothIndex), Type = PaymentType.Cash, Gateway = PaymentGateway.None, Amount = amount, Status = PaymentStatus.Paid, PaidAt = occurredAt, CreatedAt = occurredAt, UpdatedAt = occurredAt });
-                await AddIfMissingAsync(db.Reviews, ReviewId(sequence), () => new Review { Id = ReviewId(sequence), BoothId = BoothId(boothIndex), CustomerId = customerId, OrderId = orderId, Rating = rating, Content = $"Đánh giá demo hợp lệ cho quầy {Booths[boothIndex - 1].Name}.", ImageUrl = sequence == 1 ? $"{AssetRoot}/food.svg" : null, IsVisible = true, CreatedAt = occurredAt.AddHours(1), UpdatedAt = occurredAt.AddHours(1) });
+                await AddIfMissingAsync(db.Reviews, ReviewId(sequence), () => new Review { Id = ReviewId(sequence), BoothId = BoothId(boothIndex), CustomerId = customerId, OrderId = orderId, Rating = rating, Content = $"Đánh giá demo hợp lệ cho quầy {Booths[boothIndex - 1].Name}.", ImageUrl = sequence == 1 ? $"{AssetRoot}/food-1-1.svg" : null, IsVisible = true, CreatedAt = occurredAt.AddHours(1), UpdatedAt = occurredAt.AddHours(1) });
                 sequence++;
             }
         }

@@ -55,9 +55,7 @@ public class AccountService : IAccountService
         if (fullName.Length > 150)
             throw AppException.BadRequest("Full name must not exceed 150 characters.", "FULL_NAME_TOO_LONG");
 
-        var phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim();
-        if (phone is not null && (phone.Length > 20 || !new PhoneAttribute().IsValid(phone)))
-            throw AppException.BadRequest("Phone number format is invalid.", "PHONE_INVALID");
+        var phone = NormalizeVietnamesePhone(request.Phone);
 
         var address = string.IsNullOrWhiteSpace(request.Address) ? null : request.Address.Trim();
         if (address?.Length > 255)
@@ -129,6 +127,20 @@ public class AccountService : IAccountService
         return await ToMyAccountResponseAsync(user, "Avatar updated successfully.");
     }
 
+    public async Task<ApiResponse<UserResponse>> RemoveAvatarAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        var user = await _users.GetByIdAsync(userId)
+            ?? throw AppException.NotFound("Account was not found.");
+        var oldAvatarUrl = user.AvatarUrl;
+        if (oldAvatarUrl is null) return await ToMyAccountResponseAsync(user, "Avatar is already empty.");
+
+        user.AvatarUrl = null;
+        user.UpdatedAt = DateTime.UtcNow;
+        await _users.SaveChangesAsync();
+        await TryDeleteAvatarAsync(oldAvatarUrl, userId, "removed");
+        return await ToMyAccountResponseAsync(user, "Avatar removed successfully.");
+    }
+
     private async Task TryDeleteAvatarAsync(string? avatarUrl, Guid userId, string kind)
     {
         try
@@ -143,6 +155,27 @@ public class AccountService : IAccountService
                 kind,
                 userId);
         }
+    }
+
+    private static string? NormalizeVietnamesePhone(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return null;
+        var raw = input.Trim();
+        if (raw.Any(character => !char.IsDigit(character) && character is not '+' and not ' ' and not '.' and not '-' and not '(' and not ')'))
+            throw AppException.BadRequest("Phone number format is invalid.", "PHONE_INVALID");
+
+        var compact = new string(raw.Where(character => char.IsDigit(character) || character == '+').ToArray());
+        if (compact.StartsWith("+84", StringComparison.Ordinal)) compact = $"0{compact[3..]}";
+        else if (compact.StartsWith("84", StringComparison.Ordinal)) compact = $"0{compact[2..]}";
+
+        var validPrefix = compact.StartsWith("03", StringComparison.Ordinal)
+            || compact.StartsWith("05", StringComparison.Ordinal)
+            || compact.StartsWith("07", StringComparison.Ordinal)
+            || compact.StartsWith("08", StringComparison.Ordinal)
+            || compact.StartsWith("09", StringComparison.Ordinal);
+        if (compact.Length != 10 || compact.Any(character => !char.IsDigit(character)) || !validPrefix || compact.Distinct().Count() == 1)
+            throw AppException.BadRequest("Phone number format is invalid.", "PHONE_INVALID");
+        return compact;
     }
 
     public async Task<ApiResponse<PaginationResp<ManagedUserResponse>>> GetUsersAsync(UserListQuery query, CancellationToken cancellationToken = default)

@@ -294,7 +294,7 @@ namespace TestingLayer
             var request = new UpdateProfileRequest
             {
                 FullName = "  New Name  ",
-                Phone = "  0901234567  ",
+                Phone = "  +84 901 234 567  ",
                 Address = "  District 1  ",
                 DoB = new DateOnly(2000, 1, 2)
             };
@@ -366,8 +366,11 @@ namespace TestingLayer
             _mockUsers.Verify(repository => repository.SaveChangesAsync(), Times.Never);
         }
 
-        [Fact]
-        public async Task UpdateMyAccountAsync_InvalidPhone_IsRejectedBeforePersistence()
+        [Theory]
+        [InlineData("not-a-phone")]
+        [InlineData("0000000000")]
+        [InlineData("0212345678")]
+        public async Task UpdateMyAccountAsync_InvalidPhone_IsRejectedBeforePersistence(string invalidPhone)
         {
             var user = new User { Id = Guid.NewGuid(), FullName = "Existing Name" };
             _mockUsers.Setup(repository => repository.GetByIdAsync(user.Id)).ReturnsAsync(user);
@@ -378,7 +381,7 @@ namespace TestingLayer
                     new UpdateProfileRequest
                     {
                         FullName = "Valid Name",
-                        Phone = "not-a-phone"
+                        Phone = invalidPhone
                     }));
 
             Assert.Equal("PHONE_INVALID", exception.ErrorCode);

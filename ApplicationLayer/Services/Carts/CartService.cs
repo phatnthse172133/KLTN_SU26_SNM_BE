@@ -158,7 +158,7 @@ public class CartService : ICartService
         if (item is null)
             throw AppException.NotFound("Cart item was not found.", "CART_ITEM_NOT_FOUND");
 
-        item.UpdatedAt = DateTime.UtcNow;
+        item.UpdatedAt = _timeProvider.GetUtcNow().UtcDateTime;
         item.Cart.UpdatedAt = item.UpdatedAt;
         item.IsDeleted = true;
         await _cartItems.SaveChangesAsync();
@@ -180,7 +180,7 @@ public class CartService : ICartService
                 "The cart does not contain items from this booth.",
                 "CART_BOOTH_ITEMS_NOT_FOUND");
 
-        var now = DateTime.UtcNow;
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
         foreach (var item in items)
         {
             item.UpdatedAt = now;
@@ -198,7 +198,7 @@ public class CartService : ICartService
     {
         var cart = await GetCurrentCartAsync(customerId, cancellationToken);
         var items = await _cartItems.GetActiveByCartAsync(cart.Id, cancellationToken);
-        var now = DateTime.UtcNow;
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
 
         foreach (var item in items)
         {
@@ -221,7 +221,7 @@ public class CartService : ICartService
 
     private async Task<Cart> CreateCartAsync(Guid customerId)
     {
-        var now = DateTime.UtcNow;
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
         var cart = new Cart
         {
             Id = Guid.NewGuid(),

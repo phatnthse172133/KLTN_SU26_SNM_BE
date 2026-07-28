@@ -91,6 +91,7 @@ public static class IntegrationDemoDataSeeder
 
         try
         {
+            logger.LogInformation("Controlled demo seed enabled; transaction starting.");
             if (db.Database.IsRelational())
                 transaction = await db.Database.BeginTransactionAsync(cancellationToken);
 
@@ -111,10 +112,11 @@ public static class IntegrationDemoDataSeeder
                 report.NightMarkets, report.Booths, report.Foods, report.Reviews, report.LayoutNodes, report.LayoutEdges);
             return report;
         }
-        catch
+        catch (Exception exception)
         {
             if (transaction is not null)
                 await transaction.RollbackAsync(cancellationToken);
+            logger.LogError(exception, "Controlled demo seed failed; transaction rolled back.");
             throw;
         }
         finally

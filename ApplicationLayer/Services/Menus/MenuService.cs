@@ -3,6 +3,7 @@ using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
 using ApplicationLayer.Mappings;
+using ApplicationLayer.AI.Services;
 using AutoMapper;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
@@ -15,17 +16,20 @@ public class MenuService : IMenuService
     private readonly IBoothRepository _booths;
     private readonly IFoodCategoryRepository _categories;
     private readonly IFoodItemRepository _foodItems;
+    private readonly IFoodTagRepository _foodTags;
     private readonly IMapper _mapper;
 
     public MenuService(
         IBoothRepository booths,
         IFoodCategoryRepository categories,
         IFoodItemRepository foodItems,
+        IFoodTagRepository foodTags,
         IMapper mapper)
     {
         _booths = booths;
         _categories = categories;
         _foodItems = foodItems;
+        _foodTags = foodTags;
         _mapper = mapper;
     }
 
@@ -51,7 +55,7 @@ public class MenuService : IMenuService
         if (managementError is not null)
             throw ToBoothAccessException(managementError);
 
-        var (validationError, category) = await ValidateFoodItemRequestAsync(boothId, request);
+        var (validationError, category, tags) = await ValidateFoodItemRequestAsync(boothId, request, cancellationToken);
         if (validationError is not null)
             throw validationError.Contains("not found", StringComparison.OrdinalIgnoreCase)
                 ? AppException.NotFound(validationError)
@@ -65,6 +69,7 @@ public class MenuService : IMenuService
         foodItem.IsDeleted = false;
         foodItem.CreatedAt = now;
         foodItem.UpdatedAt = now;
+        SetTags(foodItem, tags!, now);
 
         await _foodItems.AddAsync(foodItem);
         await _foodItems.SaveChangesAsync();
@@ -82,7 +87,7 @@ public class MenuService : IMenuService
         if (foodItem is null)
             throw AppException.NotFound("Food item was not found.");
 
-        var (validationError, category) = await ValidateFoodItemRequestAsync(boothId, request);
+        var (validationError, category, tags) = await ValidateFoodItemRequestAsync(boothId, request, cancellationToken);
         if (validationError is not null)
             throw validationError.Contains("not found", StringComparison.OrdinalIgnoreCase)
                 ? AppException.NotFound(validationError)
@@ -91,6 +96,7 @@ public class MenuService : IMenuService
         _mapper.Map(request, foodItem);
         foodItem.Category = category!;
         foodItem.UpdatedAt = DateTime.UtcNow;
+        SetTags(foodItem, tags!, foodItem.UpdatedAt);
 
         _foodItems.Update(foodItem);
         await _foodItems.SaveChangesAsync();
@@ -179,19 +185,48 @@ public class MenuService : IMenuService
         return null;
     }
 
-    private async Task<(string? Error, FoodCategory? Category)> ValidateFoodItemRequestAsync(Guid boothId, CreateFoodItemRequest request)
+    private async Task<(string? Error, FoodCategory? Category, IReadOnlyCollection<FoodTag>? Tags)> ValidateFoodItemRequestAsync(
+        Guid boothId, CreateFoodItemRequest request, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.Name))
-            return ("Food item name is required.", null);
+            return ("Food item name is required.", null, null);
 
         if (request.Price <= 0)
-            return ("Food item price must be greater than zero.", null);
+            return ("Food item price must be greater than zero.", null, null);
 
         var category = await _categories.GetActiveByBoothAsync(boothId, request.CategoryId);
         if (category is null)
-            return ("Food category was not found.", null);
+            return ("Food category was not found or is not selectable.", null, null);
 
-        return (null, category);
+        if (request.TagIds.Count != request.TagIds.Distinct().Count())
+            return ("Food tag IDs must not contain duplicates.", null, null);
+
+        var tagIds = request.TagIds.ToList();
+        var tags = await _foodTags.GetActiveByIdsAsync(tagIds, cancellationToken);
+        if (tags.Count != tagIds.Count)
+            return ("One or more food tags are invalid or inactive.", null, null);
+
+        FoodTagSelectionPolicy.Validate(tags);
+
+        return (null, category, tags);
+    }
+
+    private static void SetTags(FoodItem foodItem, IReadOnlyCollection<FoodTag> tags, DateTime now)
+    {
+        var requestedIds = tags.Select(tag => tag.Id).ToHashSet();
+        foreach (var existing in foodItem.FoodItemTags.Where(item => !requestedIds.Contains(item.FoodTagId)).ToList())
+            foodItem.FoodItemTags.Remove(existing);
+
+        var existingIds = foodItem.FoodItemTags.Select(item => item.FoodTagId).ToHashSet();
+        foreach (var tag in tags.Where(tag => !existingIds.Contains(tag.Id)))
+        {
+            foodItem.FoodItemTags.Add(new FoodItemTag
+            {
+                FoodItemId = foodItem.Id,
+                FoodTagId = tag.Id,
+                CreatedAt = now
+            });
+        }
     }
 
     private static AppException ToBoothAccessException(string message)

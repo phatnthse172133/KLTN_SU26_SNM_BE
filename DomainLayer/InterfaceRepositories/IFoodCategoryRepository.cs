@@ -7,6 +7,7 @@ public interface IFoodCategoryRepository : IGenericRepository<FoodCategory>
 {
     Task<PagedResult<FoodCategory>> GetActivePagedByBoothAsync(Guid boothId, int page, int pageSize, CancellationToken cancellationToken = default);
     Task<FoodCategory?> GetActiveByBoothAsync(Guid boothId, Guid categoryId);
+    Task<PagedResult<FoodCategory>> GetSelectablePagedAsync(int page, int pageSize, CancellationToken cancellationToken = default);
     Task<bool> ActiveNameExistsAsync(Guid boothId, string name, Guid? excludeId = null);
     Task<IReadOnlyCollection<FoodCategory>> GetByIdsAsync(IReadOnlyCollection<Guid> ids);
     Task<IReadOnlyCollection<FoodCategory>> GetActiveByIdsAndBoothAsync(

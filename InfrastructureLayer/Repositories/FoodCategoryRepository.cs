@@ -19,8 +19,10 @@ public class FoodCategoryRepository : GenericRepository<FoodCategory>, IFoodCate
         CancellationToken cancellationToken = default)
     {
         var query = _dbSet
-            .Where(category => category.BoothId == boothId && !category.IsDeleted)
-            .OrderBy(category => category.Name);
+            .Where(category => (category.BoothId == boothId || category.IsSystem)
+                && category.IsActive && category.IsSelectable && !category.IsDeleted)
+            .OrderBy(category => category.DisplayOrder)
+            .ThenBy(category => category.Name);
 
         var total = await query.CountAsync(cancellationToken);
         var items = await query
@@ -32,7 +34,25 @@ public class FoodCategoryRepository : GenericRepository<FoodCategory>, IFoodCate
     }
 
     public async Task<FoodCategory?> GetActiveByBoothAsync(Guid boothId, Guid categoryId)
-        => await _dbSet.FirstOrDefaultAsync(category => category.Id == categoryId && category.BoothId == boothId && !category.IsDeleted);
+        => await _dbSet.FirstOrDefaultAsync(category => category.Id == categoryId
+            && (category.BoothId == boothId || category.IsSystem)
+            && category.IsActive && category.IsSelectable && !category.IsDeleted);
+
+    public async Task<PagedResult<FoodCategory>> GetSelectablePagedAsync(
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        var query = _dbSet.Where(category => category.IsSystem
+            && category.IsActive && category.IsSelectable && !category.IsDeleted);
+        var total = await query.CountAsync(cancellationToken);
+        var items = await query.OrderBy(category => category.DisplayOrder)
+            .ThenBy(category => category.Name)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+        return new PagedResult<FoodCategory>(items, total);
+    }
 
     public async Task<bool> ActiveNameExistsAsync(Guid boothId, string name, Guid? excludeId = null)
         => await _dbSet.AnyAsync(category =>
@@ -49,6 +69,7 @@ public class FoodCategoryRepository : GenericRepository<FoodCategory>, IFoodCate
         IReadOnlyCollection<Guid> categoryIds,
         CancellationToken cancellationToken = default)
         => await ActiveQuery()
-            .Where(category => category.BoothId == boothId && categoryIds.Contains(category.Id))
+            .Where(category => (category.BoothId == boothId || category.IsSystem)
+                && category.IsActive && category.IsSelectable && categoryIds.Contains(category.Id))
             .ToListAsync(cancellationToken);
 }

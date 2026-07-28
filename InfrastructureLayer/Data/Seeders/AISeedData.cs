@@ -455,9 +455,12 @@ public static class AISeedData
                 {
                     Id = categoryId,
                     BoothId = BoothId(seed.Index),
+                    Code = $"DEMO_AI_{seed.Index:00}",
                     Name = "Thực đơn demo AI",
                     Description = "Danh mục món seed để AI có dữ liệu thật khi gợi ý.",
                     IsDeleted = false,
+                    IsActive = true,
+                    IsSelectable = true,
                     CreatedAt = now,
                     UpdatedAt = now
                 });

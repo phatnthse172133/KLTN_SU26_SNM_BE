@@ -152,6 +152,7 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
     {
         var query = _dbSet
             .Include(item => item.Category)
+            .Include(item => item.FoodItemTags)
             .Where(item => item.BoothId == boothId && !item.IsDeleted);
         var totalCount = await query.CountAsync(cancellationToken);
         var items = await query
@@ -168,6 +169,7 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
     public async Task<FoodItem?> GetByBoothAsync(Guid boothId, Guid foodItemId)
         => await _dbSet
             .Include(item => item.Category)
+            .Include(item => item.FoodItemTags)
             .FirstOrDefaultAsync(item => item.Id == foodItemId && item.BoothId == boothId && !item.IsDeleted);
 
     public Task<FoodItem?> GetForCartAsync(

@@ -32,24 +32,4 @@ public class FoodCategoriesController : ControllerBase
         return response.Success ? Ok(response) : NotFound(response);
     }
 
-    [HttpPost]
-    public async Task<IActionResult> Create(Guid boothId, CreateFoodCategoryRequest request, CancellationToken cancellationToken)
-    {
-        var response = await _service.CreateAsync(CurrentUserId, boothId, request, cancellationToken);
-        return response.Success ? CreatedAtAction(nameof(Get), new { boothId, categoryId = response.Data!.Id }, response) : BadRequest(response);
-    }
-
-    [HttpPut("{categoryId:guid}")]
-    public async Task<IActionResult> Update(Guid boothId, Guid categoryId, UpdateFoodCategoryRequest request, CancellationToken cancellationToken)
-    {
-        var response = await _service.UpdateAsync(CurrentUserId, boothId, categoryId, request, cancellationToken);
-        return response.Success ? Ok(response) : BadRequest(response);
-    }
-
-    [HttpDelete("{categoryId:guid}")]
-    public async Task<IActionResult> Delete(Guid boothId, Guid categoryId, CancellationToken cancellationToken)
-    {
-        var response = await _service.DeleteAsync(CurrentUserId, boothId, categoryId, cancellationToken);
-        return response.Success ? Ok(response) : BadRequest(response);
-    }
 }

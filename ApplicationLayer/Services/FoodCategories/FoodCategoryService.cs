@@ -23,6 +23,15 @@ public class FoodCategoryService : IFoodCategoryService
         _mapper = mapper;
     }
 
+    public async Task<ApiResponse<PaginationResp<FoodCategoryResponse>>> GetSelectableAsync(
+        PaginationReq pagination,
+        CancellationToken cancellationToken = default)
+    {
+        var page = await _categories.GetSelectablePagedAsync(pagination.Page, pagination.PageSize, cancellationToken);
+        return ApiResponse<PaginationResp<FoodCategoryResponse>>.SuccessResponse(
+            _mapper.MapPage<FoodCategory, FoodCategoryResponse>(page, pagination));
+    }
+
     public async Task<ApiResponse<PaginationResp<FoodCategoryResponse>>> GetMyBoothCategoriesAsync(Guid ownerId, Guid boothId, PaginationReq pagination, CancellationToken cancellationToken = default)
     {
         var ownershipError = await ValidateBoothOwnershipAsync(ownerId, boothId);
@@ -62,6 +71,10 @@ public class FoodCategoryService : IFoodCategoryService
         var category = _mapper.Map<FoodCategory>(request);
         category.Id = Guid.NewGuid();
         category.BoothId = boothId;
+        category.Code = $"LEGACY_{category.Id:N}".ToUpperInvariant();
+        category.IsSystem = false;
+        category.IsActive = true;
+        category.IsSelectable = true;
         category.IsDeleted = false;
         category.CreatedAt = now;
         category.UpdatedAt = now;
@@ -81,6 +94,8 @@ public class FoodCategoryService : IFoodCategoryService
         var category = await _categories.GetActiveByBoothAsync(boothId, categoryId);
         if (category is null)
             throw AppException.NotFound("Food category was not found.");
+        if (category.IsSystem)
+            throw AppException.Forbidden("System food categories can only be changed by a versioned backend seed.");
 
         var validationError = await ValidateAsync(boothId, request, categoryId);
         if (validationError is not null)
@@ -104,6 +119,8 @@ public class FoodCategoryService : IFoodCategoryService
         var category = await _categories.GetActiveByBoothAsync(boothId, categoryId);
         if (category is null)
             throw AppException.NotFound("Food category was not found.");
+        if (category.IsSystem)
+            throw AppException.Forbidden("System food categories cannot be deleted.");
 
         category.UpdatedAt = DateTime.UtcNow;
         _categories.Delete(category);

@@ -8,6 +8,11 @@ public class FoodTagResponse
     public string? Description { get; set; }
     public string TagGroup { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
+    public bool IsSystem { get; set; }
+    public int DisplayOrder { get; set; }
+    public bool IsSelectable { get; set; }
+    public bool IsPreferenceSelectable { get; set; }
+    public bool IsAutoAssigned { get; set; }
 }
 
 public class CustomerPreferenceTagResponse

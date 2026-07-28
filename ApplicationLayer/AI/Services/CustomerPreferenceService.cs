@@ -42,6 +42,8 @@ public class CustomerPreferenceService : ICustomerPreferenceService
         var tags = await _foodTags.GetActiveByIdsAsync(allIds, cancellationToken);
         if (tags.Count != allIds.Count)
             throw AppException.BadRequest("One or more food tags are invalid.");
+        if (tags.Any(tag => !tag.IsPreferenceSelectable))
+            throw AppException.BadRequest("One or more food tags cannot be selected as a customer preference.");
 
         var existing = await _preferences.GetByCustomerAsync(customerId, cancellationToken);
         if (existing.Count > 0)

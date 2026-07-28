@@ -279,6 +279,13 @@ public static class IntegrationDemoDataSeeder
         for (var boothIndex = 1; boothIndex <= Booths.Length; boothIndex++)
         {
             await AddIfMissingAsync(db.FoodCategories, CategoryId(boothIndex), () => new FoodCategory { Id = CategoryId(boothIndex), BoothId = BoothId(boothIndex), Name = "Thực đơn demo", Description = "Danh mục dùng cho kiểm thử tích hợp.", CreatedAt = now, UpdatedAt = now });
+            var demoCategory = await db.FoodCategories.FindAsync([CategoryId(boothIndex)], ct);
+            if (demoCategory is not null)
+            {
+                demoCategory.Code = $"DEMO_INTEGRATION_{boothIndex:00}";
+                demoCategory.IsActive = true;
+                demoCategory.IsSelectable = true;
+            }
             for (var foodIndex = 1; foodIndex <= Menus[boothIndex - 1].Length; foodIndex++)
             {
                 var seed = Menus[boothIndex - 1][foodIndex - 1];

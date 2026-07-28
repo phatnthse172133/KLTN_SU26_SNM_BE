@@ -216,8 +216,13 @@ namespace ApplicationLayer.Mappings
             CreateMap<CreateFoodCategoryRequest, FoodCategory>()
                 .ForMember(d => d.Id, o => o.Ignore())
                 .ForMember(d => d.BoothId, o => o.Ignore())
+                .ForMember(d => d.Code, o => o.Ignore())
                 .ForMember(d => d.Name, o => o.MapFrom(s => s.Name.Trim()))
                 .ForMember(d => d.Description, o => o.MapFrom(s => ApplicationLayer.Helppers.TextHelper.NormalizeOptionalText(s.Description)))
+                .ForMember(d => d.IsSystem, o => o.Ignore())
+                .ForMember(d => d.IsActive, o => o.Ignore())
+                .ForMember(d => d.DisplayOrder, o => o.Ignore())
+                .ForMember(d => d.IsSelectable, o => o.Ignore())
                 .ForMember(d => d.IsDeleted, o => o.Ignore())
                 .ForMember(d => d.CreatedAt, o => o.Ignore())
                 .ForMember(d => d.UpdatedAt, o => o.Ignore())
@@ -231,6 +236,7 @@ namespace ApplicationLayer.Mappings
             CreateMap<FoodCategory, FoodCategoryResponse>();
 
             CreateMap<CreateFoodItemRequest, FoodItem>()
+                .ForSourceMember(s => s.TagIds, o => o.DoNotValidate())
                 .ForMember(d => d.Id, o => o.Ignore())
                 .ForMember(d => d.BoothId, o => o.Ignore())
                 .ForMember(d => d.Name, o => o.MapFrom(s => s.Name.Trim()))
@@ -250,7 +256,8 @@ namespace ApplicationLayer.Mappings
             CreateMap<UpdateFoodItemRequest, FoodItem>()
                 .IncludeBase<CreateFoodItemRequest, FoodItem>();
             CreateMap<FoodItem, FoodItemResponse>()
-                .ForMember(d => d.CategoryName, o => o.MapFrom(s => s.Category.Name));
+                .ForMember(d => d.CategoryName, o => o.MapFrom(s => s.Category.Name))
+                .ForMember(d => d.TagIds, o => o.MapFrom(s => s.FoodItemTags.Select(tag => tag.FoodTagId)));
 
             CreateMap<CreateComplaintRequest, Complaint>()
                 .ForMember(d => d.Id, o => o.Ignore())

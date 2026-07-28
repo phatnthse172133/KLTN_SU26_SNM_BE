@@ -72,6 +72,8 @@ public class FoodTagService : IFoodTagService
     {
         var tag = await _foodTags.GetByIdAsync(tagId)
             ?? throw AppException.NotFound("Food tag was not found.");
+        if (tag.IsSystem)
+            throw AppException.Forbidden("System food tags can only be changed by a versioned backend seed.");
         var code = NormalizeCode(request.Code);
 
         if (await _foodTags.AnyAsync(existing => existing.Id != tagId && existing.Code == code && !existing.IsDeleted))
@@ -94,6 +96,8 @@ public class FoodTagService : IFoodTagService
     {
         var tag = await _foodTags.GetByIdAsync(tagId)
             ?? throw AppException.NotFound("Food tag was not found.");
+        if (tag.IsSystem)
+            throw AppException.Forbidden("System food tags cannot be deleted.");
 
         tag.Status = FoodTagStatus.Inactive;
         tag.UpdatedAt = DateTime.UtcNow;
@@ -116,13 +120,20 @@ public class FoodTagService : IFoodTagService
         if (!isAdmin && foodItem.Booth.BoothOwnerId != ownerId)
             throw AppException.Forbidden("You do not have permission to update this food item.");
 
-        var uniqueTagIds = request.TagIds.Distinct().ToList();
+        if (request.TagIds.Count != request.TagIds.Distinct().Count())
+            throw AppException.BadRequest("Food tag IDs must not contain duplicates.");
+        var uniqueTagIds = request.TagIds.ToList();
         var tags = await _foodTags.GetActiveByIdsAsync(uniqueTagIds, cancellationToken);
         if (tags.Count != uniqueTagIds.Count)
             throw AppException.BadRequest("One or more food tags are invalid.");
+        FoodTagSelectionPolicy.Validate(tags);
 
-        foodItem.FoodItemTags.Clear();
-        foreach (var tagId in uniqueTagIds)
+        var requestedIds = uniqueTagIds.ToHashSet();
+        foreach (var existing in foodItem.FoodItemTags.Where(item => !requestedIds.Contains(item.FoodTagId)).ToList())
+            foodItem.FoodItemTags.Remove(existing);
+
+        var existingIds = foodItem.FoodItemTags.Select(item => item.FoodTagId).ToHashSet();
+        foreach (var tagId in uniqueTagIds.Where(tagId => !existingIds.Contains(tagId)))
         {
             foodItem.FoodItemTags.Add(new FoodItemTag
             {
@@ -149,7 +160,12 @@ public class FoodTagService : IFoodTagService
             Code = tag.Code,
             Description = tag.Description,
             TagGroup = tag.TagGroup.ToString(),
-            Status = tag.Status.ToString()
+            Status = tag.Status.ToString(),
+            IsSystem = tag.IsSystem,
+            DisplayOrder = tag.DisplayOrder,
+            IsSelectable = tag.IsSelectable,
+            IsPreferenceSelectable = tag.IsPreferenceSelectable,
+            IsAutoAssigned = tag.IsAutoAssigned
         };
 
     private static string NormalizeCode(string code)

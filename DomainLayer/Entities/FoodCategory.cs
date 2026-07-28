@@ -10,11 +10,21 @@ public partial class FoodCategory : ISoftDelete
 {
     public Guid Id { get; set; }
 
-    public Guid BoothId { get; set; }
+    public Guid? BoothId { get; set; }
+
+    public string Code { get; set; } = null!;
 
     public string Name { get; set; } = null!;
 
     public string? Description { get; set; }
+
+    public bool IsSystem { get; set; }
+
+    public bool IsActive { get; set; }
+
+    public int DisplayOrder { get; set; }
+
+    public bool IsSelectable { get; set; }
 
     public bool IsDeleted { get; set; }
 
@@ -22,7 +32,7 @@ public partial class FoodCategory : ISoftDelete
 
     public DateTime UpdatedAt { get; set; }
 
-    public virtual Booth Booth { get; set; } = null!;
+    public virtual Booth? Booth { get; set; }
 
     public virtual ICollection<FoodItem> FoodItems { get; set; } = new List<FoodItem>();
 

@@ -113,6 +113,35 @@ namespace InfrastructureLayer.Data
 
         public virtual DbSet<ModerationActionHistory> ModerationActionHistories { get; set; }
 
+        public override int SaveChanges(bool acceptAllChangesOnSuccess)
+        {
+            PrepareFoodCategoryMetadata();
+            return base.SaveChanges(acceptAllChangesOnSuccess);
+        }
+
+        public override Task<int> SaveChangesAsync(
+            bool acceptAllChangesOnSuccess,
+            CancellationToken cancellationToken = default)
+        {
+            PrepareFoodCategoryMetadata();
+            return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        }
+
+        private void PrepareFoodCategoryMetadata()
+        {
+            foreach (var entry in ChangeTracker.Entries<FoodCategory>().Where(entry => entry.State == EntityState.Added))
+            {
+                if (entry.Entity.Id == Guid.Empty)
+                    entry.Entity.Id = Guid.NewGuid();
+                if (string.IsNullOrWhiteSpace(entry.Entity.Code))
+                {
+                    entry.Entity.Code = $"LEGACY_{entry.Entity.Id:N}".ToUpperInvariant();
+                    entry.Entity.IsActive = true;
+                    entry.Entity.IsSelectable = true;
+                }
+            }
+        }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -567,13 +596,22 @@ namespace InfrastructureLayer.Data
 
                 entity.HasIndex(e => e.BoothId, "idx_foodcategory_booth");
 
+                entity.HasIndex(e => e.Code, "ux_foodcategory_code_active")
+                    .IsUnique()
+                    .HasFilter("\"IsDeleted\" = false");
+
                 entity.HasIndex(e => new { e.BoothId, e.Name }, "FoodCategories_BoothId_Name_key")
                     .IsUnique()
                     .HasFilter("\"IsDeleted\" = false");
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.Code).HasMaxLength(100);
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+                entity.Property(e => e.DisplayOrder).HasDefaultValue(0);
+                entity.Property(e => e.IsActive).HasDefaultValue(true);
                 entity.Property(e => e.IsDeleted).HasDefaultValue(false);
+                entity.Property(e => e.IsSelectable).HasDefaultValue(true);
+                entity.Property(e => e.IsSystem).HasDefaultValue(false);
                 entity.Property(e => e.Name).HasMaxLength(100);
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
 
@@ -695,7 +733,12 @@ namespace InfrastructureLayer.Data
                     .HasConversion<string>()
                     .HasMaxLength(20)
                     .HasDefaultValueSql("'Active'::character varying");
+                entity.Property(e => e.DisplayOrder).HasDefaultValue(0);
+                entity.Property(e => e.IsAutoAssigned).HasDefaultValue(false);
                 entity.Property(e => e.IsDeleted).HasDefaultValue(false);
+                entity.Property(e => e.IsPreferenceSelectable).HasDefaultValue(false);
+                entity.Property(e => e.IsSelectable).HasDefaultValue(true);
+                entity.Property(e => e.IsSystem).HasDefaultValue(false);
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
             });

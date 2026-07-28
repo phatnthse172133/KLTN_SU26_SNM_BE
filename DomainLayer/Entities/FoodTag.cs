@@ -18,6 +18,16 @@ public partial class FoodTag : ISoftDelete
 
     public FoodTagStatus Status { get; set; }
 
+    public bool IsSystem { get; set; }
+
+    public int DisplayOrder { get; set; }
+
+    public bool IsSelectable { get; set; }
+
+    public bool IsPreferenceSelectable { get; set; }
+
+    public bool IsAutoAssigned { get; set; }
+
     public bool IsDeleted { get; set; }
 
     public DateTime CreatedAt { get; set; }

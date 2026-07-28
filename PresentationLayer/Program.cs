@@ -345,6 +345,17 @@ var app = builder.Build();
 var swaggerEnabled = app.Environment.IsDevelopment()
     || builder.Configuration.GetValue<bool>("Swagger:Enabled");
 
+if (args.Contains("--seed-food-taxonomy-only", StringComparer.OrdinalIgnoreCase))
+{
+    await SystemFoodTaxonomySeeder.SeedAsync(app.Services);
+    return;
+}
+
+if (app.Configuration.GetValue<bool>("SeedData:FoodTaxonomy"))
+{
+    await SystemFoodTaxonomySeeder.SeedAsync(app.Services);
+}
+
 // Demo data is opt-in. A normal application start must never mutate a shared database.
 if (IntegrationDemoDataSeeder.IsEnabled(builder.Configuration))
 {

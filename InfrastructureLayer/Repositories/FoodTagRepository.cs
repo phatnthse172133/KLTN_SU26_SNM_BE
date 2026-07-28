@@ -21,6 +21,7 @@ public class FoodTagRepository : GenericRepository<FoodTag>, IFoodTagRepository
         CancellationToken cancellationToken = default)
     {
         var query = ActiveQuery();
+        query = query.Where(tag => tag.IsSystem && tag.Status == FoodTagStatus.Active);
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -39,6 +40,7 @@ public class FoodTagRepository : GenericRepository<FoodTag>, IFoodTagRepository
         var total = await query.CountAsync(cancellationToken);
         var items = await query
             .OrderBy(tag => tag.TagGroup)
+            .ThenBy(tag => tag.DisplayOrder)
             .ThenBy(tag => tag.Name)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
@@ -59,6 +61,7 @@ public class FoodTagRepository : GenericRepository<FoodTag>, IFoodTagRepository
         => await ActiveQuery()
             .Where(tag => tag.Status == FoodTagStatus.Active)
             .OrderBy(tag => tag.TagGroup)
+            .ThenBy(tag => tag.DisplayOrder)
             .ThenBy(tag => tag.Name)
             .ToListAsync(cancellationToken);
 

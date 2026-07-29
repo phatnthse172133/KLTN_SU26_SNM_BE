@@ -378,49 +378,165 @@ public class AIRecommendationServiceTests
     }
 
     [Fact]
-    public async Task DiningPlan_RepairsQuantitiesAndNeverExceedsStrictBudget()
+    public async Task DiningPlan_DoesNotReduceRequiredQuantitiesToForceAnUnderfundedMenu()
+    {
+        var appetizer = Tag("COURSE_APPETIZER");
+        var main = Tag("COURSE_MAIN_COURSE");
+        var drink = Tag("COURSE_DRINK");
+        var dessert = Tag("COURSE_DESSERT");
+        var market = Market(10.77m, 106.69m);
+        var foods = new[]
+        {
+            Food(30_000m, appetizer, market), Food(80_000m, main, market),
+            Food(20_000m, drink, market), Food(30_000m, dessert, market)
+        };
+        var service = CreateService([appetizer, main, drink, dessert], foods, new FoodIntentDto());
+
+        var result = await service.DiningPlanAssistantAsync(Guid.NewGuid(), new DiningPlanAssistantRequest
+        {
+            NightMarketId = market.Id,
+            GroupSize = 2,
+            Budget = 150_000m
+        });
+
+        Assert.Empty(result.Data!.Options);
+        Assert.Equal("NO_PLAN_FOUND", result.Data.Step);
+        Assert.Empty(result.Data.MissingRequiredCourses);
+        Assert.Equal(260_000m, result.Data.MinimumRequiredBudget);
+    }
+
+    [Fact]
+    public async Task DiningPlan_DoesNotReturnSingleFoodAsAGroupPlan()
     {
         var main = Tag("FULLMEAL");
-        var drink = Tag("DRINK");
-        var mainFood = Food(80_000m, main);
-        var drinkFood = Food(50_000m, drink, mainFood.Booth.NightMarket, mainFood.Booth);
-        var service = CreateService([main, drink], [mainFood, drinkFood], new FoodIntentDto());
+        var onlyFood = Food(50_000m, main);
+        var service = CreateService([main], [onlyFood], new FoodIntentDto());
+
+        var result = await service.DiningPlanAssistantAsync(Guid.NewGuid(), new DiningPlanAssistantRequest
+        {
+            NightMarketId = onlyFood.Booth.NightMarketId,
+            GroupSize = 3,
+            Budget = 500_000m
+        });
+
+        Assert.Empty(result.Data!.Options);
+        Assert.Equal("NO_PLAN_FOUND", result.Data.Step);
+    }
+
+    [Fact]
+    public async Task DiningPlan_UsesCanonicalTaxonomyToBuildMultipleCoursesForThreePeople()
+    {
+        var appetizer = Tag("COURSE_APPETIZER");
+        var main = Tag("COURSE_MAIN_COURSE");
+        var drink = Tag("COURSE_DRINK");
+        var dessert = Tag("COURSE_DESSERT");
+        var market = Market(10.77m, 106.69m);
+        var appetizerFood = Food(25_000m, appetizer, market);
+        var mainFood = Food(60_000m, main, market);
+        var drinkFood = Food(20_000m, drink, market);
+        var dessertFood = Food(30_000m, dessert, market);
+        var service = CreateService([appetizer, main, drink, dessert],
+            [appetizerFood, mainFood, drinkFood, dessertFood], new FoodIntentDto());
 
         var result = await service.DiningPlanAssistantAsync(Guid.NewGuid(), new DiningPlanAssistantRequest
         {
             NightMarketId = mainFood.Booth.NightMarketId,
-            GroupSize = 2,
-            Budget = 100_000m
+            GroupSize = 3,
+            Budget = 350_000m,
+            DiningStyle = "FullMeal"
         });
 
-        var option = Assert.Single(result.Data!.Options);
-        Assert.True(option.EstimatedTotal <= option.Budget);
+        var option = result.Data!.Options.Single(value => value.OptionType == "BestMatch");
+        Assert.True(option.IsCompleteMenu);
+        Assert.Collection(option.PlanPreview,
+            item =>
+            {
+                Assert.Equal(appetizerFood.Id, item.FoodItemId);
+                Assert.Equal("APPETIZER", item.Course);
+                Assert.Equal(2, item.Quantity);
+            },
+            item =>
+            {
+                Assert.Equal(mainFood.Id, item.FoodItemId);
+                Assert.Equal("MAIN_COURSE", item.Course);
+                Assert.Equal(3, item.Quantity);
+            },
+            item =>
+            {
+                Assert.Equal(drinkFood.Id, item.FoodItemId);
+                Assert.Equal("DRINK", item.Course);
+                Assert.Equal(3, item.Quantity);
+            },
+            item =>
+            {
+                Assert.Equal(dessertFood.Id, item.FoodItemId);
+                Assert.Equal("DESSERT", item.Course);
+                Assert.Equal(2, item.Quantity);
+            });
+        Assert.Equal(option.PlanPreview.Sum(item => item.TotalPrice), option.EstimatedTotal);
         Assert.Equal(option.Budget - option.EstimatedTotal, option.RemainingBudget);
-        Assert.All(option.PlanPreview, item =>
-            Assert.Equal(option.NightMarketId, new[] { mainFood, drinkFood }.Single(f => f.Id == item.FoodItemId).Booth.NightMarketId));
     }
 
     [Fact]
-    public async Task DiningStyleLightMeal_UsesSupportedLightTags()
+    public async Task DiningPlan_AddsOptionalSideDishWhenItFitsAndPreservesCourseOrder()
     {
-        var mild = Tag("MILD");
-        var full = Tag("FULLMEAL");
-        var fullFood = Food(50_000m, full);
-        var lightFood = Food(50_000m, mild, fullFood.Booth.NightMarket, fullFood.Booth);
-        var service = CreateService([mild, full], [fullFood, lightFood], new FoodIntentDto());
+        var tags = new[]
+        {
+            Tag("COURSE_APPETIZER"), Tag("COURSE_MAIN_COURSE"), Tag("COURSE_SIDE_DISH"),
+            Tag("COURSE_DRINK"), Tag("COURSE_DESSERT")
+        };
+        var market = Market(10.77m, 106.69m);
+        var foods = tags.Select(tag => Food(20_000m, tag, market)).ToList();
+        var service = CreateService(tags, foods, new FoodIntentDto());
 
         var result = await service.DiningPlanAssistantAsync(Guid.NewGuid(), new DiningPlanAssistantRequest
         {
-            NightMarketId = fullFood.Booth.NightMarketId,
+            NightMarketId = market.Id, GroupSize = 2, Budget = 200_000m
+        });
+
+        var option = result.Data!.Options.Single(value => value.OptionType == "BestMatch");
+        Assert.Equal(new[] { "APPETIZER", "MAIN_COURSE", "SIDE_DISH", "DRINK", "DESSERT" },
+            option.PlanPreview.Select(item => item.Course));
+        Assert.True(option.IsCompleteMenu);
+    }
+
+    [Fact]
+    public async Task DiningPlan_ReportsMissingRequiredCourseInsteadOfRelabelingAnotherFood()
+    {
+        var tags = new[] { Tag("COURSE_APPETIZER"), Tag("COURSE_MAIN_COURSE"), Tag("COURSE_DRINK") };
+        var market = Market(10.77m, 106.69m);
+        var foods = tags.Select(tag => Food(20_000m, tag, market)).ToList();
+        var service = CreateService(tags, foods, new FoodIntentDto());
+
+        var result = await service.DiningPlanAssistantAsync(Guid.NewGuid(), new DiningPlanAssistantRequest
+        {
+            NightMarketId = market.Id, GroupSize = 3, Budget = 1_000_000m
+        });
+
+        Assert.Empty(result.Data!.Options);
+        Assert.Equal(new[] { "DESSERT" }, result.Data.MissingRequiredCourses);
+        Assert.Null(result.Data.MinimumRequiredBudget);
+    }
+
+    [Fact]
+    public async Task DiningStyleLightMeal_StillReturnsACompleteOrderedMenu()
+    {
+        var courses = new[] { Tag("COURSE_APPETIZER"), Tag("COURSE_MAIN_COURSE"), Tag("COURSE_DRINK"), Tag("COURSE_DESSERT") };
+        var market = Market(10.77m, 106.69m);
+        var foods = courses.Select(tag => Food(20_000m, tag, market)).ToList();
+        var service = CreateService(courses, foods, new FoodIntentDto());
+
+        var result = await service.DiningPlanAssistantAsync(Guid.NewGuid(), new DiningPlanAssistantRequest
+        {
+            NightMarketId = market.Id,
             DiningStyle = "LightMeal",
             GroupSize = 1,
             Budget = 100_000m
         });
 
         var option = Assert.Single(result.Data!.Options);
-        var item = Assert.Single(option.PlanPreview);
-        Assert.Equal(lightFood.Id, item.FoodItemId);
-        Assert.Equal("LightMeal", item.Role);
+        Assert.Equal(new[] { "APPETIZER", "MAIN_COURSE", "DRINK", "DESSERT" },
+            option.PlanPreview.Select(item => item.Course));
     }
 
     [Fact]
@@ -505,7 +621,10 @@ public class AIRecommendationServiceTests
     [Fact]
     public async Task DiningPlan_StrategyLabelsRepresentDistinctAlgorithms()
     {
-        var main = Tag("FULLMEAL");
+        var main = Tag("COURSE_MAIN_COURSE");
+        var appetizer = Tag("COURSE_APPETIZER");
+        var drink = Tag("COURSE_DRINK");
+        var dessert = Tag("COURSE_DESSERT");
         var preferred = Tag("PREFERRED");
         var market = Market(10.77m, 106.69m);
         var best = Food(70_000m, main, market);
@@ -515,20 +634,27 @@ public class AIRecommendationServiceTests
         cheap.Booth.AverageRating = 3m;
         var rated = Food(90_000m, main, market);
         rated.Booth.AverageRating = 5m;
-        var service = CreateService([main, preferred], [cheap, rated, best], new FoodIntentDto());
+        var starter = Food(10_000m, appetizer, market);
+        var beverage = Food(10_000m, drink, market);
+        var sweet = Food(10_000m, dessert, market);
+        var service = CreateService([main, appetizer, drink, dessert, preferred],
+            [cheap, rated, best, starter, beverage, sweet], new FoodIntentDto());
 
         var result = await service.DiningPlanAssistantAsync(Guid.NewGuid(), new DiningPlanAssistantRequest
         {
             NightMarketId = market.Id,
             PreferredTagIds = [preferred.Id],
             GroupSize = 1,
-            Budget = 100_000m
+            Budget = 150_000m
         });
 
         var options = result.Data!.Options.ToDictionary(option => option.OptionType);
-        Assert.Equal(best.Id, Assert.Single(options["BestMatch"].PlanPreview).FoodItemId);
-        Assert.Equal(cheap.Id, Assert.Single(options["BudgetFriendly"].PlanPreview).FoodItemId);
-        Assert.Equal(rated.Id, Assert.Single(options["HighRating"].PlanPreview).FoodItemId);
+        Assert.Equal(best.Id, options["BestMatch"].PlanPreview.Single(item => item.Course == "MAIN_COURSE").FoodItemId);
+        Assert.Equal(cheap.Id, options["BudgetFriendly"].PlanPreview.Single(item => item.Course == "MAIN_COURSE").FoodItemId);
+        Assert.Equal(rated.Id, options["HighRating"].PlanPreview.Single(item => item.Course == "MAIN_COURSE").FoodItemId);
+        Assert.All(options.Values, option => Assert.True(option.IsCompleteMenu));
+        Assert.True(options["BudgetFriendly"].EstimatedTotal <= options["BestMatch"].EstimatedTotal);
+        Assert.True(options["BudgetFriendly"].EstimatedTotal <= options["HighRating"].EstimatedTotal);
         Assert.Single(options.Values.Select(option => option.NightMarketId).Distinct());
     }
 
@@ -556,21 +682,29 @@ public class AIRecommendationServiceTests
     [Fact]
     public async Task Confirm_RevalidatesMarketAndReturnsStableErrorCode()
     {
-        var main = Tag("FULLMEAL");
-        var food = Food(40_000m, main);
-        food.Booth.NightMarket.Status = NightMarketStatus.Closed;
+        var appetizer = Tag("COURSE_APPETIZER");
+        var main = Tag("COURSE_MAIN_COURSE");
+        var drink = Tag("COURSE_DRINK");
+        var dessert = Tag("COURSE_DESSERT");
+        var market = Market(10.77m, 106.69m);
+        var foods = new[]
+        {
+            Food(20_000m, appetizer, market), Food(40_000m, main, market),
+            Food(15_000m, drink, market), Food(20_000m, dessert, market)
+        };
+        market.Status = NightMarketStatus.Closed;
         var customerId = Guid.NewGuid();
         var logId = Guid.NewGuid();
         var option = new DiningPlanOptionResponse
         {
-            OptionId = "OPT_BEST_MATCH", NightMarketId = food.Booth.NightMarketId,
-            NightMarketName = food.Booth.NightMarket.Name, GroupSize = 1, Budget = 100_000m,
-            EstimatedTotal = food.Price,
-            PlanPreview = [new DiningPlanItemResponse
-            {
-                FoodItemId = food.Id, BoothId = food.BoothId, Quantity = 1,
-                UnitPrice = food.Price, TotalPrice = food.Price
-            }]
+            OptionId = "OPT_BEST_MATCH", NightMarketId = market.Id,
+            NightMarketName = market.Name, GroupSize = 1, Budget = 100_000m,
+            EstimatedTotal = foods.Sum(food => food.Price),
+            PlanPreview =
+            [
+                PlanItem(foods[0], "APPETIZER"), PlanItem(foods[1], "MAIN_COURSE"),
+                PlanItem(foods[2], "DRINK"), PlanItem(foods[3], "DESSERT")
+            ]
         };
         var logs = new Mock<IAIRecommendationLogRepository>();
         logs.Setup(repository => repository.GetByIdAsync(logId)).ReturnsAsync(new AIRecommendationLog
@@ -578,7 +712,7 @@ public class AIRecommendationServiceTests
             Id = logId, CustomerId = customerId, RecommendationType = AIRecommendationType.DiningPlan,
             InputJson = "{}", ResultJson = JsonSerializer.Serialize(new DiningPlanAssistantResponse { Options = [option] })
         });
-        var service = CreateService([main], [food], new FoodIntentDto(), logRepository: logs);
+        var service = CreateService([appetizer, main, drink, dessert], foods, new FoodIntentDto(), logRepository: logs);
 
         var error = await Assert.ThrowsAsync<AppException>(() => service.ConfirmDiningPlanAsync(
             customerId, new ConfirmDiningPlanRequest { LogId = logId, OptionId = option.OptionId }));
@@ -705,4 +839,23 @@ public class AIRecommendationServiceTests
         {
             FoodItemId = food.Id, FoodItem = food, FoodTagId = tag.Id, FoodTag = tag
         });
+
+    private static DiningPlanItemResponse PlanItem(FoodItem food, string course, int quantity = 1)
+        => new()
+        {
+            FoodItemId = food.Id,
+            FoodName = food.Name,
+            BoothId = food.BoothId,
+            BoothName = food.Booth.BoothName,
+            Quantity = quantity,
+            UnitPrice = food.Price,
+            TotalPrice = food.Price * quantity,
+            Course = course,
+            CourseDisplayName = course,
+            CourseOrder = course switch
+            {
+                "APPETIZER" => 10, "MAIN_COURSE" => 20, "DRINK" => 60, "DESSERT" => 70, _ => 80
+            },
+            Role = course
+        };
 }

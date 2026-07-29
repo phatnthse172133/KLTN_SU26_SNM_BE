@@ -16,6 +16,8 @@ namespace ApplicationLayer.AI.Services;
 public class AIRecommendationService : IAIRecommendationService
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly string[] RequiredMealCourses = ["APPETIZER", "MAIN_COURSE", "DRINK", "DESSERT"];
+    private static readonly string[] OptionalMealCourses = ["SIDE_DISH", "SOUP", "SHARED_DISH", "EXTRA"];
     private readonly IFoodItemRepository _foodItems;
     private readonly IFoodTagRepository _foodTags;
     private readonly ICustomerPreferenceRepository _preferences;
@@ -249,14 +251,20 @@ public class AIRecommendationService : IAIRecommendationService
         var options = BuildPlanOptions(scopedCandidates, intent, request)
             .Take(3)
             .ToList();
+        var diagnostics = AnalyzeCourseAvailability(scopedCandidates, request.GroupSize);
 
         var response = new DiningPlanAssistantResponse
         {
             Step = options.Count == 0 ? "NO_PLAN_FOUND" : "PLAN_OPTIONS",
             Message = options.Count == 0
-                ? "Chưa tìm thấy phương án phù hợp. Bạn thử tăng ngân sách hoặc bỏ bớt món cần tránh nhé."
-                : "AI đã chuẩn bị các phương án ăn uống dễ chọn cho bạn.",
-            Options = options
+                ? diagnostics.MissingCourses.Count > 0
+                    ? $"Chưa đủ dữ liệu món đang bán cho các phần: {string.Join(", ", diagnostics.MissingCourses.Select(CourseDisplayName))}."
+                    : $"Ngân sách hiện tại chưa đủ cho thực đơn hoàn chỉnh. Mức tối thiểu dự kiến là {diagnostics.MinimumBudget.GetValueOrDefault():N0}đ."
+                : "AI đã chuẩn bị thực đơn hoàn chỉnh từ khai vị đến tráng miệng.",
+            Options = options,
+            RequiredCourses = RequiredMealCourses,
+            MissingRequiredCourses = options.Count == 0 ? diagnostics.MissingCourses : [],
+            MinimumRequiredBudget = diagnostics.MinimumBudget
         };
         var resolvedPlanMarketId = request.NightMarketId ?? options.FirstOrDefault()?.NightMarketId;
 
@@ -293,7 +301,7 @@ public class AIRecommendationService : IAIRecommendationService
         var option = result.Options.FirstOrDefault(item => item.OptionId == request.OptionId)
             ?? throw AppException.NotFound("Dining plan option was not found.");
 
-        if (option.PlanPreview.Count == 0 || option.PlanPreview.Any(item => item.Quantity < 1))
+        if (!IsCompleteMenu(option.PlanPreview) || option.PlanPreview.Any(item => item.Quantity < 1))
             throw AppException.Conflict("The dining plan structure has changed.", AIErrorCodes.PlanChanged);
 
         var candidates = await _foodItems.GetAllFoodItemsByIdsAsync(option.PlanPreview.Select(item => item.FoodItemId).Distinct().ToList());
@@ -333,6 +341,7 @@ public class AIRecommendationService : IAIRecommendationService
 
         var response = new DiningPlanReadyResponse
         {
+            PlanName = option.PlanName,
             NightMarketId = option.NightMarketId,
             NightMarketName = option.NightMarketName,
             GroupSize = option.GroupSize,
@@ -340,6 +349,7 @@ public class AIRecommendationService : IAIRecommendationService
             EstimatedTotal = option.EstimatedTotal,
             RemainingBudget = option.RemainingBudget,
             PlanItems = option.PlanPreview,
+            IsCompleteMenu = true,
             Reason = option.Reason
         };
 
@@ -380,15 +390,21 @@ public class AIRecommendationService : IAIRecommendationService
         var options = BuildPlanOptions(
             candidates.Where(IsOrderableNow).ToList(), intent, rebuiltRequest,
             previousSignatures, request.Priority).Take(3).ToList();
+        var diagnostics = AnalyzeCourseAvailability(candidates.Where(IsOrderableNow).ToList(), rebuiltRequest.GroupSize);
 
         var regenerated = new DiningPlanAssistantResponse
         {
             LogId = Guid.NewGuid(),
             Step = options.Count == 0 ? "NO_PLAN_FOUND" : "PLAN_OPTIONS",
             Message = options.Count == 0
-                ? "Không còn phương án có thể đặt ngay trong ngân sách hiện tại."
-                : "Đã tạo lại phương án từ dữ liệu và trạng thái hiện tại.",
-            Options = options
+                ? diagnostics.MissingCourses.Count > 0
+                    ? $"Không còn đủ món cho các phần: {string.Join(", ", diagnostics.MissingCourses.Select(CourseDisplayName))}."
+                    : $"Ngân sách chưa đủ cho thực đơn hoàn chỉnh; cần tối thiểu khoảng {diagnostics.MinimumBudget.GetValueOrDefault():N0}đ."
+                : "Đã tạo lại thực đơn hoàn chỉnh từ dữ liệu và trạng thái hiện tại.",
+            Options = options,
+            RequiredCourses = RequiredMealCourses,
+            MissingRequiredCourses = options.Count == 0 ? diagnostics.MissingCourses : [],
+            MinimumRequiredBudget = diagnostics.MinimumBudget
         };
         await SaveRequiredLogAsync(
             regenerated.LogId, customerId, rebuiltRequest.NightMarketId, AIRecommendationType.DiningPlan,
@@ -415,6 +431,7 @@ public class AIRecommendationService : IAIRecommendationService
             var items = option.PlanPreview.Select(item =>
             {
                 var current = candidateMap[item.FoodItemId];
+                var course = NormalizeCourse(item.Course, item.Role);
                 return new DiningPlanItemResponse
                 {
                     FoodItemId = current.Id,
@@ -426,19 +443,23 @@ public class AIRecommendationService : IAIRecommendationService
                     Quantity = item.Quantity,
                     UnitPrice = current.Price,
                     TotalPrice = current.Price * item.Quantity,
-                    Role = item.Role
+                    Course = course,
+                    CourseDisplayName = CourseDisplayName(course),
+                    CourseOrder = CourseOrder(course),
+                    Role = course
                 };
             }).ToList();
 
-            RepairPlanToBudget(items, option.Budget);
             var total = items.Sum(item => item.TotalPrice);
-            if (items.Count == 0 || total > option.Budget)
+            if (!IsCompleteMenu(items) || total > option.Budget)
                 continue;
 
-            option.PlanPreview = items;
+            option.PlanPreview = items.OrderBy(item => item.CourseOrder).ToList();
             option.EstimatedTotal = total;
             option.RemainingBudget = option.Budget - total;
             option.FeasibilityStatus = "WithinBudget";
+            option.IsCompleteMenu = true;
+            option.MissingRequiredCourses = [];
             option.DistanceMeters = null;
             option.Reason = $"Có món thật đang bán tại {option.NightMarketName}, tổng dự kiến {total:N0} trong ngân sách {option.Budget:N0}.";
             refreshed.Add(option);
@@ -690,13 +711,13 @@ public class AIRecommendationService : IAIRecommendationService
         IReadOnlySet<string>? excludedCombinations = null,
         string? preferredStrategy = null)
     {
-        var marketGroup = candidates
+        var marketGroups = candidates
             .GroupBy(item => item.Booth.NightMarketId)
             .OrderByDescending(group => group.Max(item => ScoreItem(item, intent)))
             .ThenByDescending(group => group.Max(item => item.Booth.AverageRating ?? 0))
             .ThenBy(group => group.Key)
-            .FirstOrDefault();
-        if (marketGroup is null) return [];
+            .ToList();
+        if (marketGroups.Count == 0) return [];
 
         var strategies = new[] { "BestMatch", "BudgetFriendly", "HighRating" };
         if (!string.IsNullOrWhiteSpace(preferredStrategy))
@@ -709,12 +730,16 @@ public class AIRecommendationService : IAIRecommendationService
         var combinations = new HashSet<string>(StringComparer.Ordinal);
         foreach (var strategy in strategies)
         {
-            var option = BuildPlanOption(marketGroup.ToList(), intent, request, strategy);
-            if (option is null) continue;
-            var signature = GetPlanSignature(option.PlanPreview);
-            if (!combinations.Add(signature)) continue;
-            if (excludedCombinations?.Contains(signature) == true) continue;
-            options.Add(option);
+            foreach (var marketGroup in marketGroups)
+            {
+                var option = BuildPlanOption(marketGroup.ToList(), intent, request, strategy);
+                if (option is null) continue;
+                var signature = GetPlanSignature(option.PlanPreview);
+                if (!combinations.Add(signature)) continue;
+                if (excludedCombinations?.Contains(signature) == true) continue;
+                options.Add(option);
+                break;
+            }
         }
 
         if (options.Count == 0 && excludedCombinations is not null)
@@ -750,21 +775,41 @@ public class AIRecommendationService : IAIRecommendationService
         if (filtered.Count == 0) return null;
 
         var planItems = new List<DiningPlanItemResponse>();
-        AddDiningStyleRoles(planItems, filtered, request);
-
-        if (planItems.Count == 0)
+        foreach (var course in RequiredMealCourses)
         {
-            var first = filtered.First();
-            planItems.Add(ToPlanItem(first, request.GroupSize, "MainDish"));
+            if (!TryAddCourse(planItems, filtered, course, request.GroupSize))
+                return null;
         }
 
-        RepairPlanToBudget(planItems, request.Budget);
         var total = planItems.Sum(item => item.TotalPrice);
-        if (planItems.Count == 0 || total > request.Budget) return null;
+        if (total > request.Budget) return null;
+
+        // Optional courses are added only when a distinct, correctly tagged live
+        // item fits the remaining budget. Required quantities are never silently
+        // reduced and required courses are never removed to force a result.
+        foreach (var course in strategy == "BudgetFriendly" ? [] : OptionalMealCourses)
+        {
+            var optional = CreateCourseItem(planItems, filtered, course, request.GroupSize);
+            if (optional is not null && total + optional.TotalPrice <= request.Budget)
+            {
+                planItems.Add(optional);
+                total += optional.TotalPrice;
+            }
+        }
+
+        planItems = planItems.OrderBy(item => item.CourseOrder).ToList();
+        if (!IsCompleteMenu(planItems)) return null;
 
         var market = filtered.First().Booth.NightMarket;
         var score = (int)Math.Round(planItems.Average(item =>
             ScoreItem(filtered.First(food => food.Id == item.FoodItemId), intent, distanceMeters)));
+
+        var label = strategy switch
+        {
+            "BudgetFriendly" => "Tiết kiệm hơn",
+            "HighRating" => "Ưu tiên đánh giá gian hàng",
+            _ => "Phù hợp nhất"
+        };
 
         return new DiningPlanOptionResponse
         {
@@ -776,12 +821,8 @@ public class AIRecommendationService : IAIRecommendationService
             },
             OptionType = strategy,
             FeasibilityStatus = "OrderableNow",
-            Label = strategy switch
-            {
-                "BudgetFriendly" => "Tiết kiệm hơn",
-                "HighRating" => "Ưu tiên rating gian hàng",
-                _ => "Phù hợp nhất"
-            },
+            Label = label,
+            PlanName = $"{label} · {market.Name}",
             NightMarketId = market.Id,
             NightMarketName = market.Name,
             GroupSize = request.GroupSize,
@@ -791,92 +832,42 @@ public class AIRecommendationService : IAIRecommendationService
             RemainingBudget = request.Budget - total,
             DistanceMeters = distanceMeters,
             PlanPreview = planItems,
+            IsCompleteMenu = true,
+            MissingRequiredCourses = [],
             Reason = distanceMeters.HasValue
-                ? $"Có món thật tại {market.Name}, cách vị trí của bạn khoảng {distanceMeters.Value:N0} m; tổng dự kiến {total:N0} trong ngân sách {request.Budget:N0}."
-                : $"Các món hiện có thể đặt tại {market.Name}; tổng dự kiến {total:N0} trong ngân sách nhóm {request.Budget:N0}."
+                ? $"Thực đơn đủ khai vị, món chính, đồ uống và tráng miệng tại {market.Name}, cách bạn khoảng {distanceMeters.Value:N0} m; tổng dự kiến {total:N0} trong ngân sách {request.Budget:N0}."
+                : $"Thực đơn đủ khai vị, món chính, đồ uống và tráng miệng tại {market.Name}; tổng dự kiến {total:N0} trong ngân sách nhóm {request.Budget:N0}."
         };
     }
 
-    private static void AddDiningStyleRoles(
+    private static bool TryAddCourse(
         ICollection<DiningPlanItemResponse> planItems,
         IReadOnlyCollection<FoodItem> candidates,
-        DiningPlanAssistantRequest request)
+        string course,
+        int groupSize)
     {
-        var sharedQuantity = Math.Max(1, (int)Math.Ceiling(request.GroupSize / 2d));
-        switch (request.DiningStyle.Trim().ToLowerInvariant())
-        {
-            case "lightmeal":
-            case "light":
-                TryAddRole(planItems, candidates, "LightMeal", request.GroupSize, ["MILD", "SOUP", "SNACK"]);
-                TryAddRole(planItems, candidates, "Drink", request.GroupSize, ["DRINK", "COLD"]);
-                break;
-            case "foodtour":
-                TryAddRole(planItems, candidates, "Shareable", sharedQuantity, ["SHAREABLE", "GRILLED", "FRIED"]);
-                TryAddRole(planItems, candidates, "Snack", sharedQuantity, ["SNACK"]);
-                TryAddRole(planItems, candidates, "Drink", request.GroupSize, ["DRINK", "COLD"]);
-                break;
-            case "datenight":
-                TryAddRole(planItems, candidates, "Shareable", sharedQuantity, ["SHAREABLE", "FULLMEAL"]);
-                TryAddRole(planItems, candidates, "Dessert", sharedQuantity, ["DESSERT", "SWEET"]);
-                TryAddRole(planItems, candidates, "Drink", request.GroupSize, ["DRINK", "COLD"]);
-                break;
-            case "family":
-            case "sharing":
-                TryAddRole(planItems, candidates, "MainDish", request.GroupSize, ["FULLMEAL", "RICE", "NOODLE"]);
-                TryAddRole(planItems, candidates, "Shareable", sharedQuantity, ["SHAREABLE", "GRILLED", "FRIED"]);
-                TryAddRole(planItems, candidates, "Drink", request.GroupSize, ["DRINK", "COLD"]);
-                break;
-            default:
-                TryAddRole(planItems, candidates, "MainDish", request.GroupSize, ["FULLMEAL", "RICE", "NOODLE", "BEEF", "CHICKEN", "PORK"]);
-                TryAddRole(planItems, candidates, "Drink", request.GroupSize, ["DRINK", "COLD"]);
-                TryAddRole(planItems, candidates, "Snack", sharedQuantity, ["SNACK", "SHAREABLE", "FRIED", "GRILLED"]);
-                break;
-        }
+        var item = CreateCourseItem(planItems, candidates, course, groupSize);
+        if (item is null) return false;
+        planItems.Add(item);
+        return true;
     }
 
-    private static void RepairPlanToBudget(List<DiningPlanItemResponse> items, decimal budget)
-    {
-        while (items.Count > 0 && items.Sum(item => item.TotalPrice) > budget)
-        {
-            var reducible = items
-                .Where(item => item.Quantity > 1)
-                .OrderByDescending(item => item.UnitPrice)
-                .FirstOrDefault();
-            if (reducible is not null)
-            {
-                reducible.Quantity--;
-                reducible.TotalPrice = reducible.UnitPrice * reducible.Quantity;
-                continue;
-            }
-
-            var removable = items
-                .OrderBy(item => item.Role == "MainDish" ? 1 : 0)
-                .ThenByDescending(item => item.TotalPrice)
-                .First();
-            items.Remove(removable);
-        }
-    }
-
-    private static void TryAddRole(
+    private static DiningPlanItemResponse? CreateCourseItem(
         ICollection<DiningPlanItemResponse> planItems,
         IReadOnlyCollection<FoodItem> candidates,
-        string role,
-        int quantity,
-        IReadOnlyCollection<string> tagCodes)
+        string course,
+        int groupSize)
     {
         var usedIds = planItems.Select(item => item.FoodItemId).ToHashSet();
+        var tagCode = $"COURSE_{course}";
         var item = candidates.FirstOrDefault(food =>
             !usedIds.Contains(food.Id)
-            && food.FoodItemTags.Any(tag =>
-                tag.FoodTag.Status == FoodTagStatus.Active
-                && tagCodes.Contains(tag.FoodTag.Code)));
-        if (item is not null)
-        {
-            planItems.Add(ToPlanItem(item, quantity, role));
-        }
+            && food.FoodItemTags.Any(tag => tag.FoodTag.Status == FoodTagStatus.Active
+                && string.Equals(tag.FoodTag.Code, tagCode, StringComparison.Ordinal)));
+        return item is null ? null : ToPlanItem(item, CourseQuantity(course, groupSize), course);
     }
 
-    private static DiningPlanItemResponse ToPlanItem(FoodItem item, int quantity, string role)
+    private static DiningPlanItemResponse ToPlanItem(FoodItem item, int quantity, string course)
         => new()
         {
             FoodItemId = item.Id,
@@ -888,8 +879,102 @@ public class AIRecommendationService : IAIRecommendationService
             Quantity = quantity,
             UnitPrice = item.Price,
             TotalPrice = item.Price * quantity,
-            Role = role
+            Course = course,
+            CourseDisplayName = CourseDisplayName(course),
+            CourseOrder = CourseOrder(course),
+            Role = course
         };
+
+    private static bool IsCompleteMenu(IEnumerable<DiningPlanItemResponse> items)
+    {
+        var courses = items.Select(item => NormalizeCourse(item.Course, item.Role)).ToHashSet(StringComparer.Ordinal);
+        return RequiredMealCourses.All(courses.Contains);
+    }
+
+    private static (IReadOnlyCollection<string> MissingCourses, decimal? MinimumBudget) AnalyzeCourseAvailability(
+        IReadOnlyCollection<FoodItem> candidates,
+        int groupSize)
+    {
+        IReadOnlyCollection<string> bestMissing = RequiredMealCourses;
+        decimal? minimumBudget = null;
+        foreach (var market in candidates.GroupBy(item => item.Booth.NightMarketId))
+        {
+            var used = new HashSet<Guid>();
+            var missing = new List<string>();
+            decimal total = 0;
+            foreach (var course in RequiredMealCourses)
+            {
+                var tagCode = $"COURSE_{course}";
+                var item = market.Where(food => !used.Contains(food.Id)
+                        && food.FoodItemTags.Any(tag => tag.FoodTag.Status == FoodTagStatus.Active
+                            && string.Equals(tag.FoodTag.Code, tagCode, StringComparison.Ordinal)))
+                    .OrderBy(food => food.Price)
+                    .ThenBy(food => food.Id)
+                    .FirstOrDefault();
+                if (item is null) missing.Add(course);
+                else
+                {
+                    used.Add(item.Id);
+                    total += item.Price * CourseQuantity(course, groupSize);
+                }
+            }
+
+            if (missing.Count < bestMissing.Count) bestMissing = missing;
+            if (missing.Count == 0 && (!minimumBudget.HasValue || total < minimumBudget.Value))
+                minimumBudget = total;
+        }
+
+        return (bestMissing, minimumBudget);
+    }
+
+    private static int CourseQuantity(string course, int groupSize)
+        => course switch
+        {
+            "MAIN_COURSE" or "DRINK" or "SOUP" => groupSize,
+            "APPETIZER" or "SIDE_DISH" or "DESSERT" => Math.Max(1, (int)Math.Ceiling(groupSize / 2d)),
+            "SHARED_DISH" => Math.Max(1, (int)Math.Ceiling(groupSize / 3d)),
+            _ => 1
+        };
+
+    private static int CourseOrder(string course)
+        => course switch
+        {
+            "APPETIZER" => 10,
+            "MAIN_COURSE" => 20,
+            "SOUP" => 30,
+            "SIDE_DISH" => 40,
+            "SHARED_DISH" => 50,
+            "DRINK" => 60,
+            "DESSERT" => 70,
+            _ => 80
+        };
+
+    private static string CourseDisplayName(string course)
+        => course switch
+        {
+            "APPETIZER" => "Khai vị",
+            "MAIN_COURSE" => "Món chính",
+            "SIDE_DISH" => "Món ăn kèm",
+            "SOUP" => "Món canh hoặc món nước",
+            "SHARED_DISH" => "Món dùng chung",
+            "DRINK" => "Đồ uống",
+            "DESSERT" => "Tráng miệng",
+            _ => "Món bổ sung"
+        };
+
+    private static string NormalizeCourse(string? course, string? legacyRole)
+    {
+        if (!string.IsNullOrWhiteSpace(course)) return course.Trim().ToUpperInvariant();
+        return legacyRole?.Trim().ToLowerInvariant() switch
+        {
+            "maindish" => "MAIN_COURSE",
+            "drink" => "DRINK",
+            "dessert" => "DESSERT",
+            "snack" or "lightmeal" => "APPETIZER",
+            "shareable" or "shareddish" => "SHARED_DISH",
+            _ => "EXTRA"
+        };
+    }
 
     private static double ScoreItem(FoodItem item, ResolvedIntent intent, double? distanceMeters = null)
     {

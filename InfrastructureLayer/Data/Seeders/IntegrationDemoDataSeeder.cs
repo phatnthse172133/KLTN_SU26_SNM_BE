@@ -158,24 +158,30 @@ public static class IntegrationDemoDataSeeder
         var generatedPassword = string.IsNullOrWhiteSpace(configuredPassword)
             ? Guid.NewGuid().ToString("N")
             : configuredPassword;
+        var normalizeConfiguredPassword = !string.IsNullOrWhiteSpace(configuredPassword);
 
-        await AddUserIfMissingAsync(db, CustomerAId, roles.Customer, "phase035.customer.a", "Khách Demo An", "phase035.customer.a@snm.local", generatedPassword, hasher, now, ct);
-        await AddUserIfMissingAsync(db, CustomerBId, roles.Customer, "phase035.customer.b", "Khách Demo Bình", "phase035.customer.b@snm.local", generatedPassword, hasher, now, ct);
+        await AddUserIfMissingAsync(db, CustomerAId, roles.Customer, "phase035.customer.a", "Khách Demo An", "phase035.customer.a@snm.local", generatedPassword, normalizeConfiguredPassword, hasher, now, ct);
+        await AddUserIfMissingAsync(db, CustomerBId, roles.Customer, "phase035.customer.b", "Khách Demo Bình", "phase035.customer.b@snm.local", generatedPassword, normalizeConfiguredPassword, hasher, now, ct);
         foreach (var booth in Booths)
-            await AddUserIfMissingAsync(db, OwnerId(booth.Index), roles.Owner, $"phase035.owner.{booth.Index:00}", $"Chủ quầy demo {booth.Index:00}", $"phase035.owner.{booth.Index:00}@snm.local", generatedPassword, hasher, now, ct);
+            await AddUserIfMissingAsync(db, OwnerId(booth.Index), roles.Owner, $"phase035.owner.{booth.Index:00}", $"Chủ quầy demo {booth.Index:00}", $"phase035.owner.{booth.Index:00}@snm.local", generatedPassword, normalizeConfiguredPassword, hasher, now, ct);
 
         await db.SaveChangesAsync(ct);
     }
 
     private static async Task AddUserIfMissingAsync(
         SNMDbContext db, Guid id, Guid roleId, string userName, string fullName, string email,
-        string password, IPasswordHasher hasher, DateTime now, CancellationToken ct)
+        string password, bool normalizeConfiguredPassword, IPasswordHasher hasher, DateTime now, CancellationToken ct)
     {
         var existing = await db.Users.SingleOrDefaultAsync(x => x.Id == id, ct);
         if (existing is not null)
         {
             if (!string.Equals(existing.Email, email, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException($"Demo seed ID collision for user {id}.");
+            if (normalizeConfiguredPassword && !hasher.VerifyPassword(password, existing.PasswordHash))
+            {
+                existing.PasswordHash = hasher.HashPassword(password);
+                existing.UpdatedAt = now;
+            }
             return;
         }
 
@@ -307,9 +313,92 @@ public static class IntegrationDemoDataSeeder
         }
         await db.SaveChangesAsync(ct);
 
+        await EnsureDemoFoodTagsAsync(db, now, ct);
+
         await AddIfMissingAsync(db.FoodPrices, PriceId(1), () => new FoodPrice { Id = PriceId(1), FoodItemId = FoodId(1, 1), Price = 59000, StartDate = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc), EndDate = new DateTime(2035, 1, 1, 0, 0, 0, DateTimeKind.Utc), CreatedAt = now, UpdatedAt = now });
         await db.SaveChangesAsync(ct);
     }
+
+    private static async Task EnsureDemoFoodTagsAsync(SNMDbContext db, DateTime now, CancellationToken ct)
+    {
+        var tagIdsByCode = await db.FoodTags
+            .Where(tag => tag.IsSystem && !tag.IsDeleted && tag.Status == FoodTagStatus.Active)
+            .ToDictionaryAsync(tag => tag.Code, tag => tag.Id, ct);
+        if (tagIdsByCode.Count == 0) return;
+
+        for (var boothIndex = 1; boothIndex <= Booths.Length; boothIndex++)
+        {
+            for (var foodIndex = 1; foodIndex <= Menus[boothIndex - 1].Length; foodIndex++)
+            {
+                var foodId = FoodId(boothIndex, foodIndex);
+                var price = Menus[boothIndex - 1][foodIndex - 1].Price;
+                var courseCodes = GetDemoCourseCodes(boothIndex, foodIndex);
+                var isDrink = courseCodes.Contains("COURSE_DRINK");
+                var isDessert = courseCodes.Contains("COURSE_DESSERT");
+                var codes = new List<string>(courseCodes)
+                {
+                    isDrink || isDessert ? "TEMP_COLD" : "TEMP_HOT",
+                    isDrink ? "PURPOSE_REFRESHMENT"
+                        : isDessert ? "PURPOSE_DESSERT"
+                        : courseCodes.Contains("COURSE_MAIN_COURSE") ? "PURPOSE_FULL_MEAL"
+                        : "PURPOSE_SNACKING",
+                    price < 30_000 ? "BUDGET_UNDER_30000"
+                        : price < 50_000 ? "BUDGET_30000_50000"
+                        : price < 100_000 ? "BUDGET_50000_100000"
+                        : price < 200_000 ? "BUDGET_100000_200000"
+                        : "BUDGET_FROM_200000"
+                };
+                if (foodIndex == 1) codes.Add("OTHER_BEST_SELLER");
+
+                var managedCodes = tagIdsByCode.Keys.Where(code =>
+                    code.StartsWith("COURSE_", StringComparison.Ordinal)
+                    || code.StartsWith("PURPOSE_", StringComparison.Ordinal)
+                    || code.StartsWith("TEMP_", StringComparison.Ordinal)).ToHashSet(StringComparer.Ordinal);
+                var staleLinks = await db.FoodItemTags
+                    .Where(link => link.FoodItemId == foodId && managedCodes.Contains(link.FoodTag.Code)
+                        && !codes.Contains(link.FoodTag.Code))
+                    .ToListAsync(ct);
+                db.FoodItemTags.RemoveRange(staleLinks);
+
+                foreach (var code in codes)
+                {
+                    if (!tagIdsByCode.TryGetValue(code, out var tagId)) continue;
+                    if (!await db.FoodItemTags.AnyAsync(link => link.FoodItemId == foodId && link.FoodTagId == tagId, ct))
+                    {
+                        db.FoodItemTags.Add(new FoodItemTag
+                        {
+                            FoodItemId = foodId, FoodTagId = tagId, CreatedAt = now
+                        });
+                    }
+                }
+            }
+        }
+
+        await db.SaveChangesAsync(ct);
+    }
+
+    private static IReadOnlyCollection<string> GetDemoCourseCodes(int boothIndex, int foodIndex)
+        => boothIndex switch
+        {
+            1 => foodIndex switch
+            {
+                1 or 2 => ["COURSE_MAIN_COURSE"],
+                3 => ["COURSE_APPETIZER", "COURSE_SIDE_DISH"],
+                _ => ["COURSE_DRINK"]
+            },
+            2 => foodIndex switch
+            {
+                1 or 2 => ["COURSE_MAIN_COURSE"],
+                3 => ["COURSE_APPETIZER", "COURSE_SHARED_DISH"],
+                _ => ["COURSE_DRINK"]
+            },
+            3 => ["COURSE_DESSERT"],
+            4 => ["COURSE_DRINK"],
+            5 => foodIndex == 4
+                ? ["COURSE_SHARED_DISH"]
+                : ["COURSE_APPETIZER", "COURSE_SIDE_DISH"],
+            _ => ["COURSE_EXTRA"]
+        };
 
     private static async Task EnsureReviewHistoryAsync(SNMDbContext db, DateTime now, CancellationToken ct)
     {

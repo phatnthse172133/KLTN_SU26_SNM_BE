@@ -1,6 +1,8 @@
 using ApplicationLayer.Helppers;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 using static DomainLayer.Enums.GeneralEnum;
+using ApplicationLayer.Serialization;
 
 namespace ApplicationLayer.DTOs.Requests;
 
@@ -16,10 +18,9 @@ public sealed class BoothOwnerOrderQuery : PaginationReq
 public sealed class UpdateBoothOwnerOrderStatusRequest
 {
     [Required]
-    public OrderStatus NewStatus { get; set; }
-
-    [StringLength(500)]
-    public string? Reason { get; set; }
+    [JsonPropertyName("status")]
+    [JsonConverter(typeof(UpperSnakeCaseEnumConverter<OrderStatus>))]
+    public OrderStatus Status { get; set; }
 }
 
 public sealed class CreateWalkInOrderRequest

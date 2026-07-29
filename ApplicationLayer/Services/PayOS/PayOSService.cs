@@ -1,8 +1,10 @@
 using ApplicationLayer.Configuration;
 using ApplicationLayer.Exceptions;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using PayOS;
+using PayOS.Exceptions;
 using PayOS.Models.V2.PaymentRequests;
 using PayOS.Models.Webhooks;
 using System;
@@ -12,21 +14,18 @@ namespace ApplicationLayer.Services.PayOS
 {
     public class PayOSService : IPayOSService
     {
-        private readonly PayOSClient _client;
+        private readonly IServiceProvider _services;
         private readonly PayOSSettings _settings;
         private readonly ILogger<PayOSService> _logger;
 
         public PayOSService(
-            [Microsoft.Extensions.DependencyInjection.FromKeyedServices("PayIn")] PayOSClient client,
-            IOptions<PayOSSettings> settings,
+            IServiceProvider services,
+            IConfiguration configuration,
             ILogger<PayOSService> logger)
         {
-            _client = client;
-            _settings = settings.Value;
+            _services = services;
+            _settings = configuration.GetSection(PayOSSettings.SectionName).Get<PayOSSettings>() ?? new PayOSSettings();
             _logger = logger;
-
-            if (string.IsNullOrEmpty(_settings.ClientId) || string.IsNullOrEmpty(_settings.ApiKey) || string.IsNullOrEmpty(_settings.ChecksumKey))
-                throw new InvalidOperationException("PayOS is not configured. Set PayOS__ClientId, PayOS__ApiKey, PayOS__ChecksumKey in environment or appsettings.");
         }
 
         public async Task<PayOSPaymentResponse> CreatePaymentLinkAsync(PayOSPaymentRequest request)
@@ -38,10 +37,19 @@ namespace ApplicationLayer.Services.PayOS
 
             var returnUrl = string.IsNullOrEmpty(request.ReturnUrl) ? _settings.ReturnUrl : request.ReturnUrl;
             var cancelUrl = string.IsNullOrEmpty(request.CancelUrl) ? _settings.CancelUrl : request.CancelUrl;
+            if (!Uri.TryCreate(returnUrl, UriKind.Absolute, out _)
+                || !Uri.TryCreate(cancelUrl, UriKind.Absolute, out _))
+            {
+                throw AppException.ServiceUnavailable(
+                    "PayOS return and cancel URLs are not configured correctly.",
+                    "PAYOS_URL_INVALID");
+            }
+
             var amount = decimal.ToInt64(request.Amount);
             // payOS documents a 9-character limit for bank accounts that are not
             // directly linked through payOS. Staying within it works for both modes.
             var description = request.Description.Length > 9 ? request.Description[..9] : request.Description;
+            var client = GetClient();
 
             try
             {
@@ -54,7 +62,18 @@ namespace ApplicationLayer.Services.PayOS
                     CancelUrl = cancelUrl,
                 };
 
-                var sdkResponse = await _client.PaymentRequests.CreateAsync(sdkRequest);
+                var sdkResponse = await client.PaymentRequests.CreateAsync(sdkRequest);
+
+                if (sdkResponse.OrderCode != request.OrderCode
+                    || sdkResponse.Amount != amount
+                    || string.IsNullOrWhiteSpace(sdkResponse.PaymentLinkId)
+                    || !Uri.TryCreate(sdkResponse.CheckoutUrl, UriKind.Absolute, out var checkoutUri)
+                    || checkoutUri.Scheme != Uri.UriSchemeHttps)
+                {
+                    throw AppException.BadGateway(
+                        "PayOS returned an invalid payment-link response.",
+                        "PAYOS_CREATE_LINK_FAILED");
+                }
 
                 return new PayOSPaymentResponse
                 {
@@ -72,18 +91,58 @@ namespace ApplicationLayer.Services.PayOS
                         : null,
                 };
             }
+            catch (ApiException ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "PayOS create-link failed. OrderCode={OrderCode} Amount={Amount} ProviderStatus={ProviderStatus} ProviderCode={ProviderCode} ProviderMessage={ProviderMessage}",
+                    request.OrderCode,
+                    amount,
+                    ex.StatusCode,
+                    ex.ErrorCode,
+                    ex.Message);
+                throw AppException.BadGateway(
+                    "Không thể tạo liên kết thanh toán PayOS. Vui lòng thử lại.",
+                    "PAYOS_CREATE_LINK_FAILED",
+                    ex);
+            }
+            catch (PayOSException ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "PayOS create-link failed. OrderCode={OrderCode} Amount={Amount} ProviderMessage={ProviderMessage}",
+                    request.OrderCode,
+                    amount,
+                    ex.Message);
+                throw AppException.BadGateway(
+                    "Không thể tạo liên kết thanh toán PayOS. Vui lòng thử lại.",
+                    "PAYOS_CREATE_LINK_FAILED",
+                    ex);
+            }
+            catch (AppException)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "PayOS create payment link failed for order {OrderCode}", request.OrderCode);
-                throw AppException.BadRequest("Failed to create PayOS payment link.", "PAYOS_CREATE_FAILED");
+                _logger.LogError(
+                    ex,
+                    "PayOS create-link failed unexpectedly. OrderCode={OrderCode} Amount={Amount}",
+                    request.OrderCode,
+                    amount);
+                throw AppException.ServiceUnavailable(
+                    "Không thể kết nối PayOS. Vui lòng thử lại.",
+                    "PAYOS_UNAVAILABLE",
+                    ex);
             }
         }
 
         public async Task CancelPaymentLinkAsync(long orderCode)
         {
+            var client = GetClient();
             try
             {
-                await _client.PaymentRequests.CancelAsync(orderCode);
+                await client.PaymentRequests.CancelAsync(orderCode);
                 _logger.LogInformation("PayOS payment link for order {OrderCode} cancelled successfully", orderCode);
             }
             catch (Exception ex)
@@ -95,9 +154,10 @@ namespace ApplicationLayer.Services.PayOS
 
         public async Task<PayOSWebhookData?> VerifyWebhookAsync(Webhook webhook)
         {
+            var client = GetClient();
             try
             {
-                var verifiedData = await _client.Webhooks.VerifyAsync(webhook);
+                var verifiedData = await client.Webhooks.VerifyAsync(webhook);
                 if (verifiedData == null)
                 {
                     _logger.LogWarning("PayOS webhook verification returned null");
@@ -126,9 +186,10 @@ namespace ApplicationLayer.Services.PayOS
 
         public async Task<PayOSPaymentStatus?> GetPaymentStatusAsync(long orderCode)
         {
+            var client = GetClient();
             try
             {
-                var paymentLink = await _client.PaymentRequests.GetAsync(orderCode);
+                var paymentLink = await client.PaymentRequests.GetAsync(orderCode);
 
                 return new PayOSPaymentStatus
                 {
@@ -146,6 +207,20 @@ namespace ApplicationLayer.Services.PayOS
                 _logger.LogError(ex, "PayOS get payment status failed for order {OrderCode}", orderCode);
                 return null;
             }
+        }
+
+        private PayOSClient GetClient()
+        {
+            if (string.IsNullOrWhiteSpace(_settings.ClientId)
+                || string.IsNullOrWhiteSpace(_settings.ApiKey)
+                || string.IsNullOrWhiteSpace(_settings.ChecksumKey))
+            {
+                throw AppException.ServiceUnavailable(
+                    "PayOS is not configured for this environment.",
+                    "PAYOS_NOT_CONFIGURED");
+            }
+
+            return _services.GetRequiredKeyedService<PayOSClient>("PayIn");
         }
     }
 }

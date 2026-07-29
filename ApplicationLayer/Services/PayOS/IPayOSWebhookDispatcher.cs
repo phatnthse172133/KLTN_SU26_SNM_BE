@@ -2,6 +2,12 @@ using Microsoft.Extensions.Logging;
 using PayOS.Models.Webhooks;
 using System;
 using System.Threading.Tasks;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using DomainLayer.Entities;
+using DomainLayer.InterfaceRepository;
+using static DomainLayer.Enums.GeneralEnum;
 
 namespace ApplicationLayer.Services.PayOS
 {
@@ -17,19 +23,22 @@ namespace ApplicationLayer.Services.PayOS
         private readonly Subscriptions.IPayOSWebhookService _subscriptionWebhookService;
         private readonly Orders.IOrderService _orderService;
         private readonly ILogger<PayOSWebhookDispatcher> _logger;
+        private readonly IOrderRepository? _orderRepository;
 
         public PayOSWebhookDispatcher(
             IPayOSService payosService,
             IPayOSOrderCodeGenerator orderCodeGenerator,
             Subscriptions.IPayOSWebhookService subscriptionWebhookService,
             Orders.IOrderService orderService,
-            ILogger<PayOSWebhookDispatcher> logger)
+            ILogger<PayOSWebhookDispatcher> logger,
+            IOrderRepository? orderRepository = null)
         {
             _payosService = payosService;
             _orderCodeGenerator = orderCodeGenerator;
             _subscriptionWebhookService = subscriptionWebhookService;
             _orderService = orderService;
             _logger = logger;
+            _orderRepository = orderRepository;
         }
 
         public async Task<WebhookDispatchResult> DispatchAsync(Webhook webhookBody)
@@ -48,19 +57,43 @@ namespace ApplicationLayer.Services.PayOS
                 return WebhookDispatchResult.InvalidSignature;
             }
 
+            Guid? auditId = null;
+            if (_orderRepository is not null)
+            {
+                var payload = JsonSerializer.Serialize(webhookBody);
+                var signature = "";
+                using (var document = JsonDocument.Parse(payload))
+                    if (document.RootElement.TryGetProperty("signature", out var value)) signature = value.GetString() ?? "";
+                var eventKey = $"{verifiedData.OrderCode}:{verifiedData.Reference ?? verifiedData.PaymentLinkId ?? verifiedData.Code}:{verifiedData.Amount}";
+                auditId = await _orderRepository.TryRecordWebhookEventAsync(new PaymentWebhookEvent
+                {
+                    Id = Guid.NewGuid(),
+                    Provider = "PayOS",
+                    ProviderEventKey = eventKey,
+                    OrderCode = verifiedData.OrderCode,
+                    SignatureHash = Hash(signature),
+                    PayloadHash = Hash(payload),
+                    ProcessingStatus = WebhookProcessingStatus.Received,
+                    ReceivedAt = DateTime.UtcNow
+                });
+                if (!auditId.HasValue) return WebhookDispatchResult.AlreadyProcessed;
+            }
+
             // Dispatch by prefix
             var source = _orderCodeGenerator.GetSource(verifiedData.OrderCode);
             if (source != null)
             {
                 _logger.LogInformation("Dispatching webhook for order code {OrderCode}, source={Source}", verifiedData.OrderCode, source);
 
-                return source switch
+                var routedResult = source switch
                 {
                     PayOSOrderSource.Order => await _orderService.ProcessPaymentWebhookAsync(verifiedData),
                     PayOSOrderSource.BoothSubscription => await _subscriptionWebhookService.HandleWebhookAsync(verifiedData),
                     PayOSOrderSource.MarketSubscription => await _subscriptionWebhookService.HandleWebhookAsync(verifiedData),
                     _ => WebhookDispatchResult.NotFound
                 };
+                await CompleteAuditAsync(auditId, routedResult);
+                return routedResult;
             }
 
             // Legacy fallback: code has no known prefix (created before prefix system).
@@ -73,17 +106,41 @@ namespace ApplicationLayer.Services.PayOS
             if (hasOrder && hasSubscription)
             {
                 _logger.LogError("Legacy fallback conflict: order code {OrderCode} exists in both Order and Subscription domains. Returning Conflict.", verifiedData.OrderCode);
+                await CompleteAuditAsync(auditId, WebhookDispatchResult.Conflict);
                 return WebhookDispatchResult.Conflict;
             }
 
             if (hasOrder)
-                return await _orderService.ProcessPaymentWebhookAsync(verifiedData);
+            {
+                var result = await _orderService.ProcessPaymentWebhookAsync(verifiedData);
+                await CompleteAuditAsync(auditId, result);
+                return result;
+            }
 
             if (hasSubscription)
-                return await _subscriptionWebhookService.HandleWebhookAsync(verifiedData);
+            {
+                var result = await _subscriptionWebhookService.HandleWebhookAsync(verifiedData);
+                await CompleteAuditAsync(auditId, result);
+                return result;
+            }
 
             _logger.LogWarning("Legacy fallback exhausted for order code {OrderCode}. No matching Order or Subscription found.", verifiedData.OrderCode);
+            await CompleteAuditAsync(auditId, WebhookDispatchResult.NotFound);
             return WebhookDispatchResult.NotFound;
         }
+
+        private async Task CompleteAuditAsync(Guid? auditId, WebhookDispatchResult result)
+        {
+            if (auditId.HasValue && _orderRepository is not null)
+                await _orderRepository.CompleteWebhookEventAsync(auditId.Value,
+                    result is WebhookDispatchResult.OrderHandled or WebhookDispatchResult.SubscriptionHandled or WebhookDispatchResult.AlreadyProcessed
+                        ? WebhookProcessingStatus.Processed
+                        : WebhookProcessingStatus.Rejected,
+                    result is WebhookDispatchResult.OrderHandled or WebhookDispatchResult.SubscriptionHandled or WebhookDispatchResult.AlreadyProcessed ? null : result.ToString(),
+                    DateTime.UtcNow);
+        }
+
+        private static string Hash(string value)
+            => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
     }
 }

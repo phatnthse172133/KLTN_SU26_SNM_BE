@@ -5,6 +5,7 @@ using InfrastructureLayer.Data;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Threading.Tasks;
+using System.Text.Json;
 using static DomainLayer.Enums.GeneralEnum;
 
 namespace InfrastructureLayer.Repositories;
@@ -16,7 +17,11 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
     }
 
     public async Task<Order?> GetByCustomerAsync(Guid customerId, Guid orderId)
-        => await _dbSet.FirstOrDefaultAsync(order => order.Id == orderId && order.CustomerId == customerId);
+        => await _dbSet
+            .Include(order => order.Payments)
+                .ThenInclude(payment => payment.Attempts)
+            .Include(order => order.PromotionUsages)
+            .FirstOrDefaultAsync(order => order.Id == orderId && order.CustomerId == customerId);
 
     public Task<Guid?> GetBoothIdForCustomerOrderAsync(Guid customerId, Guid orderId, CancellationToken cancellationToken = default)
         => _context.OrderDetails.AsNoTracking()
@@ -124,6 +129,7 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
 
         return await _dbSet
             .Include(order => order.Payments)
+                .ThenInclude(payment => payment.Attempts)
             .Include(order => order.PromotionUsages)
             .FirstOrDefaultAsync(order => order.OrderCode == orderCode);
     }
@@ -296,6 +302,11 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
         await _context.Payments.AddAsync(payment);
     }
 
+    public async Task AddPaymentAttemptAsync(PaymentAttempt attempt)
+    {
+        await _context.PaymentAttempts.AddAsync(attempt);
+    }
+
     public async Task<DomainLayer.Common.PagedResult<Order>> GetByBoothOwnerPagedAsync(
         Guid boothOwnerId,
         string? keyword,
@@ -376,4 +387,39 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
                 .SetProperty(order => order.Status, newStatus)
                 .SetProperty(order => order.UpdatedAt, updatedAt),
                 cancellationToken);
+
+    public async Task ClearCheckedOutCartItemsAsync(Order order, DateTime updatedAt, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(order.CheckoutCartItemIds)) return;
+        var ids = JsonSerializer.Deserialize<Guid[]>(order.CheckoutCartItemIds) ?? [];
+        if (ids.Length == 0) return;
+        await _context.CartItems
+            .Where(item => ids.Contains(item.Id) && item.Cart.CustomerId == order.CustomerId && !item.IsDeleted)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(item => item.IsDeleted, true)
+                .SetProperty(item => item.UpdatedAt, updatedAt), cancellationToken);
+    }
+
+    public async Task<Guid?> TryRecordWebhookEventAsync(PaymentWebhookEvent webhookEvent, CancellationToken cancellationToken = default)
+    {
+        _context.PaymentWebhookEvents.Add(webhookEvent);
+        try
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+            return webhookEvent.Id;
+        }
+        catch (DbUpdateException)
+        {
+            _context.Entry(webhookEvent).State = EntityState.Detached;
+            return null;
+        }
+    }
+
+    public Task CompleteWebhookEventAsync(Guid eventId, WebhookProcessingStatus status, string? error, DateTime processedAt,
+        CancellationToken cancellationToken = default)
+        => _context.PaymentWebhookEvents.Where(item => item.Id == eventId)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(item => item.ProcessingStatus, status)
+                .SetProperty(item => item.Error, error)
+                .SetProperty(item => item.ProcessedAt, processedAt), cancellationToken);
 }

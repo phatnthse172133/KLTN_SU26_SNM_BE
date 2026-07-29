@@ -207,6 +207,10 @@ public class EmailService : IEmailService
             await client.SendAsync(message, cancellationToken);
             _logger.LogInformation("Sent email to {Email}", recipientEmail);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to send email to {Email}", recipientEmail);
@@ -214,7 +218,21 @@ public class EmailService : IEmailService
         }
         finally
         {
-            await client.DisconnectAsync(true, cancellationToken);
+            if (client.IsConnected)
+            {
+                try
+                {
+                    await client.DisconnectAsync(true, cancellationToken);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    // Disposal closes the connection; shutdown cancellation is expected here.
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to disconnect cleanly from the SMTP server.");
+                }
+            }
         }
     }
 

@@ -23,7 +23,7 @@ using static DomainLayer.Enums.GeneralEnum;
 
 namespace ApplicationLayer.Services.Orders
 {
-    public class OrderService : IOrderService
+    public partial class OrderService : IOrderService
     {
         private readonly IOrderRepository _orderRepo;
         private readonly IPromotionRepository _promotionRepo;
@@ -199,10 +199,15 @@ namespace ApplicationLayer.Services.Orders
                 Id = Guid.NewGuid(),
                 CustomerId = customerId.Value,
                 BoothOwnerId = booth.BoothOwnerId,
+                BoothId = booth.Id,
                 OrderCode = orderCode,
                 CheckoutRequestId = dto.CheckoutRequestId,
+                IdempotencyKey = dto.IdempotencyKey ?? dto.CheckoutRequestId.ToString("D"),
+                RequestHash = dto.RequestHash,
+                CheckoutCartItemIds = System.Text.Json.JsonSerializer.Serialize(dto.CheckoutCartItemIds),
                 Note = dto.Note,
-                Status = OrderStatus.Placed,
+                Status = dto.PaymentMethod == PaymentType.PayOS ? OrderStatus.PendingPayment : OrderStatus.Placed,
+                PaymentMethod = dto.PaymentMethod,
                 CreatedAt = utcNow,
                 UpdatedAt = utcNow
             };
@@ -239,6 +244,16 @@ namespace ApplicationLayer.Services.Orders
                 }).ToList();
                 var preview = await _validation.ValidateAsync(customerId.Value, promotion, validationItems);
                 order.DiscountAmount = preview.DiscountAmount;
+                order.PromotionId = promotion.Id;
+                order.PromotionSnapshot = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    promotion.Id,
+                    promotion.PromotionCode,
+                    promotion.Title,
+                    promotion.DiscountType,
+                    promotion.DiscountValue,
+                    promotion.MaximumDiscountAmount
+                });
                 order.PromotionUsages.Add(new PromotionUsage
                 {
                     Id = Guid.NewGuid(),
@@ -266,12 +281,14 @@ namespace ApplicationLayer.Services.Orders
 
             order.FinalAmount = order.TotalAmount - order.DiscountAmount;
             var isZeroPaymentOrder = order.FinalAmount == 0m;
-            if (isZeroPaymentOrder)
+            if (isZeroPaymentOrder || dto.PaymentMethod == PaymentType.Cash)
             {
                 // A fully discounted order is financially settled without an
                 // external provider. It follows the same operational state as
                 // a successfully paid PayOS order.
-                order.Status = OrderStatus.Preparing;
+                order.Status = isZeroPaymentOrder && string.IsNullOrWhiteSpace(dto.RequestHash)
+                    ? OrderStatus.Preparing
+                    : OrderStatus.Placed;
                 PromotionUsageLifecycle.ConsumeReserved(
                     order.PromotionUsages,
                     utcNow);
@@ -289,7 +306,10 @@ namespace ApplicationLayer.Services.Orders
                     : dto.PaymentMethod == PaymentType.PayOS
                         ? PaymentGateway.Payos
                         : PaymentGateway.None,
-                Status = isZeroPaymentOrder ? PaymentStatus.Paid : PaymentStatus.Pending,
+                Status = isZeroPaymentOrder ? PaymentStatus.Paid
+                    : dto.PaymentMethod == PaymentType.Cash && !string.IsNullOrWhiteSpace(dto.RequestHash)
+                        ? PaymentStatus.Unpaid
+                        : PaymentStatus.Pending,
                 PayOSOrderCode = dto.PaymentMethod == PaymentType.PayOS && !isZeroPaymentOrder
                     ? orderCode
                     : null,
@@ -299,8 +319,23 @@ namespace ApplicationLayer.Services.Orders
             };
             order.Payments.Add(payment);
 
+            PaymentAttempt? attempt = null;
+            if (dto.PaymentMethod == PaymentType.PayOS && !isZeroPaymentOrder)
+            {
+                attempt = new PaymentAttempt
+                {
+                    Id = Guid.NewGuid(),
+                    PaymentId = payment.Id,
+                    AttemptNumber = 1,
+                    ProviderOrderCode = orderCode,
+                    Status = PaymentAttemptStatus.Creating,
+                    CreatedAt = utcNow,
+                    UpdatedAt = utcNow
+                };
+                payment.Attempts.Add(attempt);
+            }
+
             string? checkoutUrl = null;
-            var payosLinkCreated = false;
             await _orderRepo.BeginTransactionAsync();
             try
             {
@@ -317,7 +352,14 @@ namespace ApplicationLayer.Services.Orders
                         OrderId = existingOrder.Id,
                         OrderCode = existingOrder.OrderCode,
                         Status = existingOrder.Status,
-                        PaymentUrl = existingPayment?.CheckoutUrl
+                        PaymentUrl = existingPayment?.CheckoutUrl,
+                        CheckoutUrl = existingPayment?.CheckoutUrl,
+                        PaymentId = existingPayment?.Id,
+                        PaymentMethod = existingPayment?.Type ?? existingOrder.PaymentMethod,
+                        PaymentStatus = existingPayment?.Status ?? PaymentStatus.Pending,
+                        TotalAmount = existingOrder.FinalAmount,
+                        QrCode = existingPayment?.QrCode,
+                        ExpiresAt = existingPayment?.ExpiresAt
                     }, "The existing idempotent checkout result was returned.");
                 }
 
@@ -338,24 +380,6 @@ namespace ApplicationLayer.Services.Orders
                             "PROMOTION_CHANGED");
                 }
 
-                // Promotion quota must be finalized under its PostgreSQL row lock
-                // before creating an external money intent. Otherwise two different
-                // checkout keys can both create PayOS links while only one may reserve
-                // the last promotion slot.
-                if (dto.PaymentMethod == PaymentType.PayOS && !isZeroPaymentOrder)
-                {
-                    var link = await _payos.CreatePaymentLinkAsync(new PayOSPaymentRequest
-                    {
-                        OrderCode = orderCode,
-                        Amount = order.FinalAmount,
-                        Description = $"SNM{orderCode % 1_000_000}"
-                    });
-                    checkoutUrl = link.CheckoutUrl;
-                    payment.CheckoutUrl = link.CheckoutUrl;
-                    payment.PaymentLinkId = link.PaymentLinkId;
-                    payosLinkCreated = true;
-                }
-
                 await _orderRepo.AddAsync(order);
                 await _orderRepo.SaveChangesAsync();
                 await _orderRepo.CommitTransactionAsync();
@@ -363,9 +387,48 @@ namespace ApplicationLayer.Services.Orders
             catch
             {
                 await _orderRepo.RollbackTransactionAsync();
-                if (payosLinkCreated)
-                    await TryCancelPayOSLinkAsync(orderCode);
                 throw;
+            }
+
+            // The local idempotent skeleton is committed before the external call.
+            // This avoids holding PostgreSQL locks while PayOS is unavailable or slow.
+            if (dto.PaymentMethod == PaymentType.PayOS && !isZeroPaymentOrder)
+            {
+                var linkCreated = false;
+                try
+                {
+                    var link = await _payos.CreatePaymentLinkAsync(new PayOSPaymentRequest
+                    {
+                        OrderCode = orderCode,
+                        Amount = order.FinalAmount,
+                        Description = $"SNM{orderCode % 1_000_000}"
+                    });
+                    linkCreated = true;
+                    checkoutUrl = link.CheckoutUrl;
+                    payment.CheckoutUrl = link.CheckoutUrl;
+                    payment.QrCode = link.QrCode;
+                    payment.PaymentLinkId = link.PaymentLinkId;
+                    payment.ExpiresAt = link.ExpiresAt?.UtcDateTime;
+                    attempt!.ProviderPaymentLinkId = link.PaymentLinkId;
+                    attempt.CheckoutUrl = link.CheckoutUrl;
+                    attempt.QrCode = link.QrCode;
+                    attempt.ExpiresAt = link.ExpiresAt?.UtcDateTime;
+                    attempt.Status = PaymentAttemptStatus.Pending;
+                    attempt.UpdatedAt = DateTime.UtcNow;
+                    await _orderRepo.SaveChangesAsync();
+                }
+                catch
+                {
+                    if (linkCreated) await TryCancelPayOSLinkAsync(orderCode);
+                    var failedAt = DateTime.UtcNow;
+                    attempt!.Status = PaymentAttemptStatus.Failed;
+                    attempt.FailureCode = "PAYOS_CREATE_LINK_FAILED";
+                    attempt.UpdatedAt = failedAt;
+                    payment.MarkFailed("PAYOS_CREATE_LINK_FAILED", "PayOS did not create a checkout link.", failedAt);
+                    order.MarkPaymentFailed(failedAt);
+                    await _orderRepo.SaveChangesAsync();
+                    throw;
+                }
             }
 
             if (dto.PaymentMethod == PaymentType.Cash || isZeroPaymentOrder)
@@ -376,7 +439,14 @@ namespace ApplicationLayer.Services.Orders
                 OrderId = order.Id,
                 OrderCode = order.OrderCode,
                 Status = order.Status,
-                PaymentUrl = checkoutUrl
+                PaymentUrl = checkoutUrl,
+                CheckoutUrl = checkoutUrl,
+                PaymentId = payment.Id,
+                PaymentMethod = payment.Type,
+                PaymentStatus = payment.Status,
+                TotalAmount = order.FinalAmount,
+                QrCode = payment.QrCode,
+                ExpiresAt = payment.ExpiresAt
             }, "Order created successfully.");
         }
 
@@ -563,17 +633,12 @@ namespace ApplicationLayer.Services.Orders
 
                 if (!amountMatches)
                 {
-                    var cancelledRows = await _orderRepo.UpdateOrderStatusIfPlacedAsync(
-                        order.OrderCode,
-                        OrderStatus.Cancelled,
-                        now);
-                    if (cancelledRows == 0)
-                    {
-                        await _orderRepo.RollbackTransactionAsync();
-                        return WebhookDispatchResult.AlreadyProcessed;
-                    }
-
+                    if (order.Status == OrderStatus.Placed)
+                        await _orderRepo.UpdateOrderStatusIfPlacedAsync(order.OrderCode, OrderStatus.Cancelled, now);
+                    else
+                        order.Cancel("PayOS amount mismatch; refund required.", now);
                     await _promotionUsages.ConsumeReservedByOrderAsync(order.Id, now);
+                    await _orderRepo.SaveChangesAsync();
                     await _orderRepo.CommitTransactionAsync();
                     _logger.LogError(
                         "PayOS amount mismatch for provider order {ProviderOrderCode}. Expected {ExpectedAmount}, received {ActualAmount}; payment moved to refund processing.",
@@ -583,18 +648,19 @@ namespace ApplicationLayer.Services.Orders
                     return WebhookDispatchResult.OrderHandled;
                 }
 
-                var orderRows = await _orderRepo.UpdateOrderStatusIfPlacedAsync(
-                    order.OrderCode,
-                    OrderStatus.Preparing,
-                    now);
-
-                if (orderRows == 0)
+                if (order.Status == OrderStatus.Placed)
+                    await _orderRepo.UpdateOrderStatusIfPlacedAsync(order.OrderCode, OrderStatus.Preparing, now);
+                else
+                    order.MarkPaid(now);
+                var paidAttempt = targetPayment.Attempts.FirstOrDefault(item => item.ProviderOrderCode == verifiedData.OrderCode);
+                if (paidAttempt is not null)
                 {
-                    await _orderRepo.RollbackTransactionAsync();
-                    return WebhookDispatchResult.AlreadyProcessed;
+                    paidAttempt.Status = PaymentAttemptStatus.Paid;
+                    paidAttempt.UpdatedAt = now;
                 }
-
                 await _promotionUsages.ConsumeReservedByOrderAsync(order.Id, now);
+                await _orderRepo.ClearCheckedOutCartItemsAsync(order, now);
+                await _orderRepo.SaveChangesAsync();
                 await _orderRepo.CommitTransactionAsync();
             }
             catch
@@ -1924,46 +1990,33 @@ namespace ApplicationLayer.Services.Orders
                 boothOwnerId, orderCode, cancellationToken)
                 ?? throw AppException.NotFound("Order not found.", "ORDER_NOT_FOUND");
 
-            if (!IsValidTransition(order.Status, request.NewStatus))
+            if (request.Status is not OrderStatus.Preparing and not OrderStatus.ReadyForPickup and not OrderStatus.Completed)
+                throw AppException.BadRequest("Status must be PREPARING, READY_FOR_PICKUP or COMPLETED.", "ORDER_STATUS_INVALID");
+            if (!IsValidTransition(order.Status, request.Status))
                 throw AppException.Conflict(
-                    $"The order cannot move from {order.Status} to {request.NewStatus}.",
-                    "INVALID_ORDER_STATUS_TRANSITION");
-            if (request.NewStatus == OrderStatus.Cancelled && string.IsNullOrWhiteSpace(request.Reason))
-                throw AppException.BadRequest("A cancellation reason is required.", "CANCELLATION_REASON_REQUIRED");
+                    $"The order cannot move from {order.Status} to {request.Status}.",
+                    "INVALID_ORDER_TRANSITION");
 
             var payment = LatestPayment(order);
-            if (request.NewStatus == OrderStatus.Preparing
+            if (request.Status == OrderStatus.Preparing
                 && payment?.Type == PaymentType.PayOS
                 && payment.Status != PaymentStatus.Paid)
                 throw AppException.Conflict(
                     "Online payment must be confirmed before preparation starts.", "PAYMENT_REQUIRED");
-            if (request.NewStatus == OrderStatus.Completed
+            if (request.Status == OrderStatus.Completed
                 && !order.Payments.Any(item => item.Status == PaymentStatus.Paid))
                 throw AppException.Conflict(
                     "Payment must be confirmed before completing the order.", "PAYMENT_REQUIRED");
 
-            if (request.NewStatus == OrderStatus.Cancelled)
-            {
-                order.Note = string.IsNullOrWhiteSpace(order.Note)
-                    ? $"Cancellation reason: {request.Reason!.Trim()}"
-                    : $"{order.Note}\nCancellation reason: {request.Reason!.Trim()}";
-                order.Status = OrderStatus.Cancelled;
-                order.UpdatedAt = DateTime.UtcNow;
-                _orderRepo.Update(order);
-                await _orderRepo.SaveChangesAsync();
-            }
-            else
-            {
-                var affected = await _orderRepo.UpdateBoothOwnerOrderStatusAsync(
-                    boothOwnerId, orderCode, order.Status, request.NewStatus,
-                    DateTime.UtcNow, cancellationToken);
-                if (affected == 0)
-                    throw AppException.Conflict(
-                        "The order was updated by another request. Refresh and try again.",
-                        "ORDER_STATUS_CONFLICT");
-            }
+            var affected = await _orderRepo.UpdateBoothOwnerOrderStatusAsync(
+                boothOwnerId, orderCode, order.Status, request.Status,
+                DateTime.UtcNow, cancellationToken);
+            if (affected == 0)
+                throw AppException.Conflict(
+                    "The order was updated by another request. Refresh and try again.",
+                    "ORDER_STATUS_CONFLICT");
 
-            await PublishOrderStatusAsync(order, request.NewStatus);
+            await PublishOrderStatusAsync(order, request.Status);
             return ApiResponse<bool>.SuccessResponse(true, "Order status updated successfully.");
         }
 

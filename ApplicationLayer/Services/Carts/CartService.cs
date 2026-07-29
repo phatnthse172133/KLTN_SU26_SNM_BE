@@ -34,7 +34,8 @@ public class CartService : ICartService
 
     public async Task<ApiResponse<CartResponse>> GetCurrentAsync(Guid customerId, PaginationReq pagination, CancellationToken cancellationToken = default)
     {
-        var cart = await GetCurrentCartAsync(customerId, cancellationToken);
+        var cart = await _carts.GetActiveByCustomerAsync(customerId, cancellationToken)
+            ?? await CreateCartAsync(customerId);
         var items = await _cartItems.GetActiveByCartAsync(cart.Id, cancellationToken);
         var utcNow = _timeProvider.GetUtcNow().UtcDateTime;
         var boothGroups = items
@@ -231,6 +232,7 @@ public class CartService : ICartService
             UpdatedAt = now
         };
         await _carts.AddAsync(cart);
+        await _carts.SaveChangesAsync();
         return cart;
     }
 

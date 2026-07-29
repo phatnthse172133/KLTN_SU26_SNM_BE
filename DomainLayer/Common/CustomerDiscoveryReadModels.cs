@@ -1,3 +1,5 @@
+using static DomainLayer.Enums.GeneralEnum;
+
 namespace DomainLayer.Common;
 
 public sealed record CustomerBoothReadModel(
@@ -50,4 +52,13 @@ public sealed record CustomerFoodReadModel(
     TimeOnly? MarketOpenTime,
     TimeOnly? MarketCloseTime,
     bool MarketIsOperational,
-    IReadOnlyCollection<string> ImageUrls);
+    IReadOnlyCollection<string> ImageUrls)
+{
+    public IReadOnlyCollection<CustomerFoodTagReadModel> Tags { get; init; } = [];
+}
+
+public sealed record CustomerFoodTagReadModel(
+    Guid Id,
+    string Code,
+    string Name,
+    FoodTagGroup TagGroup);

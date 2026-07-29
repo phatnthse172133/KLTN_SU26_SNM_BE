@@ -73,6 +73,13 @@ public static class SystemFoodTaxonomyCatalog
             ("OTHER_CUSTOMIZABLE", "Có thể tùy chỉnh"));
         Add(FoodTagGroup.Other, false, true,
             ("OTHER_BEST_SELLER", "Bán chạy"), ("OTHER_NEW_ITEM", "Món mới"), ("OTHER_QUICK_SERVE", "Phục vụ nhanh"));
+        // Course tags are append-only so the stable IDs of the original 94
+        // taxonomy rows never change in an already-applied PostgreSQL database.
+        Add(FoodTagGroup.Other, false, false,
+            ("COURSE_APPETIZER", "Khai vị"), ("COURSE_MAIN_COURSE", "Món chính"),
+            ("COURSE_SIDE_DISH", "Món ăn kèm"), ("COURSE_SOUP", "Món canh hoặc món nước"),
+            ("COURSE_SHARED_DISH", "Món dùng chung"), ("COURSE_DRINK", "Đồ uống"),
+            ("COURSE_DESSERT", "Tráng miệng"), ("COURSE_EXTRA", "Món bổ sung"));
         return result;
 
         void Add(FoodTagGroup group, bool preferenceSelectable, bool autoAssigned, params (string Code, string Name)[] values)

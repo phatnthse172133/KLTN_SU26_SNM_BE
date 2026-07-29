@@ -2033,11 +2033,27 @@ namespace InfrastructureLayer.Migrations
                         .HasColumnType("uuid")
                         .HasDefaultValueSql("uuid_generate_v4()");
 
+                    b.Property<Guid>("BoothId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("BoothOwnerId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("CancellationReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CheckoutCartItemIds")
+                        .HasColumnType("jsonb");
+
                     b.Property<Guid?>("CheckoutRequestId")
                         .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -2056,11 +2072,37 @@ namespace InfrastructureLayer.Migrations
                         .HasColumnType("numeric(12,2)")
                         .HasComment("TotalAmount - DiscountAmount");
 
+                    b.Property<string>("IdempotencyKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<string>("Note")
                         .HasColumnType("text");
 
                     b.Property<long>("OrderCode")
                         .HasColumnType("bigint");
+
+                    b.Property<string>("PaymentMethod")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid?>("PromotionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PromotionSnapshot")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("RequestHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("bytea")
+                        .HasDefaultValueSql("uuid_send(gen_random_uuid())");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -2082,6 +2124,8 @@ namespace InfrastructureLayer.Migrations
                     b.HasKey("Id")
                         .HasName("Order_pkey");
 
+                    b.HasIndex("BoothId");
+
                     b.HasIndex("BoothOwnerId");
 
                     b.HasIndex(new[] { "OrderCode" }, "Order_OrderCode_key")
@@ -2098,6 +2142,10 @@ namespace InfrastructureLayer.Migrations
                     b.HasIndex(new[] { "CustomerId", "CheckoutRequestId" }, "ux_order_customer_checkout_request")
                         .IsUnique()
                         .HasFilter("\"CheckoutRequestId\" IS NOT NULL");
+
+                    b.HasIndex(new[] { "CustomerId", "IdempotencyKey" }, "ux_order_customer_idempotency_key")
+                        .IsUnique()
+                        .HasFilter("\"IdempotencyKey\" IS NOT NULL");
 
                     b.ToTable("Order", null, t =>
                         {
@@ -2340,6 +2388,9 @@ namespace InfrastructureLayer.Migrations
                     b.Property<Guid>("BoothOwnerId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("CheckoutUrl")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)")
@@ -2349,6 +2400,20 @@ namespace InfrastructureLayer.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("now()");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("FailedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FailureCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("FailureMessage")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<string>("Gateway")
                         .IsRequired()
@@ -2383,6 +2448,10 @@ namespace InfrastructureLayer.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<string>("QrCode")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
                     b.Property<decimal?>("RefundAmount")
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)");
@@ -2401,6 +2470,13 @@ namespace InfrastructureLayer.Migrations
 
                     b.Property<DateTime?>("RefundedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("bytea")
+                        .HasDefaultValueSql("uuid_send(gen_random_uuid())");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -2449,6 +2525,66 @@ namespace InfrastructureLayer.Migrations
                         });
                 });
 
+            modelBuilder.Entity("DomainLayer.Entities.PaymentAttempt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("AttemptNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CheckoutUrl")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FailureCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("FailureMessage")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("PaymentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("ProviderOrderCode")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ProviderPaymentLinkId")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("QrCode")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProviderOrderCode")
+                        .IsUnique();
+
+                    b.HasIndex("PaymentId", "AttemptNumber")
+                        .IsUnique();
+
+                    b.ToTable("PaymentAttempts", (string)null);
+                });
+
             modelBuilder.Entity("DomainLayer.Entities.PaymentMethod", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2478,6 +2614,61 @@ namespace InfrastructureLayer.Migrations
                         {
                             t.HasComment("CÃ¡ÂºÂ¥u hÃƒÂ¬nh phÃ†Â°Ã†Â¡ng thÃ¡Â»Â©c thanh toÃƒÂ¡n Ã†Â°u tiÃƒÂªn cÃ¡Â»Â§a ngÃ†Â°Ã¡Â»Âi dÃƒÂ¹ng");
                         });
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.PaymentWebhookEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<long>("OrderCode")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("PayloadHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("ProcessedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ProcessingStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("ProviderEventKey")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<DateTime>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SignatureHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Provider", "PayloadHash")
+                        .IsUnique();
+
+                    b.HasIndex("Provider", "ProviderEventKey")
+                        .IsUnique();
+
+                    b.ToTable("PaymentWebhookEvents", (string)null);
                 });
 
             modelBuilder.Entity("DomainLayer.Entities.Promotion", b =>
@@ -3681,6 +3872,13 @@ namespace InfrastructureLayer.Migrations
 
             modelBuilder.Entity("DomainLayer.Entities.Order", b =>
                 {
+                    b.HasOne("DomainLayer.Entities.Booth", "Booth")
+                        .WithMany()
+                        .HasForeignKey("BoothId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("Order_BoothId_fkey");
+
                     b.HasOne("DomainLayer.Entities.User", "BoothOwner")
                         .WithMany()
                         .HasForeignKey("BoothOwnerId")
@@ -3693,6 +3891,8 @@ namespace InfrastructureLayer.Migrations
                         .HasForeignKey("CustomerId")
                         .IsRequired()
                         .HasConstraintName("Order_CustomerId_fkey");
+
+                    b.Navigation("Booth");
 
                     b.Navigation("BoothOwner");
 
@@ -3760,6 +3960,17 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("BoothOwner");
 
                     b.Navigation("Order");
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.PaymentAttempt", b =>
+                {
+                    b.HasOne("DomainLayer.Entities.Payment", "Payment")
+                        .WithMany("Attempts")
+                        .HasForeignKey("PaymentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Payment");
                 });
 
             modelBuilder.Entity("DomainLayer.Entities.PaymentMethod", b =>
@@ -4091,6 +4302,11 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("PackagePrices");
 
                     b.Navigation("Policies");
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.Payment", b =>
+                {
+                    b.Navigation("Attempts");
                 });
 
             modelBuilder.Entity("DomainLayer.Entities.Promotion", b =>

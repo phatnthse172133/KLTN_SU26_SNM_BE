@@ -9,6 +9,7 @@ using InfrastructureLayer.Data;
 using InfrastructureLayer.Data.Seeders;
 using InfrastructureLayer.Storage;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -31,6 +32,14 @@ builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 builder.Logging.AddDebug();
 
+var dataProtectionKeysPath = builder.Configuration["DataProtection:KeysPath"];
+if (!string.IsNullOrWhiteSpace(dataProtectionKeysPath))
+{
+    var absoluteKeysPath = Path.GetFullPath(dataProtectionKeysPath, builder.Environment.ContentRootPath);
+    Directory.CreateDirectory(absoluteKeysPath);
+    builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(absoluteKeysPath));
+}
+
 // Load .env file (environment variables override appsettings.json)
 var envPath = Path.Combine(AppContext.BaseDirectory, ".env");
 if (!File.Exists(envPath))
@@ -40,6 +49,26 @@ if (File.Exists(envPath))
 
 // Re-add environment variables so .env values take effect
 builder.Configuration.AddEnvironmentVariables();
+
+FileStream? developmentInstanceLock = null;
+if (builder.Environment.IsDevelopment())
+{
+    var lockPath = Path.Combine(builder.Environment.ContentRootPath, ".local-api.lock");
+    try
+    {
+        developmentInstanceLock = new FileStream(
+            lockPath,
+            FileMode.OpenOrCreate,
+            FileAccess.ReadWrite,
+            FileShare.None);
+    }
+    catch (IOException exception)
+    {
+        throw new InvalidOperationException(
+            "Smart Night Market Backend is already running. Stop the existing PresentationLayer instance before starting another one.",
+            exception);
+    }
+}
 
 var jwtSettings = builder.Configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>() ?? new JwtSettings();
 if (string.IsNullOrWhiteSpace(jwtSettings.SecretKey) || jwtSettings.SecretKey.Length < 32)
@@ -57,7 +86,9 @@ builder.Services
     .Validate(settings => !string.IsNullOrWhiteSpace(settings.ApiKey), "PayOS:ApiKey is required.")
     .Validate(settings => !string.IsNullOrWhiteSpace(settings.ChecksumKey), "PayOS:ChecksumKey is required.")
     .Validate(settings => Uri.TryCreate(settings.ReturnUrl, UriKind.Absolute, out _), "PayOS:ReturnUrl must be an absolute URL.")
-    .Validate(settings => Uri.TryCreate(settings.CancelUrl, UriKind.Absolute, out _), "PayOS:CancelUrl must be an absolute URL.");
+    .Validate(settings => Uri.TryCreate(settings.CancelUrl, UriKind.Absolute, out _), "PayOS:CancelUrl must be an absolute URL.")
+    .Validate(settings => string.IsNullOrWhiteSpace(settings.WebhookUrl) || Uri.TryCreate(settings.WebhookUrl, UriKind.Absolute, out _), "PayOS:WebhookUrl must be an absolute URL when configured.")
+    .ValidateOnStart();
 
 builder.Services.AddKeyedSingleton<PayOSClient>("PayIn", (sp, key) =>
 {
@@ -75,8 +106,6 @@ builder.Services.AddKeyedSingleton<PayOSClient>("PayOut", (sp, key) =>
         settings["ApiKey"] ?? string.Empty,
         settings["ChecksumKey"] ?? string.Empty);
 });
-
-//await payOSClient.Webhooks.ConfirmAsync("https://your-url.com/payos-webhook");
 
 // Đăng ký Background Service dọn dẹp đơn hàng treo
 //builder.Services.AddHostedService<OrderCleanupBackgroundService>();
@@ -342,8 +371,30 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 var app = builder.Build();
+var payOSRuntimeSettings = app.Services
+    .GetRequiredService<Microsoft.Extensions.Options.IOptions<PayOSSettings>>()
+    .Value;
+app.Lifetime.ApplicationStarted.Register(() =>
+    app.Logger.LogInformation(
+        "PayOS runtime config. ClientIdPresent={ClientIdPresent} ApiKeyPresent={ApiKeyPresent} ChecksumKeyPresent={ChecksumKeyPresent} ReturnUrlValid={ReturnUrlValid} CancelUrlValid={CancelUrlValid}",
+        !string.IsNullOrWhiteSpace(payOSRuntimeSettings.ClientId),
+        !string.IsNullOrWhiteSpace(payOSRuntimeSettings.ApiKey),
+        !string.IsNullOrWhiteSpace(payOSRuntimeSettings.ChecksumKey),
+        Uri.TryCreate(payOSRuntimeSettings.ReturnUrl, UriKind.Absolute, out _),
+        Uri.TryCreate(payOSRuntimeSettings.CancelUrl, UriKind.Absolute, out _)));
+if (developmentInstanceLock is not null)
+{
+    app.Lifetime.ApplicationStopped.Register(developmentInstanceLock.Dispose);
+}
 var swaggerEnabled = app.Environment.IsDevelopment()
     || builder.Configuration.GetValue<bool>("Swagger:Enabled");
+
+if (app.Configuration.GetValue<bool>("Database:ApplyMigrationsOnStartup"))
+{
+    await using var migrationScope = app.Services.CreateAsyncScope();
+    var database = migrationScope.ServiceProvider.GetRequiredService<SNMDbContext>();
+    await database.Database.MigrateAsync();
+}
 
 if (args.Contains("--seed-food-taxonomy-only", StringComparer.OrdinalIgnoreCase))
 {
@@ -388,6 +439,18 @@ if (swaggerEnabled)
 }
 
 app.UseForwardedHeaders();
+if (app.Environment.IsDevelopment())
+{
+    app.Use(async (context, next) =>
+    {
+        await next();
+        app.Logger.LogInformation(
+            "[HTTP] {Method} {Path} -> {StatusCode}",
+            context.Request.Method,
+            context.Request.Path,
+            context.Response.StatusCode);
+    });
+}
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 if (builder.Configuration.GetValue("HttpsRedirection:Enabled", true))

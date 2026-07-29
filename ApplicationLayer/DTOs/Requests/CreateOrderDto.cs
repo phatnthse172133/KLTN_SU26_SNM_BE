@@ -10,6 +10,9 @@ namespace ApplicationLayer.DTOs.Requests
     public class CreateOrderDto
     {
         public Guid CheckoutRequestId { get; set; }
+        public string? IdempotencyKey { get; set; }
+        public string? RequestHash { get; set; }
+        public IReadOnlyCollection<Guid> CheckoutCartItemIds { get; set; } = [];
         public Guid? CustomerId { get; set; }
         public Guid BoothOwnerId { get; set; }
         public Guid BoothId { get; set; }

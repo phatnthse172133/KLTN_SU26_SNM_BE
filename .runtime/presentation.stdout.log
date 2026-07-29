@@ -1,0 +1,128 @@
+Using launch settings from PresentationLayer\Properties\launchSettings.json...
+info: Microsoft.EntityFrameworkCore.Migrations[20405]
+      No migrations were applied. The database is already up to date.
+info: SystemFoodTaxonomySeeder[0]
+      System food taxonomy seed completed. Categories inserted=0, updated=0, skipped=18; tags inserted=0, updated=0, skipped=102; legacy tags deactivated=0.
+info: InfrastructureLayer.Data.SNMDbContext[0]
+      Controlled demo seed enabled; transaction starting.
+info: InfrastructureLayer.Data.SNMDbContext[0]
+      Phase 03.5 demo seed ready: 1 market, 5 booths, 20 foods, 12 reviews, 10 nodes, 12 edges.
+info: InfrastructureLayer.Backgrounds.OrderCleanupBackgroundService[0]
+      [OrderCleanupService] Background Service dọn dẹp đơn hàng đã bắt đầu chạy.
+info: Microsoft.Hosting.Lifetime[14]
+      Now listening on: http://0.0.0.0:5282
+info: Microsoft.Hosting.Lifetime[0]
+      Application started. Press Ctrl+C to shut down.
+info: Microsoft.Hosting.Lifetime[0]
+      Hosting environment: Development
+info: Microsoft.Hosting.Lifetime[0]
+      Content root path: D:\KLTN\KLTN_SU26_SNM_BE\PresentationLayer
+info: PresentationLayer[0]
+      PayOS runtime config. ClientIdPresent=True ApiKeyPresent=True ChecksumKeyPresent=True ReturnUrlValid=True CancelUrlValid=True
+info: PresentationLayer[0]
+      [HTTP] GET /health -> 200
+info: PresentationLayer[0]
+      [HTTP] GET /health -> 200
+warn: Microsoft.EntityFrameworkCore.Query[20504]
+      Compiling a query which loads related collections for more than one collection navigation, either via 'Include' or through projection, but no 'QuerySplittingBehavior' has been configured. By default, Entity Framework will use 'QuerySplittingBehavior.SingleQuery', which can potentially result in slow query performance. See https://go.microsoft.com/fwlink/?linkid=2134277 for more information. To identify the query that's triggering this warning call 'ConfigureWarnings(w => w.Throw(RelationalEventId.MultipleCollectionIncludeWarning))'.
+info: PresentationLayer[0]
+      [HTTP] GET /health -> 200
+info: PresentationLayer[0]
+      [HTTP] GET /health -> 200
+info: PresentationLayer[0]
+      [HTTP] GET /health -> 200
+info: PresentationLayer[0]
+      [HTTP] GET /health -> 200
+info: PresentationLayer[0]
+      [HTTP] GET /health -> 200
+info: PresentationLayer[0]
+      [HTTP] POST /api/auth/login -> 200
+info: PresentationLayer[0]
+      [HTTP] GET /api/cart -> 200
+info: PresentationLayer[0]
+      [HTTP] POST /api/auth/login -> 200
+info: PresentationLayer[0]
+      [HTTP] GET /api/customer/checkout/preview -> 200
+info: PresentationLayer[0]
+      [HTTP] POST /api/customer/orders -> 200
+info: PresentationLayer[0]
+      [HTTP] GET /api/cart -> 200
+info: PresentationLayer[0]
+      [HTTP] GET /health -> 200
+info: PresentationLayer[0]
+      [HTTP] POST /api/auth/login -> 200
+info: PresentationLayer[0]
+      [HTTP] POST /api/cart/items -> 201
+[2026-07-29 19:22:49] [WARN] PayOS: [log_80cbc3] Connection error: An attempt was made to access a socket in a way forbidden by its access permissions. (api-merchant.payos.vn:443), retrying in 904.1209ms. Retries remaining: 1
+[2026-07-29 19:22:50] [WARN] PayOS: [log_fe8f3e (retry of log_80cbc3)] Connection error: An attempt was made to access a socket in a way forbidden by its access permissions. (api-merchant.payos.vn:443), retrying in 1857.563ms. Retries remaining: 0
+fail: ApplicationLayer.Services.PayOS.PayOSService[0]
+      PayOS create-link failed. OrderCode=100000000000014 Amount=59000 ProviderStatus=0 ProviderCode=(null) ProviderMessage=Connection error occurred
+      PayOS.Exceptions.ConnectionException: Connection error occurred
+       ---> System.Net.Http.HttpRequestException: An attempt was made to access a socket in a way forbidden by its access permissions. (api-merchant.payos.vn:443)
+       ---> System.Net.Sockets.SocketException (10013): An attempt was made to access a socket in a way forbidden by its access permissions.
+         at System.Net.Sockets.Socket.AwaitableSocketAsyncEventArgs.ThrowException(SocketError error, CancellationToken cancellationToken)
+         at System.Net.Sockets.Socket.AwaitableSocketAsyncEventArgs.System.Threading.Tasks.Sources.IValueTaskSource.GetResult(Int16 token)
+         at System.Net.Sockets.Socket.<ConnectAsync>g__WaitForConnectWithCancellation|285_0(AwaitableSocketAsyncEventArgs saea, ValueTask connectTask, CancellationToken cancellationToken)
+         at System.Net.Http.HttpConnectionPool.ConnectToTcpHostAsync(String host, Int32 port, HttpRequestMessage initialRequest, Boolean async, CancellationToken cancellationToken)
+         --- End of inner exception stack trace ---
+         at System.Net.Http.HttpConnectionPool.ConnectToTcpHostAsync(String host, Int32 port, HttpRequestMessage initialRequest, Boolean async, CancellationToken cancellationToken)
+         at System.Net.Http.HttpConnectionPool.ConnectAsync(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)
+         at System.Net.Http.HttpConnectionPool.CreateHttp11ConnectionAsync(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)
+         at System.Net.Http.HttpConnectionPool.AddHttp11ConnectionAsync(QueueItem queueItem)
+         at System.Threading.Tasks.TaskCompletionSourceWithCancellation`1.WaitWithCancellationAsync(CancellationToken cancellationToken)
+         at System.Net.Http.HttpConnectionPool.SendWithVersionDetectionAndRetryAsync(HttpRequestMessage request, Boolean async, Boolean doRequestAuth, CancellationToken cancellationToken)
+         at System.Net.Http.DiagnosticsHandler.SendAsyncCore(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)
+         at System.Net.Http.RedirectHandler.SendAsync(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)
+         at System.Net.Http.HttpClient.<SendAsync>g__Core|83_0(HttpRequestMessage request, HttpCompletionOption completionOption, CancellationTokenSource cts, Boolean disposeCts, CancellationTokenSource pendingRequestsCts, CancellationToken originalCancellationToken)
+         at PayOS.PayOSClient.RequestAsync[T,TBody](HttpMethod method, String path, RequestOptions`1 requestOptions)
+         --- End of inner exception stack trace ---
+         at PayOS.PayOSClient.RequestAsync[T,TBody](HttpMethod method, String path, RequestOptions`1 requestOptions)
+         at PayOS.PayOSClient.PostAsync[T,TRequest](String path, RequestOptions`1 options)
+         at PayOS.Resources.V2.PaymentRequests.PaymentRequests.CreateAsync(CreatePaymentLinkRequest paymentData, RequestOptions`1 requestOptions)
+         at ApplicationLayer.Services.PayOS.PayOSService.CreatePaymentLinkAsync(PayOSPaymentRequest request) in D:\KLTN\KLTN_SU26_SNM_BE\ApplicationLayer\Services\PayOS\PayOSService.cs:line 65
+fail: PresentationLayer.Middlewares.ExceptionHandlingMiddleware[0]
+      Request POST /api/customer/orders failed with trace id 0HNNDDBS7UM7M:00000003
+      ApplicationLayer.Exceptions.AppException: Không thể tạo liên kết thanh toán PayOS. Vui lòng thử lại.
+       ---> PayOS.Exceptions.ConnectionException: Connection error occurred
+       ---> System.Net.Http.HttpRequestException: An attempt was made to access a socket in a way forbidden by its access permissions. (api-merchant.payos.vn:443)
+       ---> System.Net.Sockets.SocketException (10013): An attempt was made to access a socket in a way forbidden by its access permissions.
+         at System.Net.Sockets.Socket.AwaitableSocketAsyncEventArgs.ThrowException(SocketError error, CancellationToken cancellationToken)
+         at System.Net.Sockets.Socket.AwaitableSocketAsyncEventArgs.System.Threading.Tasks.Sources.IValueTaskSource.GetResult(Int16 token)
+         at System.Net.Sockets.Socket.<ConnectAsync>g__WaitForConnectWithCancellation|285_0(AwaitableSocketAsyncEventArgs saea, ValueTask connectTask, CancellationToken cancellationToken)
+         at System.Net.Http.HttpConnectionPool.ConnectToTcpHostAsync(String host, Int32 port, HttpRequestMessage initialRequest, Boolean async, CancellationToken cancellationToken)
+         --- End of inner exception stack trace ---
+         at System.Net.Http.HttpConnectionPool.ConnectToTcpHostAsync(String host, Int32 port, HttpRequestMessage initialRequest, Boolean async, CancellationToken cancellationToken)
+         at System.Net.Http.HttpConnectionPool.ConnectAsync(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)
+         at System.Net.Http.HttpConnectionPool.CreateHttp11ConnectionAsync(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)
+         at System.Net.Http.HttpConnectionPool.AddHttp11ConnectionAsync(QueueItem queueItem)
+         at System.Threading.Tasks.TaskCompletionSourceWithCancellation`1.WaitWithCancellationAsync(CancellationToken cancellationToken)
+         at System.Net.Http.HttpConnectionPool.SendWithVersionDetectionAndRetryAsync(HttpRequestMessage request, Boolean async, Boolean doRequestAuth, CancellationToken cancellationToken)
+         at System.Net.Http.DiagnosticsHandler.SendAsyncCore(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)
+         at System.Net.Http.RedirectHandler.SendAsync(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)
+         at System.Net.Http.HttpClient.<SendAsync>g__Core|83_0(HttpRequestMessage request, HttpCompletionOption completionOption, CancellationTokenSource cts, Boolean disposeCts, CancellationTokenSource pendingRequestsCts, CancellationToken originalCancellationToken)
+         at PayOS.PayOSClient.RequestAsync[T,TBody](HttpMethod method, String path, RequestOptions`1 requestOptions)
+         --- End of inner exception stack trace ---
+         at PayOS.PayOSClient.RequestAsync[T,TBody](HttpMethod method, String path, RequestOptions`1 requestOptions)
+         at PayOS.PayOSClient.PostAsync[T,TRequest](String path, RequestOptions`1 options)
+         at PayOS.Resources.V2.PaymentRequests.PaymentRequests.CreateAsync(CreatePaymentLinkRequest paymentData, RequestOptions`1 requestOptions)
+         at ApplicationLayer.Services.PayOS.PayOSService.CreatePaymentLinkAsync(PayOSPaymentRequest request) in D:\KLTN\KLTN_SU26_SNM_BE\ApplicationLayer\Services\PayOS\PayOSService.cs:line 65
+         --- End of inner exception stack trace ---
+         at ApplicationLayer.Services.PayOS.PayOSService.CreatePaymentLinkAsync(PayOSPaymentRequest request) in D:\KLTN\KLTN_SU26_SNM_BE\ApplicationLayer\Services\PayOS\PayOSService.cs:line 104
+         at ApplicationLayer.Services.Orders.OrderService.CreateOrderAsync(CreateOrderDto dto) in D:\KLTN\KLTN_SU26_SNM_BE\ApplicationLayer\Services\Orders\OrderService.cs:line 400
+         at ApplicationLayer.Services.Orders.OrderService.CreateOrderAsync(CreateOrderDto dto) in D:\KLTN\KLTN_SU26_SNM_BE\ApplicationLayer\Services\Orders\OrderService.cs:line 430
+         at ApplicationLayer.Services.Orders.CustomerCheckoutService.CreateOrderAsync(Guid customerId, CreateCustomerOrderRequest request, String headerIdempotencyKey, CancellationToken cancellationToken) in D:\KLTN\KLTN_SU26_SNM_BE\ApplicationLayer\Services\Orders\CustomerCheckoutService.cs:line 136
+         at PresentationLayer.Controllers.CustomerOrdersController.Create(CreateCustomerOrderRequest request, CancellationToken cancellationToken) in D:\KLTN\KLTN_SU26_SNM_BE\PresentationLayer\Controllers\CustomerOrdersController.cs:line 32
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ActionMethodExecutor.TaskOfIActionResultExecutor.Execute(ActionContext actionContext, IActionResultTypeMapper mapper, ObjectMethodExecutor executor, Object controller, Object[] arguments)
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.<InvokeActionMethodAsync>g__Awaited|12_0(ControllerActionInvoker invoker, ValueTask`1 actionResultValueTask)
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.<InvokeNextActionFilterAsync>g__Awaited|10_0(ControllerActionInvoker invoker, Task lastTask, State next, Scope scope, Object state, Boolean isCompleted)
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.Rethrow(ActionExecutedContextSealed context)
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.Next(State& next, Scope& scope, Object& state, Boolean& isCompleted)
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.<InvokeInnerFilterAsync>g__Awaited|13_0(ControllerActionInvoker invoker, Task lastTask, State next, Scope scope, Object state, Boolean isCompleted)
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeFilterPipelineAsync>g__Awaited|20_0(ResourceInvoker invoker, Task lastTask, State next, Scope scope, Object state, Boolean isCompleted)
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeAsync>g__Awaited|17_0(ResourceInvoker invoker, Task task, IDisposable scope)
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeAsync>g__Awaited|17_0(ResourceInvoker invoker, Task task, IDisposable scope)
+         at Microsoft.AspNetCore.Authorization.AuthorizationMiddleware.Invoke(HttpContext context)
+         at Microsoft.AspNetCore.Authentication.AuthenticationMiddleware.Invoke(HttpContext context)
+         at PresentationLayer.Middlewares.ExceptionHandlingMiddleware.InvokeAsync(HttpContext context) in D:\KLTN\KLTN_SU26_SNM_BE\PresentationLayer\Middlewares\ExceptionHandlingMiddleware.cs:line 24
+info: PresentationLayer[0]
+      [HTTP] POST /api/customer/orders -> 502

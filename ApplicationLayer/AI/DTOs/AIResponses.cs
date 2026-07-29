@@ -106,6 +106,10 @@ public class DiningPlanItemResponse
     public int Quantity { get; set; }
     public decimal UnitPrice { get; set; }
     public decimal TotalPrice { get; set; }
+    public string Course { get; set; } = string.Empty;
+    public string CourseDisplayName { get; set; } = string.Empty;
+    public int CourseOrder { get; set; }
+    // Backward-compatible alias. New clients must use Course.
     public string Role { get; set; } = string.Empty;
 }
 
@@ -115,6 +119,7 @@ public class DiningPlanOptionResponse
     public string OptionType { get; set; } = string.Empty;
     public string FeasibilityStatus { get; set; } = string.Empty;
     public string Label { get; set; } = string.Empty;
+    public string PlanName { get; set; } = string.Empty;
     public Guid NightMarketId { get; set; }
     public string NightMarketName { get; set; } = string.Empty;
     public int GroupSize { get; set; }
@@ -124,6 +129,8 @@ public class DiningPlanOptionResponse
     public decimal RemainingBudget { get; set; }
     public double? DistanceMeters { get; set; }
     public IReadOnlyCollection<DiningPlanItemResponse> PlanPreview { get; set; } = [];
+    public bool IsCompleteMenu { get; set; }
+    public IReadOnlyCollection<string> MissingRequiredCourses { get; set; } = [];
     public string Reason { get; set; } = string.Empty;
 }
 
@@ -133,11 +140,15 @@ public class DiningPlanAssistantResponse
     public string Message { get; set; } = string.Empty;
     public Guid LogId { get; set; }
     public IReadOnlyCollection<DiningPlanOptionResponse> Options { get; set; } = [];
+    public IReadOnlyCollection<string> RequiredCourses { get; set; } = [];
+    public IReadOnlyCollection<string> MissingRequiredCourses { get; set; } = [];
+    public decimal? MinimumRequiredBudget { get; set; }
 }
 
 public class DiningPlanReadyResponse
 {
     public string Step { get; set; } = "PLAN_READY";
+    public string PlanName { get; set; } = string.Empty;
     public Guid NightMarketId { get; set; }
     public string NightMarketName { get; set; } = string.Empty;
     public int GroupSize { get; set; }
@@ -145,6 +156,7 @@ public class DiningPlanReadyResponse
     public decimal EstimatedTotal { get; set; }
     public decimal RemainingBudget { get; set; }
     public IReadOnlyCollection<DiningPlanItemResponse> PlanItems { get; set; } = [];
+    public bool IsCompleteMenu { get; set; }
     public string Reason { get; set; } = string.Empty;
 }
 

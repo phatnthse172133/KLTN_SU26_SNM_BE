@@ -23,37 +23,55 @@ public class SubscriptionExpiryWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        while (!stoppingToken.IsCancellationRequested)
+        try
         {
-            try
+            while (!stoppingToken.IsCancellationRequested)
             {
-                using var scope = _serviceProvider.CreateScope();
-                var context = scope.ServiceProvider.GetRequiredService<SNMDbContext>();
-                var now = DateTime.UtcNow;
-
-                var expiredBooth = await context.BoothSubscriptions
-                    .Where(bs => bs.Status == SubscriptionStatus.Active && bs.EndDate < now)
-                    .ExecuteUpdateAsync(s => s
-                        .SetProperty(bs => bs.Status, SubscriptionStatus.Expired)
-                        .SetProperty(bs => bs.UpdatedAt, now), stoppingToken);
-
-                var expiredMarket = await context.MarketSubscriptions
-                    .Where(ms => ms.Status == SubscriptionStatus.Active && ms.EndDate < now)
-                    .ExecuteUpdateAsync(s => s
-                        .SetProperty(ms => ms.Status, SubscriptionStatus.Expired)
-                        .SetProperty(ms => ms.UpdatedAt, now), stoppingToken);
-
-                if (expiredBooth > 0 || expiredMarket > 0)
+                try
                 {
-                    _logger.LogInformation("Expired {BoothCount} booth subscriptions and {MarketCount} market subscriptions.", expiredBooth, expiredMarket);
+                    await ExpireSubscriptionsAsync(stoppingToken);
                 }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error in SubscriptionExpiryWorker.");
-            }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error in SubscriptionExpiryWorker. The worker will retry on the next iteration.");
+                }
 
-            await Task.Delay(TimeSpan.FromHours(1), stoppingToken);
+                await Task.Delay(Interval, stoppingToken);
+            }
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            _logger.LogDebug("SubscriptionExpiryWorker stopped because the host is shutting down.");
+        }
+    }
+
+    protected virtual TimeSpan Interval => TimeSpan.FromHours(1);
+
+    protected virtual async Task ExpireSubscriptionsAsync(CancellationToken stoppingToken)
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<SNMDbContext>();
+        var now = DateTime.UtcNow;
+
+        var expiredBooth = await context.BoothSubscriptions
+            .Where(bs => bs.Status == SubscriptionStatus.Active && bs.EndDate < now)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(bs => bs.Status, SubscriptionStatus.Expired)
+                .SetProperty(bs => bs.UpdatedAt, now), stoppingToken);
+
+        var expiredMarket = await context.MarketSubscriptions
+            .Where(ms => ms.Status == SubscriptionStatus.Active && ms.EndDate < now)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(ms => ms.Status, SubscriptionStatus.Expired)
+                .SetProperty(ms => ms.UpdatedAt, now), stoppingToken);
+
+        if (expiredBooth > 0 || expiredMarket > 0)
+        {
+            _logger.LogInformation("Expired {BoothCount} booth subscriptions and {MarketCount} market subscriptions.", expiredBooth, expiredMarket);
         }
     }
 }

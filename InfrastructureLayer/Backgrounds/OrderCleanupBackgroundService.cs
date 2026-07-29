@@ -20,7 +20,7 @@ namespace InfrastructureLayer.Backgrounds
         private readonly ILogger<OrderCleanupBackgroundService> _logger;
 
         // Chu kỳ chạy dọn dẹp: Cứ mỗi 2 phút quét DB 1 lần
-        private readonly TimeSpan _period = TimeSpan.FromMinutes(2);
+        protected virtual TimeSpan Period => TimeSpan.FromMinutes(2);
 
         // Thời hạn hết hạn đơn hàng: 15 phút
         private readonly int _orderTimeoutMinutes = 15;
@@ -37,23 +37,34 @@ namespace InfrastructureLayer.Backgrounds
         {
             _logger.LogInformation("[OrderCleanupService] Background Service dọn dẹp đơn hàng đã bắt đầu chạy.");
 
-            using PeriodicTimer timer = new PeriodicTimer(_period);
-
-            // Vòng lặp sẽ chạy vô tận cho đến khi ứng dụng bị Stop (stoppingToken)
-            while (!stoppingToken.IsCancellationRequested && await timer.WaitForNextTickAsync(stoppingToken))
+            try
             {
-                try
+                using PeriodicTimer timer = new PeriodicTimer(Period);
+
+                // Vòng lặp sẽ chạy vô tận cho đến khi ứng dụng bị Stop (stoppingToken)
+                while (await timer.WaitForNextTickAsync(stoppingToken))
                 {
-                    await RunOnceAsync(stoppingToken);
+                    try
+                    {
+                        await RunOnceAsync(stoppingToken);
+                    }
+                    catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                    {
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "[OrderCleanupService] Lỗi xảy ra khi dọn dẹp đơn hàng treo! Service sẽ thử lại ở chu kỳ kế tiếp.");
+                    }
                 }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "[OrderCleanupService] Lỗi xảy ra khi dọn dẹp đơn hàng treo!");
-                }
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                _logger.LogDebug("[OrderCleanupService] Đã dừng do host đang shutdown.");
             }
         }
 
-        public async Task RunOnceAsync(CancellationToken stoppingToken = default)
+        public virtual async Task RunOnceAsync(CancellationToken stoppingToken = default)
         {
             // BackgroundService là Singleton, 
             // nên bắt buộc phải tạo Scope riêng để dùng DbContext (Scoped service)
@@ -123,6 +134,10 @@ namespace InfrastructureLayer.Backgrounds
                         try
                         {
                             await payos.CancelPaymentLinkAsync(providerCode);
+                        }
+                        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                        {
+                            throw;
                         }
                         catch (Exception exception)
                         {

@@ -313,7 +313,9 @@ namespace DomainLayer.Enums
             Refunded = 3, // Đã hoàn tiền cho khách
             Cancelled = 4,
             RefundProcessing = 5, // Đang xử lý hoàn tiền
-            Underpaid = 6 // Thanh toán thiếu
+            Underpaid = 6, // Thanh toán thiếu
+            Unpaid = 7,
+            Expired = 8
         }
 
         public enum OrderStatus
@@ -325,7 +327,27 @@ namespace DomainLayer.Enums
             Completed = 3,       // Khách đã lấy món -> Hoàn thành đơn (đã trả tiền cho quầy nếu customer chọn Cash)
             Cancelled = 4,       // Đơn bị hủy (Do khách hủy hoặc quầy hết nguyên liệu)
             Underpaid = 5,       // Đã nhận tiền nhưng thấp hơn FinalAmount, chờ thanh toán bổ sung/xử lý
-            Refunded = 6         // Đơn đã được hoàn tiền cho khách
+            Refunded = 6,        // Đơn đã được hoàn tiền cho khách
+            PendingPayment = 7,
+            PaymentFailed = 8
+        }
+
+        public enum PaymentAttemptStatus
+        {
+            Creating = 0,
+            Pending = 1,
+            Paid = 2,
+            Cancelled = 3,
+            Expired = 4,
+            Failed = 5
+        }
+
+        public enum WebhookProcessingStatus
+        {
+            Received = 0,
+            Processed = 1,
+            Rejected = 2,
+            Failed = 3
         }
 
         //public enum PayOrderStatus

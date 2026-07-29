@@ -32,6 +32,7 @@ public sealed class IntegrationDemoDataSeederTests
     {
         await using var provider = Provider();
 
+        await SystemFoodTaxonomySeeder.SeedAsync(provider);
         var first = await IntegrationDemoDataSeeder.SeedAsync(provider);
         var second = await IntegrationDemoDataSeeder.SeedAsync(provider);
 
@@ -57,6 +58,16 @@ public sealed class IntegrationDemoDataSeederTests
             .Select(x => x.ThumbnailUrl).ToListAsync();
         Assert.Equal(5, boothImageUrls.Distinct().Count());
         Assert.All(boothImageUrls, url => Assert.EndsWith("-v2.jpg", url, StringComparison.Ordinal));
+
+        var courseLinks = await db.FoodItemTags
+            .Where(link => link.FoodItem.Booth.NightMarketId == market.Id && link.FoodTag.Code.StartsWith("COURSE_"))
+            .Select(link => link.FoodTag.Code)
+            .ToListAsync();
+        var courseCoverage = courseLinks.GroupBy(code => code).ToDictionary(group => group.Key, group => group.Count());
+        Assert.True(courseCoverage["COURSE_APPETIZER"] >= 2);
+        Assert.True(courseCoverage["COURSE_MAIN_COURSE"] >= 2);
+        Assert.True(courseCoverage["COURSE_DRINK"] >= 2);
+        Assert.True(courseCoverage["COURSE_DESSERT"] >= 2);
 
         var ratings = await db.Booths.Where(x => x.NightMarketId == market.Id)
             .OrderBy(x => x.BoothCode).Select(x => x.AverageRating).ToListAsync();
@@ -292,7 +303,24 @@ public sealed class IntegrationDemoDataSeederTests
         var normal = all.Data.Items.First(x => x.BasePrice == x.EffectivePrice);
         var reduced = all.Data.Items.First(x => x.EffectivePrice < x.BasePrice);
         var nonOrderable = all.Data.Items.First(x => !x.CanOrder);
-        Assert.Equal(normal.Id, (await discovery.GetFoodAsync(normal.Id)).Data!.Id);
+        var detailTag = new DomainLayer.Entities.FoodTag
+        {
+            Id = Guid.NewGuid(), Code = "detail-tag", Name = "Detail tag",
+            TagGroup = FoodTagGroup.Dietary, Status = FoodTagStatus.Active,
+            IsSystem = true, IsSelectable = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
+        };
+        db.FoodTags.Add(detailTag);
+        db.FoodItemTags.Add(new DomainLayer.Entities.FoodItemTag
+        {
+            FoodItemId = normal.Id, FoodTagId = detailTag.Id, CreatedAt = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+
+        var normalDetail = (await discovery.GetFoodAsync(normal.Id)).Data!;
+        Assert.Equal(normal.Id, normalDetail.Id);
+        var returnedTag = Assert.Single(normalDetail.Tags);
+        Assert.Equal(detailTag.Id, returnedTag.Id);
+        Assert.Equal("Dietary", returnedTag.TagGroup);
         Assert.True((await discovery.GetFoodAsync(reduced.Id)).Data!.EffectivePrice < reduced.BasePrice);
         var nonOrderableDetail = (await discovery.GetFoodAsync(nonOrderable.Id)).Data!;
         Assert.True(nonOrderableDetail.IsAvailable);

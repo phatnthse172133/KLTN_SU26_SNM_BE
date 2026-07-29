@@ -40,9 +40,11 @@ public sealed class CartIntegrationBusinessTests
             mapper,
             new FixedTimeProvider(OpenUtc));
 
-        var empty = await Assert.ThrowsAsync<AppException>(() =>
-            service.GetCurrentAsync(customerId, new PaginationReq()));
-        Assert.Equal("CART_NOT_FOUND", empty.ErrorCode);
+        var empty = (await service.GetCurrentAsync(customerId, new PaginationReq())).Data!;
+        Assert.Equal(0, empty.TotalItemCount);
+        Assert.Equal(0m, empty.TotalAmount);
+        Assert.False(empty.CanCheckout);
+        Assert.Empty(empty.Booths.Items);
 
         var firstFoodId = IntegrationDemoDataSeeder.FoodId(1, 1);
         var firstFood = await db.FoodItems
@@ -101,9 +103,9 @@ public sealed class CartIntegrationBusinessTests
         Assert.Single(oneBooth.Booths.Items);
 
         await service.ClearAsync(customerId);
-        var cleared = await Assert.ThrowsAsync<AppException>(() =>
-            service.GetCurrentAsync(customerId, new PaginationReq()));
-        Assert.Equal("CART_NOT_FOUND", cleared.ErrorCode);
+        var cleared = (await service.GetCurrentAsync(customerId, new PaginationReq())).Data!;
+        Assert.Equal(0, cleared.TotalItemCount);
+        Assert.Empty(cleared.Booths.Items);
         Assert.True((await db.CartItems.IgnoreQueryFilters().SingleAsync(
             item => item.Id == anotherBooth.Data!.CartItemId)).IsDeleted);
     }

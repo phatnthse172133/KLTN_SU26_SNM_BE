@@ -78,6 +78,10 @@ namespace InfrastructureLayer.Data
 
         public virtual DbSet<Payment> Payments { get; set; }
 
+        public virtual DbSet<PaymentAttempt> PaymentAttempts { get; set; }
+
+        public virtual DbSet<PaymentWebhookEvent> PaymentWebhookEvents { get; set; }
+
         public virtual DbSet<Package> Packages { get; set; }
 
         public virtual DbSet<PackagePrice> PackagePrices { get; set; }
@@ -168,7 +172,6 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.SelectedOptionId).HasMaxLength(100);
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
-
                 entity.HasOne(d => d.Customer).WithMany(p => p.AIRecommendationLogs)
                     .HasForeignKey(d => d.CustomerId)
                     .OnDelete(DeleteBehavior.SetNull)
@@ -1037,6 +1040,10 @@ namespace InfrastructureLayer.Data
                     .IsUnique()
                     .HasFilter("\"CheckoutRequestId\" IS NOT NULL");
 
+                entity.HasIndex(e => new { e.CustomerId, e.IdempotencyKey }, "ux_order_customer_idempotency_key")
+                    .IsUnique()
+                    .HasFilter("\"IdempotencyKey\" IS NOT NULL");
+
                 entity.HasIndex(e => e.CustomerId, "idx_order_customer");
                 entity.HasIndex(e => new { e.CustomerId, e.CreatedAt }, "idx_order_customer_created").IsDescending(false, true);
                 entity.HasIndex(e => new { e.CustomerId, e.Status, e.CreatedAt }, "idx_order_customer_status_created").IsDescending(false, false, true);
@@ -1049,6 +1056,15 @@ namespace InfrastructureLayer.Data
                     .HasComment("TotalAmount - DiscountAmount");
                 entity.Property(e => e.OrderCode)
                     .IsRequired();
+                entity.Property(e => e.IdempotencyKey).HasMaxLength(100);
+                entity.Property(e => e.RequestHash).HasMaxLength(64);
+                entity.Property(e => e.CheckoutCartItemIds).HasColumnType("jsonb");
+                entity.Property(e => e.PromotionSnapshot).HasColumnType("jsonb");
+                entity.Property(e => e.CancellationReason).HasMaxLength(500);
+                entity.Property(e => e.PaymentMethod).HasConversion<string>().HasMaxLength(20);
+                entity.Property(e => e.RowVersion)
+                    .IsRowVersion()
+                    .HasDefaultValueSql("uuid_send(gen_random_uuid())");
                 entity.Property(e => e.Status)
                     .HasConversion<string>()
                     .HasMaxLength(30)
@@ -1067,6 +1083,12 @@ namespace InfrastructureLayer.Data
                     .HasForeignKey(o => o.BoothOwnerId)
                     .OnDelete(DeleteBehavior.Restrict)
                     .HasConstraintName("Order_BoothOwnerId_fkey");
+
+                entity.HasOne(o => o.Booth)
+                    .WithMany()
+                    .HasForeignKey(o => o.BoothId)
+                    .OnDelete(DeleteBehavior.Restrict)
+                    .HasConstraintName("Order_BoothId_fkey");
             });
 
             modelBuilder.Entity<OrderDetail>(entity =>
@@ -1157,6 +1179,13 @@ namespace InfrastructureLayer.Data
                     .HasComment("TiÃ¡Â»Ân mÃ¡ÂºÂ·t hoÃ¡ÂºÂ·c PayOS");
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
 
+                entity.Property(e => e.QrCode).HasMaxLength(4000);
+                entity.Property(e => e.FailureCode).HasMaxLength(100);
+                entity.Property(e => e.FailureMessage).HasMaxLength(500);
+                entity.Property(e => e.RowVersion)
+                    .IsRowVersion()
+                    .HasDefaultValueSql("uuid_send(gen_random_uuid())");
+
                 entity.Property(e => e.PaidAt)
                     .IsRequired(false) // Ã„â€˜ÃƒÂ¢y lÃƒÂ  trÃ†Â°Ã¡Â»Âng Nullable (Ã„â€˜Ã†Â°Ã¡Â»Â£c phÃƒÂ©p trÃ¡Â»â€˜ng)
                     .HasComment("ThÃ¡Â»Âi Ã„â€˜iÃ¡Â»Æ’m dÃƒÂ²ng tiÃ¡Â»Ân thÃ¡Â»Â±c tÃ¡ÂºÂ¿ Ã„â€˜Ã†Â°Ã¡Â»Â£c khÃƒÂ¡ch hÃƒÂ ng quÃƒÂ©t mÃƒÂ£ vÃƒÂ  bÃ¡ÂºÂ¯n vÃ¡Â»Â hÃ¡Â»â€¡ thÃ¡Â»â€˜ng thÃƒÂ nh cÃƒÂ´ng");
@@ -1170,6 +1199,35 @@ namespace InfrastructureLayer.Data
                     .HasForeignKey(d => d.OrderId)
                     .OnDelete(DeleteBehavior.Cascade)
                     .HasConstraintName("Payments_OrderId_fkey");
+            });
+
+            modelBuilder.Entity<PaymentAttempt>(entity =>
+            {
+                entity.ToTable("PaymentAttempts");
+                entity.HasKey(e => e.Id);
+                entity.HasIndex(e => e.ProviderOrderCode).IsUnique();
+                entity.HasIndex(e => new { e.PaymentId, e.AttemptNumber }).IsUnique();
+                entity.Property(e => e.ProviderPaymentLinkId).HasMaxLength(255);
+                entity.Property(e => e.CheckoutUrl).HasMaxLength(2000);
+                entity.Property(e => e.QrCode).HasMaxLength(4000);
+                entity.Property(e => e.FailureCode).HasMaxLength(100);
+                entity.Property(e => e.FailureMessage).HasMaxLength(500);
+                entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(20);
+                entity.HasOne(e => e.Payment).WithMany(e => e.Attempts).HasForeignKey(e => e.PaymentId).OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<PaymentWebhookEvent>(entity =>
+            {
+                entity.ToTable("PaymentWebhookEvents");
+                entity.HasKey(e => e.Id);
+                entity.HasIndex(e => new { e.Provider, e.ProviderEventKey }).IsUnique();
+                entity.HasIndex(e => new { e.Provider, e.PayloadHash }).IsUnique();
+                entity.Property(e => e.Provider).HasMaxLength(30);
+                entity.Property(e => e.ProviderEventKey).HasMaxLength(255);
+                entity.Property(e => e.SignatureHash).HasMaxLength(64);
+                entity.Property(e => e.PayloadHash).HasMaxLength(64);
+                entity.Property(e => e.Error).HasMaxLength(500);
+                entity.Property(e => e.ProcessingStatus).HasConversion<string>().HasMaxLength(20);
             });
 
             modelBuilder.Entity<Package>(entity =>

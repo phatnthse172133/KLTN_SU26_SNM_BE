@@ -1,0 +1,64 @@
+info: Microsoft.EntityFrameworkCore.Migrations[20405]
+      No migrations were applied. The database is already up to date.
+info: SystemFoodTaxonomySeeder[0]
+      System food taxonomy seed completed. Categories inserted=0, updated=0, skipped=18; tags inserted=0, updated=0, skipped=102; legacy tags deactivated=0.
+info: InfrastructureLayer.Data.SNMDbContext[0]
+      Controlled demo seed enabled; transaction starting.
+info: InfrastructureLayer.Data.SNMDbContext[0]
+      Phase 03.5 demo seed ready: 1 market, 5 booths, 20 foods, 12 reviews, 10 nodes, 12 edges.
+info: InfrastructureLayer.Backgrounds.OrderCleanupBackgroundService[0]
+      [OrderCleanupService] Background Service d?n d?p don h…ng da b?t d?u ch?y.
+info: Microsoft.Hosting.Lifetime[14]
+      Now listening on: http://0.0.0.0:5282
+info: Microsoft.Hosting.Lifetime[0]
+      Application started. Press Ctrl+C to shut down.
+info: Microsoft.Hosting.Lifetime[0]
+      Hosting environment: Development
+info: Microsoft.Hosting.Lifetime[0]
+      Content root path: D:\KLTN\KLTN_SU26_SNM_BE\PresentationLayer
+info: PresentationLayer[0]
+      PayOS runtime config. ClientIdPresent=True ApiKeyPresent=True ChecksumKeyPresent=True ReturnUrlValid=True CancelUrlValid=True
+info: PresentationLayer[0]
+      [HTTP] GET /health -> 200
+info: PresentationLayer[0]
+      [HTTP] POST /api/auth/login -> 200
+warn: Microsoft.EntityFrameworkCore.Query[20504]
+      Compiling a query which loads related collections for more than one collection navigation, either via 'Include' or through projection, but no 'QuerySplittingBehavior' has been configured. By default, Entity Framework will use 'QuerySplittingBehavior.SingleQuery', which can potentially result in slow query performance. See https://go.microsoft.com/fwlink/?linkid=2134277 for more information. To identify the query that's triggering this warning call 'ConfigureWarnings(w => w.Throw(RelationalEventId.MultipleCollectionIncludeWarning))'.
+fail: ApplicationLayer.Services.PayOS.PayOSService[0]
+      PayOS create-link failed. OrderCode=100000000000022 Amount=59000 ProviderStatus=200 ProviderCode=214 ProviderMessage=C?ng thanh to n kh“ng t?n t?i ho?c da t?m d?ng, vui l•ng ch?n c?ng kh c
+      PayOS.Exceptions.ApiException: C?ng thanh to n kh“ng t?n t?i ho?c da t?m d?ng, vui l•ng ch?n c?ng kh c
+         at PayOS.PayOSClient.ProcessResponseAsync[T](HttpResponseMessage response, SignatureOptions signatureOptions)
+         at PayOS.PayOSClient.RequestAsync[T,TBody](HttpMethod method, String path, RequestOptions`1 requestOptions)
+         at PayOS.PayOSClient.PostAsync[T,TRequest](String path, RequestOptions`1 options)
+         at PayOS.Resources.V2.PaymentRequests.PaymentRequests.CreateAsync(CreatePaymentLinkRequest paymentData, RequestOptions`1 requestOptions)
+         at ApplicationLayer.Services.PayOS.PayOSService.CreatePaymentLinkAsync(PayOSPaymentRequest request) in D:\KLTN\KLTN_SU26_SNM_BE\ApplicationLayer\Services\PayOS\PayOSService.cs:line 65
+fail: PresentationLayer.Middlewares.ExceptionHandlingMiddleware[0]
+      Request POST /api/customer/orders/588afc20-b913-4b2b-8a09-aa9b7e234214/payments/retry failed with trace id 0HNNDDMCQ201N:00000003
+      ApplicationLayer.Exceptions.AppException: Kh“ng th? t?o liˆn k?t thanh to n PayOS. Vui l•ng th? l?i.
+       ---> PayOS.Exceptions.ApiException: C?ng thanh to n kh“ng t?n t?i ho?c da t?m d?ng, vui l•ng ch?n c?ng kh c
+         at PayOS.PayOSClient.ProcessResponseAsync[T](HttpResponseMessage response, SignatureOptions signatureOptions)
+         at PayOS.PayOSClient.RequestAsync[T,TBody](HttpMethod method, String path, RequestOptions`1 requestOptions)
+         at PayOS.PayOSClient.PostAsync[T,TRequest](String path, RequestOptions`1 options)
+         at PayOS.Resources.V2.PaymentRequests.PaymentRequests.CreateAsync(CreatePaymentLinkRequest paymentData, RequestOptions`1 requestOptions)
+         at ApplicationLayer.Services.PayOS.PayOSService.CreatePaymentLinkAsync(PayOSPaymentRequest request) in D:\KLTN\KLTN_SU26_SNM_BE\ApplicationLayer\Services\PayOS\PayOSService.cs:line 65
+         --- End of inner exception stack trace ---
+         at ApplicationLayer.Services.PayOS.PayOSService.CreatePaymentLinkAsync(PayOSPaymentRequest request) in D:\KLTN\KLTN_SU26_SNM_BE\ApplicationLayer\Services\PayOS\PayOSService.cs:line 104
+         at ApplicationLayer.Services.Orders.OrderService.RetryPaymentAsync(Guid customerId, Guid orderId, CancellationToken cancellationToken) in D:\KLTN\KLTN_SU26_SNM_BE\ApplicationLayer\Services\Orders\OrderService.CustomerPaymentFlow.cs:line 63
+         at ApplicationLayer.Services.Orders.OrderService.RetryPaymentAsync(Guid customerId, Guid orderId, CancellationToken cancellationToken) in D:\KLTN\KLTN_SU26_SNM_BE\ApplicationLayer\Services\Orders\OrderService.CustomerPaymentFlow.cs:line 91
+         at PresentationLayer.Controllers.CustomerOrdersController.RetryPayment(Guid orderId, CancellationToken cancellationToken) in D:\KLTN\KLTN_SU26_SNM_BE\PresentationLayer\Controllers\CustomerOrdersController.cs:line 40
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ActionMethodExecutor.TaskOfIActionResultExecutor.Execute(ActionContext actionContext, IActionResultTypeMapper mapper, ObjectMethodExecutor executor, Object controller, Object[] arguments)
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.<InvokeActionMethodAsync>g__Awaited|12_0(ControllerActionInvoker invoker, ValueTask`1 actionResultValueTask)
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.<InvokeNextActionFilterAsync>g__Awaited|10_0(ControllerActionInvoker invoker, Task lastTask, State next, Scope scope, Object state, Boolean isCompleted)
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.Rethrow(ActionExecutedContextSealed context)
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.Next(State& next, Scope& scope, Object& state, Boolean& isCompleted)
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.<InvokeInnerFilterAsync>g__Awaited|13_0(ControllerActionInvoker invoker, Task lastTask, State next, Scope scope, Object state, Boolean isCompleted)
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeFilterPipelineAsync>g__Awaited|20_0(ResourceInvoker invoker, Task lastTask, State next, Scope scope, Object state, Boolean isCompleted)
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeAsync>g__Awaited|17_0(ResourceInvoker invoker, Task task, IDisposable scope)
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeAsync>g__Awaited|17_0(ResourceInvoker invoker, Task task, IDisposable scope)
+         at Microsoft.AspNetCore.Authorization.AuthorizationMiddleware.Invoke(HttpContext context)
+         at Microsoft.AspNetCore.Authentication.AuthenticationMiddleware.Invoke(HttpContext context)
+         at PresentationLayer.Middlewares.ExceptionHandlingMiddleware.InvokeAsync(HttpContext context) in D:\KLTN\KLTN_SU26_SNM_BE\PresentationLayer\Middlewares\ExceptionHandlingMiddleware.cs:line 24
+info: PresentationLayer[0]
+      [HTTP] POST /api/customer/orders/588afc20-b913-4b2b-8a09-aa9b7e234214/payments/retry -> 502
+warn: Microsoft.EntityFrameworkCore.Query[20504]
+      Compiling a query which loads related collections for more than one collection navigation, either via 'Include' or through projection, but no 'QuerySplittingBehavior' has been configured. By default, Entity Framework will use 'QuerySplittingBehavior.SingleQuery', which can potentially result in slow query performance. See https://go.microsoft.com/fwlink/?linkid=2134277 for more information. To identify the query that's triggering this warning call 'ConfigureWarnings(w => w.Throw(RelationalEventId.MultipleCollectionIncludeWarning))'.

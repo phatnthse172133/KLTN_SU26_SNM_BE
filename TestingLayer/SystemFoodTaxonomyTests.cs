@@ -27,15 +27,15 @@ public sealed class SystemFoodTaxonomyTests
         var second = await SystemFoodTaxonomySeeder.SeedAsync(provider);
 
         Assert.Equal(18, first.CategoriesInserted);
-        Assert.Equal(94, first.TagsInserted);
+        Assert.Equal(102, first.TagsInserted);
         Assert.Equal(0, second.CategoriesInserted + second.CategoriesUpdated + second.TagsInserted + second.TagsUpdated);
         Assert.Equal(18, second.CategoriesSkipped);
-        Assert.Equal(94, second.TagsSkipped);
+        Assert.Equal(102, second.TagsSkipped);
 
         await using var scope = provider.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SNMDbContext>();
         Assert.Equal(18, await db.FoodCategories.CountAsync(category => category.IsSystem));
-        Assert.Equal(94, await db.FoodTags.CountAsync(tag => tag.IsSystem));
+        Assert.Equal(102, await db.FoodTags.CountAsync(tag => tag.IsSystem));
         Assert.False(await db.FoodCategories.GroupBy(category => category.Code).AnyAsync(group => group.Count() > 1));
         Assert.False(await db.FoodTags.GroupBy(tag => tag.Code).AnyAsync(group => group.Count() > 1));
 
@@ -48,7 +48,8 @@ public sealed class SystemFoodTaxonomyTests
         Assert.Equal(30, counts[FoodTagGroup.Ingredient]);
         Assert.Equal(13, counts[FoodTagGroup.Dietary]);
         Assert.Equal(5, counts[FoodTagGroup.Budget]);
-        Assert.Equal(8, counts[FoodTagGroup.Other]);
+        Assert.Equal(16, counts[FoodTagGroup.Other]);
+        Assert.Equal(8, await db.FoodTags.CountAsync(tag => tag.Code.StartsWith("COURSE_") && tag.IsSystem));
         Assert.All(await db.FoodTags.Where(tag => tag.TagGroup == FoodTagGroup.Budget).ToListAsync(), tag =>
         {
             Assert.True(tag.IsAutoAssigned);

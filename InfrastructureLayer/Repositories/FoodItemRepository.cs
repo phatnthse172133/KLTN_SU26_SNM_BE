@@ -86,16 +86,41 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
                 .Include(item => item.Category)
                 .Include(item => item.FoodPrices)
                 .Include(item => item.FoodImages)
+                .Include(item => item.FoodItemTags).ThenInclude(itemTag => itemTag.FoodTag)
                 .FirstOrDefaultAsync(item => item.Id == foodItemId, cancellationToken);
-            return food is null ? null : ToCustomerReadModel(food, utcNow, includeImages: true);
+            if (food is null) return null;
+            return ToCustomerReadModel(food, utcNow, includeImages: true) with
+            {
+                Tags = food.FoodItemTags
+                    .Where(itemTag => itemTag.FoodTag.Status == FoodTagStatus.Active && !itemTag.FoodTag.IsDeleted)
+                    .OrderBy(itemTag => itemTag.FoodTag.DisplayOrder)
+                    .ThenBy(itemTag => itemTag.FoodTag.Name)
+                    .Select(itemTag => new CustomerFoodTagReadModel(
+                        itemTag.FoodTag.Id, itemTag.FoodTag.Code, itemTag.FoodTag.Name, itemTag.FoodTag.TagGroup))
+                    .ToList()
+            };
         }
 
-        return await ProjectCustomer(
+        var result = await ProjectCustomer(
                     FoodPriceResolver.WithCurrentPrice(
                         CustomerVisibleQuery().Where(item => item.Id == foodItemId),
                         utcNow),
                     includeImages: true)
                 .FirstOrDefaultAsync(cancellationToken);
+        if (result is null) return null;
+
+        var tags = await _context.FoodItemTags
+            .AsNoTracking()
+            .Where(itemTag => itemTag.FoodItemId == foodItemId
+                              && itemTag.FoodTag.Status == FoodTagStatus.Active
+                              && !itemTag.FoodTag.IsDeleted)
+            .OrderBy(itemTag => itemTag.FoodTag.DisplayOrder)
+            .ThenBy(itemTag => itemTag.FoodTag.Name)
+            .Select(itemTag => new CustomerFoodTagReadModel(
+                itemTag.FoodTag.Id, itemTag.FoodTag.Code, itemTag.FoodTag.Name, itemTag.FoodTag.TagGroup))
+            .ToListAsync(cancellationToken);
+
+        return result with { Tags = tags };
     }
 
     public async Task<PagedResult<NightMarketFoodCustomerReadModel>> GetCustomerByNightMarketPagedAsync(

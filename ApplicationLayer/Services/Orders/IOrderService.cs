@@ -15,6 +15,10 @@ namespace ApplicationLayer.Services.Orders
         Task<ApiResponse<OrderResponseDto>> CreateOrderAsync(CreateOrderDto dto);
         Task<ApiResponse<PaginationResp<CustomerOrderHistoryResponse>>> GetCustomerHistoryAsync(Guid customerId, CustomerOrderHistoryRequest request, CancellationToken cancellationToken = default);
         Task<ApiResponse<CustomerOrderDetailResponse>> GetCustomerDetailAsync(Guid customerId, Guid orderId, CancellationToken cancellationToken = default);
+        Task<ApiResponse<CustomerPaymentStatusResponse>> GetPaymentStatusAsync(Guid customerId, Guid orderId, CancellationToken cancellationToken = default);
+        Task<ApiResponse<CustomerPaymentStatusResponse>> ReconcileCustomerPaymentAsync(Guid customerId, Guid orderId, CancellationToken cancellationToken = default);
+        Task<ApiResponse<OrderResponseDto>> RetryPaymentAsync(Guid customerId, Guid orderId, CancellationToken cancellationToken = default);
+        Task<ApiResponse<bool>> CancelCustomerOrderAsync(Guid customerId, Guid orderId, string? reason, CancellationToken cancellationToken = default);
         Task<ApiResponse<SupplementalPaymentResponseDto>> PayRemainingAmountAsync(Guid actorId, long orderCode);
         Task<WebhookDispatchResult> ProcessPaymentWebhookAsync(PayOSWebhookData verifiedData);
         Task<ApiResponse<bool>> UpdateOrderStatusByBoothOwnerAsync(Guid boothOwnerId, UpdateOrderStatusDto dto);

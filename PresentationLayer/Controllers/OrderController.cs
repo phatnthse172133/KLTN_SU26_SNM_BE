@@ -26,7 +26,7 @@ namespace PresentationLayer.Controllers
         //private Guid CurrentUserId => Guid.Parse("22222222-2222-2222-2222-222222222222");
 
         // POST api/<OrderController>
-        [HttpPost]
+        [NonAction]
         [Authorize(Roles = "Customer,BoothOwner")]
         [EnableRateLimiting("OrderApiPolicy")]
         public async Task<IActionResult> CreateOrder([FromBody] CreateOrderDto dto)
@@ -59,7 +59,7 @@ namespace PresentationLayer.Controllers
             return response.Success ? Ok(response) : BadRequest(response);
         }
 
-        [HttpPut("update-status/{orderCode}")]
+        [NonAction]
         [Authorize(Roles = "BoothOwner")]
         public async Task<IActionResult> UpdateOrderStatus([FromRoute] long orderCode, [FromBody] UpdateOrderStatusDto dto)
         {
@@ -76,7 +76,7 @@ namespace PresentationLayer.Controllers
             return response.Success ? Ok(response) : BadRequest(response);
         }
 
-        [HttpPut("{orderCode}/Customer/Cancel")]
+        [NonAction]
         [Authorize(Roles = "Customer")]
         public async Task<IActionResult> CancelOrderByCustomer([FromRoute] long orderCode)
         {

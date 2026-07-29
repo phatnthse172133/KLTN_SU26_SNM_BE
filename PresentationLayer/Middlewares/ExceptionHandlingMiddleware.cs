@@ -8,16 +8,13 @@ public class ExceptionHandlingMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly ILogger<ExceptionHandlingMiddleware> _logger;
-    private readonly IHostEnvironment _environment;
 
     public ExceptionHandlingMiddleware(
         RequestDelegate next,
-        ILogger<ExceptionHandlingMiddleware> logger,
-        IHostEnvironment environment)
+        ILogger<ExceptionHandlingMiddleware> logger)
     {
         _next = next;
         _logger = logger;
-        _environment = environment;
     }
 
     public async Task InvokeAsync(HttpContext context)
@@ -32,6 +29,21 @@ public class ExceptionHandlingMiddleware
         }
         catch (DbUpdateException exception)
         {
+            if (exception is DbUpdateConcurrencyException concurrencyException)
+            {
+                _logger.LogWarning(
+                    "Database concurrency conflict for entities {EntityTypes}.",
+                    string.Join(",", concurrencyException.Entries.Select(entry => entry.Metadata.ClrType.Name)));
+            }
+            else if (exception.InnerException is Npgsql.PostgresException postgresException)
+            {
+                _logger.LogWarning(
+                    "Database constraint conflict. SqlState={SqlState} Constraint={Constraint} Table={Table}",
+                    postgresException.SqlState,
+                    postgresException.ConstraintName,
+                    postgresException.TableName);
+            }
+
             await WriteErrorAsync(
                 context,
                 exception,
@@ -104,7 +116,7 @@ public class ExceptionHandlingMiddleware
         {
             TraceId = traceId,
             ErrorCode = errorCode,
-            Details = _environment.IsDevelopment() ? exception.ToString() : null
+            Details = null
         });
 
         await context.Response.WriteAsJsonAsync(response);

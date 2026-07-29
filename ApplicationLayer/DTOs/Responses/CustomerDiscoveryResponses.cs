@@ -74,8 +74,17 @@ public sealed class CustomerFoodDetailResponse : CustomerFoodListItemResponse
 {
     public string? Description { get; set; }
     public IReadOnlyCollection<string> ImageUrls { get; set; } = [];
+    public IReadOnlyCollection<CustomerFoodTagResponse> Tags { get; set; } = [];
     public CustomerBoothSummaryResponse Booth { get; set; } = new();
     public CustomerMarketSummaryResponse Market { get; set; } = new();
+}
+
+public sealed class CustomerFoodTagResponse
+{
+    public Guid Id { get; set; }
+    public string Code { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string TagGroup { get; set; } = string.Empty;
 }
 
 public sealed class CustomerReviewResponse

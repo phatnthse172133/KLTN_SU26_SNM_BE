@@ -25,23 +25,35 @@ public class EmailOutboxWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        while (!stoppingToken.IsCancellationRequested)
+        try
         {
-            try
+            while (!stoppingToken.IsCancellationRequested)
             {
-                await ProcessOutboxAsync(stoppingToken);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "An error occurred while processing the email outbox.");
-            }
+                try
+                {
+                    await ProcessOutboxAsync(stoppingToken);
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "An error occurred while processing the email outbox. The worker will retry on the next iteration.");
+                }
 
-            // Check every 30 seconds
-            await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
+                await Task.Delay(Interval, stoppingToken);
+            }
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            _logger.LogDebug("EmailOutboxWorker stopped because the host is shutting down.");
         }
     }
 
-    private async Task ProcessOutboxAsync(CancellationToken stoppingToken)
+    protected virtual TimeSpan Interval => TimeSpan.FromSeconds(30);
+
+    protected virtual async Task ProcessOutboxAsync(CancellationToken stoppingToken)
     {
         using var scope = _serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<SNMDbContext>();
@@ -83,6 +95,10 @@ public class EmailOutboxWorker : BackgroundService
                 email.UpdatedAt = DateTime.UtcNow;
                 _logger.LogInformation("Successfully sent email (Type: {Type}) to {Email}", email.EmailType, email.RecipientEmail);
             }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 email.LastError = ex.Message;
@@ -90,7 +106,7 @@ public class EmailOutboxWorker : BackgroundService
                 email.Status = email.RetryCount >= 5 ? "Failed_Permanent" : "Failed";
                 email.NextRetryAt = CalculateNextRetry(email.RetryCount);
                 email.UpdatedAt = DateTime.UtcNow;
-                _logger.LogWarning("Failed to send email to {Email}. RetryCount: {RetryCount}", email.RecipientEmail, email.RetryCount);
+                _logger.LogWarning(ex, "Failed to send email to {Email}. RetryCount: {RetryCount}", email.RecipientEmail, email.RetryCount);
             }
         }
 

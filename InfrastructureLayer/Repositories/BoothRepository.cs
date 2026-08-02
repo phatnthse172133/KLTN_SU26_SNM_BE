@@ -109,8 +109,34 @@ public class BoothRepository : GenericRepository<Booth>, IBoothRepository
 
     public Task<Booth?> GetByOwnerIdAsync(
         Guid ownerId, CancellationToken cancellationToken = default)
-        => _dbSet.AsNoTracking().FirstOrDefaultAsync(
-            booth => booth.BoothOwnerId == ownerId, cancellationToken);
+        => _dbSet.AsNoTracking()
+            .Include(booth => booth.NightMarket)
+            .Include(booth => booth.Zone)
+            .FirstOrDefaultAsync(
+                booth => booth.BoothOwnerId == ownerId, cancellationToken);
+
+    public Task<Booth?> GetByOwnerIdWithAdminDetailsAsync(
+        Guid ownerId,
+        CancellationToken cancellationToken = default)
+        => _dbSet.AsNoTracking()
+            .AsSplitQuery()
+            .Include(booth => booth.BoothOwner)
+            .Include(booth => booth.NightMarket)
+            .Include(booth => booth.Zone)
+            .Include(booth => booth.BoothDocuments)
+            .Include(booth => booth.Registration)
+                .ThenInclude(registration => registration!.BoothDocuments)
+            .Include(booth => booth.BoothLocations.Where(location =>
+                !location.IsDeleted && location.ReleasedAt == null))
+                .ThenInclude(location => location.Layout)
+            .Include(booth => booth.BoothLocations.Where(location =>
+                !location.IsDeleted && location.ReleasedAt == null))
+                .ThenInclude(location => location.Zone)
+            .Include(booth => booth.BoothSubscriptions)
+                .ThenInclude(subscription => subscription.Package)
+            .FirstOrDefaultAsync(
+                booth => booth.BoothOwnerId == ownerId,
+                cancellationToken);
 
     public Task<bool> ExistsByOwnerIdAsync(
         Guid ownerId, CancellationToken cancellationToken = default)

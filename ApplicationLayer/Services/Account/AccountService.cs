@@ -24,8 +24,9 @@ public class AccountService : IAccountService
     private readonly IGenericRepository<EmailOutbox> _outbox;
     private readonly ILogger<AccountService> _logger;
     private readonly IFileStorageService _fileStorage;
+    private readonly IBoothRepository? _booths;
 
-    public AccountService(IUserRepository users, IGenericRepository<Role> roles, IMapper mapper, INotificationService notifications, IGenericRepository<UserStatusHistory> history, IGenericRepository<EmailOutbox> outbox, ILogger<AccountService> logger, IFileStorageService fileStorage)
+    public AccountService(IUserRepository users, IGenericRepository<Role> roles, IMapper mapper, INotificationService notifications, IGenericRepository<UserStatusHistory> history, IGenericRepository<EmailOutbox> outbox, ILogger<AccountService> logger, IFileStorageService fileStorage, IBoothRepository? booths = null)
     {
         _users = users;
         _roles = roles;
@@ -35,6 +36,7 @@ public class AccountService : IAccountService
         _outbox = outbox;
         _logger = logger;
         _fileStorage = fileStorage;
+        _booths = booths;
     }
 
     public async Task<ApiResponse<UserResponse>> GetMyAccountAsync(Guid userId, CancellationToken cancellationToken = default)
@@ -259,6 +261,77 @@ public class AccountService : IAccountService
         var user = await _users.GetByIdAsync(userId);
         return user is null ? throw AppException.NotFound("Account was not found.")
             : ApiResponse<ManagedUserResponse>.SuccessResponse(await ToManagedUserResponseAsync(user));
+    }
+
+    public async Task<ApiResponse<BoothOwnerAccountDetailResponse>> GetBoothOwnerDetailsAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await _users.GetByIdAsync(userId)
+            ?? throw AppException.NotFound("This account no longer exists.", "ACCOUNT_NOT_FOUND");
+        var role = await _roles.GetByIdAsync(user.RoleId);
+        if (!string.Equals(role?.RoleName, "BoothOwner", StringComparison.OrdinalIgnoreCase))
+            throw AppException.BadRequest("This account is not a Booth Owner account.", "USER_NOT_BOOTH_OWNER");
+        if (_booths is null)
+            throw AppException.ServiceUnavailable(
+                "Booth account details are temporarily unavailable.",
+                "BOOTH_DETAILS_UNAVAILABLE");
+
+        var booth = await _booths.GetByOwnerIdWithAdminDetailsAsync(userId, cancellationToken);
+        var response = new BoothOwnerAccountDetailResponse
+        {
+            Account = await ToManagedUserResponseAsync(user)
+        };
+
+        if (booth is null)
+            return ApiResponse<BoothOwnerAccountDetailResponse>.SuccessResponse(response);
+
+        var activeLocation = booth.BoothLocations
+            .Where(location => !location.IsDeleted && location.ReleasedAt == null)
+            .OrderByDescending(location => location.UpdatedAt)
+            .FirstOrDefault();
+        var activeSubscription = booth.BoothSubscriptions
+            .Where(subscription => subscription.Status == SubscriptionStatus.Active)
+            .OrderByDescending(subscription => subscription.EndDate)
+            .FirstOrDefault();
+        var documents = booth.BoothDocuments
+            .Concat(booth.Registration?.BoothDocuments ?? [])
+            .GroupBy(document => document.Id)
+            .Select(group => group.First())
+            .OrderByDescending(document => document.CreatedAt)
+            .Select(document => new BoothDocumentResponse
+            {
+                Id = document.Id,
+                DocumentType = document.DocumentType.ToString(),
+                FileUrl = document.FileUrl,
+                VerificationStatus = document.VerificationStatus.ToString(),
+                CreatedAt = document.CreatedAt,
+                UpdatedAt = document.UpdatedAt
+            })
+            .ToList();
+
+        response.OwnedBooths.Add(new AdminOwnedBoothResponse
+        {
+            Id = booth.Id,
+            BoothName = booth.BoothName,
+            BoothCode = booth.BoothCode,
+            Status = booth.Status.ToString(),
+            Description = booth.Description,
+            PhoneNumber = booth.PhoneNumber,
+            ThumbnailUrl = booth.ThumbnailUrl,
+            LogoUrl = booth.LogoUrl,
+            NightMarketName = booth.NightMarket?.Name,
+            ZoneName = activeLocation?.Zone?.ZoneName ?? booth.Zone?.ZoneName,
+            SlotNumber = activeLocation?.SlotNumber ?? booth.SlotNumber,
+            MapPositionX = activeLocation?.Xcoordinate ?? booth.MapPositionX,
+            MapPositionY = activeLocation?.Ycoordinate ?? booth.MapPositionY,
+            ActivePackageName = activeSubscription?.Package?.PackageName,
+            PackageExpiryDate = activeSubscription?.EndDate,
+            CreatedAt = booth.CreatedAt,
+            Documents = documents
+        });
+
+        return ApiResponse<BoothOwnerAccountDetailResponse>.SuccessResponse(response);
     }
 
     public async Task<ApiResponse<ManagedUserResponse>> ChangeUserStatusAsync(Guid adminId, Guid userId, ChangeUserStatusRequest request, CancellationToken cancellationToken = default)

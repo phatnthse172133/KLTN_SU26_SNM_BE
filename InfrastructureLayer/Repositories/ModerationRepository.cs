@@ -152,7 +152,7 @@ public class ModerationRepository : GenericRepository<ModerationActionHistory>, 
             .Include(b => b.Zone)
             .Include(b => b.BoothDocuments)
             .Include(b => b.Registration)
-                .ThenInclude(r => r.BoothDocuments)
+                .ThenInclude(r => r!.BoothDocuments)
             .FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
     }
 

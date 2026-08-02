@@ -18,6 +18,11 @@ public class MarketModerationOverviewResponse
     public string ModerationStatus { get; set; } = string.Empty;
     public int TotalBooths { get; set; }
     public int ActiveBooths { get; set; }
+    /// <summary>
+    /// Booths that are currently usable by customers. A booth is unavailable when
+    /// its market is inactive or suspended, even if the booth itself is Active.
+    /// </summary>
+    public int AvailableBooths { get; set; }
     public int TotalComplaintCount { get; set; }
     public int SeriousComplaintCount { get; set; }
     public DateTime CreatedAt { get; set; }

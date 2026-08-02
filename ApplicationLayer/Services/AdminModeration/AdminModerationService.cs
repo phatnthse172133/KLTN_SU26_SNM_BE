@@ -417,6 +417,7 @@ public class AdminModerationService : IAdminModerationService
             ModerationStatus = market.ModerationStatus.ToString(),
             TotalBooths = boothCounts.GetValueOrDefault(market.Id),
             ActiveBooths = activeBoothCounts.GetValueOrDefault(market.Id),
+            AvailableBooths = GetAvailableBoothCount(market, activeBoothCounts.GetValueOrDefault(market.Id)),
             SeriousComplaintCount = seriousComplaintCounts.GetValueOrDefault(market.Id),
             CreatedAt = market.CreatedAt,
             UpdatedAt = market.UpdatedAt
@@ -449,12 +450,21 @@ public class AdminModerationService : IAdminModerationService
             ModerationStatus = market.ModerationStatus.ToString(),
             TotalBooths = totalBooths,
             ActiveBooths = activeBooths,
+            AvailableBooths = GetAvailableBoothCount(market, activeBooths),
             TotalComplaintCount = totalComplaints,
             SeriousComplaintCount = seriousComplaints,
             CreatedAt = market.CreatedAt,
             UpdatedAt = market.UpdatedAt,
             RecentComplaints = recentComplaints.Select(MapComplaintSummary).ToList()
         };
+    }
+
+    private static int GetAvailableBoothCount(NightMarket market, int activeBooths)
+    {
+        return market.Status == NightMarketStatus.Active
+            && market.ModerationStatus == ModerationStatus.Active
+            ? activeBooths
+            : 0;
     }
 
     private static BoothModerationOverviewResponse MapBoothOverview(Booth booth, int complaintCount)

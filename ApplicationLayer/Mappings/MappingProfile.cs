@@ -120,6 +120,7 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.BoothPaymentInfos, o => o.Ignore()).ForMember(d => d.Registration, o => o.Ignore())
                 .ForMember(d => d.Zone, o => o.Ignore()).ForMember(d => d.BoothSubscriptions, o => o.Ignore())
                 .ForMember(d => d.Complaints, o => o.Ignore()).ForMember(d => d.FoodItems, o => o.Ignore())
+                .ForMember(d => d.AiMealPlanItems, o => o.Ignore())
                 .ForMember(d => d.Conversations, o => o.Ignore())
                 .ForMember(d => d.FoodCategories, o => o.Ignore()).ForMember(d => d.NightMarket, o => o.Ignore())
                 .ForMember(d => d.Notifications, o => o.Ignore()).ForMember(d => d.Promotions, o => o.Ignore())
@@ -136,6 +137,7 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.BoothPaymentInfos, o => o.Ignore()).ForMember(d => d.Registration, o => o.Ignore())
                 .ForMember(d => d.Zone, o => o.Ignore()).ForMember(d => d.BoothSubscriptions, o => o.Ignore())
                 .ForMember(d => d.Complaints, o => o.Ignore()).ForMember(d => d.FoodItems, o => o.Ignore())
+                .ForMember(d => d.AiMealPlanItems, o => o.Ignore())
                 .ForMember(d => d.FoodCategories, o => o.Ignore()).ForMember(d => d.NightMarket, o => o.Ignore())
                 .ForMember(d => d.Notifications, o => o.Ignore()).ForMember(d => d.Promotions, o => o.Ignore())
                 .ForMember(d => d.Reviews, o => o.Ignore());
@@ -165,6 +167,7 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.Zones, o => o.Ignore())
                 .ForMember(d => d.NightMarketImages, o => o.Ignore())
                 .ForMember(d => d.AIRecommendationLogs, o => o.Ignore())
+                .ForMember(d => d.AiMealPlans, o => o.Ignore())
                 .ForMember(d => d.BoothRegistrations, o => o.Ignore())
                 .ForMember(d => d.ModerationStatus, o => o.Ignore())
                 .ForMember(d => d.Status, o => o.Ignore());
@@ -196,6 +199,7 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.Zones, o => o.Ignore())
                 .ForMember(d => d.NightMarketImages, o => o.Ignore())
                 .ForMember(d => d.AIRecommendationLogs, o => o.Ignore())
+                .ForMember(d => d.AiMealPlans, o => o.Ignore())
                 .ForMember(d => d.BoothRegistrations, o => o.Ignore())
                 .ForMember(d => d.ModerationStatus, o => o.Ignore());
             CreateMap<NightMarket, NightMarketResponse>()
@@ -252,7 +256,23 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.FoodItemTags, o => o.Ignore())
                 .ForMember(d => d.FoodPrices, o => o.Ignore())
                 .ForMember(d => d.OrderDetails, o => o.Ignore())
-                .ForMember(d => d.PromotionFoodItems, o => o.Ignore());
+                .ForMember(d => d.PromotionFoodItems, o => o.Ignore())
+                .ForMember(d => d.SpiceLevel, o => o.Ignore())
+                .ForMember(d => d.ServingTemperature, o => o.Ignore())
+                .ForMember(d => d.EstimatedServingCount, o => o.Ignore())
+                .ForMember(d => d.ServingSizeDescription, o => o.Ignore())
+                .ForMember(d => d.IsShareable, o => o.Ignore())
+                .ForMember(d => d.SemanticProfileVersion, o => o.Ignore())
+                .ForMember(d => d.SemanticProfileUpdatedAt, o => o.Ignore())
+                .ForMember(d => d.Ingredients, o => o.Ignore())
+                .ForMember(d => d.Allergens, o => o.Ignore())
+                .ForMember(d => d.DietaryAttributes, o => o.Ignore())
+                .ForMember(d => d.PreparationMethods, o => o.Ignore())
+                .ForMember(d => d.TasteProfiles, o => o.Ignore())
+                .ForMember(d => d.SearchFacets, o => o.Ignore())
+                .ForMember(d => d.Courses, o => o.Ignore())
+                .ForMember(d => d.DiningPurposes, o => o.Ignore())
+                .ForMember(d => d.AiProfile, o => o.Ignore());
             CreateMap<UpdateFoodItemRequest, FoodItem>()
                 .IncludeBase<CreateFoodItemRequest, FoodItem>();
             CreateMap<FoodItem, FoodItemResponse>()

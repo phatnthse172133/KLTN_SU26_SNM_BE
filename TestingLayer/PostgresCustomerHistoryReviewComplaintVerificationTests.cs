@@ -94,6 +94,8 @@ public sealed class PostgresCustomerHistoryReviewComplaintVerificationTests
                 var legacy = await SeedLegacySnapshotsAsync(testBuilder.ConnectionString);
                 await migrator.MigrateAsync(MigrationId);
                 await AssertLegacyBackfillAsync(testBuilder.ConnectionString, legacy);
+                await DeleteLegacyProbeAsync(testBuilder.ConnectionString, legacy);
+                await migrator.MigrateAsync();
             }
             var seed = await SeedAsync(testBuilder.ConnectionString);
 
@@ -403,8 +405,8 @@ public sealed class PostgresCustomerHistoryReviewComplaintVerificationTests
             INSERT INTO "Booth"
                 ("Id", "RegistrationId", "NightMarketId", "BoothOwnerId", "BoothName", "Status", "CreatedAt", "UpdatedAt")
             VALUES (@booth, @registration, @market, @owner, 'Verification booth', 'Active', now(), now());
-            INSERT INTO "FoodCategories" ("Id", "BoothId", "Name", "IsDeleted", "CreatedAt", "UpdatedAt")
-            VALUES (@category, @booth, 'Category', false, now(), now());
+            INSERT INTO "FoodCategories" ("Id", "BoothId", "Code", "Name", "IsActive", "IsSelectable", "IsDeleted", "CreatedAt", "UpdatedAt")
+            VALUES (@category, @booth, 'VERIFICATION_CATEGORY', 'Category', true, true, false, now(), now());
             INSERT INTO "FoodItem"
                 ("Id", "BoothId", "CategoryId", "Name", "Price", "IsAvailable", "IsFeatured", "IsDeleted", "CreatedAt", "UpdatedAt")
             VALUES (@food, @booth, @category, 'Current renamed food', 999000, true, false, false, now(), now());
@@ -432,8 +434,8 @@ public sealed class PostgresCustomerHistoryReviewComplaintVerificationTests
             await using var order = new NpgsqlCommand(
                 """
                 INSERT INTO "Order"
-                    ("Id", "CustomerId", "BoothOwnerId", "OrderCode", "Status", "TotalAmount", "DiscountAmount", "FinalAmount", "CreatedAt", "UpdatedAt")
-                VALUES (@id, @customer, @owner, @code, 'Completed', 42000, 0, 42000, @created, @created);
+                    ("Id", "CustomerId", "BoothOwnerId", "BoothId", "OrderCode", "Status", "TotalAmount", "DiscountAmount", "FinalAmount", "CreatedAt", "UpdatedAt")
+                VALUES (@id, @customer, @owner, @booth, @code, 'Completed', 42000, 0, 42000, @created, @created);
                 INSERT INTO "OrderDetail"
                     ("Id", "OrderId", "FoodItemId", "FoodNameSnapshot", "Quantity", "UnitPrice", "TotalPrice", "CreatedAt", "UpdatedAt")
                 VALUES (@detail, @id, @food, 'Historical food', 1, 42000, 42000, @created, @created);
@@ -441,6 +443,7 @@ public sealed class PostgresCustomerHistoryReviewComplaintVerificationTests
             order.Parameters.AddWithValue("id", orderIds[index]);
             order.Parameters.AddWithValue("customer", customer);
             order.Parameters.AddWithValue("owner", seed.Owner);
+            order.Parameters.AddWithValue("booth", seed.Booth);
             order.Parameters.AddWithValue("code", 800_000_000_000_000L + index);
             order.Parameters.AddWithValue("detail", Guid.NewGuid());
             order.Parameters.AddWithValue("food", seed.Food);
@@ -523,6 +526,26 @@ public sealed class PostgresCustomerHistoryReviewComplaintVerificationTests
             Assert.Equal("LEGACY", reader.GetString(0));
             Assert.Equal("Legacy current promotion title", reader.GetString(1));
         }
+    }
+
+    private static async Task DeleteLegacyProbeAsync(string connectionString, LegacyIds ids)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand(
+            """
+            DELETE FROM "PromotionUsages" WHERE "Id" = @usage;
+            DELETE FROM "OrderDetail" WHERE "Id" = @detail;
+            DELETE FROM "Order" WHERE "Id" = @order;
+            DELETE FROM "Promotion" WHERE "Id" = @promotion;
+            DELETE FROM "FoodItem" WHERE "Id" = @food;
+            """, connection);
+        command.Parameters.AddWithValue("usage", ids.PromotionUsage);
+        command.Parameters.AddWithValue("detail", ids.OrderDetail);
+        command.Parameters.AddWithValue("order", ids.Order);
+        command.Parameters.AddWithValue("promotion", ids.Promotion);
+        command.Parameters.AddWithValue("food", ids.Food);
+        await command.ExecuteNonQueryAsync();
     }
 
     private static async Task<long> ScalarLongAsync(NpgsqlConnection connection, string sql, params (string Name, object Value)[] parameters)

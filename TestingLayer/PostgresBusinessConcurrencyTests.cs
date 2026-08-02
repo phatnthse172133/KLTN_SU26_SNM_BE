@@ -558,8 +558,8 @@ public sealed class PostgresBusinessConcurrencyTests
                 ("Id", "RegistrationId", "NightMarketId", "BoothOwnerId", "BoothName", "Status", "CreatedAt", "UpdatedAt")
             VALUES (@booth, @registration, @market, @owner, 'Concurrency booth', 'Active', now(), now());
             INSERT INTO "FoodCategories"
-                ("Id", "BoothId", "Name", "IsDeleted", "CreatedAt", "UpdatedAt")
-            VALUES (@category, @booth, 'Category', false, now(), now());
+                ("Id", "BoothId", "Code", "Name", "IsActive", "IsSelectable", "IsDeleted", "CreatedAt", "UpdatedAt")
+            VALUES (@category, @booth, 'CONCURRENCY_CATEGORY', 'Category', true, true, false, now(), now());
             INSERT INTO "FoodItem"
                 ("Id", "BoothId", "CategoryId", "Name", "Price", "IsAvailable", "IsFeatured", "IsDeleted", "CreatedAt", "UpdatedAt")
             VALUES (@food, @booth, @category, 'Concurrency food', 100000, true, false, false, now(), now());

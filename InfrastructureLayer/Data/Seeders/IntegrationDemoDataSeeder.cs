@@ -1,4 +1,5 @@
 using DomainLayer.Entities;
+using DomainLayer.Enums;
 using DomainLayer.InterfaceCore.JWT;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -359,6 +360,36 @@ public static class IntegrationDemoDataSeeder
                         && !codes.Contains(link.FoodTag.Code))
                     .ToListAsync(ct);
                 db.FoodItemTags.RemoveRange(staleLinks);
+
+                var normalizedCourses = courseCodes
+                    .Select(code => Enum.Parse<FoodCourse>(code.Replace("COURSE_", "", StringComparison.Ordinal)))
+                    .ToHashSet();
+                var staleCourses = await db.FoodItemCourses
+                    .Where(link => link.FoodItemId == foodId && !normalizedCourses.Contains(link.Course))
+                    .ToListAsync(ct);
+                db.FoodItemCourses.RemoveRange(staleCourses);
+                var existingCourses = await db.FoodItemCourses
+                    .Where(link => link.FoodItemId == foodId)
+                    .Select(link => link.Course)
+                    .ToListAsync(ct);
+                foreach (var course in normalizedCourses.Where(course => !existingCourses.Contains(course)))
+                    db.FoodItemCourses.Add(new FoodItemCourse
+                    {
+                        FoodItemId = foodId,
+                        Course = course,
+                        IsPrimary = normalizedCourses.Count == 1,
+                        CreatedAt = now
+                    });
+
+                var purposeCode = codes.Single(code => code.StartsWith("PURPOSE_", StringComparison.Ordinal));
+                var purpose = Enum.Parse<DiningPurpose>(purposeCode.Replace("PURPOSE_", "", StringComparison.Ordinal));
+                if (!await db.FoodItemDiningPurposes.AnyAsync(link => link.FoodItemId == foodId && link.Purpose == purpose, ct))
+                    db.FoodItemDiningPurposes.Add(new FoodItemDiningPurpose { FoodItemId = foodId, Purpose = purpose, CreatedAt = now });
+
+                var food = await db.FoodItems.SingleAsync(item => item.Id == foodId, ct);
+                food.ServingTemperature = isDrink || isDessert ? ServingTemperature.COLD : ServingTemperature.HOT;
+                food.SemanticProfileVersion = Math.Max(food.SemanticProfileVersion, 1);
+                food.SemanticProfileUpdatedAt = now;
 
                 foreach (var code in codes)
                 {

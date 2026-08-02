@@ -5,6 +5,7 @@ using ApplicationLayer.Services.CustomerDiscovery;
 using ApplicationLayer.Services.MapNavigation;
 using AutoMapper;
 using DomainLayer.InterfaceCore.JWT;
+using DomainLayer.Enums;
 using InfrastructureLayer.Cores.Helppers;
 using InfrastructureLayer.Data;
 using InfrastructureLayer.Data.Seeders;
@@ -68,6 +69,10 @@ public sealed class IntegrationDemoDataSeederTests
         Assert.True(courseCoverage["COURSE_MAIN_COURSE"] >= 2);
         Assert.True(courseCoverage["COURSE_DRINK"] >= 2);
         Assert.True(courseCoverage["COURSE_DESSERT"] >= 2);
+        Assert.Equal(20, await db.FoodItemCourses.Select(link => link.FoodItemId).Distinct().CountAsync());
+        Assert.True(await db.FoodItemCourses.AnyAsync(link => link.Course == FoodCourse.DRINK));
+        Assert.True(await db.FoodItemCourses.AnyAsync(link => link.Course == FoodCourse.DESSERT));
+        Assert.Equal(20, await db.FoodItemDiningPurposes.Select(link => link.FoodItemId).Distinct().CountAsync());
 
         var ratings = await db.Booths.Where(x => x.NightMarketId == market.Id)
             .OrderBy(x => x.BoothCode).Select(x => x.AverageRating).ToListAsync();
@@ -314,12 +319,26 @@ public sealed class IntegrationDemoDataSeederTests
         {
             FoodItemId = normal.Id, FoodTagId = detailTag.Id, CreatedAt = DateTime.UtcNow
         });
+        var normalizedDietary = new DomainLayer.Entities.DietaryAttribute
+        {
+            Id = Guid.NewGuid(), Code = "DIET_DETAIL", Name = "Normalized detail diet",
+            IsSystem = true, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
+        };
+        db.DietaryAttributes.Add(normalizedDietary);
+        db.FoodItemDietaryAttributes.Add(new DomainLayer.Entities.FoodItemDietaryAttribute
+        {
+            FoodItemId = normal.Id, DietaryAttributeId = normalizedDietary.Id,
+            SuitabilityStatus = DomainLayer.Enums.DietarySuitabilityStatus.UNVERIFIED,
+            Source = DomainLayer.Enums.MetadataSource.OWNER_DECLARED,
+            CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
+        });
         await db.SaveChangesAsync();
 
         var normalDetail = (await discovery.GetFoodAsync(normal.Id)).Data!;
         Assert.Equal(normal.Id, normalDetail.Id);
         var returnedTag = Assert.Single(normalDetail.Tags);
-        Assert.Equal(detailTag.Id, returnedTag.Id);
+        Assert.Equal(normalizedDietary.Id, returnedTag.Id);
+        Assert.NotEqual(detailTag.Id, returnedTag.Id);
         Assert.Equal("Dietary", returnedTag.TagGroup);
         Assert.True((await discovery.GetFoodAsync(reduced.Id)).Data!.EffectivePrice < reduced.BasePrice);
         var nonOrderableDetail = (await discovery.GetFoodAsync(nonOrderable.Id)).Data!;

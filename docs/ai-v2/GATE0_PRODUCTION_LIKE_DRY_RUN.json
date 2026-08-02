@@ -1,0 +1,445 @@
+{
+  "Mode": 0,
+  "BatchSize": 200,
+  "GeneratedAtUtc": "2026-08-02T09:21:25.7663332Z",
+  "TotalLegacyTags": 136,
+  "SystemTags": 102,
+  "NonSystemTags": 34,
+  "ActiveTags": 116,
+  "ArchivedTags": 20,
+  "FoodItemTagBefore": 274,
+  "CustomerPreferenceBefore": 28,
+  "SpecialRelationCounts": {
+    "DRINK_FOOD": 10,
+    "DRINK_CUSTOMER": 1,
+    "DESSERT_FOOD": 4,
+    "DESSERT_CUSTOMER": 1,
+    "SOUP_FOOD": 12,
+    "SOUP_CUSTOMER": 0,
+    "OTHER_QUICK_SERVE_FOOD": 0,
+    "OTHER_QUICK_SERVE_CUSTOMER": 0
+  },
+  "CatalogDispositionCounts": {
+    "MIGRATE": 122,
+    "DERIVE": 10,
+    "ARCHIVE": 1,
+    "AMBIGUOUS_REQUIRES_MANUAL_REVIEW": 3
+  },
+  "RelationDispositionCounts": {
+    "MIGRATE": 229,
+    "DERIVE": 61,
+    "AMBIGUOUS_REQUIRES_MANUAL_REVIEW": 12
+  },
+  "CoveredLegacyRelations": 302,
+  "TargetCounts": {
+    "Purpose/customer facet": 43,
+    "Preparation": 15,
+    "Temperature": 42,
+    "Ingredient": 19,
+    "Spice": 8,
+    "SearchFacet": 36,
+    "Course": 39
+  },
+  "PlannedWrites": {
+    "Catalogs": 77,
+    "FoodMetadataRelations": 151,
+    "FoodScalarUpdates": 45,
+    "CustomerProfiles": 4,
+    "CustomerRelations": 17,
+    "CustomerScalarUpdates": 3,
+    "FoodAiProfileCreates": 56,
+    "FoodAiProfileUpdates": 0
+  },
+  "FinalNormalizedCounts": {
+    "Ingredient": 30,
+    "DietaryAttribute": 13,
+    "PreparationMethod": 15,
+    "TasteProfile": 7,
+    "FoodSearchFacet": 12,
+    "Allergen": 0,
+    "FoodItemIngredient": 19,
+    "FoodItemDietaryAttribute": 0,
+    "FoodItemPreparationMethod": 15,
+    "FoodItemTasteProfile": 0,
+    "FoodItemSearchFacet": 36,
+    "FoodItemCourse": 39,
+    "FoodItemDiningPurpose": 42,
+    "CustomerFoodProfile": 4,
+    "CustomerPreferredIngredient": 0,
+    "CustomerAvoidedIngredient": 0,
+    "CustomerDietaryRequirement": 0,
+    "CustomerPreferredPreparationMethod": 0,
+    "CustomerPreferredTasteProfile": 0,
+    "CustomerAvoidedTasteProfile": 0,
+    "CustomerPreferredCourse": 0,
+    "CustomerPreferredDiningPurpose": 0,
+    "FoodAiProfile": 56,
+    "CustomerNormalizedRelations": 17
+  },
+  "UnmappedRelations": 0,
+  "AmbiguousRelations": 9,
+  "Exceptions": [
+    {
+      "Code": "SOUP_MANUAL_REVIEW",
+      "RelationType": "FoodItemTag",
+      "RelationId": "99999999-9999-9999-9999-999999990401",
+      "Reason": "Name and noodle tag may indicate a broth dish, but description does not state broth/soup and category is generic demo data."
+    },
+    {
+      "Code": "SOUP_MANUAL_REVIEW",
+      "RelationType": "FoodItemTag",
+      "RelationId": "99999999-9999-9999-9999-999999990803",
+      "Reason": "Description says \u0027m\u00F3n n\u01B0\u1EDBc n\u00F3ng\u0027, but the same row also has the contradictory DRINK tag and a generic demo category."
+    },
+    {
+      "Code": "SOUP_NOT_APPLICABLE",
+      "RelationType": "FoodItemTag",
+      "RelationId": "99999999-9999-9999-9999-999999990104",
+      "Reason": "Name, description and DRINK tag explicitly identify a cold beverage."
+    },
+    {
+      "Code": "SOUP_NOT_APPLICABLE",
+      "RelationType": "FoodItemTag",
+      "RelationId": "99999999-9999-9999-9999-999999990202",
+      "Reason": "Name and description explicitly describe grilled pork, raw vegetables and crispy spring rolls; no soup/broth evidence."
+    },
+    {
+      "Code": "SOUP_NOT_APPLICABLE",
+      "RelationType": "FoodItemTag",
+      "RelationId": "99999999-9999-9999-9999-999999990301",
+      "Reason": "Description explicitly identifies a cold dessert and the existing DESSERT tag corroborates it."
+    },
+    {
+      "Code": "SOUP_NOT_APPLICABLE",
+      "RelationType": "FoodItemTag",
+      "RelationId": "99999999-9999-9999-9999-999999990303",
+      "Reason": "Description explicitly identifies a beverage."
+    },
+    {
+      "Code": "SOUP_NOT_APPLICABLE",
+      "RelationType": "FoodItemTag",
+      "RelationId": "99999999-9999-9999-9999-999999990304",
+      "Reason": "Description explicitly identifies a cold fruit dessert."
+    },
+    {
+      "Code": "SOUP_NOT_APPLICABLE",
+      "RelationType": "FoodItemTag",
+      "RelationId": "99999999-9999-9999-9999-999999990403",
+      "Reason": "Name and description explicitly identify grilled chicken; SOUP and DRINK are contradictory legacy inferences."
+    },
+    {
+      "Code": "SOUP_NOT_APPLICABLE",
+      "RelationType": "FoodItemTag",
+      "RelationId": "99999999-9999-9999-9999-999999990603",
+      "Reason": "Description explicitly identifies a cold, lightly sweet dessert."
+    },
+    {
+      "Code": "SOUP_NOT_APPLICABLE",
+      "RelationType": "FoodItemTag",
+      "RelationId": "99999999-9999-9999-9999-999999990604",
+      "Reason": "Description explicitly identifies a street beverage."
+    },
+    {
+      "Code": "SOUP_NOT_APPLICABLE",
+      "RelationType": "FoodItemTag",
+      "RelationId": "99999999-9999-9999-9999-999999990903",
+      "Reason": "Description explicitly identifies a sweet, rich cold dessert."
+    },
+    {
+      "Code": "SOUP_NOT_APPLICABLE",
+      "RelationType": "FoodItemTag",
+      "RelationId": "99999999-9999-9999-9999-999999990904",
+      "Reason": "Name and description explicitly identify a cold strawberry drink."
+    },
+    {
+      "Code": "UNSUPPORTED_AVOIDED_COURSE",
+      "RelationType": "CustomerPreference",
+      "RelationId": "e062a5bb-7216-43a6-bf25-c0bd467c3204",
+      "Reason": "Legacy avoid-course remains available through dual-read; no positive preference is fabricated."
+    },
+    {
+      "Code": "UNSUPPORTED_AVOIDED_SPICE",
+      "RelationType": "CustomerPreference",
+      "RelationId": "c82c1ea8-046d-48f6-9fbe-48be1a813ef1",
+      "Reason": "Avoided spice is not converted into a positive preferred level."
+    },
+    {
+      "Code": "UNSUPPORTED_SOFT_DIETARY",
+      "RelationType": "CustomerPreference",
+      "RelationId": "33f283e4-4dc4-4b9b-b254-4dcd38c8a50f",
+      "Reason": "Only explicit hard required diets migrate to CustomerDietaryRequirement; legacy relation is retained."
+    },
+    {
+      "Code": "UNSUPPORTED_SOFT_DIETARY",
+      "RelationType": "CustomerPreference",
+      "RelationId": "4a573c19-9b19-4e8f-a2a0-490a26646add",
+      "Reason": "Only explicit hard required diets migrate to CustomerDietaryRequirement; legacy relation is retained."
+    },
+    {
+      "Code": "UNSUPPORTED_SOFT_DIETARY",
+      "RelationType": "CustomerPreference",
+      "RelationId": "70dceb56-5cc8-4124-93c9-b9b199f82448",
+      "Reason": "Only explicit hard required diets migrate to CustomerDietaryRequirement; legacy relation is retained."
+    },
+    {
+      "Code": "UNSUPPORTED_SOFT_DIETARY",
+      "RelationType": "CustomerPreference",
+      "RelationId": "bd35bbfd-eeda-4bf3-b4c0-eba47c4e2256",
+      "Reason": "Only explicit hard required diets migrate to CustomerDietaryRequirement; legacy relation is retained."
+    },
+    {
+      "Code": "UNSUPPORTED_SOFT_DIETARY",
+      "RelationType": "CustomerPreference",
+      "RelationId": "c4bf0dc7-8955-41db-b79f-15fc4329903d",
+      "Reason": "Only explicit hard required diets migrate to CustomerDietaryRequirement; legacy relation is retained."
+    }
+  ],
+  "SoupResolutions": [
+    {
+      "FoodItemId": "99999999-9999-9999-9999-999999990803",
+      "FoodName": "B\u00F2 vi\u00EAn n\u00F3ng",
+      "ExistingCategoryCode": "LEGACY_88888888888888888888888888888008",
+      "ExistingTagCodes": [
+        "BEEF",
+        "BUDGETFRIENDLY",
+        "DRINK",
+        "SOUP",
+        "VIETNAMESE"
+      ],
+      "ProposedCourse": "SOUP",
+      "ProposedPreparationMethod": "METHOD_SOUP_COOKED",
+      "ProposedCategoryChange": null,
+      "Confidence": 0.55,
+      "ResolutionStatus": 1,
+      "Evidence": "Description says \u0027m\u00F3n n\u01B0\u1EDBc n\u00F3ng\u0027, but the same row also has the contradictory DRINK tag and a generic demo category.",
+      "Notes": "Owner/admin confirmation is required before assigning soup course or preparation."
+    },
+    {
+      "FoodItemId": "99999999-9999-9999-9999-999999990401",
+      "FoodName": "B\u00FAn num b\u00F2 ch\u00F3c",
+      "ExistingCategoryCode": "LEGACY_88888888888888888888888888888004",
+      "ExistingTagCodes": [
+        "BEEF",
+        "FULLMEAL",
+        "HOT",
+        "MIDRANGE",
+        "NOODLE",
+        "SOUP",
+        "SPICY",
+        "VIETNAMESE"
+      ],
+      "ProposedCourse": "SOUP",
+      "ProposedPreparationMethod": "METHOD_SOUP_COOKED",
+      "ProposedCategoryChange": null,
+      "Confidence": 0.50,
+      "ResolutionStatus": 1,
+      "Evidence": "Name and noodle tag may indicate a broth dish, but description does not state broth/soup and category is generic demo data.",
+      "Notes": "Do not infer preparation from culinary knowledge alone."
+    },
+    {
+      "FoodItemId": "99999999-9999-9999-9999-999999990202",
+      "FoodName": "B\u00FAn th\u1ECBt n\u01B0\u1EDBng ch\u1EA3 gi\u00F2",
+      "ExistingCategoryCode": "LEGACY_88888888888888888888888888888002",
+      "ExistingTagCodes": [
+        "FULLMEAL",
+        "GRILLED",
+        "HOT",
+        "MIDRANGE",
+        "NOODLE",
+        "PORK",
+        "SOUP",
+        "VIETNAMESE"
+      ],
+      "ProposedCourse": "MAIN_COURSE",
+      "ProposedPreparationMethod": null,
+      "ProposedCategoryChange": null,
+      "Confidence": 0.99,
+      "ResolutionStatus": 2,
+      "Evidence": "Name and description explicitly describe grilled pork, raw vegetables and crispy spring rolls; no soup/broth evidence.",
+      "Notes": "Legacy SOUP relation is retained but creates no normalized soup metadata."
+    },
+    {
+      "FoodItemId": "99999999-9999-9999-9999-999999990301",
+      "FoodName": "Ch\u00E8 ba m\u00E0u",
+      "ExistingCategoryCode": "LEGACY_88888888888888888888888888888003",
+      "ExistingTagCodes": [
+        "BUDGETFRIENDLY",
+        "DESSERT",
+        "NOODLE",
+        "SOUP",
+        "VIETNAMESE"
+      ],
+      "ProposedCourse": "DESSERT",
+      "ProposedPreparationMethod": null,
+      "ProposedCategoryChange": null,
+      "Confidence": 0.99,
+      "ResolutionStatus": 2,
+      "Evidence": "Description explicitly identifies a cold dessert and the existing DESSERT tag corroborates it.",
+      "Notes": "Legacy SOUP relation is retained but creates no normalized soup metadata."
+    },
+    {
+      "FoodItemId": "99999999-9999-9999-9999-999999990403",
+      "FoodName": "G\u00E0 n\u01B0\u1EDBng s\u1EA3 \u1EDBt",
+      "ExistingCategoryCode": "LEGACY_88888888888888888888888888888004",
+      "ExistingTagCodes": [
+        "CHICKEN",
+        "DRINK",
+        "GRILLED",
+        "MIDRANGE",
+        "SOUP",
+        "SPICY",
+        "VIETNAMESE"
+      ],
+      "ProposedCourse": "MAIN_COURSE",
+      "ProposedPreparationMethod": null,
+      "ProposedCategoryChange": null,
+      "Confidence": 0.99,
+      "ResolutionStatus": 2,
+      "Evidence": "Name and description explicitly identify grilled chicken; SOUP and DRINK are contradictory legacy inferences.",
+      "Notes": "Legacy SOUP relation is retained but creates no normalized soup metadata."
+    },
+    {
+      "FoodItemId": "99999999-9999-9999-9999-999999990904",
+      "FoodName": "N\u01B0\u1EDBc \u00E9p d\u00E2u",
+      "ExistingCategoryCode": "LEGACY_88888888888888888888888888888009",
+      "ExistingTagCodes": [
+        "BUDGETFRIENDLY",
+        "DRINK",
+        "SOUP",
+        "VIETNAMESE"
+      ],
+      "ProposedCourse": "DRINK",
+      "ProposedPreparationMethod": null,
+      "ProposedCategoryChange": null,
+      "Confidence": 1.00,
+      "ResolutionStatus": 2,
+      "Evidence": "Name and description explicitly identify a cold strawberry drink.",
+      "Notes": "Legacy SOUP relation is retained but creates no normalized soup metadata."
+    },
+    {
+      "FoodItemId": "99999999-9999-9999-9999-999999990604",
+      "FoodName": "N\u01B0\u1EDBc m\u00EDa t\u1EAFc",
+      "ExistingCategoryCode": "LEGACY_88888888888888888888888888888006",
+      "ExistingTagCodes": [
+        "BUDGETFRIENDLY",
+        "DRINK",
+        "SOUP",
+        "VIETNAMESE"
+      ],
+      "ProposedCourse": "DRINK",
+      "ProposedPreparationMethod": null,
+      "ProposedCategoryChange": null,
+      "Confidence": 1.00,
+      "ResolutionStatus": 2,
+      "Evidence": "Description explicitly identifies a street beverage.",
+      "Notes": "Legacy SOUP relation is retained but creates no normalized soup metadata."
+    },
+    {
+      "FoodItemId": "99999999-9999-9999-9999-999999990104",
+      "FoodName": "N\u01B0\u1EDBc s\u00E2m l\u1EA1nh",
+      "ExistingCategoryCode": "LEGACY_88888888888888888888888888888001",
+      "ExistingTagCodes": [
+        "BUDGETFRIENDLY",
+        "DRINK",
+        "GRILLED",
+        "SOUP",
+        "VIETNAMESE"
+      ],
+      "ProposedCourse": "DRINK",
+      "ProposedPreparationMethod": null,
+      "ProposedCategoryChange": null,
+      "Confidence": 1.00,
+      "ResolutionStatus": 2,
+      "Evidence": "Name, description and DRINK tag explicitly identify a cold beverage.",
+      "Notes": "Legacy SOUP relation is retained but creates no normalized soup metadata."
+    },
+    {
+      "FoodItemId": "99999999-9999-9999-9999-999999990303",
+      "FoodName": "N\u01B0\u1EDBc s\u00E2m rong bi\u1EC3n",
+      "ExistingCategoryCode": "LEGACY_88888888888888888888888888888003",
+      "ExistingTagCodes": [
+        "BUDGETFRIENDLY",
+        "DRINK",
+        "SOUP",
+        "VIETNAMESE"
+      ],
+      "ProposedCourse": "DRINK",
+      "ProposedPreparationMethod": null,
+      "ProposedCategoryChange": null,
+      "Confidence": 1.00,
+      "ResolutionStatus": 2,
+      "Evidence": "Description explicitly identifies a beverage.",
+      "Notes": "Legacy SOUP relation is retained but creates no normalized soup metadata."
+    },
+    {
+      "FoodItemId": "99999999-9999-9999-9999-999999990603",
+      "FoodName": "S\u1EEFa chua n\u1EBFp c\u1EA9m",
+      "ExistingCategoryCode": "LEGACY_88888888888888888888888888888006",
+      "ExistingTagCodes": [
+        "BUDGETFRIENDLY",
+        "HOT",
+        "NOODLE",
+        "SNACK",
+        "SOUP",
+        "VIETNAMESE"
+      ],
+      "ProposedCourse": "DESSERT",
+      "ProposedPreparationMethod": null,
+      "ProposedCategoryChange": null,
+      "Confidence": 0.99,
+      "ResolutionStatus": 2,
+      "Evidence": "Description explicitly identifies a cold, lightly sweet dessert.",
+      "Notes": "Legacy SOUP relation is retained but creates no normalized soup metadata."
+    },
+    {
+      "FoodItemId": "99999999-9999-9999-9999-999999990903",
+      "FoodName": "S\u1EEFa chua ph\u00F4 mai",
+      "ExistingCategoryCode": "LEGACY_88888888888888888888888888888009",
+      "ExistingTagCodes": [
+        "BUDGETFRIENDLY",
+        "HOT",
+        "NOODLE",
+        "SNACK",
+        "SOUP",
+        "VIETNAMESE"
+      ],
+      "ProposedCourse": "DESSERT",
+      "ProposedPreparationMethod": null,
+      "ProposedCategoryChange": null,
+      "Confidence": 0.99,
+      "ResolutionStatus": 2,
+      "Evidence": "Description explicitly identifies a sweet, rich cold dessert.",
+      "Notes": "Legacy SOUP relation is retained but creates no normalized soup metadata."
+    },
+    {
+      "FoodItemId": "99999999-9999-9999-9999-999999990304",
+      "FoodName": "Tr\u00E1i c\u00E2y d\u1EA7m",
+      "ExistingCategoryCode": "LEGACY_88888888888888888888888888888003",
+      "ExistingTagCodes": [
+        "BUDGETFRIENDLY",
+        "HOT",
+        "NOODLE",
+        "SNACK",
+        "SOUP",
+        "VIETNAMESE"
+      ],
+      "ProposedCourse": "DESSERT",
+      "ProposedPreparationMethod": null,
+      "ProposedCategoryChange": null,
+      "Confidence": 0.99,
+      "ResolutionStatus": 2,
+      "Evidence": "Description explicitly identifies a cold fruit dessert.",
+      "Notes": "Legacy SOUP relation is retained but creates no normalized soup metadata."
+    }
+  ],
+  "DataQuality": {
+    "FoodsWithoutCourse": 22,
+    "FoodsWithoutServingCount": 56,
+    "FoodsWithoutSemanticDescription": 0,
+    "FoodsWithMultiplePrimaryCourses": 0,
+    "CustomerHardSoftConflicts": 0,
+    "ContradictoryFoodSemanticIds": []
+  },
+  "LegacyDataChanged": false,
+  "TransactionCommitted": false
+}

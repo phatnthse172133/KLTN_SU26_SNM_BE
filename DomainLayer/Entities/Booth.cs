@@ -82,6 +82,8 @@ public partial class Booth
 
     public virtual ICollection<FoodItem> FoodItems { get; set; } = new List<FoodItem>();
 
+    public virtual ICollection<AiMealPlanItem> AiMealPlanItems { get; set; } = new List<AiMealPlanItem>();
+
     public virtual ICollection<FoodCategory> FoodCategories { get; set; } = new List<FoodCategory>();
 
     public virtual NightMarket NightMarket { get; set; } = null!;

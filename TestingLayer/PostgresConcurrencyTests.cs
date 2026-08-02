@@ -98,15 +98,16 @@ public class PostgresConcurrencyTests
             await using var command = new NpgsqlCommand(
                 """
                 INSERT INTO "Order"
-                    ("Id", "CustomerId", "BoothOwnerId", "OrderCode", "CheckoutRequestId",
+                    ("Id", "CustomerId", "BoothOwnerId", "BoothId", "OrderCode", "CheckoutRequestId",
                      "Status", "TotalAmount", "DiscountAmount", "FinalAmount", "CreatedAt", "UpdatedAt")
                 VALUES
-                    (@id, @customer, @owner, @code, @request,
+                    (@id, @customer, @owner, @booth, @code, @request,
                      'Placed', 0, 0, 0, now(), now())
                 """, connection);
             command.Parameters.AddWithValue("id", Guid.NewGuid());
             command.Parameters.AddWithValue("customer", customer);
             command.Parameters.AddWithValue("owner", owner);
+            command.Parameters.AddWithValue("booth", Guid.NewGuid());
             command.Parameters.AddWithValue("code", code);
             command.Parameters.AddWithValue("request", checkoutRequestId.HasValue
                 ? checkoutRequestId.Value

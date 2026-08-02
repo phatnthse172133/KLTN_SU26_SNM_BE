@@ -52,6 +52,8 @@ using ApplicationLayer.Services.Orders;
 using InfrastructureLayer.Cores.AI;
 using InfrastructureLayer.Backgrounds;
 using ApplicationLayer.AI.Services;
+using ApplicationLayer.AI.V2.Configuration;
+using ApplicationLayer.AI.V2.Services;
 
 namespace InfrastructureLayer
 {
@@ -74,6 +76,7 @@ namespace InfrastructureLayer
             services.AddScoped<IBoothRegistrationRepository, BoothRegistrationRepository>();
             services.AddScoped<IFoodCategoryRepository, FoodCategoryRepository>();
             services.AddScoped<IFoodItemRepository, FoodItemRepository>();
+            services.AddScoped<IFoodSemanticMetadataRepository, FoodSemanticMetadataRepository>();
             services.AddScoped<IFoodPriceRepository, FoodPriceRepository>();
             services.AddScoped<IPackagePriceRepository, PackagePriceRepository>();
             services.AddScoped<IOrderRepository, OrderRepository>();
@@ -119,6 +122,10 @@ namespace InfrastructureLayer
 
             services.AddScoped<IFoodCategoryService, FoodCategoryService>();
             services.AddScoped<IMenuService, MenuService>();
+            services.AddScoped<IFoodAiProfileGenerator, FoodAiProfileGenerator>();
+            services.AddScoped<IFoodAiProfileRebuildService, FoodAiProfileRebuildService>();
+            services.AddScoped<IFoodMetadataCatalogService, FoodMetadataCatalogService>();
+            services.AddScoped<ILegacyFoodTagMetadataAdapter, LegacyFoodTagMetadataAdapter>();
 
             services.AddScoped<INightMarketService, NightMarketService>();
             services.AddScoped<ICustomerDiscoveryService, CustomerDiscoveryService>();
@@ -150,8 +157,34 @@ namespace InfrastructureLayer
             services.AddScoped<IDeviceTokenService, DeviceTokenService>();
             services.AddScoped<IFoodTagService, FoodTagService>();
             services.AddScoped<ICustomerPreferenceService, CustomerPreferenceService>();
+            services.AddScoped<ICustomerFoodProfileService, CustomerFoodProfileService>();
+            services.AddScoped<ILegacyCustomerPreferenceAdapter, LegacyCustomerPreferenceAdapter>();
             services.AddScoped<IAIRecommendationService, AIRecommendationService>();
             services.AddScoped<IAISettingsService, AISettingsService>();
+            services.Configure<AiProviderRuntimeOptions>(configuration.GetSection(AiProviderRuntimeOptions.SectionName));
+            services.Configure<GeminiV2SecretOptions>(configuration.GetSection(AiProviderRuntimeOptions.SectionName));
+            services.Configure<RecommendationV2Options>(configuration.GetSection(RecommendationV2Options.SectionName));
+            services.Configure<MealPlanV2Options>(configuration.GetSection(MealPlanV2Options.SectionName));
+            services.AddSingleton<IFoodRecommendationFallbackParser, DeterministicFoodIntentParser>();
+            services.AddScoped<IFoodRecommendationIntentNormalizer, FoodRecommendationIntentNormalizer>();
+            services.AddSingleton<IDeterministicRecommendationReasonBuilder, DeterministicRecommendationReasonBuilder>();
+            services.AddHttpClient<GeminiV2Client>()
+                .ConfigureHttpClient(client => client.Timeout = Timeout.InfiniteTimeSpan)
+                .RedactLoggedHeaders(_ => true)
+                .RemoveAllLoggers();
+            services.AddScoped<IAiIntentExtractor, GeminiIntentExtractor>();
+            services.AddScoped<IAiExplanationGenerator, GeminiExplanationGenerator>();
+            services.AddScoped<IFoodRecommendationReadRepository, FoodRecommendationReadRepository>();
+            services.AddScoped<IAiRecommendationSessionRepository, AiRecommendationSessionRepository>();
+            services.AddSingleton<IFoodSemanticMatcher, DeterministicFoodSemanticMatcher>();
+            services.AddSingleton<IFoodRecommendationRanker, FoodRecommendationRanker>();
+            services.AddSingleton<IFoodRecommendationDiversityReranker, FoodRecommendationDiversityReranker>();
+            services.AddScoped<IFoodRecommendationV2Service, FoodRecommendationV2Service>();
+            services.AddScoped<IMealPlanCandidateRepository, MealPlanCandidateRepository>();
+            services.AddScoped<IMealPlanV2Repository, MealPlanV2Repository>();
+            services.AddSingleton<IMealPlanPolicyResolver, MealPlanPolicyResolver>();
+            services.AddSingleton<IMealPlanRecalculationService, MealPlanRecalculationService>();
+            services.AddScoped<IMealPlanV2Service, MealPlanV2Service>();
             services.AddSingleton<IOnlinePresenceService, OnlinePresenceService>();
             services.Configure<AIProviderSettings>(
                 configuration.GetSection(AIProviderSettings.SectionName));
@@ -185,6 +218,8 @@ namespace InfrastructureLayer
             services.AddHostedService<EmailOutboxWorker>();
             services.AddHostedService<SubscriptionExpiryWorker>();
             services.AddHostedService<OrderCleanupBackgroundService>();
+            services.AddHostedService<AiRecommendationSessionCleanupWorker>();
+            services.AddHostedService<AiMealPlanSessionCleanupWorker>();
 
             return services;
         }

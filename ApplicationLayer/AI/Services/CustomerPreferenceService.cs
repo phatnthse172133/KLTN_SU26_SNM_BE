@@ -11,6 +11,7 @@ public class CustomerPreferenceService : ICustomerPreferenceService
 {
     private readonly ICustomerPreferenceRepository _preferences;
     private readonly IFoodTagRepository _foodTags;
+    private readonly ILegacyCustomerPreferenceAdapter? _legacyAdapter;
 
     public CustomerPreferenceService(
         ICustomerPreferenceRepository preferences,
@@ -20,10 +21,18 @@ public class CustomerPreferenceService : ICustomerPreferenceService
         _foodTags = foodTags;
     }
 
+    public CustomerPreferenceService(ICustomerPreferenceRepository preferences, IFoodTagRepository foodTags, ILegacyCustomerPreferenceAdapter legacyAdapter)
+        : this(preferences, foodTags) => _legacyAdapter = legacyAdapter;
+
     public async Task<ApiResponse<CustomerPreferenceResponse>> GetMineAsync(
         Guid customerId,
         CancellationToken cancellationToken = default)
     {
+        if (_legacyAdapter is not null)
+        {
+            var derived = await _legacyAdapter.GetDerivedAsync(customerId, cancellationToken);
+            if (derived is not null) return ApiResponse<CustomerPreferenceResponse>.SuccessResponse(derived, "Deprecated response derived from normalized customer food profile.");
+        }
         var preferences = await _preferences.GetByCustomerAsync(customerId, cancellationToken);
         return ApiResponse<CustomerPreferenceResponse>.SuccessResponse(Map(preferences));
     }
@@ -63,6 +72,7 @@ public class CustomerPreferenceService : ICustomerPreferenceService
 
         await _preferences.SaveChangesAsync();
         var saved = await _preferences.GetByCustomerAsync(customerId, cancellationToken);
+        if (_legacyAdapter is not null) await _legacyAdapter.AddSupportedAsync(customerId, saved, cancellationToken);
 
         return ApiResponse<CustomerPreferenceResponse>.SuccessResponse(
             Map(saved),

@@ -8,6 +8,7 @@ using AutoMapper;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
 using static DomainLayer.Enums.GeneralEnum;
+using DomainLayer.Enums;
 
 namespace ApplicationLayer.Services.Menus;
 
@@ -18,6 +19,9 @@ public class MenuService : IMenuService
     private readonly IFoodItemRepository _foodItems;
     private readonly IFoodTagRepository _foodTags;
     private readonly IMapper _mapper;
+    private readonly IFoodSemanticMetadataRepository? _semanticMetadata;
+    private readonly IFoodAiProfileGenerator? _profileGenerator;
+    private readonly ILegacyFoodTagMetadataAdapter? _legacyAdapter;
 
     public MenuService(
         IBoothRepository booths,
@@ -32,6 +36,18 @@ public class MenuService : IMenuService
         _foodTags = foodTags;
         _mapper = mapper;
     }
+
+    public MenuService(
+        IBoothRepository booths,
+        IFoodCategoryRepository categories,
+        IFoodItemRepository foodItems,
+        IFoodTagRepository foodTags,
+        IMapper mapper,
+        IFoodSemanticMetadataRepository semanticMetadata,
+        IFoodAiProfileGenerator profileGenerator,
+        ILegacyFoodTagMetadataAdapter legacyAdapter)
+        : this(booths, categories, foodItems, foodTags, mapper)
+        => (_semanticMetadata, _profileGenerator, _legacyAdapter) = (semanticMetadata, profileGenerator, legacyAdapter);
 
     public async Task<ApiResponse<PaginationResp<FoodItemResponse>>> GetMyBoothMenuAsync(
         Guid ownerId,
@@ -70,6 +86,11 @@ public class MenuService : IMenuService
         foodItem.CreatedAt = now;
         foodItem.UpdatedAt = now;
         SetTags(foodItem, tags!, now);
+        if (_legacyAdapter is not null)
+        {
+            await _legacyAdapter.ApplySupportedAsync(foodItem, tags!, now, cancellationToken);
+            _profileGenerator!.Rebuild(foodItem, now);
+        }
 
         await _foodItems.AddAsync(foodItem);
         await _foodItems.SaveChangesAsync();
@@ -97,11 +118,56 @@ public class MenuService : IMenuService
         foodItem.Category = category!;
         foodItem.UpdatedAt = DateTime.UtcNow;
         SetTags(foodItem, tags!, foodItem.UpdatedAt);
+        if (_legacyAdapter is not null)
+        {
+            await _legacyAdapter.ApplySupportedAsync(foodItem, tags!, foodItem.UpdatedAt, cancellationToken);
+            _profileGenerator!.Rebuild(foodItem, foodItem.UpdatedAt);
+        }
 
         _foodItems.Update(foodItem);
         await _foodItems.SaveChangesAsync();
 
         return ApiResponse<FoodItemResponse>.SuccessResponse(_mapper.Map<FoodItemResponse>(foodItem), "Food item updated successfully.");
+    }
+
+    public async Task<ApiResponse<FoodItemV2Response>> CreateFoodItemV2Async(Guid ownerId, Guid boothId, CreateFoodItemV2Request request, CancellationToken cancellationToken = default)
+    {
+        EnsureV2Dependencies();
+        var managementError = await ValidateBoothManagementAsync(ownerId, boothId);
+        if (managementError is not null) throw ToBoothAccessException(managementError);
+        var category = await ValidateBaseV2Async(boothId, request, cancellationToken);
+        var metadata = await LoadAndValidateMetadataAsync(request, cancellationToken);
+        var now = DateTime.UtcNow;
+        var food = new FoodItem
+        {
+            Id = Guid.NewGuid(), BoothId = boothId, CategoryId = category.Id, Category = category,
+            Name = request.Name.Trim(), Description = request.Description?.Trim(), Price = request.Price,
+            ThumbnailUrl = request.ThumbnailUrl, IsAvailable = request.IsAvailable, IsFeatured = request.IsFeatured,
+            IsDeleted = false, CreatedAt = now, UpdatedAt = now
+        };
+        ApplyNormalizedMetadata(food, request, metadata, now);
+        _profileGenerator!.Rebuild(food, now);
+        await _foodItems.AddAsync(food);
+        await _foodItems.SaveChangesAsync();
+        return ApiResponse<FoodItemV2Response>.SuccessResponse(MapV2(food), "Food item created with normalized metadata.");
+    }
+
+    public async Task<ApiResponse<FoodItemV2Response>> UpdateFoodItemV2Async(Guid ownerId, Guid boothId, Guid foodItemId, UpdateFoodItemV2Request request, CancellationToken cancellationToken = default)
+    {
+        EnsureV2Dependencies();
+        var managementError = await ValidateBoothManagementAsync(ownerId, boothId);
+        if (managementError is not null) throw ToBoothAccessException(managementError);
+        var food = await _foodItems.GetByBoothAsync(boothId, foodItemId) ?? throw AppException.NotFound("Food item was not found.");
+        var category = await ValidateBaseV2Async(boothId, request, cancellationToken);
+        var metadata = await LoadAndValidateMetadataAsync(request, cancellationToken);
+        var now = DateTime.UtcNow;
+        food.CategoryId = category.Id; food.Category = category; food.Name = request.Name.Trim(); food.Description = request.Description?.Trim();
+        food.Price = request.Price; food.ThumbnailUrl = request.ThumbnailUrl; food.IsAvailable = request.IsAvailable; food.IsFeatured = request.IsFeatured; food.UpdatedAt = now;
+        ApplyNormalizedMetadata(food, request, metadata, now);
+        _profileGenerator!.Rebuild(food, now);
+        _foodItems.Update(food);
+        await _foodItems.SaveChangesAsync();
+        return ApiResponse<FoodItemV2Response>.SuccessResponse(MapV2(food), "Food item normalized metadata replaced successfully.");
     }
 
     public async Task<ApiResponse<FoodItemResponse>> UpdateAvailabilityAsync(Guid ownerId, Guid boothId, Guid foodItemId, UpdateFoodAvailabilityRequest request, CancellationToken cancellationToken = default)
@@ -235,4 +301,107 @@ public class MenuService : IMenuService
             : message.Contains("not found", StringComparison.OrdinalIgnoreCase)
                 ? AppException.NotFound(message)
                 : AppException.BadRequest(message);
+
+    private void EnsureV2Dependencies()
+    {
+        if (_semanticMetadata is null || _profileGenerator is null)
+            throw new InvalidOperationException("Normalized menu dependencies are not configured.");
+    }
+
+    private async Task<FoodCategory> ValidateBaseV2Async(Guid boothId, CreateFoodItemV2Request request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name)) throw AppException.BadRequest("Food item name is required.");
+        if (request.Price <= 0) throw AppException.BadRequest("Food item price must be greater than zero.");
+        if (request.EstimatedServingCount <= 0) throw AppException.BadRequest("Estimated serving count must be greater than zero.");
+        if (!request.PrimaryCourse.HasValue || !Enum.IsDefined(request.PrimaryCourse.Value)) throw AppException.BadRequest("Primary course is required and must be valid.");
+        if (request.AdditionalCourses.Any(course => !Enum.IsDefined(course))) throw AppException.BadRequest("One or more additional courses are invalid.");
+        if (request.AdditionalCourses.Contains(request.PrimaryCourse.Value)) throw AppException.BadRequest("Primary course cannot be repeated as an additional course.");
+        if (request.AdditionalCourses.Count != request.AdditionalCourses.Distinct().Count()) throw AppException.BadRequest("Course values must not contain duplicates.");
+        if (!Enum.IsDefined(request.SpiceLevel) || (request.ServingTemperature.HasValue && !Enum.IsDefined(request.ServingTemperature.Value))) throw AppException.BadRequest("Semantic enum value is invalid.");
+        if (request.ConfirmedAllergenDeclarations.Any(x => !Enum.IsDefined(x.DeclarationType))) throw AppException.BadRequest("Allergen declaration type is invalid.");
+        return await _categories.GetActiveByBoothAsync(boothId, request.CategoryId)
+            ?? throw AppException.NotFound("Food category was not found or is not selectable.");
+    }
+
+    private async Task<MetadataSelection> LoadAndValidateMetadataAsync(CreateFoodItemV2Request request, CancellationToken ct)
+    {
+        static void EnsureUnique(IEnumerable<Guid> values, string name)
+        {
+            var array = values.ToArray();
+            if (array.Length != array.Distinct().Count()) throw AppException.BadRequest($"{name} must not contain duplicates.");
+        }
+        EnsureUnique(request.IngredientIds, "Ingredient IDs"); EnsureUnique(request.DietaryAttributeIds, "Dietary attribute IDs");
+        EnsureUnique(request.PreparationMethodIds, "Preparation method IDs"); EnsureUnique(request.TasteProfileIds, "Taste profile IDs");
+        EnsureUnique(request.ConfirmedAllergenDeclarations.Select(x => x.AllergenId), "Allergen IDs");
+        var ingredients = await _semanticMetadata!.GetActiveIngredientsAsync(request.IngredientIds, ct);
+        var allergens = await _semanticMetadata.GetActiveAllergensAsync(request.ConfirmedAllergenDeclarations.Select(x => x.AllergenId).ToArray(), ct);
+        var dietary = await _semanticMetadata.GetActiveDietaryAttributesAsync(request.DietaryAttributeIds, ct);
+        var preparations = await _semanticMetadata.GetActivePreparationMethodsAsync(request.PreparationMethodIds, ct);
+        var tastes = await _semanticMetadata.GetActiveTasteProfilesAsync(request.TasteProfileIds, ct);
+        if (ingredients.Count != request.IngredientIds.Count || allergens.Count != request.ConfirmedAllergenDeclarations.Count || dietary.Count != request.DietaryAttributeIds.Count || preparations.Count != request.PreparationMethodIds.Count || tastes.Count != request.TasteProfileIds.Count)
+            throw AppException.BadRequest("One or more normalized catalog IDs are invalid or inactive.");
+        return new(ingredients, allergens, dietary, preparations, tastes);
+    }
+
+    private static void ApplyNormalizedMetadata(FoodItem food, CreateFoodItemV2Request request, MetadataSelection selection, DateTime now)
+    {
+        food.SpiceLevel = request.SpiceLevel; food.ServingTemperature = request.ServingTemperature;
+        food.EstimatedServingCount = request.EstimatedServingCount; food.ServingSizeDescription = request.ServingSizeDescription?.Trim(); food.IsShareable = request.IsShareable;
+        Sync(food.Courses, request.AdditionalCourses.Append(request.PrimaryCourse!.Value).ToArray(), x => x.Course,
+            course => new() { FoodItemId = food.Id, Course = course, CreatedAt = now });
+        foreach (var course in food.Courses) course.IsPrimary = course.Course == request.PrimaryCourse.Value;
+        Sync(food.Ingredients, selection.Ingredients.Select(x => x.Id).ToArray(), x => x.IngredientId,
+            id => new() { FoodItemId = food.Id, IngredientId = id, Ingredient = selection.Ingredients.Single(x => x.Id == id), CreatedAt = now });
+        Sync(food.PreparationMethods, selection.Preparations.Select(x => x.Id).ToArray(), x => x.PreparationMethodId,
+            id => new() { FoodItemId = food.Id, PreparationMethodId = id, PreparationMethod = selection.Preparations.Single(x => x.Id == id), CreatedAt = now });
+        Sync(food.TasteProfiles, selection.Tastes.Select(x => x.Id).ToArray(), x => x.TasteProfileId,
+            id => new() { FoodItemId = food.Id, TasteProfileId = id, TasteProfile = selection.Tastes.Single(x => x.Id == id), CreatedAt = now });
+
+        var requestedAllergens = selection.Allergens.Select(x => x.Id).ToHashSet();
+        foreach (var existing in food.Allergens.Where(x => x.Source != MetadataSource.ADMIN_VERIFIED && !requestedAllergens.Contains(x.AllergenId)).ToArray()) food.Allergens.Remove(existing);
+        foreach (var item in selection.Allergens)
+        {
+            var declaration = request.ConfirmedAllergenDeclarations.Single(x => x.AllergenId == item.Id);
+            var existing = food.Allergens.SingleOrDefault(x => x.AllergenId == item.Id);
+            if (existing is null) food.Allergens.Add(new() { FoodItemId = food.Id, AllergenId = item.Id, Allergen = item, DeclarationType = declaration.DeclarationType, IsConfirmed = false, Source = MetadataSource.OWNER_DECLARED, CreatedAt = now, UpdatedAt = now });
+            else if (existing.Source != MetadataSource.ADMIN_VERIFIED) { existing.DeclarationType = declaration.DeclarationType; existing.IsConfirmed = false; existing.Source = MetadataSource.OWNER_DECLARED; existing.UpdatedAt = now; }
+        }
+        var requestedDietary = selection.Dietary.Select(x => x.Id).ToHashSet();
+        foreach (var existing in food.DietaryAttributes.Where(x => x.Source != MetadataSource.ADMIN_VERIFIED && !requestedDietary.Contains(x.DietaryAttributeId)).ToArray()) food.DietaryAttributes.Remove(existing);
+        foreach (var item in selection.Dietary)
+        {
+            var existing = food.DietaryAttributes.SingleOrDefault(x => x.DietaryAttributeId == item.Id);
+            if (existing is null) food.DietaryAttributes.Add(new() { FoodItemId = food.Id, DietaryAttributeId = item.Id, DietaryAttribute = item, SuitabilityStatus = DietarySuitabilityStatus.UNVERIFIED, IsConfirmed = false, Source = MetadataSource.OWNER_DECLARED, CreatedAt = now, UpdatedAt = now });
+        }
+    }
+
+    private static FoodItemV2Response MapV2(FoodItem food) => new()
+    {
+        Id = food.Id, BoothId = food.BoothId, CategoryId = food.CategoryId, CategoryName = food.Category.Name, Name = food.Name,
+        Description = food.Description, Price = food.Price, ThumbnailUrl = food.ThumbnailUrl, IsAvailable = food.IsAvailable, IsFeatured = food.IsFeatured,
+        TagIds = food.FoodItemTags.Select(x => x.FoodTagId).ToArray(), CreatedAt = food.CreatedAt, UpdatedAt = food.UpdatedAt,
+        SemanticMetadata = new()
+        {
+            PrimaryCourse = food.Courses.SingleOrDefault(x => x.IsPrimary)?.Course,
+            SupportedCourses = food.Courses.OrderByDescending(x => x.IsPrimary).ThenBy(x => x.Course).Select(x => x.Course).ToArray(),
+            Ingredients = food.Ingredients.OrderBy(x => x.Ingredient.Code).Select(x => new SemanticCatalogResponse(x.IngredientId, x.Ingredient.Code, x.Ingredient.Name)).ToArray(),
+            AllergenDeclarations = food.Allergens.OrderBy(x => x.Allergen.Code).Select(x => new FoodAllergenDeclarationResponse(x.AllergenId, x.Allergen.Code, x.Allergen.Name, x.DeclarationType, x.IsConfirmed, x.Source)).ToArray(),
+            DietaryAttributes = food.DietaryAttributes.OrderBy(x => x.DietaryAttribute.Code).Select(x => new FoodDietaryAttributeResponse(x.DietaryAttributeId, x.DietaryAttribute.Code, x.DietaryAttribute.Name, x.SuitabilityStatus, x.IsConfirmed, x.Source)).ToArray(),
+            PreparationMethods = food.PreparationMethods.OrderBy(x => x.PreparationMethod.Code).Select(x => new SemanticCatalogResponse(x.PreparationMethodId, x.PreparationMethod.Code, x.PreparationMethod.Name)).ToArray(),
+            TasteProfiles = food.TasteProfiles.OrderBy(x => x.TasteProfile.Code).Select(x => new SemanticCatalogResponse(x.TasteProfileId, x.TasteProfile.Code, x.TasteProfile.Name)).ToArray(),
+            SpiceLevel = food.SpiceLevel, ServingTemperature = food.ServingTemperature, EstimatedServingCount = food.EstimatedServingCount,
+            ServingSizeDescription = food.ServingSizeDescription, IsShareable = food.IsShareable
+        }
+    };
+
+    private sealed record MetadataSelection(IReadOnlyCollection<Ingredient> Ingredients, IReadOnlyCollection<Allergen> Allergens, IReadOnlyCollection<DietaryAttribute> Dietary, IReadOnlyCollection<PreparationMethod> Preparations, IReadOnlyCollection<TasteProfile> Tastes);
+
+    private static void Sync<TItem, TKey>(ICollection<TItem> current, IReadOnlyCollection<TKey> requested, Func<TItem, TKey> key, Func<TKey, TItem> create)
+        where TKey : notnull
+    {
+        var desired = requested.ToHashSet();
+        foreach (var item in current.Where(item => !desired.Contains(key(item))).ToArray()) current.Remove(item);
+        var existing = current.Select(key).ToHashSet();
+        foreach (var value in requested.Where(value => !existing.Contains(value))) current.Add(create(value));
+    }
 }

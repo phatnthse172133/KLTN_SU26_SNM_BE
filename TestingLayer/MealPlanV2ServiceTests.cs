@@ -1,0 +1,177 @@
+using ApplicationLayer.AI.V2.Configuration;
+using ApplicationLayer.AI.V2.MealPlans;
+using ApplicationLayer.AI.V2.Models;
+using ApplicationLayer.AI.V2.Recommendations;
+using ApplicationLayer.AI.V2.Services;
+using ApplicationLayer.Exceptions;
+using DomainLayer.Entities;
+using DomainLayer.Enums;
+using DomainLayer.InterfaceRepository;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using Moq;
+using static DomainLayer.Enums.GeneralEnum;
+
+namespace TestingLayer;
+
+public sealed class MealPlanV2ServiceTests
+{
+    [Fact]
+    public async Task Create_returns_only_feasible_same_market_plans_and_is_idempotent()
+    {
+        var fixture = Fixture(3);
+        var request = Request();
+        var first = await fixture.Service.CreateAsync(Customer, request, default);
+        Assert.Equal("SUCCESS", first.Data!.Status); Assert.Equal(3, first.Data.Plans.Count);
+        Assert.Equal(3, first.Data.Plans.Select(value => value.Market.Id).Distinct().Count());
+        Assert.All(first.Data.Plans, value => { Assert.True(value.IsComplete); Assert.Equal(1, value.Version); Assert.True(value.TotalPrice <= value.Budget); });
+        var replay = await fixture.Service.CreateAsync(Customer, request, default);
+        Assert.Equal(first.Data.SessionId, replay.Data!.SessionId); Assert.Equal(1, fixture.Extractor.Calls);
+        var changed = Request(); changed.Budget++;
+        var conflict = await Assert.ThrowsAsync<AppException>(() => fixture.Service.CreateAsync(Customer, changed, default));
+        Assert.Equal("AI_IDEMPOTENCY_CONFLICT", conflict.ErrorCode);
+    }
+
+    [Fact]
+    public async Task One_feasible_market_returns_partial_without_fake_plans()
+    {
+        var fixture = Fixture(1);
+        var response = await fixture.Service.CreateAsync(Customer, Request(), default);
+        Assert.Equal("PARTIAL_PLANS", response.Data!.Status); Assert.Single(response.Data.Plans);
+    }
+
+    [Fact]
+    public async Task Alternatives_replace_remove_and_regenerate_are_server_recalculated_and_versioned()
+    {
+        var fixture = Fixture(1);
+        var created = (await fixture.Service.CreateAsync(Customer, Request(), default)).Data!;
+        var planId = Assert.Single(created.Plans).PlanId;
+        var detail = (await fixture.Service.GetDetailAsync(Customer, planId, default)).Data!;
+        var main = detail.CourseGroups.Single(group => group.Course == "MAIN_COURSE").Items.Single();
+        var alternatives = (await fixture.Service.GetAlternativesAsync(Customer, planId, main.PlanItemId, 1, 10, default)).Data!;
+        Assert.True(alternatives.Total >= 2); Assert.Equal(detail.Version, alternatives.CurrentPlanVersion);
+        var replacement = alternatives.Items.First();
+        var replaced = (await fixture.Service.ReplaceAsync(Customer, planId, main.PlanItemId,
+            new() { ReplacementFoodId = replacement.FoodId, ExpectedPlanVersion = detail.Version }, default)).Data!;
+        Assert.Equal(detail.Version + 1, replaced.Version); Assert.True(replaced.IsComplete);
+        var stale = await Assert.ThrowsAsync<AppException>(() => fixture.Service.RemoveAsync(Customer, planId,
+            replaced.CourseGroups.SelectMany(group => group.Items).First().PlanItemId, detail.Version, default));
+        Assert.Equal("AI_PLAN_VERSION_CONFLICT", stale.ErrorCode);
+        var currentMain = replaced.CourseGroups.Single(group => group.Course == "MAIN_COURSE").Items.Single();
+        var regenerated = (await fixture.Service.RegenerateCourseAsync(Customer, planId, FoodCourse.MAIN_COURSE,
+            new() { ExpectedPlanVersion = replaced.Version }, default)).Data!;
+        Assert.Equal(replaced.Version + 1, regenerated.Version);
+        Assert.DoesNotContain(regenerated.CourseGroups.SelectMany(group => group.Items), item => item.FoodId == currentMain.FoodId);
+        var drink = regenerated.CourseGroups.Single(group => group.Course == "DRINK").Items.Single();
+        var removed = (await fixture.Service.RemoveAsync(Customer, planId, drink.PlanItemId, regenerated.Version, default)).Data!;
+        Assert.Equal(regenerated.Version + 1, removed.Version); Assert.True(removed.TotalPrice < regenerated.TotalPrice);
+        Assert.False(removed.IsComplete);
+    }
+
+    [Fact]
+    public async Task Expired_session_blocks_alternatives_and_mutations_but_detail_remains_read_only()
+    {
+        var fixture = Fixture(1);
+        var created = (await fixture.Service.CreateAsync(Customer, Request(), default)).Data!;
+        var session = fixture.Repository.Sessions.Single(); session.ExpiresAt = DateTime.UtcNow.AddMinutes(-1);
+        var planId = Assert.Single(created.Plans).PlanId;
+        var detail = (await fixture.Service.GetDetailAsync(Customer, planId, default)).Data!;
+        var item = detail.CourseGroups.SelectMany(group => group.Items).First();
+        var expired = await Assert.ThrowsAsync<AppException>(() => fixture.Service.GetAlternativesAsync(Customer, planId, item.PlanItemId, 1, 10, default));
+        Assert.Equal("AI_PLAN_EXPIRED", expired.ErrorCode);
+    }
+
+    private static FixtureState Fixture(int markets)
+    {
+        var values = Enumerable.Range(1, markets).SelectMany(Candidates).ToArray();
+        var extractor = new FakeExtractor(); var repository = new FakeRepository();
+        var metadata = new Mock<IFoodSemanticMetadataRepository>();
+        metadata.Setup(value => value.GetActiveCatalogsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new FoodSemanticCatalogSet([], [], [], [], []));
+        var service = new MealPlanV2Service(extractor, new FakeCandidates(values), repository, metadata.Object,
+            new MealPlanPolicyResolver(), new MealPlanRecalculationService(), Options.Create(new MealPlanV2Options()),
+            TimeProvider.System, NullLogger<MealPlanV2Service>.Instance);
+        return new(service, repository, extractor);
+    }
+
+    private static CreateMealPlanV2Request Request() => new()
+    {
+        PartySize = 2, Budget = 500_000, DiningStyle = "FULL_MEAL", Request = "bua an day du",
+        Latitude = 10.77m, Longitude = 106.70m, MaxDistanceMeters = 50_000, IdempotencyKey = "create-key"
+    };
+
+    private static IEnumerable<FoodRecommendationCandidate> Candidates(int number)
+    {
+        var market = GuidFrom(number, 1); var booth = GuidFrom(number, 2);
+        yield return Candidate(GuidFrom(number, 10), market, booth, FoodCourse.MAIN_COURSE, 100_000, 2, number);
+        yield return Candidate(GuidFrom(number, 11), market, booth, FoodCourse.MAIN_COURSE, 110_000, 2, number);
+        yield return Candidate(GuidFrom(number, 12), market, booth, FoodCourse.MAIN_COURSE, 120_000, 2, number);
+        yield return Candidate(GuidFrom(number, 13), market, booth, FoodCourse.DRINK, 20_000, 1, number);
+    }
+
+    private static FoodRecommendationCandidate Candidate(Guid food, Guid market, Guid booth, FoodCourse course,
+        decimal price, int serving, int number) => new()
+    {
+        FoodId = food, FoodName = $"Food {food:N}", CategoryId = GuidFrom(number, 20), CategoryCode = "MAIN", CategoryName = "Main",
+        CurrentPrice = price, IsAvailable = true, CategoryIsActive = true, CategoryIsSelectable = true,
+        BoothId = booth, BoothName = $"Booth {number}", BoothStatus = BoothStatus.Active,
+        MarketId = market, MarketName = $"Market {number}", MarketStatus = NightMarketStatus.Active,
+        MarketModerationStatus = ModerationStatus.Active, MarketOpenTime = new TimeOnly(0, 0), MarketCloseTime = new TimeOnly(23, 59, 59),
+        MarketLatitude = 10.77m + number / 1000m,
+        MarketLongitude = 106.70m, EstimatedServingCount = serving, Courses = [course], Rating = 4.5m, ReviewCount = 10
+    };
+
+    private static Guid GuidFrom(int a, int b) => Guid.Parse($"{a:X8}-0000-0000-0000-{b:X12}");
+    private static readonly Guid Customer = Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc");
+    private sealed record FixtureState(MealPlanV2Service Service, FakeRepository Repository, FakeExtractor Extractor);
+
+    private sealed class FakeExtractor : IAiIntentExtractor
+    {
+        public int Calls { get; private set; }
+        public Task<MealPlanIntentExtractionResult> ExtractMealPlanIntentAsync(MealPlanIntentRequest request, CancellationToken cancellationToken)
+        { Calls++; return Task.FromResult(new MealPlanIntentExtractionResult { IsSuccess = true, ParsedResult = new MealPlanIntent { Summary = request.Query, Confidence = .5m } }); }
+        public Task<FoodRecommendationIntentExtractionResult> ExtractFoodRecommendationIntentAsync(FoodRecommendationIntentRequest request, CancellationToken cancellationToken)
+            => throw new NotSupportedException();
+    }
+
+    private sealed class FakeCandidates(IReadOnlyCollection<FoodRecommendationCandidate> values) : IMealPlanCandidateRepository
+    {
+        public Task<IReadOnlyCollection<FoodRecommendationCandidate>> GetCandidatesAsync(DateTime utcNow, int limit, int maximumPerMarket, CancellationToken cancellationToken)
+            => Task.FromResult(values);
+    }
+
+    private sealed class FakeRepository : IMealPlanV2Repository
+    {
+        public List<AiMealPlanSession> Sessions { get; } = [];
+        public Task<AiMealPlanSession?> FindSessionAsync(Guid customerId, string key, CancellationToken cancellationToken)
+            => Task.FromResult(Sessions.SingleOrDefault(value => value.CustomerId == customerId && value.IdempotencyKey == key));
+        public Task<MealPlanIdempotencyResult> SaveCreateAsync(AiMealPlanSession session, CancellationToken cancellationToken)
+        {
+            var existing = Sessions.SingleOrDefault(value => value.CustomerId == session.CustomerId && value.IdempotencyKey == session.IdempotencyKey);
+            if (existing is not null) return Task.FromResult(new MealPlanIdempotencyResult(existing.RequestHash == session.RequestHash ? MealPlanIdempotencyStatus.EXISTING : MealPlanIdempotencyStatus.CONFLICT, existing));
+            foreach (var plan in session.Plans)
+            {
+                plan.Session = session; plan.Market = new NightMarket { Id = plan.MarketId, Name = "Market", Address = "Address",
+                    Status = NightMarketStatus.Active, ModerationStatus = ModerationStatus.Active };
+                foreach (var item in plan.Items)
+                {
+                    item.Plan = plan; item.FoodItem = new FoodItem { Id = item.FoodItemId!.Value, Name = item.FoodNameSnapshot,
+                        Price = item.UnitPriceSnapshot, IsAvailable = true }; item.Booth = new Booth { Id = item.BoothId!.Value,
+                        BoothName = item.BoothNameSnapshot, Status = BoothStatus.Active };
+                }
+            }
+            Sessions.Add(session); return Task.FromResult(new MealPlanIdempotencyResult(MealPlanIdempotencyStatus.CREATED, session));
+        }
+        public Task<AiMealPlan?> GetOwnedPlanAsync(Guid customerId, Guid planId, CancellationToken cancellationToken)
+            => Task.FromResult(Sessions.Where(value => value.CustomerId == customerId).SelectMany(value => value.Plans).SingleOrDefault(value => value.Id == planId));
+        public async Task<IMealPlanMutation?> BeginOwnedMutationAsync(Guid customerId, Guid planId, CancellationToken cancellationToken)
+            => new Mutation(await GetOwnedPlanAsync(customerId, planId, cancellationToken));
+        public Task<int> DeleteExpiredBatchAsync(DateTime retentionCutoffUtc, int batchSize, CancellationToken cancellationToken) => Task.FromResult(0);
+        private sealed class Mutation(AiMealPlan? plan) : IMealPlanMutation
+        {
+            public AiMealPlan Plan { get; } = plan!;
+            public Task CommitAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
+    }
+}

@@ -18,6 +18,38 @@ namespace InfrastructureLayer.Data
         // DbSets
         public virtual DbSet<AIRecommendationLog> AIRecommendationLogs { get; set; }
 
+        public virtual DbSet<Ingredient> Ingredients { get; set; }
+        public virtual DbSet<Allergen> Allergens { get; set; }
+        public virtual DbSet<DietaryAttribute> DietaryAttributes { get; set; }
+        public virtual DbSet<PreparationMethod> PreparationMethods { get; set; }
+        public virtual DbSet<TasteProfile> TasteProfiles { get; set; }
+        public virtual DbSet<FoodSearchFacet> FoodSearchFacets { get; set; }
+        public virtual DbSet<FoodItemIngredient> FoodItemIngredients { get; set; }
+        public virtual DbSet<FoodItemAllergen> FoodItemAllergens { get; set; }
+        public virtual DbSet<FoodItemDietaryAttribute> FoodItemDietaryAttributes { get; set; }
+        public virtual DbSet<FoodItemPreparationMethod> FoodItemPreparationMethods { get; set; }
+        public virtual DbSet<FoodItemTasteProfile> FoodItemTasteProfiles { get; set; }
+        public virtual DbSet<FoodItemSearchFacet> FoodItemSearchFacets { get; set; }
+        public virtual DbSet<FoodItemCourse> FoodItemCourses { get; set; }
+        public virtual DbSet<FoodItemDiningPurpose> FoodItemDiningPurposes { get; set; }
+        public virtual DbSet<CustomerFoodProfile> CustomerFoodProfiles { get; set; }
+        public virtual DbSet<CustomerPreferredIngredient> CustomerPreferredIngredients { get; set; }
+        public virtual DbSet<CustomerAvoidedIngredient> CustomerAvoidedIngredients { get; set; }
+        public virtual DbSet<CustomerDietaryRequirement> CustomerDietaryRequirements { get; set; }
+        public virtual DbSet<CustomerAllergenExclusion> CustomerAllergenExclusions { get; set; }
+        public virtual DbSet<CustomerPreferredPreparationMethod> CustomerPreferredPreparationMethods { get; set; }
+        public virtual DbSet<CustomerPreferredTasteProfile> CustomerPreferredTasteProfiles { get; set; }
+        public virtual DbSet<CustomerAvoidedTasteProfile> CustomerAvoidedTasteProfiles { get; set; }
+        public virtual DbSet<CustomerPreferredCourse> CustomerPreferredCourses { get; set; }
+        public virtual DbSet<CustomerPreferredDiningPurpose> CustomerPreferredDiningPurposes { get; set; }
+        public virtual DbSet<AiRecommendationSession> AiRecommendationSessions { get; set; }
+        public virtual DbSet<AiRecommendationFeedback> AiRecommendationFeedback { get; set; }
+        public virtual DbSet<AiRecommendationResult> AiRecommendationResults { get; set; }
+        public virtual DbSet<AiMealPlanSession> AiMealPlanSessions { get; set; }
+        public virtual DbSet<AiMealPlan> AiMealPlans { get; set; }
+        public virtual DbSet<AiMealPlanItem> AiMealPlanItems { get; set; }
+        public virtual DbSet<FoodAiProfile> FoodAiProfiles { get; set; }
+
         public virtual DbSet<Booth> Booths { get; set; }
 
         public virtual DbSet<BoothDocument> BoothDocuments { get; set; }
@@ -149,6 +181,7 @@ namespace InfrastructureLayer.Data
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+            modelBuilder.ConfigureAiV2();
             // Apply all configurations from the current assembly
             modelBuilder.HasPostgresExtension("uuid-ossp");
 
@@ -657,6 +690,18 @@ namespace InfrastructureLayer.Data
                     .HasComment("false khi mÃƒÂ³n hÃ¡ÂºÂ¿t nguyÃƒÂªn liÃ¡Â»â€¡u hoÃ¡ÂºÂ·c chÃ¡Â»Â§ quÃƒÂ¡n tÃ¡ÂºÂ¡m Ã¡ÂºÂ©n");
                 entity.Property(e => e.IsDeleted).HasDefaultValue(false);
                 entity.Property(e => e.IsFeatured).HasDefaultValue(false);
+                entity.Property(e => e.SpiceLevel)
+                    .HasConversion<string>()
+                    .HasMaxLength(20)
+                    .HasDefaultValue(DomainLayer.Enums.FoodSpiceLevel.UNKNOWN);
+                entity.Property(e => e.ServingTemperature)
+                    .HasConversion<string>()
+                    .HasMaxLength(20);
+                entity.Property(e => e.ServingSizeDescription).HasMaxLength(300);
+                entity.Property(e => e.SemanticProfileVersion).HasDefaultValue(0);
+                entity.ToTable("FoodItem", table => table.HasCheckConstraint(
+                    "ck_fooditem_estimated_serving_count",
+                    "\"EstimatedServingCount\" IS NULL OR \"EstimatedServingCount\" > 0"));
                 entity.Property(e => e.Name).HasMaxLength(200);
                 entity.Property(e => e.Price)
                     .HasPrecision(12, 2)

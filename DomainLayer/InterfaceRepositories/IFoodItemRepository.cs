@@ -58,4 +58,5 @@ public interface IFoodItemRepository : IGenericRepository<FoodItem>
         CancellationToken cancellationToken = default);
 
     Task<List<FoodItem>> GetAllFoodItemsByIdsAsync(List<Guid> foodItemIds);
+    Task<IReadOnlyCollection<FoodItem>> GetSemanticProfileBatchAsync(Guid? foodItemId, int batchSize, CancellationToken cancellationToken = default);
 }

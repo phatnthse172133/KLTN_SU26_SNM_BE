@@ -1,4 +1,7 @@
 namespace ApplicationLayer.DTOs.Responses;
+using DomainLayer.Enums;
+using ApplicationLayer.DTOs;
+using System.Text.Json.Serialization;
 
 public sealed class CustomerMarketSummaryResponse
 {
@@ -68,13 +71,18 @@ public class CustomerFoodListItemResponse
     public Guid MarketId { get; set; }
     public string MarketName { get; set; } = string.Empty;
     public bool IsFeatured { get; set; }
+    [JsonConverter(typeof(NullableEnumJsonConverter<FoodCourse>))] public FoodCourse? PrimaryCourse { get; set; }
+    public int? EstimatedServingCount { get; set; }
+    public bool? IsShareable { get; set; }
 }
 
 public sealed class CustomerFoodDetailResponse : CustomerFoodListItemResponse
 {
     public string? Description { get; set; }
     public IReadOnlyCollection<string> ImageUrls { get; set; } = [];
+    /// <summary>Deprecated compatibility field derived from normalized metadata.</summary>
     public IReadOnlyCollection<CustomerFoodTagResponse> Tags { get; set; } = [];
+    public FoodSemanticMetadataResponse SemanticMetadata { get; set; } = new();
     public CustomerBoothSummaryResponse Booth { get; set; } = new();
     public CustomerMarketSummaryResponse Market { get; set; } = new();
 }

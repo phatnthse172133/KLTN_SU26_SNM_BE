@@ -81,6 +81,481 @@ namespace InfrastructureLayer.Migrations
                         });
                 });
 
+            modelBuilder.Entity("DomainLayer.Entities.AiMealPlan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("uuid_generate_v4()");
+
+                    b.Property<decimal>("CompatibilityScore")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<int?>("DistanceMeters")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("EstimatedServingCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("EstimatedTravelMinutes")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsComplete")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("MarketId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PlanCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("PlanTitle")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<decimal>("RemainingBudget")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Strategy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Summary")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<decimal>("TotalPrice")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
+                    b.Property<string>("WarningsJson")
+                        .HasColumnType("jsonb");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex(new[] { "MarketId" }, "idx_aimealplan_market");
+
+                    b.HasIndex(new[] { "SessionId", "PlanCode" }, "ux_aimealplan_session_code")
+                        .IsUnique();
+
+                    b.ToTable("AiMealPlan", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_aimealplan_prices", "\"TotalPrice\" >= 0");
+
+                            t.HasCheckConstraint("ck_aimealplan_score", "\"CompatibilityScore\" BETWEEN 0 AND 100");
+                        });
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.AiMealPlanItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("uuid_generate_v4()");
+
+                    b.Property<Guid?>("BoothId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BoothNameSnapshot")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<decimal>("CompatibilityScore")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<string>("Course")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid?>("FoodItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("FoodNameSnapshot")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("ImageUrlSnapshot")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<bool>("IsRemoved")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("PlanId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal?>("RatingSnapshot")
+                        .HasPrecision(3, 2)
+                        .HasColumnType("numeric(3,2)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<int>("ReviewCountSnapshot")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ServingCountSnapshot")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("TotalPriceSnapshot")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<decimal>("UnitPriceSnapshot")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BoothId");
+
+                    b.HasIndex("FoodItemId");
+
+                    b.HasIndex(new[] { "PlanId" }, "idx_aimealplanitem_plan");
+
+                    b.HasIndex(new[] { "PlanId", "FoodItemId" }, "ux_aimealplanitem_active_food")
+                        .IsUnique()
+                        .HasFilter("\"IsRemoved\" = false AND \"FoodItemId\" IS NOT NULL");
+
+                    b.ToTable("AiMealPlanItem", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_aimealplanitem_prices", "\"UnitPriceSnapshot\" >= 0 AND \"TotalPriceSnapshot\" >= 0");
+
+                            t.HasCheckConstraint("ck_aimealplanitem_quantity", "\"Quantity\" > 0");
+
+                            t.HasCheckConstraint("ck_aimealplanitem_score", "\"CompatibilityScore\" BETWEEN 0 AND 100");
+                        });
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.AiMealPlanSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("uuid_generate_v4()");
+
+                    b.Property<decimal>("Budget")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid?>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DiningStyle")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("IdempotencyKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<decimal?>("Latitude")
+                        .HasPrecision(10, 7)
+                        .HasColumnType("numeric(10,7)");
+
+                    b.Property<decimal?>("Longitude")
+                        .HasPrecision(10, 7)
+                        .HasColumnType("numeric(10,7)");
+
+                    b.Property<int?>("MaxDistanceMeters")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("OriginalRequest")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("ParsedPreferenceJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<int>("PartySize")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("RequestHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<bool>("UsedProviderFallback")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("WarningsJson")
+                        .HasColumnType("jsonb");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex(new[] { "CustomerId", "CreatedAt" }, "idx_aimealplansession_customer_created");
+
+                    b.HasIndex(new[] { "CustomerId", "IdempotencyKey" }, "ux_aimealplansession_customer_idempotency")
+                        .IsUnique()
+                        .HasFilter("\"CustomerId\" IS NOT NULL AND \"IdempotencyKey\" IS NOT NULL");
+
+                    b.ToTable("AiMealPlanSession", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_aimealplansession_budget", "\"Budget\" > 0");
+
+                            t.HasCheckConstraint("ck_aimealplansession_party", "\"PartySize\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.AiRecommendationFeedback", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("uuid_generate_v4()");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid?>("FoodItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FoodItemId");
+
+                    b.HasIndex(new[] { "SessionId" }, "idx_airecommendationfeedback_session");
+
+                    b.HasIndex(new[] { "SessionId", "FoodItemId" }, "ux_airecommendationfeedback_state")
+                        .IsUnique()
+                        .HasFilter("\"FoodItemId\" IS NOT NULL AND \"Action\" IN ('LIKED', 'DISLIKED')");
+
+                    b.ToTable("AiRecommendationFeedback", (string)null);
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.AiRecommendationResult", b =>
+                {
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("FoodItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("MatchTier")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<int>("Rank")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("Score")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.HasKey("SessionId", "FoodItemId");
+
+                    b.HasIndex("FoodItemId");
+
+                    b.HasIndex(new[] { "SessionId", "Rank" }, "ux_airecommendationresult_session_rank")
+                        .IsUnique();
+
+                    b.ToTable("AiRecommendationResult", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_airecommendationresult_score", "\"Score\" BETWEEN 0 AND 100");
+                        });
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.AiRecommendationSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("uuid_generate_v4()");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid?>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal?>("Latitude")
+                        .HasPrecision(10, 7)
+                        .HasColumnType("numeric(10,7)");
+
+                    b.Property<decimal?>("Longitude")
+                        .HasPrecision(10, 7)
+                        .HasColumnType("numeric(10,7)");
+
+                    b.Property<int?>("MaxDistanceMeters")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("OriginalQuery")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("ParsedPreferenceJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("ProviderFailureCategory")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("ProviderModelName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ProviderName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ProviderRequestId")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<bool>("UsedFallback")
+                        .HasColumnType("boolean");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex(new[] { "CustomerId", "CreatedAt" }, "idx_airecommendationsession_customer_created");
+
+                    b.ToTable("AiRecommendationSession", (string)null);
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.Allergen", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("uuid_generate_v4()");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<int>("DisplayOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsSystem")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("Id")
+                        .HasName("Allergen_pkey");
+
+                    b.HasIndex(new[] { "Code" }, "ux_allergen_code")
+                        .IsUnique();
+
+                    b.ToTable("Allergen", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_allergen_code_normalized", "\"Code\" = upper(btrim(\"Code\"))");
+                        });
+                });
+
             modelBuilder.Entity("DomainLayer.Entities.Booth", b =>
                 {
                     b.Property<Guid>("Id")
@@ -871,6 +1346,126 @@ namespace InfrastructureLayer.Migrations
                         });
                 });
 
+            modelBuilder.Entity("DomainLayer.Entities.CustomerAllergenExclusion", b =>
+                {
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AllergenId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("CustomerId", "AllergenId");
+
+                    b.HasIndex("AllergenId");
+
+                    b.ToTable("CustomerAllergenExclusion", (string)null);
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.CustomerAvoidedIngredient", b =>
+                {
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("IngredientId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("CustomerId", "IngredientId");
+
+                    b.HasIndex("IngredientId");
+
+                    b.ToTable("CustomerAvoidedIngredient", (string)null);
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.CustomerAvoidedTasteProfile", b =>
+                {
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TasteProfileId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("CustomerId", "TasteProfileId");
+
+                    b.HasIndex("TasteProfileId");
+
+                    b.ToTable("CustomerAvoidedTasteProfile", (string)null);
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.CustomerDietaryRequirement", b =>
+                {
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DietaryAttributeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("CustomerId", "DietaryAttributeId");
+
+                    b.HasIndex("DietaryAttributeId");
+
+                    b.ToTable("CustomerDietaryRequirement", (string)null);
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.CustomerFoodProfile", b =>
+                {
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<int?>("DefaultMaxDistanceMeters")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal?>("PreferredPriceMax")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<decimal?>("PreferredPriceMin")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<string>("PreferredSpiceLevel")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("CustomerId");
+
+                    b.ToTable("CustomerFoodProfile", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_customerfoodprofile_distance", "\"DefaultMaxDistanceMeters\" IS NULL OR \"DefaultMaxDistanceMeters\" > 0");
+
+                            t.HasCheckConstraint("ck_customerfoodprofile_price_range", "\"PreferredPriceMin\" IS NULL OR \"PreferredPriceMax\" IS NULL OR \"PreferredPriceMin\" <= \"PreferredPriceMax\"");
+                        });
+                });
+
             modelBuilder.Entity("DomainLayer.Entities.CustomerPreference", b =>
                 {
                     b.Property<Guid>("Id")
@@ -917,6 +1512,158 @@ namespace InfrastructureLayer.Migrations
                     b.ToTable("CustomerPreference", null, t =>
                         {
                             t.HasComment("SÃ¡Â»Å¸ thÃƒÂ­ch rÃƒÂµ rÃƒÂ ng cÃ¡Â»Â§a khÃƒÂ¡ch hÃƒÂ ng theo FoodTag: Like/Avoid");
+                        });
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.CustomerPreferredCourse", b =>
+                {
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Course")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("CustomerId", "Course");
+
+                    b.ToTable("CustomerPreferredCourse", (string)null);
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.CustomerPreferredDiningPurpose", b =>
+                {
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Purpose")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("CustomerId", "Purpose");
+
+                    b.ToTable("CustomerPreferredDiningPurpose", (string)null);
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.CustomerPreferredIngredient", b =>
+                {
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("IngredientId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("CustomerId", "IngredientId");
+
+                    b.HasIndex("IngredientId");
+
+                    b.ToTable("CustomerPreferredIngredient", (string)null);
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.CustomerPreferredPreparationMethod", b =>
+                {
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PreparationMethodId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("CustomerId", "PreparationMethodId");
+
+                    b.HasIndex("PreparationMethodId");
+
+                    b.ToTable("CustomerPreferredPreparationMethod", (string)null);
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.CustomerPreferredTasteProfile", b =>
+                {
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TasteProfileId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("CustomerId", "TasteProfileId");
+
+                    b.HasIndex("TasteProfileId");
+
+                    b.ToTable("CustomerPreferredTasteProfile", (string)null);
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.DietaryAttribute", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("uuid_generate_v4()");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<int>("DisplayOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsSystem")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("Id")
+                        .HasName("DietaryAttribute_pkey");
+
+                    b.HasIndex(new[] { "Code" }, "ux_dietaryattribute_code")
+                        .IsUnique();
+
+                    b.ToTable("DietaryAttribute", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_dietaryattribute_code_normalized", "\"Code\" = upper(btrim(\"Code\"))");
                         });
                 });
 
@@ -973,6 +1720,62 @@ namespace InfrastructureLayer.Migrations
                         .IsUnique();
 
                     b.ToTable("EmailOutbox", (string)null);
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.FoodAiProfile", b =>
+                {
+                    b.Property<Guid>("FoodItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContentHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<DateTime?>("EmbeddedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<float[]>("Embedding")
+                        .HasColumnType("real[]");
+
+                    b.Property<string>("EmbeddingModel")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("LastAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("SearchText")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.HasKey("FoodItemId");
+
+                    b.HasIndex(new[] { "ContentHash" }, "idx_foodaiprofile_contenthash");
+
+                    b.ToTable("FoodAiProfile", (string)null);
                 });
 
             modelBuilder.Entity("DomainLayer.Entities.FoodCategory", b =>
@@ -1114,6 +1917,9 @@ namespace InfrastructureLayer.Migrations
                     b.Property<string>("Description")
                         .HasColumnType("text");
 
+                    b.Property<int?>("EstimatedServingCount")
+                        .HasColumnType("integer");
+
                     b.Property<bool>("IsAvailable")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -1130,6 +1936,9 @@ namespace InfrastructureLayer.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
 
+                    b.Property<bool?>("IsShareable")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -1139,6 +1948,29 @@ namespace InfrastructureLayer.Migrations
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)")
                         .HasComment("GiÃƒÂ¡ mÃ¡ÂºÂ·c Ã„â€˜Ã¡Â»â€¹nh. NÃ¡ÂºÂ¿u cÃƒÂ³ FoodPrice theo ngÃƒÂ y hiÃ¡Â»â€¡n tÃ¡ÂºÂ¡i thÃƒÂ¬ giÃƒÂ¡ Ã„â€˜ÃƒÂ³ Ã„â€˜Ã†Â°Ã¡Â»Â£c Ã†Â°u tiÃƒÂªn (override)");
+
+                    b.Property<DateTime?>("SemanticProfileUpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("SemanticProfileVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<string>("ServingSizeDescription")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("ServingTemperature")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("SpiceLevel")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("UNKNOWN");
 
                     b.Property<string>("ThumbnailUrl")
                         .HasMaxLength(500)
@@ -1159,7 +1991,203 @@ namespace InfrastructureLayer.Migrations
                     b.ToTable("FoodItem", null, t =>
                         {
                             t.HasComment("MÃƒÂ³n Ã„Æ’n cÃ¡Â»Â§a tÃ¡Â»Â«ng gian hÃƒÂ ng");
+
+                            t.HasCheckConstraint("ck_fooditem_estimated_serving_count", "\"EstimatedServingCount\" IS NULL OR \"EstimatedServingCount\" > 0");
                         });
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.FoodItemAllergen", b =>
+                {
+                    b.Property<Guid>("FoodItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AllergenId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("DeclarationType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<bool>("IsConfirmed")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("FoodItemId", "AllergenId");
+
+                    b.HasIndex("AllergenId");
+
+                    b.ToTable("FoodItemAllergen", (string)null);
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.FoodItemCourse", b =>
+                {
+                    b.Property<Guid>("FoodItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Course")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<bool>("IsPrimary")
+                        .HasColumnType("boolean");
+
+                    b.HasKey("FoodItemId", "Course");
+
+                    b.HasIndex(new[] { "FoodItemId" }, "ux_fooditemcourse_primary")
+                        .IsUnique()
+                        .HasFilter("\"IsPrimary\" = true");
+
+                    b.ToTable("FoodItemCourse", (string)null);
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.FoodItemDietaryAttribute", b =>
+                {
+                    b.Property<Guid>("FoodItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DietaryAttributeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<bool>("IsConfirmed")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("SuitabilityStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("FoodItemId", "DietaryAttributeId");
+
+                    b.HasIndex("DietaryAttributeId");
+
+                    b.ToTable("FoodItemDietaryAttribute", (string)null);
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.FoodItemDiningPurpose", b =>
+                {
+                    b.Property<Guid>("FoodItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Purpose")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("FoodItemId", "Purpose");
+
+                    b.ToTable("FoodItemDiningPurpose", (string)null);
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.FoodItemIngredient", b =>
+                {
+                    b.Property<Guid>("FoodItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("IngredientId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<bool>("IsOptional")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsPrimary")
+                        .HasColumnType("boolean");
+
+                    b.HasKey("FoodItemId", "IngredientId");
+
+                    b.HasIndex("IngredientId");
+
+                    b.ToTable("FoodItemIngredient", (string)null);
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.FoodItemPreparationMethod", b =>
+                {
+                    b.Property<Guid>("FoodItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PreparationMethodId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<bool>("IsPrimary")
+                        .HasColumnType("boolean");
+
+                    b.HasKey("FoodItemId", "PreparationMethodId");
+
+                    b.HasIndex("PreparationMethodId");
+
+                    b.HasIndex(new[] { "FoodItemId" }, "ux_fooditempreparation_primary")
+                        .IsUnique()
+                        .HasFilter("\"IsPrimary\" = true");
+
+                    b.ToTable("FoodItemPreparationMethod", (string)null);
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.FoodItemSearchFacet", b =>
+                {
+                    b.Property<Guid>("FoodItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("FoodSearchFacetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("FoodItemId", "FoodSearchFacetId");
+
+                    b.HasIndex("FoodSearchFacetId");
+
+                    b.ToTable("FoodItemSearchFacet", (string)null);
                 });
 
             modelBuilder.Entity("DomainLayer.Entities.FoodItemTag", b =>
@@ -1183,6 +2211,32 @@ namespace InfrastructureLayer.Migrations
                     b.ToTable("FoodItemTag", null, t =>
                         {
                             t.HasComment("BÃ¡ÂºÂ£ng nÃ¡Â»â€˜i gÃ¡ÂºÂ¯n tag ngÃ¡Â»Â¯ nghÃ„Â©a vÃƒÂ o mÃƒÂ³n Ã„Æ’n");
+                        });
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.FoodItemTasteProfile", b =>
+                {
+                    b.Property<Guid>("FoodItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TasteProfileId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<int?>("Intensity")
+                        .HasColumnType("integer");
+
+                    b.HasKey("FoodItemId", "TasteProfileId");
+
+                    b.HasIndex("TasteProfileId");
+
+                    b.ToTable("FoodItemTasteProfile", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_fooditemtaste_intensity", "\"Intensity\" IS NULL OR (\"Intensity\" BETWEEN 1 AND 5)");
                         });
                 });
 
@@ -1227,6 +2281,60 @@ namespace InfrastructureLayer.Migrations
                     b.ToTable("FoodPrice", null, t =>
                         {
                             t.HasComment("BÃ¡ÂºÂ£ng giÃƒÂ¡ theo ngÃƒÂ y trong tuÃ¡ÂºÂ§n - override giÃƒÂ¡ mÃ¡ÂºÂ·c Ã„â€˜Ã¡Â»â€¹nh cÃ¡Â»Â§a FoodItem");
+                        });
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.FoodSearchFacet", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("uuid_generate_v4()");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<int>("DisplayOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsSystem")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("Id")
+                        .HasName("FoodSearchFacet_pkey");
+
+                    b.HasIndex(new[] { "Code" }, "ux_foodsearchfacet_code")
+                        .IsUnique();
+
+                    b.ToTable("FoodSearchFacet", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_foodsearchfacet_code_normalized", "\"Code\" = upper(btrim(\"Code\"))");
                         });
                 });
 
@@ -1316,6 +2424,67 @@ namespace InfrastructureLayer.Migrations
                     b.ToTable("FoodTag", null, t =>
                         {
                             t.HasComment("Danh sÃƒÂ¡ch tag chuÃ¡ÂºÂ©n mÃƒÂ´ tÃ¡ÂºÂ£ ngÃ¡Â»Â¯ nghÃ„Â©a mÃƒÂ³n Ã„Æ’n cho AI/recommendation");
+                        });
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.Ingredient", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("uuid_generate_v4()");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<int>("DisplayOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsSystem")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("Id")
+                        .HasName("Ingredient_pkey");
+
+                    b.HasIndex(new[] { "NormalizedName" }, "idx_ingredient_normalized_name");
+
+                    b.HasIndex(new[] { "Code" }, "ux_ingredient_code")
+                        .IsUnique();
+
+                    b.ToTable("Ingredient", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_ingredient_code_normalized", "\"Code\" = upper(btrim(\"Code\"))");
                         });
                 });
 
@@ -2671,6 +3840,60 @@ namespace InfrastructureLayer.Migrations
                     b.ToTable("PaymentWebhookEvents", (string)null);
                 });
 
+            modelBuilder.Entity("DomainLayer.Entities.PreparationMethod", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("uuid_generate_v4()");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<int>("DisplayOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsSystem")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("Id")
+                        .HasName("PreparationMethod_pkey");
+
+                    b.HasIndex(new[] { "Code" }, "ux_preparationmethod_code")
+                        .IsUnique();
+
+                    b.ToTable("PreparationMethod", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_preparationmethod_code_normalized", "\"Code\" = upper(btrim(\"Code\"))");
+                        });
+                });
+
             modelBuilder.Entity("DomainLayer.Entities.Promotion", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3052,6 +4275,60 @@ namespace InfrastructureLayer.Migrations
                     b.ToTable("SystemSetting", (string)null);
                 });
 
+            modelBuilder.Entity("DomainLayer.Entities.TasteProfile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("uuid_generate_v4()");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<int>("DisplayOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsSystem")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("Id")
+                        .HasName("TasteProfile_pkey");
+
+                    b.HasIndex(new[] { "Code" }, "ux_tasteprofile_code")
+                        .IsUnique();
+
+                    b.ToTable("TasteProfile", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_tasteprofile_code_normalized", "\"Code\" = upper(btrim(\"Code\"))");
+                        });
+                });
+
             modelBuilder.Entity("DomainLayer.Entities.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3351,6 +4628,107 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("NightMarket");
                 });
 
+            modelBuilder.Entity("DomainLayer.Entities.AiMealPlan", b =>
+                {
+                    b.HasOne("DomainLayer.Entities.NightMarket", "Market")
+                        .WithMany("AiMealPlans")
+                        .HasForeignKey("MarketId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("DomainLayer.Entities.AiMealPlanSession", "Session")
+                        .WithMany("Plans")
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Market");
+
+                    b.Navigation("Session");
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.AiMealPlanItem", b =>
+                {
+                    b.HasOne("DomainLayer.Entities.Booth", "Booth")
+                        .WithMany("AiMealPlanItems")
+                        .HasForeignKey("BoothId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("DomainLayer.Entities.FoodItem", "FoodItem")
+                        .WithMany()
+                        .HasForeignKey("FoodItemId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("DomainLayer.Entities.AiMealPlan", "Plan")
+                        .WithMany("Items")
+                        .HasForeignKey("PlanId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Booth");
+
+                    b.Navigation("FoodItem");
+
+                    b.Navigation("Plan");
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.AiMealPlanSession", b =>
+                {
+                    b.HasOne("DomainLayer.Entities.User", "Customer")
+                        .WithMany("AiMealPlanSessions")
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Customer");
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.AiRecommendationFeedback", b =>
+                {
+                    b.HasOne("DomainLayer.Entities.FoodItem", "FoodItem")
+                        .WithMany()
+                        .HasForeignKey("FoodItemId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("DomainLayer.Entities.AiRecommendationSession", "Session")
+                        .WithMany("Feedback")
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("FoodItem");
+
+                    b.Navigation("Session");
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.AiRecommendationResult", b =>
+                {
+                    b.HasOne("DomainLayer.Entities.FoodItem", "FoodItem")
+                        .WithMany()
+                        .HasForeignKey("FoodItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("DomainLayer.Entities.AiRecommendationSession", "Session")
+                        .WithMany("Results")
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("FoodItem");
+
+                    b.Navigation("Session");
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.AiRecommendationSession", b =>
+                {
+                    b.HasOne("DomainLayer.Entities.User", "Customer")
+                        .WithMany("AiRecommendationSessions")
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Customer");
+                });
+
             modelBuilder.Entity("DomainLayer.Entities.Booth", b =>
                 {
                     b.HasOne("DomainLayer.Entities.User", "BoothOwner")
@@ -3610,6 +4988,93 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("LastMessage");
                 });
 
+            modelBuilder.Entity("DomainLayer.Entities.CustomerAllergenExclusion", b =>
+                {
+                    b.HasOne("DomainLayer.Entities.Allergen", "Allergen")
+                        .WithMany()
+                        .HasForeignKey("AllergenId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("DomainLayer.Entities.CustomerFoodProfile", "CustomerFoodProfile")
+                        .WithMany("AllergenExclusions")
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Allergen");
+
+                    b.Navigation("CustomerFoodProfile");
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.CustomerAvoidedIngredient", b =>
+                {
+                    b.HasOne("DomainLayer.Entities.CustomerFoodProfile", "CustomerFoodProfile")
+                        .WithMany("AvoidedIngredients")
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("DomainLayer.Entities.Ingredient", "Ingredient")
+                        .WithMany()
+                        .HasForeignKey("IngredientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CustomerFoodProfile");
+
+                    b.Navigation("Ingredient");
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.CustomerAvoidedTasteProfile", b =>
+                {
+                    b.HasOne("DomainLayer.Entities.CustomerFoodProfile", "CustomerFoodProfile")
+                        .WithMany("AvoidedTasteProfiles")
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("DomainLayer.Entities.TasteProfile", "TasteProfile")
+                        .WithMany()
+                        .HasForeignKey("TasteProfileId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CustomerFoodProfile");
+
+                    b.Navigation("TasteProfile");
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.CustomerDietaryRequirement", b =>
+                {
+                    b.HasOne("DomainLayer.Entities.CustomerFoodProfile", "CustomerFoodProfile")
+                        .WithMany("DietaryRequirements")
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("DomainLayer.Entities.DietaryAttribute", "DietaryAttribute")
+                        .WithMany()
+                        .HasForeignKey("DietaryAttributeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CustomerFoodProfile");
+
+                    b.Navigation("DietaryAttribute");
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.CustomerFoodProfile", b =>
+                {
+                    b.HasOne("DomainLayer.Entities.User", "Customer")
+                        .WithOne("CustomerFoodProfile")
+                        .HasForeignKey("DomainLayer.Entities.CustomerFoodProfile", "CustomerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+                });
+
             modelBuilder.Entity("DomainLayer.Entities.CustomerPreference", b =>
                 {
                     b.HasOne("DomainLayer.Entities.User", "Customer")
@@ -3629,6 +5094,96 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("Customer");
 
                     b.Navigation("FoodTag");
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.CustomerPreferredCourse", b =>
+                {
+                    b.HasOne("DomainLayer.Entities.CustomerFoodProfile", "CustomerFoodProfile")
+                        .WithMany("PreferredCourses")
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CustomerFoodProfile");
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.CustomerPreferredDiningPurpose", b =>
+                {
+                    b.HasOne("DomainLayer.Entities.CustomerFoodProfile", "CustomerFoodProfile")
+                        .WithMany("PreferredDiningPurposes")
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CustomerFoodProfile");
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.CustomerPreferredIngredient", b =>
+                {
+                    b.HasOne("DomainLayer.Entities.CustomerFoodProfile", "CustomerFoodProfile")
+                        .WithMany("PreferredIngredients")
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("DomainLayer.Entities.Ingredient", "Ingredient")
+                        .WithMany()
+                        .HasForeignKey("IngredientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CustomerFoodProfile");
+
+                    b.Navigation("Ingredient");
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.CustomerPreferredPreparationMethod", b =>
+                {
+                    b.HasOne("DomainLayer.Entities.CustomerFoodProfile", "CustomerFoodProfile")
+                        .WithMany("PreferredPreparationMethods")
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("DomainLayer.Entities.PreparationMethod", "PreparationMethod")
+                        .WithMany()
+                        .HasForeignKey("PreparationMethodId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CustomerFoodProfile");
+
+                    b.Navigation("PreparationMethod");
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.CustomerPreferredTasteProfile", b =>
+                {
+                    b.HasOne("DomainLayer.Entities.CustomerFoodProfile", "CustomerFoodProfile")
+                        .WithMany("PreferredTasteProfiles")
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("DomainLayer.Entities.TasteProfile", "TasteProfile")
+                        .WithMany()
+                        .HasForeignKey("TasteProfileId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CustomerFoodProfile");
+
+                    b.Navigation("TasteProfile");
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.FoodAiProfile", b =>
+                {
+                    b.HasOne("DomainLayer.Entities.FoodItem", "FoodItem")
+                        .WithOne("AiProfile")
+                        .HasForeignKey("DomainLayer.Entities.FoodAiProfile", "FoodItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("FoodItem");
                 });
 
             modelBuilder.Entity("DomainLayer.Entities.FoodCategory", b =>
@@ -3673,6 +5228,123 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("Category");
                 });
 
+            modelBuilder.Entity("DomainLayer.Entities.FoodItemAllergen", b =>
+                {
+                    b.HasOne("DomainLayer.Entities.Allergen", "Allergen")
+                        .WithMany("FoodItems")
+                        .HasForeignKey("AllergenId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("DomainLayer.Entities.FoodItem", "FoodItem")
+                        .WithMany("Allergens")
+                        .HasForeignKey("FoodItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Allergen");
+
+                    b.Navigation("FoodItem");
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.FoodItemCourse", b =>
+                {
+                    b.HasOne("DomainLayer.Entities.FoodItem", "FoodItem")
+                        .WithMany("Courses")
+                        .HasForeignKey("FoodItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("FoodItem");
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.FoodItemDietaryAttribute", b =>
+                {
+                    b.HasOne("DomainLayer.Entities.DietaryAttribute", "DietaryAttribute")
+                        .WithMany("FoodItems")
+                        .HasForeignKey("DietaryAttributeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("DomainLayer.Entities.FoodItem", "FoodItem")
+                        .WithMany("DietaryAttributes")
+                        .HasForeignKey("FoodItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DietaryAttribute");
+
+                    b.Navigation("FoodItem");
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.FoodItemDiningPurpose", b =>
+                {
+                    b.HasOne("DomainLayer.Entities.FoodItem", "FoodItem")
+                        .WithMany("DiningPurposes")
+                        .HasForeignKey("FoodItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("FoodItem");
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.FoodItemIngredient", b =>
+                {
+                    b.HasOne("DomainLayer.Entities.FoodItem", "FoodItem")
+                        .WithMany("Ingredients")
+                        .HasForeignKey("FoodItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("DomainLayer.Entities.Ingredient", "Ingredient")
+                        .WithMany("FoodItems")
+                        .HasForeignKey("IngredientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("FoodItem");
+
+                    b.Navigation("Ingredient");
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.FoodItemPreparationMethod", b =>
+                {
+                    b.HasOne("DomainLayer.Entities.FoodItem", "FoodItem")
+                        .WithMany("PreparationMethods")
+                        .HasForeignKey("FoodItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("DomainLayer.Entities.PreparationMethod", "PreparationMethod")
+                        .WithMany("FoodItems")
+                        .HasForeignKey("PreparationMethodId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("FoodItem");
+
+                    b.Navigation("PreparationMethod");
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.FoodItemSearchFacet", b =>
+                {
+                    b.HasOne("DomainLayer.Entities.FoodItem", "FoodItem")
+                        .WithMany("SearchFacets")
+                        .HasForeignKey("FoodItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("DomainLayer.Entities.FoodSearchFacet", "FoodSearchFacet")
+                        .WithMany("FoodItems")
+                        .HasForeignKey("FoodSearchFacetId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("FoodItem");
+
+                    b.Navigation("FoodSearchFacet");
+                });
+
             modelBuilder.Entity("DomainLayer.Entities.FoodItemTag", b =>
                 {
                     b.HasOne("DomainLayer.Entities.FoodItem", "FoodItem")
@@ -3692,6 +5364,25 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("FoodItem");
 
                     b.Navigation("FoodTag");
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.FoodItemTasteProfile", b =>
+                {
+                    b.HasOne("DomainLayer.Entities.FoodItem", "FoodItem")
+                        .WithMany("TasteProfiles")
+                        .HasForeignKey("FoodItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("DomainLayer.Entities.TasteProfile", "TasteProfile")
+                        .WithMany("FoodItems")
+                        .HasForeignKey("TasteProfileId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("FoodItem");
+
+                    b.Navigation("TasteProfile");
                 });
 
             modelBuilder.Entity("DomainLayer.Entities.FoodPrice", b =>
@@ -4169,8 +5860,32 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("NightMarket");
                 });
 
+            modelBuilder.Entity("DomainLayer.Entities.AiMealPlan", b =>
+                {
+                    b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.AiMealPlanSession", b =>
+                {
+                    b.Navigation("Plans");
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.AiRecommendationSession", b =>
+                {
+                    b.Navigation("Feedback");
+
+                    b.Navigation("Results");
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.Allergen", b =>
+                {
+                    b.Navigation("FoodItems");
+                });
+
             modelBuilder.Entity("DomainLayer.Entities.Booth", b =>
                 {
+                    b.Navigation("AiMealPlanItems");
+
                     b.Navigation("BoothDocuments");
 
                     b.Navigation("BoothImages");
@@ -4218,6 +5933,32 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("Messages");
                 });
 
+            modelBuilder.Entity("DomainLayer.Entities.CustomerFoodProfile", b =>
+                {
+                    b.Navigation("AllergenExclusions");
+
+                    b.Navigation("AvoidedIngredients");
+
+                    b.Navigation("AvoidedTasteProfiles");
+
+                    b.Navigation("DietaryRequirements");
+
+                    b.Navigation("PreferredCourses");
+
+                    b.Navigation("PreferredDiningPurposes");
+
+                    b.Navigation("PreferredIngredients");
+
+                    b.Navigation("PreferredPreparationMethods");
+
+                    b.Navigation("PreferredTasteProfiles");
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.DietaryAttribute", b =>
+                {
+                    b.Navigation("FoodItems");
+                });
+
             modelBuilder.Entity("DomainLayer.Entities.FoodCategory", b =>
                 {
                     b.Navigation("FoodItems");
@@ -4227,7 +5968,17 @@ namespace InfrastructureLayer.Migrations
 
             modelBuilder.Entity("DomainLayer.Entities.FoodItem", b =>
                 {
+                    b.Navigation("AiProfile");
+
+                    b.Navigation("Allergens");
+
                     b.Navigation("CartItems");
+
+                    b.Navigation("Courses");
+
+                    b.Navigation("DietaryAttributes");
+
+                    b.Navigation("DiningPurposes");
 
                     b.Navigation("FoodImages");
 
@@ -4235,9 +5986,22 @@ namespace InfrastructureLayer.Migrations
 
                     b.Navigation("FoodPrices");
 
+                    b.Navigation("Ingredients");
+
                     b.Navigation("OrderDetails");
 
+                    b.Navigation("PreparationMethods");
+
                     b.Navigation("PromotionFoodItems");
+
+                    b.Navigation("SearchFacets");
+
+                    b.Navigation("TasteProfiles");
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.FoodSearchFacet", b =>
+                {
+                    b.Navigation("FoodItems");
                 });
 
             modelBuilder.Entity("DomainLayer.Entities.FoodTag", b =>
@@ -4245,6 +6009,11 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("CustomerPreferences");
 
                     b.Navigation("FoodItemTags");
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.Ingredient", b =>
+                {
+                    b.Navigation("FoodItems");
                 });
 
             modelBuilder.Entity("DomainLayer.Entities.LayoutNode", b =>
@@ -4268,6 +6037,8 @@ namespace InfrastructureLayer.Migrations
             modelBuilder.Entity("DomainLayer.Entities.NightMarket", b =>
                 {
                     b.Navigation("AIRecommendationLogs");
+
+                    b.Navigation("AiMealPlans");
 
                     b.Navigation("BoothRegistrations");
 
@@ -4309,6 +6080,11 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("Attempts");
                 });
 
+            modelBuilder.Entity("DomainLayer.Entities.PreparationMethod", b =>
+                {
+                    b.Navigation("FoodItems");
+                });
+
             modelBuilder.Entity("DomainLayer.Entities.Promotion", b =>
                 {
                     b.Navigation("PromotionCategories");
@@ -4328,9 +6104,18 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("Users");
                 });
 
+            modelBuilder.Entity("DomainLayer.Entities.TasteProfile", b =>
+                {
+                    b.Navigation("FoodItems");
+                });
+
             modelBuilder.Entity("DomainLayer.Entities.User", b =>
                 {
                     b.Navigation("AIRecommendationLogs");
+
+                    b.Navigation("AiMealPlanSessions");
+
+                    b.Navigation("AiRecommendationSessions");
 
                     b.Navigation("Booth");
 
@@ -4341,6 +6126,8 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("Complaints");
 
                     b.Navigation("Conversations");
+
+                    b.Navigation("CustomerFoodProfile");
 
                     b.Navigation("CustomerPreferences");
 

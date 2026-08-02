@@ -110,4 +110,11 @@ public class AccountController : ControllerBase
         var response = await _service.GetUserStatusHistoryAsync(userId, pagination, cancellationToken);
         return response.Success ? Ok(response) : NotFound(response);
     }
+
+    [Authorize(Roles = "Admin")]
+    [HttpGet("users/{userId:guid}/booth-owner-details")]
+    public async Task<IActionResult> GetBoothOwnerDetails(Guid userId, CancellationToken cancellationToken)
+    {
+        return Ok(await _service.GetBoothOwnerDetailsAsync(userId, cancellationToken));
+    }
 }

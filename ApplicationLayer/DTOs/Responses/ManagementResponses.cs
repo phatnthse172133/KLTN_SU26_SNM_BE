@@ -14,6 +14,33 @@ public class ManagedUserResponse
     public DateTime CreatedAt { get; set; }
 }
 
+public class BoothOwnerAccountDetailResponse
+{
+    public ManagedUserResponse Account { get; set; } = new();
+    public List<AdminOwnedBoothResponse> OwnedBooths { get; set; } = [];
+}
+
+public class AdminOwnedBoothResponse
+{
+    public Guid Id { get; set; }
+    public string BoothName { get; set; } = string.Empty;
+    public string? BoothCode { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string? PhoneNumber { get; set; }
+    public string? ThumbnailUrl { get; set; }
+    public string? LogoUrl { get; set; }
+    public string? NightMarketName { get; set; }
+    public string? ZoneName { get; set; }
+    public string? SlotNumber { get; set; }
+    public decimal? MapPositionX { get; set; }
+    public decimal? MapPositionY { get; set; }
+    public string? ActivePackageName { get; set; }
+    public DateTime? PackageExpiryDate { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public List<BoothDocumentResponse> Documents { get; set; } = [];
+}
+
 public class BoothRegistrationResponse
 {
     public Guid Id { get; set; }

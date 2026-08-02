@@ -11,15 +11,15 @@ public sealed partial class DeterministicFoodIntentParser : IFoodRecommendationF
     private const int MaximumSignals = 20;
     private static readonly (string Code, string[] Terms)[] Ingredients =
     [
-        ("ING_BEEF", ["bo", "thit bo"]), ("ING_CHICKEN", ["ga", "thit ga"]),
-        ("ING_PORK", ["heo", "thit heo", "thit lon"]), ("ING_SEAFOOD", ["hai san"]),
+        ("ING_BEEF", ["bo", "thit bo", "beef"]), ("ING_CHICKEN", ["ga", "thit ga", "chicken"]),
+        ("ING_PORK", ["heo", "thit heo", "thit lon", "pork"]), ("ING_SEAFOOD", ["hai san", "seafood"]),
         ("ING_SHRIMP", ["tom"]), ("ING_FISH", ["ca"]), ("ING_SQUID", ["muc"]),
-        ("ING_EGG", ["trung"]), ("ING_VEGETABLE", ["rau"]), ("ING_TOFU", ["dau hu", "dau phu"]),
-        ("ING_PEANUT", ["dau phong", "lac"])
+        ("ING_EGG", ["trung", "egg"]), ("ING_VEGETABLE", ["rau", "vegetable"]), ("ING_TOFU", ["dau hu", "dau phu", "tofu"]),
+        ("ING_PEANUT", ["dau phong", "lac", "peanut"])
     ];
     private static readonly (string Code, string[] Terms)[] Methods =
     [
-        ("METHOD_GRILLED", ["nuong"]), ("METHOD_FRIED", ["chien"]), ("METHOD_STEAMED", ["hap"]),
+        ("METHOD_GRILLED", ["nuong", "grilled", "grill"]), ("METHOD_FRIED", ["chien", "fried"]), ("METHOD_STEAMED", ["hap", "steamed"]),
         ("METHOD_BOILED", ["luoc"]), ("METHOD_STIR_FRIED", ["xao"]), ("METHOD_ROASTED", ["quay"]),
         ("METHOD_SIMMERED", ["nau", "ham"]), ("METHOD_MIXED", ["tron"])
     ];
@@ -27,12 +27,25 @@ public sealed partial class DeterministicFoodIntentParser : IFoodRecommendationF
     [
         ("TASTE_SWEET", ["ngot"]), ("TASTE_SOUR", ["chua"]), ("TASTE_SALTY", ["man"]),
         ("TASTE_RICH", ["dam vi", "beo"]), ("TASTE_LIGHT", ["thanh nhe", "vi nhe", "it dau"]),
-        ("TASTE_SPICY", ["cay"]), ("TASTE_MILD_SPICY", ["cay nhe"]), ("TASTE_VERY_SPICY", ["rat cay"])
+        ("TASTE_SPICY", ["cay", "spicy"]), ("TASTE_MILD_SPICY", ["cay nhe", "mildly spicy", "mild spicy"]), ("TASTE_VERY_SPICY", ["rat cay", "very spicy"])
+    ];
+    private static readonly HashSet<string> QueryStopWords =
+    [
+        "toi", "minh", "muon", "an", "mon", "cai", "gi", "do", "something", "i", "want", "to", "eat", "a", "the", "please"
+    ];
+    private static readonly HashSet<string> ContextStopWords =
+    [
+        "mat", "giai", "nhiet", "thanh", "refreshing", "cool", "cold", "hap", "dan", "ngon", "tasty",
+        "cung", "ban", "nhom", "friend", "friends", "share", "with", "duoc", "light", "snack", "filling", "meal"
     ];
 
     public FoodRecommendationIntentExtractionResult Parse(FoodRecommendationIntentRequest request)
     {
+        var language = DetectLanguage(request.Query, request.InputLanguageHint);
         var query = NormalizeText(request.Query);
+        if (!IsUsableQuery(query))
+            return new() { IsSuccess = false, UsedFallback = true, ProviderName = "DETERMINISTIC_FALLBACK",
+                FailureCategory = AiProviderFailureCategory.VALIDATION_FAILED, ValidationWarnings = ["AI_FALLBACK_PARSE_INSUFFICIENT"] };
         var warnings = new HashSet<string>(StringComparer.Ordinal);
         var preferredIngredients = new HashSet<string>(StringComparer.Ordinal);
         var excludedIngredients = new HashSet<string>(StringComparer.Ordinal);
@@ -45,6 +58,8 @@ public sealed partial class DeterministicFoodIntentParser : IFoodRecommendationF
         var courses = new HashSet<string>(StringComparer.Ordinal);
         var purposes = new HashSet<string>(StringComparer.Ordinal);
         var desiredTerms = new HashSet<string>(StringComparer.Ordinal);
+        var contextualTerms = ContextualTerms(query).ToHashSet(StringComparer.Ordinal);
+        var meaningfulTerms = MeaningfulTerms(query).ToHashSet(StringComparer.Ordinal);
 
         foreach (var mapping in Ingredients)
         {
@@ -65,22 +80,22 @@ public sealed partial class DeterministicFoodIntentParser : IFoodRecommendationF
             if (Allowed(request.AllowedTaxonomy.TasteProfiles, mapping.Code) && mapping.Terms.Any(term => ContainsTerm(query, term))) tastes.Add(mapping.Code);
 
         FoodSpiceLevel? spice = null;
-        if (ContainsTerm(query, "khong cay"))
+        if (ContainsTerm(query, "khong cay") || ContainsTerm(query, "not spicy") || ContainsTerm(query, "non spicy"))
         {
             spice = FoodSpiceLevel.NON_SPICY;
             tastes.Remove("TASTE_SPICY"); tastes.Remove("TASTE_MILD_SPICY"); tastes.Remove("TASTE_VERY_SPICY");
             AddAllowed(avoidedTastes, request.AllowedTaxonomy.TasteProfiles, "TASTE_SPICY");
             AddAllowed(avoidedTastes, request.AllowedTaxonomy.TasteProfiles, "TASTE_VERY_SPICY");
         }
-        else if (ContainsTerm(query, "rat cay")) spice = FoodSpiceLevel.VERY_SPICY;
-        else if (ContainsTerm(query, "cay nhe") || ContainsTerm(query, "hoi cay")) spice = FoodSpiceLevel.MILD;
-        else if (ContainsTerm(query, "cay")) spice = FoodSpiceLevel.SPICY;
+        else if (ContainsTerm(query, "rat cay") || ContainsTerm(query, "very spicy")) spice = FoodSpiceLevel.VERY_SPICY;
+        else if (ContainsTerm(query, "cay nhe") || ContainsTerm(query, "hoi cay") || ContainsTerm(query, "mildly spicy") || ContainsTerm(query, "mild spicy")) spice = FoodSpiceLevel.MILD;
+        else if (ContainsTerm(query, "cay") || ContainsTerm(query, "spicy")) spice = FoodSpiceLevel.SPICY;
 
-        if (ContainsTerm(query, "chay")) AddAllowed(dietary, request.AllowedTaxonomy.DietaryAttributes, "DIET_VEGETARIAN");
+        if (ContainsTerm(query, "chay") || ContainsTerm(query, "vegetarian")) AddAllowed(dietary, request.AllowedTaxonomy.DietaryAttributes, "DIET_VEGETARIAN");
         AddCourseAndPurpose(query, request.AllowedTaxonomy, courses, purposes);
         ParseAllergies(query, request.AllowedTaxonomy, allergens, excludedIngredients, warnings);
         var (minimumPrice, maximumPrice) = ParseBudget(query);
-        var preferNear = ContainsTerm(query, "gan toi") || ContainsTerm(query, "khong qua xa");
+        var preferNear = ContainsTerm(query, "gan toi") || ContainsTerm(query, "khong qua xa") || ContainsTerm(query, "near me") || ContainsTerm(query, "nearby");
         var sort = ContainsTerm(query, "danh gia cao") ? FoodRecommendationSortPreference.HIGHEST_RATED_RELEVANT
             : ContainsTerm(query, "gia re") ? FoodRecommendationSortPreference.LOWEST_PRICE_RELEVANT
             : preferNear ? FoodRecommendationSortPreference.NEAREST_RELEVANT : FoodRecommendationSortPreference.BEST_MATCH;
@@ -89,20 +104,25 @@ public sealed partial class DeterministicFoodIntentParser : IFoodRecommendationF
         var signalCount = preferredIngredients.Count + excludedIngredients.Count + allergens.Count + dietary.Count + tastes.Count
             + avoidedTastes.Count + methods.Count + avoidedMethods.Count + courses.Count + purposes.Count
             + (spice.HasValue ? 1 : 0) + (minimumPrice.HasValue || maximumPrice.HasValue ? 1 : 0) + (preferNear ? 1 : 0);
-        if (signalCount == 0)
-            return new() { IsSuccess = false, UsedFallback = true, ProviderName = "DETERMINISTIC_FALLBACK",
-                FailureCategory = AiProviderFailureCategory.VALIDATION_FAILED, ValidationWarnings = ["AI_FALLBACK_PARSE_INSUFFICIENT"] };
+        foreach (var term in contextualTerms) meaningfulTerms.Remove(term);
+        var residual = string.Join(' ', meaningfulTerms);
+        if (residual.Length > 0) desiredTerms.Add(residual);
 
         var intent = new FoodRecommendationIntent
         {
-            Summary = request.Query.Trim(), DesiredFoodTerms = Ordered(desiredTerms),
+            InputLanguageHint = request.InputLanguageHint, DetectedLanguage = language,
+            ResponseLanguage = SupportedResponseLanguage(request.ResponseLanguage, warnings), LanguageConfidence = language == "en" ? .85m : .80m,
+            LanguageWarnings = Ordered(warnings.Where(value => value.StartsWith("LANGUAGE_", StringComparison.Ordinal))),
+            Summary = LocalizedSummary(request.Query, language, request.ResponseLanguage), OriginalNormalizedQuery = query,
+            DesiredFoodTerms = Ordered(desiredTerms), ContextualTerms = Ordered(contextualTerms),
+            UnmappedMeaningfulTerms = Ordered(meaningfulTerms),
             PreferredIngredientCodes = Ordered(preferredIngredients), ExcludedIngredientCodes = Ordered(excludedIngredients),
             AllergenExclusionCodes = Ordered(allergens), DietaryRequirementCodes = Ordered(dietary),
             PreferredTasteCodes = Ordered(tastes), AvoidedTasteCodes = Ordered(avoidedTastes), PreferredSpiceLevel = spice,
             PreparationMethodCodes = Ordered(methods), AvoidedPreparationMethodCodes = Ordered(avoidedMethods),
             PreferredCourseCodes = Ordered(courses), MealPurposeCodes = Ordered(purposes), MinimumPrice = minimumPrice,
             MaximumPrice = maximumPrice, PreferNearMe = preferNear, SortPreference = sort,
-            Confidence = Math.Clamp(0.30m + signalCount * 0.04m, 0.30m, 0.70m), Warnings = Ordered(warnings)
+            Confidence = Math.Clamp(0.30m + Math.Max(1, signalCount) * 0.04m, 0.30m, 0.70m), Warnings = Ordered(warnings)
         };
         return new() { IsSuccess = true, UsedFallback = true, ProviderName = "DETERMINISTIC_FALLBACK",
             FailureCategory = AiProviderFailureCategory.NONE, ValidationWarnings = intent.Warnings, ParsedResult = intent };
@@ -110,7 +130,10 @@ public sealed partial class DeterministicFoodIntentParser : IFoodRecommendationF
 
     public MealPlanIntentExtractionResult Parse(MealPlanIntentRequest request)
     {
-        var food = Parse(new FoodRecommendationIntentRequest(request.Query, request.AllowedTaxonomy));
+        var food = Parse(new FoodRecommendationIntentRequest(request.Query, request.AllowedTaxonomy, request.InputLanguageHint, request.ResponseLanguage));
+        if (!food.IsSuccess && food.ValidationWarnings.Contains("AI_LANGUAGE_PROVIDER_REQUIRED"))
+            return new() { IsSuccess = false, UsedFallback = true, ProviderName = "DETERMINISTIC_FALLBACK",
+                FailureCategory = AiProviderFailureCategory.VALIDATION_FAILED, ValidationWarnings = food.ValidationWarnings };
         var value = food.ParsedResult ?? new FoodRecommendationIntent
         {
             Summary = request.Query.Trim(),
@@ -125,6 +148,9 @@ public sealed partial class DeterministicFoodIntentParser : IFoodRecommendationF
         return new() { IsSuccess = true, UsedFallback = true, ProviderName = "DETERMINISTIC_FALLBACK", FailureCategory = AiProviderFailureCategory.NONE,
             ValidationWarnings = food.ValidationWarnings, ParsedResult = new MealPlanIntent
             {
+                InputLanguageHint = value.InputLanguageHint, DetectedLanguage = value.DetectedLanguage,
+                ResponseLanguage = value.ResponseLanguage, LanguageConfidence = value.LanguageConfidence,
+                LanguageWarnings = value.LanguageWarnings,
                 Summary = value.Summary, PreferredIngredientCodes = value.PreferredIngredientCodes, ExcludedIngredientCodes = value.ExcludedIngredientCodes,
                 AllergenExclusionCodes = value.AllergenExclusionCodes, DietaryRequirementCodes = value.DietaryRequirementCodes,
                 PreferredTasteCodes = value.PreferredTasteCodes, AvoidedTasteCodes = value.AvoidedTasteCodes,
@@ -143,13 +169,43 @@ public sealed partial class DeterministicFoodIntentParser : IFoodRecommendationF
         if (ContainsTerm(query, "mon chinh") || ContainsTerm(query, "an no")) { AddAllowed(courses, allowed.Courses, "MAIN_COURSE"); AddAllowed(purposes, allowed.DiningPurposes, "FULL_MEAL"); }
         if (ContainsTerm(query, "khai vi")) AddAllowed(courses, allowed.Courses, "APPETIZER");
         if (ContainsTerm(query, "an nhe")) AddAllowed(purposes, allowed.DiningPurposes, "LIGHT_MEAL");
+        if (ContainsTerm(query, "light snack")) AddAllowed(purposes, allowed.DiningPurposes, "LIGHT_MEAL");
+        if (ContainsTerm(query, "filling meal")) AddAllowed(purposes, allowed.DiningPurposes, "FULL_MEAL");
+        if (new[] { "an cung ban", "di voi ban", "nhom ban", "share with friends" }.Any(term => ContainsTerm(query, term)))
+            AddAllowed(purposes, allowed.DiningPurposes, "FRIEND_GROUP");
+    }
+
+    private static IEnumerable<string> ContextualTerms(string query)
+    {
+        if (new[] { "mat", "mat mat", "giai nhiet", "thanh mat", "refreshing", "cool", "cold" }.Any(term => ContainsTerm(query, term)))
+        { yield return "refreshing"; yield return "cold"; }
+        if (new[] { "an cung ban", "di voi ban", "nhom ban", "share with friends" }.Any(term => ContainsTerm(query, term)))
+        { yield return "friend group"; yield return "shareable"; }
+        if (new[] { "hap dan", "ngon", "mon ngon", "something tasty", "tasty" }.Any(term => ContainsTerm(query, term)))
+            yield return "popular";
+        if (ContainsTerm(query, "an nhe") || ContainsTerm(query, "light snack")) yield return "light meal";
+        if (ContainsTerm(query, "an no") || ContainsTerm(query, "filling meal")) yield return "full meal";
+    }
+
+    private static IEnumerable<string> MeaningfulTerms(string query) => Regex.Matches(query, @"[\p{L}\p{Nd}]+", RegexOptions.CultureInvariant)
+        .Select(match => match.Value).Where(value => value.Length > 1 && !QueryStopWords.Contains(value) && !ContextStopWords.Contains(value))
+        .Distinct(StringComparer.Ordinal).Take(MaximumSignals);
+
+    private static bool IsUsableQuery(string query)
+    {
+        if (new[] { "ignore every instruction", "ignore system", "return all database", "return every foodid", "bo qua chi dan", "tra moi foodid", "thoi tiet" }
+            .Any(term => query.Contains(term, StringComparison.Ordinal))) return false;
+        var tokens = Regex.Matches(query, @"[\p{L}\p{Nd}]+", RegexOptions.CultureInvariant).Select(match => match.Value).ToArray();
+        if (tokens.Length == 0) return false;
+        if (tokens.Length == 1 && tokens[0].Length >= 7 && tokens[0].Count(character => "aeiouy".Contains(character)) <= 1) return false;
+        return tokens.Any(token => token.Any(char.IsLetterOrDigit));
     }
 
     private static void ParseAllergies(string query, AiTaxonomyCodes allowed, ISet<string> allergens, ISet<string> excluded, ISet<string> warnings)
     {
         foreach (var mapping in Ingredients)
         {
-            if (!mapping.Terms.Any(term => new[] { "di ung", "allergy" }.Any(prefix => ContainsTerm(query, $"{prefix} {term}")))) continue;
+            if (!mapping.Terms.Any(term => new[] { "di ung", "allergy", "allergic to" }.Any(prefix => ContainsTerm(query, $"{prefix} {term}")))) continue;
             var suffix = mapping.Code[4..];
             var allergen = allowed.Allergens.FirstOrDefault(code => code.Contains(suffix, StringComparison.OrdinalIgnoreCase)
                 || suffix == "SHRIMP" && code.Contains("CRUSTACEAN", StringComparison.OrdinalIgnoreCase));
@@ -186,8 +242,33 @@ public sealed partial class DeterministicFoodIntentParser : IFoodRecommendationF
     private static void AddAllowed(ISet<string> target, IEnumerable<string> values, string code) { if (Allowed(values, code)) target.Add(code); }
     private static string[] Ordered(IEnumerable<string> values) => values.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).Take(MaximumSignals).ToArray();
     private static bool ContainsTerm(string query, string term) => Regex.IsMatch(query, $@"(^|[^a-z0-9]){Regex.Escape(term)}($|[^a-z0-9])", RegexOptions.CultureInvariant);
-    private static bool IsExcluded(string query, string term) => new[] { "khong an", "khong muon", "tranh", "loai bo" }.Any(prefix => ContainsTerm(query, $"{prefix} {term}"));
-    private static bool IsAvoidedMethod(string query, string term) => new[] { "khong", "khong muon", "tranh", "it" }.Any(prefix => ContainsTerm(query, $"{prefix} {term}"));
+    private static bool IsExcluded(string query, string term) => new[] { "khong an", "khong muon", "tranh", "loai bo", "avoid", "no", "without", "allergic to" }.Any(prefix => ContainsTerm(query, $"{prefix} {term}"));
+    private static bool IsAvoidedMethod(string query, string term) => new[] { "khong", "khong muon", "tranh", "it", "avoid", "no", "without" }.Any(prefix => ContainsTerm(query, $"{prefix} {term}"));
+
+    private static string DetectLanguage(string text, string hint)
+    {
+        var normalizedHint = hint?.Trim().ToLowerInvariant();
+        if (normalizedHint is "vi" or "en" or "ja" or "ko") return normalizedHint;
+        if (text.Any(character => character is >= '\u3040' and <= '\u30ff')) return "ja";
+        if (text.Any(character => character is >= '\uac00' and <= '\ud7af')) return "ko";
+        var lower = text.ToLowerInvariant();
+        return Regex.IsMatch(lower, @"\b(i|want|under|below|grilled|fried|steamed|beef|chicken|pork|seafood|vegetarian|near|without|allergic)\b") ? "en" : "vi";
+    }
+
+    private static string SupportedResponseLanguage(string requested, ISet<string> warnings)
+    {
+        var value = requested?.Trim().ToLowerInvariant();
+        if (value is "vi" or "en") return value;
+        warnings.Add("LANGUAGE_RESPONSE_FALLBACK_VI");
+        return "vi";
+    }
+
+    private static string LocalizedSummary(string query, string detectedLanguage, string requestedResponseLanguage)
+    {
+        var response = requestedResponseLanguage is "en" ? "en" : "vi";
+        if (response == detectedLanguage) return query.Trim();
+        return response == "en" ? "Understood the requested food preferences." : "Đã hiểu các sở thích món ăn được yêu cầu.";
+    }
 
     public static string NormalizeText(string value)
     {
@@ -195,10 +276,10 @@ public sealed partial class DeterministicFoodIntentParser : IFoodRecommendationF
         foreach (var character in value.Normalize(NormalizationForm.FormD))
             if (CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.NonSpacingMark)
                 builder.Append(character is 'đ' or 'Đ' ? 'd' : char.ToLowerInvariant(character));
-        return Regex.Replace(builder.ToString().Normalize(NormalizationForm.FormC), @"[^a-z0-9.,]+", " ").Trim();
+        return Regex.Replace(builder.ToString().Normalize(NormalizationForm.FormC), @"[^\p{L}\p{Nd}.,]+", " ").Trim();
     }
 
     [GeneratedRegex(@"\btu\s+([0-9][0-9.,]*)\s*(k|nghin|ngan|tr|trieu)?\s+den\s+([0-9][0-9.,]*)\s*(k|nghin|ngan|tr|trieu)?\b", RegexOptions.CultureInvariant)] private static partial Regex BudgetRangeRegex();
-    [GeneratedRegex(@"\b(?:duoi|khong qua|toi da)\s+([0-9][0-9.,]*)\s*(k|nghin|ngan|tr|trieu)?\b", RegexOptions.CultureInvariant)] private static partial Regex BudgetUpperRegex();
+    [GeneratedRegex(@"\b(?:duoi|khong qua|toi da|under|below|up to)\s+([0-9][0-9.,]*)\s*(k|nghin|ngan|tr|trieu|vnd)?\b", RegexOptions.CultureInvariant)] private static partial Regex BudgetUpperRegex();
     [GeneratedRegex(@"\b(?:khoang|tam|gia)\s+([0-9][0-9.,]*)\s*(k|nghin|ngan|tr|trieu)?\b", RegexOptions.CultureInvariant)] private static partial Regex BudgetAboutRegex();
 }

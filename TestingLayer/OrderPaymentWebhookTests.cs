@@ -25,8 +25,9 @@ public sealed class OrderPaymentWebhookTests
         Assert.Equal(WebhookDispatchResult.OrderHandled, result);
         orders.Verify(repository => repository.UpdatePendingPaymentStatusByIdAsync(
             payment.Id, PaymentStatus.Paid, "bank-ref", It.IsAny<DateTime>(), It.IsAny<DateTime>()), Times.Once);
+        Assert.Equal(OrderStatus.Preparing, payment.Order.Status);
         orders.Verify(repository => repository.UpdateOrderStatusIfPlacedAsync(
-            payment.Order.OrderCode, OrderStatus.Preparing, It.IsAny<DateTime>()), Times.Once);
+            It.IsAny<long>(), It.IsAny<OrderStatus>(), It.IsAny<DateTime>()), Times.Never);
         usages.Verify(repository => repository.ConsumeReservedByOrderAsync(
             payment.OrderId, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()), Times.Once);
         orders.Verify(repository => repository.CommitTransactionAsync(), Times.Once);

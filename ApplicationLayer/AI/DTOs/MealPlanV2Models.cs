@@ -1,4 +1,5 @@
 using DomainLayer.Enums;
+using ApplicationLayer.DTOs.Responses;
 
 namespace ApplicationLayer.AI.V2.MealPlans;
 
@@ -8,6 +9,8 @@ public sealed class CreateMealPlanV2Request
     public decimal Budget { get; set; }
     public string DiningStyle { get; set; } = string.Empty;
     public string Request { get; set; } = string.Empty;
+    public string InputLanguage { get; set; } = "auto";
+    public string ResponseLanguage { get; set; } = "vi";
     public decimal? Latitude { get; set; }
     public decimal? Longitude { get; set; }
     public int? MaxDistanceMeters { get; set; }
@@ -16,6 +19,49 @@ public sealed class CreateMealPlanV2Request
 
 public sealed class ReplaceMealPlanItemRequest { public Guid ReplacementFoodId { get; set; } public int ExpectedPlanVersion { get; set; } }
 public sealed class RegenerateMealPlanCourseRequest { public int ExpectedPlanVersion { get; set; } }
+public sealed class AddMealPlanToCartRequest { public int ExpectedPlanVersion { get; set; } public string IdempotencyKey { get; set; } = string.Empty; }
+public sealed class RefreshMealPlanPricesRequest { public int ExpectedPlanVersion { get; set; } }
+
+public sealed class MealPlanAddToCartResponse
+{
+    public Guid PlanId { get; set; }
+    public int PlanVersion { get; set; }
+    public CartResponse Cart { get; set; } = new();
+    public IReadOnlyCollection<Guid> AddedFoodItemIds { get; set; } = [];
+    public IReadOnlyCollection<Guid> MergedFoodItemIds { get; set; } = [];
+    public string IdempotencyResult { get; set; } = "CREATED";
+    public string NavigationRoute { get; set; } = "Cart";
+}
+
+public sealed class MealPlanPriceChangeDetails
+{
+    public Guid PlanId { get; set; }
+    public int ExpectedPlanVersion { get; set; }
+    public decimal OldTotal { get; set; }
+    public decimal NewTotal { get; set; }
+    public IReadOnlyCollection<MealPlanChangedPriceItem> ChangedItems { get; set; } = [];
+}
+public sealed class MealPlanChangedPriceItem
+{
+    public Guid PlanItemId { get; set; }
+    public Guid FoodId { get; set; }
+    public string FoodName { get; set; } = string.Empty;
+    public decimal OldUnitPrice { get; set; }
+    public decimal NewUnitPrice { get; set; }
+    public int Quantity { get; set; }
+}
+public sealed class MealPlanUnavailableDetails
+{
+    public IReadOnlyCollection<MealPlanUnavailableItem> Items { get; set; } = [];
+}
+public sealed class MealPlanUnavailableItem
+{
+    public Guid PlanItemId { get; set; }
+    public Guid? FoodId { get; set; }
+    public string Course { get; set; } = string.Empty;
+    public string Reason { get; set; } = string.Empty;
+    public bool CanRequestAlternatives { get; set; } = true;
+}
 
 public sealed class MealPlanV2Response
 {
@@ -29,6 +75,11 @@ public sealed class MealPlanV2Response
 
 public sealed class UnderstoodMealPlanRequest
 {
+    public string InputLanguageHint { get; set; } = "auto";
+    public string DetectedLanguage { get; set; } = "vi";
+    public string ResponseLanguage { get; set; } = "vi";
+    public decimal? LanguageConfidence { get; set; }
+    public IReadOnlyCollection<string> LanguageWarnings { get; set; } = [];
     public int PartySize { get; set; }
     public decimal Budget { get; set; }
     public string DiningStyle { get; set; } = string.Empty;

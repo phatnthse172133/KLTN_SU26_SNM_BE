@@ -15,8 +15,16 @@ public enum FoodRecommendationSortPreference
 
 public sealed class FoodRecommendationIntent
 {
+    public string InputLanguageHint { get; set; } = "auto";
+    public string DetectedLanguage { get; set; } = "vi";
+    public string ResponseLanguage { get; set; } = "vi";
+    public decimal? LanguageConfidence { get; set; }
+    public IReadOnlyCollection<string> LanguageWarnings { get; set; } = [];
     public string Summary { get; set; } = string.Empty;
+    public string OriginalNormalizedQuery { get; set; } = string.Empty;
     public IReadOnlyCollection<string> DesiredFoodTerms { get; set; } = [];
+    public IReadOnlyCollection<string> ContextualTerms { get; set; } = [];
+    public IReadOnlyCollection<string> UnmappedMeaningfulTerms { get; set; } = [];
     public IReadOnlyCollection<string> PreferredIngredientCodes { get; set; } = [];
     public IReadOnlyCollection<string> ExcludedIngredientCodes { get; set; } = [];
     public IReadOnlyCollection<string> AllergenExclusionCodes { get; set; } = [];
@@ -39,6 +47,11 @@ public sealed class FoodRecommendationIntent
 
 public sealed class MealPlanIntent
 {
+    public string InputLanguageHint { get; set; } = "auto";
+    public string DetectedLanguage { get; set; } = "vi";
+    public string ResponseLanguage { get; set; } = "vi";
+    public decimal? LanguageConfidence { get; set; }
+    public IReadOnlyCollection<string> LanguageWarnings { get; set; } = [];
     public string Summary { get; set; } = string.Empty;
     public IReadOnlyCollection<string> PreferredIngredientCodes { get; set; } = [];
     public IReadOnlyCollection<string> ExcludedIngredientCodes { get; set; } = [];
@@ -67,8 +80,10 @@ public sealed record AiTaxonomyCodes(
     IReadOnlyCollection<string> Courses,
     IReadOnlyCollection<string> DiningPurposes);
 
-public sealed record FoodRecommendationIntentRequest(string Query, AiTaxonomyCodes AllowedTaxonomy);
-public sealed record MealPlanIntentRequest(string Query, AiTaxonomyCodes AllowedTaxonomy, string DiningStyle = "FULL_MEAL");
+public sealed record FoodRecommendationIntentRequest(string Query, AiTaxonomyCodes AllowedTaxonomy,
+    string InputLanguageHint = "auto", string ResponseLanguage = "vi");
+public sealed record MealPlanIntentRequest(string Query, AiTaxonomyCodes AllowedTaxonomy, string DiningStyle = "FULL_MEAL",
+    string InputLanguageHint = "auto", string ResponseLanguage = "vi");
 
 public sealed class FoodRecommendationIntentExtractionResult
 {
@@ -108,7 +123,8 @@ public sealed record FoodRecommendationExplanationContext(
     string? RatingEvidence,
     IReadOnlyCollection<string> DietaryEvidence,
     IReadOnlyCollection<string> UnmatchedSoftPreferences,
-    IReadOnlyCollection<string> Warnings);
+    IReadOnlyCollection<string> Warnings,
+    string ResponseLanguage = "vi");
 
 public sealed class AiGeneratedTextResult
 {

@@ -312,6 +312,21 @@ internal static class AiV2ModelConfiguration
             entity.HasOne(value => value.FoodItem).WithMany().HasForeignKey(value => value.FoodItemId).OnDelete(DeleteBehavior.SetNull);
             entity.HasOne(value => value.Booth).WithMany(value => value.AiMealPlanItems).HasForeignKey(value => value.BoothId).OnDelete(DeleteBehavior.SetNull);
         });
+
+        modelBuilder.Entity<AiMealPlanCartOperation>(entity =>
+        {
+            entity.ToTable("AiMealPlanCartOperation");
+            entity.HasKey(value => value.Id);
+            entity.HasIndex(value => new { value.CustomerId, value.IdempotencyKey }, "ux_aimealplancart_customer_key").IsUnique();
+            entity.HasIndex(value => value.PlanId, "idx_aimealplancart_plan");
+            entity.Property(value => value.Id).HasDefaultValueSql("uuid_generate_v4()");
+            entity.Property(value => value.IdempotencyKey).HasMaxLength(100);
+            entity.Property(value => value.RequestHash).HasMaxLength(64);
+            entity.Property(value => value.ResponseJson).HasColumnType("jsonb");
+            entity.Property(value => value.CreatedAt).HasDefaultValueSql("now()");
+            entity.HasOne<AiMealPlan>().WithMany().HasForeignKey(value => value.PlanId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<User>().WithMany().HasForeignKey(value => value.CustomerId).OnDelete(DeleteBehavior.Cascade);
+        });
     }
 
     private static void ConfigureFoodAiProfile(ModelBuilder modelBuilder)

@@ -48,6 +48,7 @@ namespace InfrastructureLayer.Data
         public virtual DbSet<AiMealPlanSession> AiMealPlanSessions { get; set; }
         public virtual DbSet<AiMealPlan> AiMealPlans { get; set; }
         public virtual DbSet<AiMealPlanItem> AiMealPlanItems { get; set; }
+        public virtual DbSet<AiMealPlanCartOperation> AiMealPlanCartOperations { get; set; }
         public virtual DbSet<FoodAiProfile> FoodAiProfiles { get; set; }
 
         public virtual DbSet<Booth> Booths { get; set; }

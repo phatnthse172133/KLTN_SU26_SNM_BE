@@ -39,3 +39,10 @@ public class CartItemResponse
     public bool CanOrder { get; set; }
     public string? ReasonCode { get; set; }
 }
+
+public sealed class CartBatchAddResponse
+{
+    public CartResponse Cart { get; set; } = new();
+    public IReadOnlyCollection<Guid> AddedFoodItemIds { get; set; } = [];
+    public IReadOnlyCollection<Guid> MergedFoodItemIds { get; set; } = [];
+}

@@ -26,6 +26,7 @@ public sealed class MealPlanV2Service(
     IFoodSemanticMetadataRepository metadata,
     IMealPlanPolicyResolver policies,
     IMealPlanRecalculationService recalculation,
+    IMealPlanCartIntegrationService cartIntegration,
     IOptions<MealPlanV2Options> options,
     TimeProvider timeProvider,
     ILogger<MealPlanV2Service> logger) : IMealPlanV2Service
@@ -35,6 +36,8 @@ public sealed class MealPlanV2Service(
 
     public async Task<ApiResponse<MealPlanV2Response>> CreateAsync(Guid customerId, CreateMealPlanV2Request request, CancellationToken cancellationToken)
     {
+        request.InputLanguage = NormalizeLanguage(request.InputLanguage, true);
+        request.ResponseLanguage = NormalizeLanguage(request.ResponseLanguage, false);
         var style = Validate(request);
         var hash = RequestHash(request, style);
         var existing = await repository.FindSessionAsync(customerId, request.IdempotencyKey.Trim(), cancellationToken);
@@ -51,10 +54,14 @@ public sealed class MealPlanV2Service(
             catalogs.PreparationMethods.Select(value => value.Code).ToArray(), catalogs.TasteProfiles.Select(value => value.Code).ToArray(),
             Enum.GetNames<FoodCourse>(), Enum.GetNames<DiningPurpose>());
         var extraction = await intentExtractor.ExtractMealPlanIntentAsync(
-            new(request.Request.Trim(), taxonomy, style.ToString()), cancellationToken);
+            new(request.Request.Trim(), taxonomy, style.ToString(), request.InputLanguage, request.ResponseLanguage), cancellationToken);
         if (extraction.FailureCategory == AiProviderFailureCategory.CANCELLED) throw new OperationCanceledException(cancellationToken);
         if (!extraction.IsSuccess || extraction.ParsedResult is null)
+        {
+            if (extraction.ValidationWarnings.Contains("AI_LANGUAGE_PROVIDER_REQUIRED"))
+                throw AppException.UnprocessableEntity("This language requires the advanced AI provider.", "AI_LANGUAGE_PROVIDER_REQUIRED");
             throw AppException.UnprocessableEntity("The meal-plan request could not be understood.", "AI_INVALID_REQUEST");
+        }
         var intent = Normalize(extraction.ParsedResult, taxonomy, request);
         var policy = policies.Resolve(style);
         var loaded = await candidates.GetCandidatesAsync(now, Math.Clamp(_options.CandidateLimit, 1, 500),
@@ -175,6 +182,112 @@ public sealed class MealPlanV2Service(
         await mutation.CommitAsync(cancellationToken);
         var refreshed = await repository.GetOwnedPlanAsync(customerId, planId, cancellationToken) ?? plan;
         return ApiResponse<MealPlanDetailResponse>.SuccessResponse(ToDetail(refreshed, now));
+    }
+
+    public async Task<ApiResponse<MealPlanAddToCartResponse>> AddToCartAsync(
+        Guid customerId, Guid planId, AddMealPlanToCartRequest request, CancellationToken cancellationToken)
+    {
+        var key = request.IdempotencyKey?.Trim() ?? string.Empty;
+        if (key.Length is < 1 or > 100)
+            throw AppException.BadRequest("Idempotency key is required and must not exceed 100 characters.", "AI_IDEMPOTENCY_KEY_REQUIRED");
+
+        await using var mutation = await repository.BeginOwnedMutationAsync(customerId, planId, cancellationToken)
+            ?? throw AppException.NotFound("Meal plan was not found.", "AI_PLAN_NOT_FOUND");
+        var plan = mutation.Plan;
+        var now = timeProvider.GetUtcNow().UtcDateTime;
+        var requestHash = CartRequestHash(planId, request.ExpectedPlanVersion);
+        var existing = await mutation.FindCartOperationAsync(customerId, key, cancellationToken);
+        if (existing is not null)
+        {
+            if (existing.PlanId != planId || existing.PlanVersion != request.ExpectedPlanVersion || existing.RequestHash != requestHash)
+                throw AppException.Conflict("The idempotency key was used for another meal plan or version.", "AI_IDEMPOTENCY_CONFLICT");
+            var replay = JsonSerializer.Deserialize<MealPlanAddToCartResponse>(existing.ResponseJson, Json)
+                ?? throw new InvalidOperationException("Stored meal-plan cart response is invalid.");
+            replay.IdempotencyResult = "REPLAYED";
+            return ApiResponse<MealPlanAddToCartResponse>.SuccessResponse(replay, "The existing cart operation was returned.");
+        }
+
+        EnsureMutation(plan, request.ExpectedPlanVersion, now);
+        if (!plan.IsComplete || plan.Status is AiMealPlanStatus.DRAFT or AiMealPlanStatus.FAILED or AiMealPlanStatus.EXPIRED)
+            throw AppException.UnprocessableEntity("Meal plan is not complete.", "AI_PLAN_INCOMPLETE");
+
+        var active = plan.Items.Where(item => !item.IsRemoved).OrderBy(item => item.SortOrder).ToArray();
+        if (active.Length == 0)
+            throw AppException.UnprocessableEntity("Meal plan has no active items.", "AI_PLAN_INCOMPLETE");
+
+        var unavailable = active.Select(item =>
+        {
+            var result = item.FoodItem is null
+                ? new CustomerOrderabilityResult(false, "FOOD_NOT_FOUND")
+                : CustomerOrderability.Evaluate(item.FoodItem, now);
+            return (Item: item, Result: result);
+        }).Where(value => !value.Result.CanOrder).Select(value => new MealPlanUnavailableItem
+        {
+            PlanItemId = value.Item.Id, FoodId = value.Item.FoodItemId, Course = value.Item.Course.ToString(),
+            Reason = value.Result.ReasonCode ?? "FOOD_UNAVAILABLE", CanRequestAlternatives = value.Item.FoodItemId.HasValue
+        }).ToArray();
+        if (unavailable.Length > 0)
+            throw AppException.UnprocessableEntity("One or more meal-plan items are unavailable.", "AI_ITEMS_UNAVAILABLE",
+                new MealPlanUnavailableDetails { Items = unavailable });
+
+        var changed = active.Select(item => new
+        {
+            Item = item,
+            Current = FoodPriceResolver.GetCurrentPrice(item.FoodItem!, now)
+        }).Where(value => value.Current != value.Item.UnitPriceSnapshot).Select(value => new MealPlanChangedPriceItem
+        {
+            PlanItemId = value.Item.Id, FoodId = value.Item.FoodItemId!.Value, FoodName = value.Item.FoodNameSnapshot,
+            OldUnitPrice = value.Item.UnitPriceSnapshot, NewUnitPrice = value.Current, Quantity = value.Item.Quantity
+        }).ToArray();
+        if (changed.Length > 0)
+            throw AppException.Conflict("Meal-plan prices have changed.", "AI_PRICE_CHANGED", new MealPlanPriceChangeDetails
+            {
+                PlanId = plan.Id, ExpectedPlanVersion = request.ExpectedPlanVersion, OldTotal = plan.TotalPrice,
+                NewTotal = active.Sum(item => FoodPriceResolver.GetCurrentPrice(item.FoodItem!, now) * item.Quantity),
+                ChangedItems = changed
+            });
+
+        var batch = await cartIntegration.AddItemsAsync(customerId,
+            active.Select(item => (item.FoodItemId!.Value, item.Quantity)).ToArray(), cancellationToken);
+        var response = new MealPlanAddToCartResponse
+        {
+            PlanId = plan.Id, PlanVersion = plan.Version, Cart = batch.Cart,
+            AddedFoodItemIds = batch.AddedFoodItemIds, MergedFoodItemIds = batch.MergedFoodItemIds,
+            IdempotencyResult = "CREATED"
+        };
+        mutation.AddCartOperation(new AiMealPlanCartOperation
+        {
+            Id = Guid.NewGuid(), CustomerId = customerId, PlanId = plan.Id, PlanVersion = plan.Version,
+            IdempotencyKey = key, RequestHash = requestHash, ResponseJson = JsonSerializer.Serialize(response, Json), CreatedAt = now
+        });
+        await mutation.CommitAsync(cancellationToken);
+        return ApiResponse<MealPlanAddToCartResponse>.SuccessResponse(response, "Meal plan added to cart.");
+    }
+
+    public async Task<ApiResponse<MealPlanDetailResponse>> RefreshPricesAsync(
+        Guid customerId, Guid planId, RefreshMealPlanPricesRequest request, CancellationToken cancellationToken)
+    {
+        await using var mutation = await repository.BeginOwnedMutationAsync(customerId, planId, cancellationToken)
+            ?? throw AppException.NotFound("Meal plan was not found.", "AI_PLAN_NOT_FOUND");
+        var plan = mutation.Plan;
+        var now = timeProvider.GetUtcNow().UtcDateTime;
+        EnsureMutation(plan, request.ExpectedPlanVersion, now);
+        var active = plan.Items.Where(item => !item.IsRemoved).ToArray();
+        if (active.Any(item => item.FoodItem is null || !CustomerOrderability.Evaluate(item.FoodItem, now).CanOrder))
+            throw AppException.UnprocessableEntity("Unavailable items must be replaced before refreshing prices.", "AI_ITEMS_UNAVAILABLE");
+        var total = active.Sum(item => FoodPriceResolver.GetCurrentPrice(item.FoodItem!, now) * item.Quantity);
+        if (total > plan.Session.Budget)
+            throw AppException.UnprocessableEntity("Updated prices exceed the meal-plan budget.", "AI_PRICE_REFRESH_EXCEEDS_BUDGET");
+        foreach (var item in active)
+        {
+            item.UnitPriceSnapshot = FoodPriceResolver.GetCurrentPrice(item.FoodItem!, now);
+            item.TotalPriceSnapshot = item.UnitPriceSnapshot * item.Quantity;
+            item.UpdatedAt = now;
+        }
+        recalculation.Recalculate(plan, policies.Resolve(ParseStyle(plan.Session.DiningStyle)), plan.Session.PartySize,
+            plan.Session.Budget, now);
+        await mutation.CommitAsync(cancellationToken);
+        return ApiResponse<MealPlanDetailResponse>.SuccessResponse(ToDetail(plan, now));
     }
 
     private List<AiMealPlan> Generate(IReadOnlyCollection<FoodRecommendationCandidate> eligible, MealPlanIntent intent,
@@ -326,6 +439,8 @@ public sealed class MealPlanV2Service(
 
     private static MealPlanIntent Normalize(MealPlanIntent value, AiTaxonomyCodes allowed, CreateMealPlanV2Request request)
     {
+        value.InputLanguageHint = request.InputLanguage;
+        value.ResponseLanguage = request.ResponseLanguage;
         static string[] Keep(IEnumerable<string> values, IReadOnlyCollection<string> whitelist) => values
             .Where(whitelist.Contains).Distinct(StringComparer.Ordinal).OrderBy(code => code).Take(20).ToArray();
         value.PreferredIngredientCodes = Keep(value.PreferredIngredientCodes, allowed.Ingredients);
@@ -345,8 +460,18 @@ public sealed class MealPlanV2Service(
 
     private static string RequestHash(CreateMealPlanV2Request request, MealPlanDiningStyle style)
     {
-        var canonical = FormattableString.Invariant($"{request.PartySize}|{request.Budget:0.00}|{style}|{request.Request.Trim()}|{request.Latitude}|{request.Longitude}|{request.MaxDistanceMeters}");
+        var canonical = FormattableString.Invariant($"{request.PartySize}|{request.Budget:0.00}|{style}|{request.Request.Trim()}|{request.InputLanguage}|{request.ResponseLanguage}|{request.Latitude}|{request.Longitude}|{request.MaxDistanceMeters}");
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
+    }
+
+    private static string CartRequestHash(Guid planId, int version)
+        => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{planId:D}|{version}")));
+
+    private static string NormalizeLanguage(string? value, bool allowAuto)
+    {
+        var normalized = value?.Trim().ToLowerInvariant() ?? (allowAuto ? "auto" : "vi");
+        if ((allowAuto && normalized == "auto") || normalized is "vi" or "en" or "ja" or "ko") return normalized;
+        throw AppException.BadRequest("Language is not supported.", "AI_LANGUAGE_NOT_SUPPORTED");
     }
 
     private static void EnsureEditable(AiMealPlan plan, DateTime now)
@@ -366,7 +491,9 @@ public sealed class MealPlanV2Service(
         var warnings = ParseWarnings(session.WarningsJson);
         return new() { SessionId = session.Id, Status = session.Plans.Count == 0 ? "NO_FEASIBLE_PLAN" : session.Plans.Count < 3 ? "PARTIAL_PLANS" : "SUCCESS",
             UsedProviderFallback = session.UsedProviderFallback, UnderstoodRequest = new() { PartySize = session.PartySize, Budget = session.Budget,
-                DiningStyle = session.DiningStyle, Summary = intent.Summary,
+                DiningStyle = session.DiningStyle, InputLanguageHint = intent.InputLanguageHint,
+                DetectedLanguage = intent.DetectedLanguage, ResponseLanguage = intent.ResponseLanguage,
+                LanguageConfidence = intent.LanguageConfidence, LanguageWarnings = intent.LanguageWarnings, Summary = intent.Summary,
                 Preferences = intent.PreferredIngredientCodes.Concat(intent.PreferredTasteCodes).Concat(intent.PreparationMethodCodes).Distinct().ToArray(),
                 Exclusions = intent.ExcludedIngredientCodes.Concat(intent.AllergenExclusionCodes).Concat(intent.DietaryRequirementCodes).Distinct().ToArray(),
                 Warnings = intent.Warnings }, Plans = session.Plans.OrderBy(value => value.PlanCode).Select(Summary).ToArray(), Warnings = warnings };

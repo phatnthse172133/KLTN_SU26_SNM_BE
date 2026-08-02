@@ -7,6 +7,8 @@ namespace ApplicationLayer.AI.V2.Recommendations;
 public sealed class CreateFoodRecommendationV2Request
 {
     public string Query { get; set; } = string.Empty;
+    public string InputLanguage { get; set; } = "auto";
+    public string ResponseLanguage { get; set; } = "vi";
     public decimal? Latitude { get; set; }
     public decimal? Longitude { get; set; }
     public int? MaxDistanceMeters { get; set; }
@@ -35,6 +37,11 @@ public sealed class FoodRecommendationV2Response
 
 public sealed class UnderstoodFoodRequestResponse
 {
+    public string InputLanguageHint { get; set; } = "auto";
+    public string DetectedLanguage { get; set; } = "vi";
+    public string ResponseLanguage { get; set; } = "vi";
+    public decimal? LanguageConfidence { get; set; }
+    public IReadOnlyCollection<string> LanguageWarnings { get; set; } = [];
     public string Summary { get; set; } = string.Empty;
     public decimal? MinimumPrice { get; set; }
     public decimal? MaximumPrice { get; set; }

@@ -9,24 +9,33 @@ namespace ApplicationLayer.AI.V2.Services;
 
 public sealed class DeterministicFoodSemanticMatcher : IFoodSemanticMatcher
 {
-    private static readonly HashSet<string> StopWords = ["toi", "muon", "mon", "an", "cho", "va", "voi", "duoi", "khong", "gia", "gan", "nhe"];
+    private static readonly HashSet<string> StopWords = ["toi", "minh", "muon", "mon", "an", "cho", "va", "voi", "duoi", "khong", "gia", "gan", "nhe", "i", "want", "to", "eat", "a", "the", "something", "please"];
     public SemanticMatchResult Match(FoodRecommendationIntent intent, FoodRecommendationCandidate candidate)
     {
         var haystack = DeterministicFoodIntentParser.NormalizeText(string.Join(' ', candidate.FoodName, candidate.CategoryName,
             candidate.CategoryCode, candidate.Description, candidate.SearchText, string.Join(' ', candidate.IngredientCodes),
             string.Join(' ', candidate.TasteCodes), string.Join(' ', candidate.PreparationMethodCodes),
-            string.Join(' ', candidate.Courses), string.Join(' ', candidate.DiningPurposes), candidate.SpiceLevel));
+            string.Join(' ', candidate.Courses), string.Join(' ', candidate.DiningPurposes), candidate.SpiceLevel,
+            candidate.ServingTemperature, candidate.ServingTemperature == ServingTemperature.COLD ? "cold cool refreshing thanh mat" : null,
+            candidate.IsShareable == true ? "shareable shared friend group" : null,
+            candidate.EstimatedServingCount >= 2 ? "serves group shared" : null));
         var desired = intent.DesiredFoodTerms.Select(DeterministicFoodIntentParser.NormalizeText).Where(value => value.Length > 0).Distinct().ToArray();
         var matchedDesired = desired.Where(term => haystack.Contains(term, StringComparison.Ordinal)).ToArray();
-        var queryTokens = Tokens(intent.Summary).Where(token => !StopWords.Contains(token)).Distinct().Take(30).ToArray();
+        var searchQuery = string.Join(' ', intent.OriginalNormalizedQuery, string.Join(' ', intent.ContextualTerms), string.Join(' ', intent.UnmappedMeaningfulTerms));
+        var queryTokens = Tokens(searchQuery).Where(token => !StopWords.Contains(token)).Distinct().Take(30).ToArray();
         var haystackTokens = Tokens(haystack).ToHashSet(StringComparer.Ordinal);
         var matchedTokens = queryTokens.Where(haystackTokens.Contains).ToArray();
+        var contextTokens = intent.ContextualTerms.SelectMany(Tokens).Distinct().ToArray();
+        var matchedContext = contextTokens.Where(haystackTokens.Contains).ToArray();
         var desiredRatio = desired.Length == 0 ? 0m : matchedDesired.Length / (decimal)desired.Length;
         var lexicalRatio = queryTokens.Length == 0 ? 0m : matchedTokens.Length / (decimal)queryTokens.Length;
-        return new(Math.Clamp(desiredRatio * .6m + lexicalRatio * .4m, 0m, 1m),
-            matchedDesired.Concat(matchedTokens).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray());
+        var contextRatio = contextTokens.Length == 0 ? 0m : matchedContext.Length / (decimal)contextTokens.Length;
+        lexicalRatio = Math.Max(lexicalRatio, contextRatio);
+        var score = desired.Length == 0 ? lexicalRatio : desiredRatio * .6m + lexicalRatio * .4m;
+        return new(Math.Clamp(score, 0m, 1m),
+            matchedDesired.Concat(matchedTokens).Concat(matchedContext).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray());
     }
-    private static IEnumerable<string> Tokens(string value) => Regex.Matches(value, "[a-z0-9_]+", RegexOptions.CultureInvariant).Select(match => match.Value);
+    private static IEnumerable<string> Tokens(string value) => Regex.Matches(value, @"[\p{L}\p{Nd}_]+", RegexOptions.CultureInvariant).Select(match => match.Value);
 }
 
 public sealed class FoodRecommendationRanker(IOptions<RecommendationV2Options> options) : IFoodRecommendationRanker
@@ -45,23 +54,46 @@ public sealed class FoodRecommendationRanker(IOptions<RecommendationV2Options> o
             .ToArray();
         var spiceMatch = intent.PreferredSpiceLevel.HasValue && intent.PreferredSpiceLevel == candidate.SpiceLevel;
 
-        var semanticPoints = Round(semantic.Score * 20m);
-        var nameCategoryPoints = NameCategoryScore(intent, candidate, courseMatches) * 10m;
-        var ingredientPoints = Ratio(ingredients.Count, intent.PreferredIngredientCodes.Count) * 10m;
+        var semanticRatio = semantic.Score;
+        var nameCategoryRatio = NameCategoryScore(intent, candidate, courseMatches);
+        var ingredientRatio = Ratio(ingredients.Count, intent.PreferredIngredientCodes.Count);
         var tasteSignals = intent.PreferredTasteCodes.Count + (intent.PreferredSpiceLevel.HasValue ? 1 : 0);
         var tasteMatches = tastes.Count + (spiceMatch ? 1 : 0);
-        var tastePoints = Ratio(tasteMatches, tasteSignals) * 8m;
-        if (intent.AvoidedTasteCodes.Intersect(candidate.TasteCodes, StringComparer.Ordinal).Any()) tastePoints = Math.Max(0, tastePoints - 3m);
-        var preparationPoints = Ratio(methods.Count, intent.PreparationMethodCodes.Count) * 5m;
-        var coursePoints = Ratio(courseMatches.Length, intent.PreferredCourseCodes.Count + intent.MealPurposeCodes.Count) * 2m;
-        var budgetPoints = BudgetScore(intent, candidate.CurrentPrice);
+        var tasteRatio = Ratio(tasteMatches, tasteSignals);
+        if (intent.AvoidedTasteCodes.Intersect(candidate.TasteCodes, StringComparer.Ordinal).Any()) tasteRatio = Math.Max(0, tasteRatio - .3m);
+        var preparationRatio = Ratio(methods.Count, intent.PreparationMethodCodes.Count);
+        var courseRatio = Ratio(courseMatches.Length, intent.PreferredCourseCodes.Count + intent.MealPurposeCodes.Count);
+        var budgetRatio = BudgetScore(intent, candidate.CurrentPrice);
         var dietaryMatches = candidate.DietaryAttributes.Count(value => intent.DietaryRequirementCodes.Contains(value.Code)
             && value.IsConfirmed && value.Status == DietarySuitabilityStatus.SUITABLE);
-        var dietaryPoints = intent.DietaryRequirementCodes.Count == 0 ? 0m : Ratio(dietaryMatches, intent.DietaryRequirementCodes.Count) * 15m;
-        var distancePoints = DistanceScore(intent, distanceMeters);
-        var ratingPoints = RatingScore(candidate.Rating, candidate.ReviewCount);
-        var final = Round(Math.Clamp(semanticPoints + nameCategoryPoints + ingredientPoints + tastePoints + preparationPoints
-            + coursePoints + budgetPoints + dietaryPoints + distancePoints + ratingPoints, 0m, 100m));
+        var dietaryRatio = Ratio(dietaryMatches, intent.DietaryRequirementCodes.Count);
+        var distanceRatio = DistanceScore(intent, distanceMeters);
+        var ratingRatio = RatingScore(candidate.Rating, candidate.ReviewCount);
+
+        decimal earned = 0, applicable = 0;
+        void Add(decimal ratio, decimal weight) { earned += Math.Clamp(ratio, 0m, 1m) * weight; applicable += weight; }
+        var hasLexicalQuery = intent.OriginalNormalizedQuery.Length > 0 || intent.ContextualTerms.Count > 0 || intent.UnmappedMeaningfulTerms.Count > 0;
+        if (hasLexicalQuery) Add(semanticRatio, intent.DesiredFoodTerms.Count > 0 ? 30m : 55m);
+        if (intent.DesiredFoodTerms.Count > 0) Add(nameCategoryRatio, 40m);
+        if (intent.PreferredIngredientCodes.Count > 0) Add(ingredientRatio, 15m);
+        if (tasteSignals > 0) Add(tasteRatio, 10m);
+        if (intent.PreparationMethodCodes.Count > 0) Add(preparationRatio, 8m);
+        if (intent.PreferredCourseCodes.Count + intent.MealPurposeCodes.Count > 0) Add(courseRatio, 10m);
+        if (intent.MinimumPrice.HasValue || intent.MaximumPrice.HasValue) Add(budgetRatio, 10m);
+        if (intent.DietaryRequirementCodes.Count > 0) Add(dietaryRatio, 15m);
+        if (distanceMeters.HasValue && (intent.PreferNearMe || intent.MaximumDistanceMeters.HasValue)) Add(distanceRatio, 8m);
+        Add(ratingRatio, intent.ContextualTerms.Contains("popular", StringComparer.Ordinal) ? 20m : 5m);
+        var final = Round(applicable == 0 ? 0 : earned / applicable * 100m);
+        var semanticPoints = Round(semanticRatio * 30m);
+        var nameCategoryPoints = Round(nameCategoryRatio * 40m);
+        var ingredientPoints = Round(ingredientRatio * 15m);
+        var tastePoints = Round(tasteRatio * 10m);
+        var preparationPoints = Round(preparationRatio * 8m);
+        var coursePoints = Round(courseRatio * 10m);
+        var budgetPoints = Round(budgetRatio * 10m);
+        var dietaryPoints = Round(dietaryRatio * 15m);
+        var distancePoints = Round(distanceRatio * 8m);
+        var ratingPoints = Round(ratingRatio * 5m);
         var strong = Math.Clamp(_options.StrongMatchThreshold, 1m, 100m);
         var near = Math.Clamp(_options.NearMatchThreshold, 0m, strong);
         var tier = final >= strong ? RecommendationMatchTier.STRONG_MATCH : final >= near ? RecommendationMatchTier.NEAR_MATCH : RecommendationMatchTier.LOW_MATCH;
@@ -89,8 +121,15 @@ public sealed class FoodRecommendationRanker(IOptions<RecommendationV2Options> o
 
     private static decimal NameCategoryScore(FoodRecommendationIntent intent, FoodRecommendationCandidate candidate, IReadOnlyCollection<string> courseMatches)
     {
+        var name = DeterministicFoodIntentParser.NormalizeText(candidate.FoodName);
         var text = DeterministicFoodIntentParser.NormalizeText($"{candidate.FoodName} {candidate.CategoryName} {candidate.CategoryCode}");
-        if (intent.DesiredFoodTerms.Any(term => text.Contains(DeterministicFoodIntentParser.NormalizeText(term), StringComparison.Ordinal))) return 1m;
+        foreach (var rawTerm in intent.DesiredFoodTerms)
+        {
+            var term = DeterministicFoodIntentParser.NormalizeText(rawTerm);
+            if (term == name) return 1m;
+            if (name.Contains(term, StringComparison.Ordinal)) return .9m;
+            if (text.Contains(term, StringComparison.Ordinal)) return .7m;
+        }
         if (courseMatches.Count > 0) return .7m;
         return 0m;
     }
@@ -99,21 +138,21 @@ public sealed class FoodRecommendationRanker(IOptions<RecommendationV2Options> o
         if (!intent.MinimumPrice.HasValue && !intent.MaximumPrice.HasValue) return 0m;
         var target = intent.MaximumPrice ?? intent.MinimumPrice!.Value;
         var closeness = target <= 0 ? 0m : 1m - Math.Min(1m, Math.Abs(target - price) / target);
-        return 10m + closeness * 5m;
+        return closeness;
     }
     private static decimal DistanceScore(FoodRecommendationIntent intent, int? distance)
     {
         if (!distance.HasValue) return 0m;
         var scale = intent.MaximumDistanceMeters.GetValueOrDefault(10_000);
         if (scale <= 0) return 0m;
-        return Math.Clamp(1m - distance.Value / (decimal)scale, 0m, 1m) * 10m;
+        return Math.Clamp(1m - distance.Value / (decimal)scale, 0m, 1m);
     }
     private static decimal RatingScore(decimal? rating, int reviews)
     {
-        if (!rating.HasValue || reviews <= 0) return 2m;
+        if (!rating.HasValue || reviews <= 0) return 0m;
         const decimal prior = 4m; const decimal weight = 10m;
         var bayesian = (rating.Value * reviews + prior * weight) / (reviews + weight);
-        return Math.Clamp((bayesian - 1m) / 4m, 0m, 1m) * 5m;
+        return Math.Clamp((bayesian - 1m) / 4m, 0m, 1m);
     }
     private static IReadOnlyCollection<string> Intersect(IEnumerable<string> requested, IEnumerable<string> actual)
         => requested.Intersect(actual, StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();

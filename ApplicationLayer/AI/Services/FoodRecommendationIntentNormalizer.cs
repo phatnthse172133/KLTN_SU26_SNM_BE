@@ -48,10 +48,16 @@ public sealed class FoodRecommendationIntentNormalizer(IOptions<RecommendationV2
         if (summary.Length > queryLimit) summary = summary[..queryLimit];
         var intent = new FoodRecommendationIntent
         {
+            InputLanguageHint = raw.InputLanguageHint, DetectedLanguage = raw.DetectedLanguage,
+            ResponseLanguage = raw.ResponseLanguage, LanguageConfidence = raw.LanguageConfidence,
+            LanguageWarnings = raw.LanguageWarnings,
             Summary = summary,
+            OriginalNormalizedQuery = DeterministicFoodIntentParser.NormalizeText(
+                string.IsNullOrWhiteSpace(raw.OriginalNormalizedQuery) ? context.Query : raw.OriginalNormalizedQuery),
             DesiredFoodTerms = (raw.DesiredFoodTerms ?? []).Where(value => !string.IsNullOrWhiteSpace(value))
                 .Select(DeterministicFoodIntentParser.NormalizeText).Where(value => value.Length is > 0 and <= 100)
                 .Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).Take(MaximumArrayCount).ToArray(),
+            ContextualTerms = Terms(raw.ContextualTerms), UnmappedMeaningfulTerms = Terms(raw.UnmappedMeaningfulTerms),
             PreferredIngredientCodes = Ordered(ingredients), ExcludedIngredientCodes = Ordered(excludedIngredients),
             AllergenExclusionCodes = Ordered(allergens), DietaryRequirementCodes = Ordered(dietary),
             PreferredTasteCodes = Ordered(tastes), AvoidedTasteCodes = Ordered(avoidedTastes),
@@ -110,7 +116,11 @@ public sealed class FoodRecommendationIntentNormalizer(IOptions<RecommendationV2
     private static int? PositiveDistance(int? value, ISet<string> warnings)
     { if (!value.HasValue) return null; if (value <= 0) { warnings.Add("MAXIMUM_DISTANCE_REMOVED"); return null; } return value; }
     private static string[] Ordered(IEnumerable<string> values) => values.OrderBy(value => value, StringComparer.Ordinal).Take(MaximumArrayCount).ToArray();
-    private static bool HasSignal(FoodRecommendationIntent value) => value.DesiredFoodTerms.Count + value.PreferredIngredientCodes.Count
+    private static string[] Terms(IEnumerable<string>? values) => (values ?? []).Where(value => !string.IsNullOrWhiteSpace(value))
+        .Select(DeterministicFoodIntentParser.NormalizeText).Where(value => value.Length is > 0 and <= 100)
+        .Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).Take(MaximumArrayCount).ToArray();
+    private static bool HasSignal(FoodRecommendationIntent value) => value.OriginalNormalizedQuery.Any(char.IsLetterOrDigit)
+        || value.DesiredFoodTerms.Count + value.ContextualTerms.Count + value.UnmappedMeaningfulTerms.Count + value.PreferredIngredientCodes.Count
         + value.ExcludedIngredientCodes.Count + value.AllergenExclusionCodes.Count + value.DietaryRequirementCodes.Count
         + value.PreferredTasteCodes.Count + value.AvoidedTasteCodes.Count + value.PreparationMethodCodes.Count
         + value.AvoidedPreparationMethodCodes.Count + value.PreferredCourseCodes.Count + value.MealPurposeCodes.Count > 0

@@ -123,6 +123,82 @@ public class CartService : ICartService
             "Item added to cart successfully.");
     }
 
+    public async Task<ApiResponse<CartBatchAddResponse>> AddItemsAsync(
+        Guid customerId,
+        AddCartItemsRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (request.Items.Count == 0)
+            throw AppException.BadRequest("At least one cart item is required.", "CART_ITEMS_REQUIRED");
+
+        var normalized = request.Items
+            .GroupBy(item => item.FoodItemId)
+            .Select(group => new AddCartItemRequest
+            {
+                FoodItemId = group.Key,
+                Quantity = group.Aggregate(0, (total, item) => checked(total + item.Quantity))
+            })
+            .ToArray();
+
+        foreach (var item in normalized)
+        {
+            ValidateQuantity(item.Quantity);
+            if (item.FoodItemId == Guid.Empty)
+                throw AppException.BadRequest("Food item id is required.", "FOOD_ITEM_ID_REQUIRED");
+        }
+
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        var foods = new Dictionary<Guid, FoodItem>();
+        foreach (var item in normalized)
+        {
+            var food = await _foodItems.GetForCartAsync(item.FoodItemId, cancellationToken)
+                ?? throw AppException.NotFound("Food item was not found.", "FOOD_ITEM_NOT_FOUND");
+            EnsureOrderable(food, now);
+            foods.Add(food.Id, food);
+        }
+
+        await _carts.AcquireCustomerMutationLockAsync(customerId, cancellationToken);
+        var cart = await _carts.GetActiveByCustomerAsync(customerId, cancellationToken);
+        if (cart is null)
+        {
+            cart = NewCart(customerId, now);
+            await _carts.AddAsync(cart);
+        }
+
+        var added = new List<Guid>();
+        var merged = new List<Guid>();
+        foreach (var item in normalized)
+        {
+            var existing = await _cartItems.GetActiveByCartAndFoodAsync(cart.Id, item.FoodItemId, cancellationToken);
+            if (existing is null)
+            {
+                await _cartItems.AddAsync(new CartItem
+                {
+                    Id = Guid.NewGuid(), CartId = cart.Id, FoodItemId = item.FoodItemId,
+                    Quantity = item.Quantity, IsDeleted = false, CreatedAt = now, UpdatedAt = now,
+                    FoodItem = foods[item.FoodItemId]
+                });
+                added.Add(item.FoodItemId);
+            }
+            else
+            {
+                if (existing.Quantity > int.MaxValue - item.Quantity)
+                    throw AppException.BadRequest("Cart item quantity is too large.", "INVALID_QUANTITY");
+                existing.Quantity += item.Quantity;
+                existing.UpdatedAt = now;
+                merged.Add(item.FoodItemId);
+            }
+        }
+
+        cart.UpdatedAt = now;
+        await _cartItems.SaveChangesAsync();
+        var current = await GetCurrentAsync(customerId, new PaginationReq { Page = 1, PageSize = 100 }, cancellationToken);
+        return ApiResponse<CartBatchAddResponse>.SuccessResponse(new CartBatchAddResponse
+        {
+            Cart = current.Data!, AddedFoodItemIds = added, MergedFoodItemIds = merged
+        }, "Items added to cart successfully.");
+    }
+
     public async Task<ApiResponse<CartItemResponse>> UpdateQuantityAsync(Guid customerId, Guid cartItemId, UpdateCartItemQuantityRequest request, CancellationToken cancellationToken = default)
     {
         ValidateQuantity(request.Quantity);
@@ -223,18 +299,17 @@ public class CartService : ICartService
     private async Task<Cart> CreateCartAsync(Guid customerId)
     {
         var now = _timeProvider.GetUtcNow().UtcDateTime;
-        var cart = new Cart
-        {
-            Id = Guid.NewGuid(),
-            CustomerId = customerId,
-            IsDeleted = false,
-            CreatedAt = now,
-            UpdatedAt = now
-        };
+        var cart = NewCart(customerId, now);
         await _carts.AddAsync(cart);
         await _carts.SaveChangesAsync();
         return cart;
     }
+
+    private static Cart NewCart(Guid customerId, DateTime now) => new()
+    {
+        Id = Guid.NewGuid(), CustomerId = customerId, IsDeleted = false,
+        CreatedAt = now, UpdatedAt = now
+    };
 
     private CartBoothResponse MapBooth(
         Guid boothId,

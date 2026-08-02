@@ -34,6 +34,24 @@ public sealed class AIMealPlanV2Controller(IMealPlanV2Service service) : Control
     public async Task<ActionResult<ApiResponse<MealPlanDetailResponse>>> Detail(Guid planId, CancellationToken cancellationToken)
         => Ok(await service.GetDetailAsync(CurrentUserId, planId, cancellationToken));
 
+    [HttpPost("{planId:guid}/add-to-cart")]
+    [EnableRateLimiting("AIMealPlanMutationV2Policy")]
+    [ProducesResponseType(typeof(ApiResponse<MealPlanAddToCartResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<ErrorResponse>), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ApiResponse<ErrorResponse>), StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<ApiResponse<MealPlanAddToCartResponse>>> AddToCart(
+        Guid planId, AddMealPlanToCartRequest request, CancellationToken cancellationToken)
+        => Ok(await service.AddToCartAsync(CurrentUserId, planId, request, cancellationToken));
+
+    [HttpPost("{planId:guid}/refresh-prices")]
+    [EnableRateLimiting("AIMealPlanMutationV2Policy")]
+    [ProducesResponseType(typeof(ApiResponse<MealPlanDetailResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<ErrorResponse>), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ApiResponse<ErrorResponse>), StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<ApiResponse<MealPlanDetailResponse>>> RefreshPrices(
+        Guid planId, RefreshMealPlanPricesRequest request, CancellationToken cancellationToken)
+        => Ok(await service.RefreshPricesAsync(CurrentUserId, planId, request, cancellationToken));
+
     [HttpGet("{planId:guid}/items/{itemId:guid}/alternatives")]
     [EnableRateLimiting("AIMealPlanReadV2Policy")]
     [ProducesResponseType(typeof(ApiResponse<MealPlanAlternativePageResponse>), StatusCodes.Status200OK)]

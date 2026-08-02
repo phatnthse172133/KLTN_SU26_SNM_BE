@@ -46,7 +46,8 @@ public sealed class FoodRecommendationV2Service(
         var taxonomy = new AiTaxonomyCodes(catalogs.Ingredients.Select(value => value.Code).ToArray(), catalogs.Allergens.Select(value => value.Code).ToArray(),
             catalogs.DietaryAttributes.Select(value => value.Code).ToArray(), catalogs.PreparationMethods.Select(value => value.Code).ToArray(),
             catalogs.TasteProfiles.Select(value => value.Code).ToArray(), Enum.GetNames<FoodCourse>(), Enum.GetNames<DiningPurpose>());
-        var extraction = await intentExtractor.ExtractFoodRecommendationIntentAsync(new(request.Query.Trim(), taxonomy), cancellationToken);
+        var extraction = await intentExtractor.ExtractFoodRecommendationIntentAsync(
+            new(request.Query.Trim(), taxonomy, request.InputLanguage, request.ResponseLanguage), cancellationToken);
         if (extraction.FailureCategory == AiProviderFailureCategory.NONE && !extraction.UsedFallback)
             AiV2Telemetry.ProviderSuccesses.Add(1, new KeyValuePair<string, object?>("operation", "intent"));
         else
@@ -56,6 +57,8 @@ public sealed class FoodRecommendationV2Service(
             AiV2Telemetry.InvalidParses.Add(1);
         if (!extraction.IsSuccess || extraction.ParsedResult is null)
         {
+            if (extraction.ValidationWarnings.Contains("AI_LANGUAGE_PROVIDER_REQUIRED"))
+                throw AppException.UnprocessableEntity("This language requires the advanced AI provider.", "AI_LANGUAGE_PROVIDER_REQUIRED");
             if (extraction.FailureCategory == AiProviderFailureCategory.CANCELLED)
                 throw new OperationCanceledException(cancellationToken);
             if (extraction.FailureCategory == AiProviderFailureCategory.INVALID_RESPONSE)
@@ -179,6 +182,8 @@ public sealed class FoodRecommendationV2Service(
     private void ValidateRequest(CreateFoodRecommendationV2Request request)
     {
         request.Query = request.Query?.Trim() ?? string.Empty;
+        request.InputLanguage = NormalizeLanguage(request.InputLanguage, true);
+        request.ResponseLanguage = NormalizeLanguage(request.ResponseLanguage, false);
         if (request.Query.Length is < 2 || request.Query.Length > Math.Clamp(_options.MaximumQueryCharacters, 100, 4000))
             throw AppException.BadRequest("Query length is invalid.", "AI_INVALID_REQUEST");
         if (request.Latitude.HasValue != request.Longitude.HasValue) throw AppException.BadRequest("Latitude and longitude must be supplied together.", "AI_INVALID_LOCATION");
@@ -189,6 +194,13 @@ public sealed class FoodRecommendationV2Service(
             throw AppException.BadRequest("Maximum price is invalid.", "AI_INVALID_REQUEST");
         if (request.Page < 1 || request.PageSize < 1 || request.PageSize > Math.Clamp(_options.MaximumPageSize, 1, 50))
             throw AppException.BadRequest("Paging is invalid.", "AI_INVALID_REQUEST");
+    }
+
+    private static string NormalizeLanguage(string? value, bool allowAuto)
+    {
+        var normalized = value?.Trim().ToLowerInvariant() ?? (allowAuto ? "auto" : "vi");
+        if ((allowAuto && normalized == "auto") || normalized is "vi" or "en" or "ja" or "ko") return normalized;
+        throw AppException.BadRequest("Language is not supported.", "AI_LANGUAGE_NOT_SUPPORTED");
     }
 
     private async Task Persist(Guid id, Guid customerId, string query, FoodRecommendationIntent intent,
@@ -209,7 +221,8 @@ public sealed class FoodRecommendationV2Service(
     private static FoodRecommendationExplanationContext ExplanationContext(FoodRecommendationIntent intent, RankedRecommendationCandidate value)
         => new(intent.Summary, value.Candidate.FoodName, value.Candidate.CategoryName, value.Candidate.CurrentPrice,
             value.Evidence.Ingredients, value.Evidence.TastesAndSpice, value.Evidence.Preparations, value.Evidence.CoursesAndPurposes,
-            value.Evidence.Budget, value.Evidence.Distance, value.Evidence.Rating, value.Evidence.Dietary, [], intent.Warnings);
+            value.Evidence.Budget, value.Evidence.Distance, value.Evidence.Rating, value.Evidence.Dietary, [], intent.Warnings,
+            intent.ResponseLanguage);
 
     private static FoodRecommendationItemResponse Item(RankedRecommendationCandidate value, string reason) => new()
     {
@@ -227,6 +240,9 @@ public sealed class FoodRecommendationV2Service(
     {
         SessionId = sessionId, Status = status, UsedProviderFallback = fallback,
         UnderstoodRequest = new() { Summary = intent.Summary, MinimumPrice = intent.MinimumPrice, MaximumPrice = intent.MaximumPrice,
+            InputLanguageHint = intent.InputLanguageHint, DetectedLanguage = intent.DetectedLanguage,
+            ResponseLanguage = intent.ResponseLanguage, LanguageConfidence = intent.LanguageConfidence,
+            LanguageWarnings = intent.LanguageWarnings,
             PreferNearMe = intent.PreferNearMe, MaximumDistanceMeters = intent.MaximumDistanceMeters,
             PreferredIngredients = intent.PreferredIngredientCodes, ExcludedIngredients = intent.ExcludedIngredientCodes,
             DietaryRequirements = intent.DietaryRequirementCodes, AllergenExclusions = intent.AllergenExclusionCodes,

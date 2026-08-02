@@ -15,3 +15,8 @@ public class UpdateCartItemQuantityRequest
     [Range(1, int.MaxValue)]
     public int Quantity { get; set; }
 }
+
+public sealed class AddCartItemsRequest
+{
+    public IReadOnlyCollection<AddCartItemRequest> Items { get; set; } = [];
+}

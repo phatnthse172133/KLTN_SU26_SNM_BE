@@ -224,6 +224,18 @@ public sealed class AiMealPlanItem
     }
 }
 
+public sealed class AiMealPlanCartOperation
+{
+    public Guid Id { get; set; }
+    public Guid CustomerId { get; set; }
+    public Guid PlanId { get; set; }
+    public int PlanVersion { get; set; }
+    public string IdempotencyKey { get; set; } = null!;
+    public string RequestHash { get; set; } = null!;
+    public string ResponseJson { get; set; } = null!;
+    public DateTime CreatedAt { get; set; }
+}
+
 public sealed class FoodAiProfile
 {
     public Guid FoodItemId { get; set; }

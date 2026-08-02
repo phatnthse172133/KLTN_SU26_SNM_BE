@@ -127,6 +127,12 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
         if (found == 0)
             return null;
 
+        // Callers may have read the aggregate before opening this transaction
+        // (for example refund reconciliation). Identity resolution would otherwise
+        // return that stale tracked graph even though the row lock was acquired
+        // after a competing transition committed.
+        _context.ChangeTracker.Clear();
+
         return await _dbSet
             .Include(order => order.Payments)
                 .ThenInclude(payment => payment.Attempts)
@@ -240,11 +246,12 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
                 .SetProperty(payment => payment.RefundRequestedAt, updatedAt)
                 .SetProperty(payment => payment.UpdatedAt, updatedAt));
 
-    public Task<int> TryClaimPayoutCreationAsync(
+    public async Task<int> TryClaimPayoutCreationAsync(
         Guid paymentId,
         DateTime claimedAt,
         DateTime staleBefore)
-        => _context.Payments
+    {
+        var affected = await _context.Payments
             .Where(payment => payment.Id == paymentId
                 && payment.Status == PaymentStatus.RefundProcessing
                 && payment.PayoutId == null
@@ -253,6 +260,20 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(payment => payment.PayoutCreateClaimedAt, claimedAt)
                 .SetProperty(payment => payment.UpdatedAt, claimedAt));
+
+        // ExecuteUpdate bypasses the change tracker. Refresh the aggregate's
+        // Payment so the later payout snapshot write uses the current row version
+        // instead of failing after the provider has already accepted the payout.
+        if (affected > 0)
+        {
+            var tracked = _context.ChangeTracker.Entries<Payment>()
+                .FirstOrDefault(entry => entry.Entity.Id == paymentId);
+            if (tracked is not null)
+                await tracked.ReloadAsync();
+        }
+
+        return affected;
+    }
 
     public async Task<int> UpdateOrderFromUnderpaidToPreparingAsync(long orderCode, DateTime updatedAt)
     {

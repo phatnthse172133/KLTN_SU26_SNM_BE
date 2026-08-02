@@ -4,6 +4,7 @@ using ApplicationLayer.AI.V2.Models;
 using ApplicationLayer.AI.V2.Recommendations;
 using ApplicationLayer.AI.V2.Services;
 using ApplicationLayer.Exceptions;
+using ApplicationLayer.DTOs.Responses;
 using DomainLayer.Entities;
 using DomainLayer.Enums;
 using DomainLayer.InterfaceRepository;
@@ -81,17 +82,41 @@ public sealed class MealPlanV2ServiceTests
         Assert.Equal("AI_PLAN_EXPIRED", expired.ErrorCode);
     }
 
+    [Fact]
+    public async Task Add_to_cart_uses_one_authoritative_batch_call_and_replays_without_duplicate_quantity()
+    {
+        var fixture = Fixture(1);
+        var created = (await fixture.Service.CreateAsync(Customer, Request(), default)).Data!;
+        var summary = Assert.Single(created.Plans);
+        var expectedFoods = (await fixture.Service.GetDetailAsync(Customer, summary.PlanId, default)).Data!
+            .CourseGroups.SelectMany(group => group.Items).Select(item => item.FoodId!.Value).Order().ToArray();
+        IReadOnlyCollection<(Guid FoodItemId, int Quantity)>? captured = null;
+        fixture.Cart.Setup(value => value.AddItemsAsync(Customer, It.IsAny<IReadOnlyCollection<(Guid, int)>>(), It.IsAny<CancellationToken>()))
+            .Callback<Guid, IReadOnlyCollection<(Guid FoodItemId, int Quantity)>, CancellationToken>((_, items, _) => captured = items)
+            .ReturnsAsync(new CartBatchAddResponse { Cart = new CartResponse { CartId = Guid.NewGuid() }, AddedFoodItemIds = expectedFoods });
+        var request = new AddMealPlanToCartRequest { ExpectedPlanVersion = summary.Version, IdempotencyKey = "cart-key" };
+
+        var first = await fixture.Service.AddToCartAsync(Customer, summary.PlanId, request, default);
+        var replay = await fixture.Service.AddToCartAsync(Customer, summary.PlanId, request, default);
+
+        Assert.Equal(expectedFoods, captured!.Select(item => item.FoodItemId).Order());
+        Assert.Equal("CREATED", first.Data!.IdempotencyResult);
+        Assert.Equal("REPLAYED", replay.Data!.IdempotencyResult);
+        fixture.Cart.Verify(value => value.AddItemsAsync(Customer, It.IsAny<IReadOnlyCollection<(Guid, int)>>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
     private static FixtureState Fixture(int markets)
     {
         var values = Enumerable.Range(1, markets).SelectMany(Candidates).ToArray();
         var extractor = new FakeExtractor(); var repository = new FakeRepository();
+        var cart = new Mock<IMealPlanCartIntegrationService>();
         var metadata = new Mock<IFoodSemanticMetadataRepository>();
         metadata.Setup(value => value.GetActiveCatalogsAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(new FoodSemanticCatalogSet([], [], [], [], []));
         var service = new MealPlanV2Service(extractor, new FakeCandidates(values), repository, metadata.Object,
-            new MealPlanPolicyResolver(), new MealPlanRecalculationService(), Options.Create(new MealPlanV2Options()),
+            new MealPlanPolicyResolver(), new MealPlanRecalculationService(), cart.Object, Options.Create(new MealPlanV2Options()),
             TimeProvider.System, NullLogger<MealPlanV2Service>.Instance);
-        return new(service, repository, extractor);
+        return new(service, repository, extractor, cart);
     }
 
     private static CreateMealPlanV2Request Request() => new()
@@ -123,7 +148,8 @@ public sealed class MealPlanV2ServiceTests
 
     private static Guid GuidFrom(int a, int b) => Guid.Parse($"{a:X8}-0000-0000-0000-{b:X12}");
     private static readonly Guid Customer = Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc");
-    private sealed record FixtureState(MealPlanV2Service Service, FakeRepository Repository, FakeExtractor Extractor);
+    private sealed record FixtureState(MealPlanV2Service Service, FakeRepository Repository, FakeExtractor Extractor,
+        Mock<IMealPlanCartIntegrationService> Cart);
 
     private sealed class FakeExtractor : IAiIntentExtractor
     {
@@ -143,6 +169,7 @@ public sealed class MealPlanV2ServiceTests
     private sealed class FakeRepository : IMealPlanV2Repository
     {
         public List<AiMealPlanSession> Sessions { get; } = [];
+        public List<AiMealPlanCartOperation> CartOperations { get; } = [];
         public Task<AiMealPlanSession?> FindSessionAsync(Guid customerId, string key, CancellationToken cancellationToken)
             => Task.FromResult(Sessions.SingleOrDefault(value => value.CustomerId == customerId && value.IdempotencyKey == key));
         public Task<MealPlanIdempotencyResult> SaveCreateAsync(AiMealPlanSession session, CancellationToken cancellationToken)
@@ -152,12 +179,15 @@ public sealed class MealPlanV2ServiceTests
             foreach (var plan in session.Plans)
             {
                 plan.Session = session; plan.Market = new NightMarket { Id = plan.MarketId, Name = "Market", Address = "Address",
-                    Status = NightMarketStatus.Active, ModerationStatus = ModerationStatus.Active };
+                    Status = NightMarketStatus.Open, ModerationStatus = ModerationStatus.Active,
+                    OpeningHours = new TimeOnly(0, 0), ClosingHours = new TimeOnly(23, 59, 59) };
                 foreach (var item in plan.Items)
                 {
-                    item.Plan = plan; item.FoodItem = new FoodItem { Id = item.FoodItemId!.Value, Name = item.FoodNameSnapshot,
-                        Price = item.UnitPriceSnapshot, IsAvailable = true }; item.Booth = new Booth { Id = item.BoothId!.Value,
-                        BoothName = item.BoothNameSnapshot, Status = BoothStatus.Active };
+                    item.Plan = plan; item.Booth = new Booth { Id = item.BoothId!.Value, NightMarketId = plan.MarketId,
+                        BoothName = item.BoothNameSnapshot, Status = BoothStatus.Active, NightMarket = plan.Market };
+                    item.FoodItem = new FoodItem { Id = item.FoodItemId!.Value, BoothId = item.Booth.Id, Name = item.FoodNameSnapshot,
+                        Price = item.UnitPriceSnapshot, IsAvailable = true, Booth = item.Booth,
+                        Category = new FoodCategory { Id = Guid.NewGuid(), Name = "Main", IsDeleted = false } };
                 }
             }
             Sessions.Add(session); return Task.FromResult(new MealPlanIdempotencyResult(MealPlanIdempotencyStatus.CREATED, session));
@@ -165,11 +195,14 @@ public sealed class MealPlanV2ServiceTests
         public Task<AiMealPlan?> GetOwnedPlanAsync(Guid customerId, Guid planId, CancellationToken cancellationToken)
             => Task.FromResult(Sessions.Where(value => value.CustomerId == customerId).SelectMany(value => value.Plans).SingleOrDefault(value => value.Id == planId));
         public async Task<IMealPlanMutation?> BeginOwnedMutationAsync(Guid customerId, Guid planId, CancellationToken cancellationToken)
-            => new Mutation(await GetOwnedPlanAsync(customerId, planId, cancellationToken));
+            => new Mutation(await GetOwnedPlanAsync(customerId, planId, cancellationToken), CartOperations);
         public Task<int> DeleteExpiredBatchAsync(DateTime retentionCutoffUtc, int batchSize, CancellationToken cancellationToken) => Task.FromResult(0);
-        private sealed class Mutation(AiMealPlan? plan) : IMealPlanMutation
+        private sealed class Mutation(AiMealPlan? plan, List<AiMealPlanCartOperation> operations) : IMealPlanMutation
         {
             public AiMealPlan Plan { get; } = plan!;
+            public Task<AiMealPlanCartOperation?> FindCartOperationAsync(Guid customerId, string idempotencyKey, CancellationToken cancellationToken)
+                => Task.FromResult(operations.SingleOrDefault(value => value.CustomerId == customerId && value.IdempotencyKey == idempotencyKey));
+            public void AddCartOperation(AiMealPlanCartOperation operation) => operations.Add(operation);
             public Task CommitAsync(CancellationToken cancellationToken) => Task.CompletedTask;
             public ValueTask DisposeAsync() => ValueTask.CompletedTask;
         }

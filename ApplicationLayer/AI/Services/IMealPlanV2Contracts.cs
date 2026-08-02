@@ -4,6 +4,7 @@ using ApplicationLayer.AI.V2.Recommendations;
 using ApplicationLayer.Helppers;
 using DomainLayer.Entities;
 using DomainLayer.Enums;
+using ApplicationLayer.DTOs.Responses;
 
 namespace ApplicationLayer.AI.V2.Services;
 
@@ -19,7 +20,15 @@ public sealed record MealPlanIdempotencyResult(MealPlanIdempotencyStatus Status,
 public interface IMealPlanMutation : IAsyncDisposable
 {
     AiMealPlan Plan { get; }
+    Task<AiMealPlanCartOperation?> FindCartOperationAsync(Guid customerId, string idempotencyKey, CancellationToken cancellationToken);
+    void AddCartOperation(AiMealPlanCartOperation operation);
     Task CommitAsync(CancellationToken cancellationToken);
+}
+
+public interface IMealPlanCartIntegrationService
+{
+    Task<CartBatchAddResponse> AddItemsAsync(Guid customerId, IReadOnlyCollection<(Guid FoodItemId, int Quantity)> items,
+        CancellationToken cancellationToken);
 }
 
 public interface IMealPlanV2Repository
@@ -50,4 +59,8 @@ public interface IMealPlanV2Service
         int expectedPlanVersion, CancellationToken cancellationToken);
     Task<ApiResponse<MealPlanDetailResponse>> RegenerateCourseAsync(Guid customerId, Guid planId, FoodCourse course,
         RegenerateMealPlanCourseRequest request, CancellationToken cancellationToken);
+    Task<ApiResponse<MealPlanAddToCartResponse>> AddToCartAsync(Guid customerId, Guid planId,
+        AddMealPlanToCartRequest request, CancellationToken cancellationToken);
+    Task<ApiResponse<MealPlanDetailResponse>> RefreshPricesAsync(Guid customerId, Guid planId,
+        RefreshMealPlanPricesRequest request, CancellationToken cancellationToken);
 }

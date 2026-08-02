@@ -165,11 +165,39 @@ public sealed class FoodRecommendationV2Tests
     public void Ranker_MissingLocationAndMetadataDoNotReceiveFullPoints()
     {
         var options = Options.Create(new RecommendationV2Options());
-        var ranked = new FoodRecommendationRanker(options).Rank(Intent(), Candidate(Guid.NewGuid(), rating: null, reviewCount: 0),
+        var ranked = new FoodRecommendationRanker(options).Rank(new FoodRecommendationIntent(), Candidate(Guid.NewGuid(), rating: null, reviewCount: 0),
             new SemanticMatchResult(0, []), null);
         Assert.Equal(0, ranked.Breakdown.DistanceScore);
         Assert.True(ranked.BaseScore < 30);
         Assert.Equal(RecommendationMatchTier.LOW_MATCH, ranked.Tier);
+    }
+
+    [Fact]
+    public async Task Recommend_NameOnlyQueryUsesAccentInsensitiveFoodNameMatching()
+    {
+        var parser = new DeterministicFoodIntentParser();
+        var extractor = new Mock<IAiIntentExtractor>();
+        extractor.Setup(value => value.ExtractFoodRecommendationIntentAsync(It.IsAny<FoodRecommendationIntentRequest>(), It.IsAny<CancellationToken>()))
+            .Returns<FoodRecommendationIntentRequest, CancellationToken>((request, _) => Task.FromResult(parser.Parse(request)));
+        var service = CreateService(Intent(), [Candidate(Guid.NewGuid(), foodName: "Phở bò")], extractor: extractor.Object);
+
+        var response = await service.RecommendAsync(Guid.NewGuid(), new() { Query = "pho" }, CancellationToken.None);
+
+        Assert.NotEqual("NO_SUITABLE_RESULTS", response.Data!.Status);
+        Assert.Equal("Phở bò", response.Data.Items.Concat(response.Data.NearMatches).Single().FoodName);
+    }
+
+    [Fact]
+    public void ContextualRefreshingQueryRanksColdSearchTextAsRelevant()
+    {
+        var intent = new DeterministicFoodIntentParser().Parse(new FoodRecommendationIntentRequest(
+            "Something refreshing", new([], [], [], [], [], [], []), "en", "vi")).ParsedResult!;
+        var candidate = Candidate(Guid.NewGuid(), foodName: "Nước sâm", servingTemperature: ServingTemperature.COLD, searchText: "thanh mát giải nhiệt");
+        var semantic = new DeterministicFoodSemanticMatcher().Match(intent, candidate);
+        var ranked = new FoodRecommendationRanker(Options.Create(new RecommendationV2Options())).Rank(intent, candidate, semantic, null);
+
+        Assert.True(semantic.Score > 0);
+        Assert.NotEqual(RecommendationMatchTier.LOW_MATCH, ranked.Tier);
     }
 
     [Fact]
@@ -274,14 +302,16 @@ public sealed class FoodRecommendationV2Tests
         IReadOnlyCollection<string>? ingredients = null, IReadOnlyCollection<string>? methods = null,
         decimal price = 80_000, bool available = true, bool deleted = false, BoothStatus boothStatus = BoothStatus.Active,
         NightMarketStatus marketStatus = NightMarketStatus.Active, bool marketDeleted = false, bool categoryActive = true,
-        decimal? marketLatitude = null, decimal? marketLongitude = null, decimal? rating = 4.5m, int reviewCount = 20) => new()
+        decimal? marketLatitude = null, decimal? marketLongitude = null, decimal? rating = 4.5m, int reviewCount = 20,
+        string foodName = "Bò nướng", ServingTemperature? servingTemperature = null, string? searchText = null) => new()
     {
-        FoodId = foodId, FoodName = "Bò nướng", CategoryId = Guid.NewGuid(), CategoryCode = "CAT_GRILL", CategoryName = "Món nướng",
+        FoodId = foodId, FoodName = foodName, CategoryId = Guid.NewGuid(), CategoryCode = "CAT_GRILL", CategoryName = "Món nướng",
         CurrentPrice = price, IsAvailable = available, IsDeleted = deleted, CategoryIsActive = categoryActive, CategoryIsSelectable = true,
         BoothId = boothId ?? Guid.NewGuid(), BoothName = "Booth A", BoothStatus = boothStatus,
         MarketId = Guid.NewGuid(), MarketName = "Market A", MarketStatus = marketStatus, MarketModerationStatus = ModerationStatus.Active,
         MarketDeleted = marketDeleted, MarketOpenTime = new TimeOnly(0, 0), MarketCloseTime = new TimeOnly(23, 59),
         MarketLatitude = marketLatitude, MarketLongitude = marketLongitude, Rating = rating, ReviewCount = reviewCount,
+        ServingTemperature = servingTemperature, SearchText = searchText,
         IngredientCodes = ingredients ?? [], PreparationMethodCodes = methods ?? [], Courses = [FoodCourse.MAIN_COURSE], SpiceLevel = FoodSpiceLevel.MILD
     };
 

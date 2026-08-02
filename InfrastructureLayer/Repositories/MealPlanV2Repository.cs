@@ -57,6 +57,7 @@ public sealed class MealPlanV2Repository(SNMDbContext db) : IMealPlanV2Repositor
                 .FromSqlInterpolated($"SELECT * FROM \"AiMealPlan\" WHERE \"Id\" = {planId} FOR UPDATE")
                 .Include(value => value.Session).Include(value => value.Market)
                 .Include(value => value.Items).ThenInclude(value => value.FoodItem).ThenInclude(value => value!.FoodPrices)
+                .Include(value => value.Items).ThenInclude(value => value.FoodItem).ThenInclude(value => value!.Booth).ThenInclude(value => value.NightMarket)
                 .Include(value => value.Items).ThenInclude(value => value.Booth)
                 .AsSplitQuery().SingleOrDefaultAsync(cancellationToken);
             if (plan is null || plan.Session.CustomerId != customerId)
@@ -93,6 +94,7 @@ public sealed class MealPlanV2Repository(SNMDbContext db) : IMealPlanV2Repositor
     {
         var query = db.AiMealPlans.Include(value => value.Session).Include(value => value.Market)
             .Include(value => value.Items).ThenInclude(value => value.FoodItem).ThenInclude(value => value!.FoodPrices)
+            .Include(value => value.Items).ThenInclude(value => value.FoodItem).ThenInclude(value => value!.Booth).ThenInclude(value => value.NightMarket)
             .Include(value => value.Items).ThenInclude(value => value.Booth).AsSplitQuery();
         return tracking ? query : query.AsNoTracking();
     }
@@ -101,6 +103,13 @@ public sealed class MealPlanV2Repository(SNMDbContext db) : IMealPlanV2Repositor
     {
         private bool _committed;
         public AiMealPlan Plan { get; } = plan;
+        public Task<AiMealPlanCartOperation?> FindCartOperationAsync(Guid customerId, string idempotencyKey,
+            CancellationToken cancellationToken)
+            => db.AiMealPlanCartOperations.SingleOrDefaultAsync(
+                value => value.CustomerId == customerId && value.IdempotencyKey == idempotencyKey,
+                cancellationToken);
+        public void AddCartOperation(AiMealPlanCartOperation operation)
+            => db.AiMealPlanCartOperations.Add(operation);
         public async Task CommitAsync(CancellationToken cancellationToken)
         {
             foreach (var item in Plan.Items)

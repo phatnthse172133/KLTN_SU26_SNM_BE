@@ -648,10 +648,13 @@ namespace ApplicationLayer.Services.Orders
                     return WebhookDispatchResult.OrderHandled;
                 }
 
-                if (order.Status == OrderStatus.Placed)
-                    await _orderRepo.UpdateOrderStatusIfPlacedAsync(order.OrderCode, OrderStatus.Preparing, now);
-                else
+                // Mutate the aggregate loaded under the row lock. Mixing a tracked
+                // Order with ExecuteUpdate left PendingPayment orders at Placed
+                // while Payment and PromotionUsage were already committed.
+                if (order.Status is OrderStatus.PendingPayment or OrderStatus.PaymentFailed)
                     order.MarkPaid(now);
+                if (order.Status == OrderStatus.Placed)
+                    order.StartPreparing(now);
                 var paidAttempt = targetPayment.Attempts.FirstOrDefault(item => item.ProviderOrderCode == verifiedData.OrderCode);
                 if (paidAttempt is not null)
                 {

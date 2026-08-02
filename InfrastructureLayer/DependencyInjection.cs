@@ -185,6 +185,7 @@ namespace InfrastructureLayer
             services.AddSingleton<IMealPlanPolicyResolver, MealPlanPolicyResolver>();
             services.AddSingleton<IMealPlanRecalculationService, MealPlanRecalculationService>();
             services.AddScoped<IMealPlanV2Service, MealPlanV2Service>();
+            services.AddScoped<IMealPlanCartIntegrationService, MealPlanCartIntegrationService>();
             services.AddSingleton<IOnlinePresenceService, OnlinePresenceService>();
             services.Configure<AIProviderSettings>(
                 configuration.GetSection(AIProviderSettings.SectionName));

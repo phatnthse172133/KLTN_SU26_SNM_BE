@@ -11,6 +11,7 @@ namespace DomainLayer.Entities
         public string OwnerEmail { get; set; } = string.Empty;
         public PackageType PackageType { get; set; }
         public Guid PackageId { get; set; }
+        public string PackageCode { get; set; } = string.Empty;
         public string PackageName { get; set; } = string.Empty;
         public string? PackageImageUrl { get; set; }
         public DateTime StartDate { get; set; }

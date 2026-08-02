@@ -1,5 +1,6 @@
 using ApplicationLayer.Helppers;
 using ApplicationLayer.Services.Notifications;
+using ApplicationLayer.Services.Realtime;
 using ApplicationLayer.Services.Storage;
 using ApplicationLayer.Configuration;
 using InfrastructureLayer;
@@ -353,6 +354,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddSignalR();
 builder.Services.AddScoped<IRealtimeNotificationPublisher, SignalRNotificationPublisher>();
 builder.Services.AddScoped<ApplicationLayer.Services.Chats.IRealtimeChatPublisher, SignalRChatPublisher>();
+builder.Services.AddScoped<IRealtimeEventPublisher, SignalREventPublisher>();
 builder.Services.AddScoped<IFileStorageService, LocalFileStorageService>();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddHealthChecks()

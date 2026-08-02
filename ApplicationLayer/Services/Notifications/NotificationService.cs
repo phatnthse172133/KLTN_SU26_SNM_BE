@@ -9,6 +9,8 @@ using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
 using Microsoft.Extensions.Logging;
 using static DomainLayer.Enums.GeneralEnum;
+using ApplicationLayer.Services.Notifications;
+using ApplicationLayer.Services.Realtime;
 
 namespace ApplicationLayer.Services.Notifications;
 
@@ -24,6 +26,7 @@ public class NotificationService : INotificationService
     private readonly IUserRepository _users;
     private readonly IPushNotificationService _push;
     private readonly IRealtimeNotificationPublisher _realtime;
+    private readonly IRealtimeEventPublisher _eventPublisher;
     private readonly IOnlinePresenceService _presence;
     private readonly IMapper _mapper;
     private readonly ILogger<NotificationService> _logger;
@@ -34,6 +37,7 @@ public class NotificationService : INotificationService
         IUserRepository users,
         IPushNotificationService push,
         IRealtimeNotificationPublisher realtime,
+        IRealtimeEventPublisher eventPublisher,
         IOnlinePresenceService presence,
         IMapper mapper,
         ILogger<NotificationService> logger)
@@ -43,6 +47,7 @@ public class NotificationService : INotificationService
         _users = users;
         _push = push;
         _realtime = realtime;
+        _eventPublisher = eventPublisher;
         _presence = presence;
         _mapper = mapper;
         _logger = logger;
@@ -88,7 +93,22 @@ public class NotificationService : INotificationService
             notification.ReadAt = now;
             notification.UpdatedAt = now;
             await _notifications.SaveChangesAsync();
-            await PublishUnreadCountSafelyAsync(userId, cancellationToken);
+            var unreadCount = await _notifications.CountUnreadAsync(userId, cancellationToken);
+            try
+            {
+                await _eventPublisher.PublishAsync(new RealtimeEvent
+                {
+                    EventType = "NotificationRead",
+                    RecipientId = userId,
+                    Payload = new { notificationId, unreadCount }
+                }, cancellationToken);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogWarning(exception,
+                    "Failed to publish NotificationRead event for {NotificationId}.",
+                    notificationId);
+            }
         }
 
         return ApiResponse<NotificationDetailResponse>.SuccessResponse(
@@ -104,7 +124,21 @@ public class NotificationService : INotificationService
             userId,
             DateTime.UtcNow,
             cancellationToken);
-        await PublishUnreadCountSafelyAsync(userId, cancellationToken);
+        try
+        {
+            await _eventPublisher.PublishAsync(new RealtimeEvent
+            {
+                EventType = "NotificationRead",
+                RecipientId = userId,
+                Payload = new { notificationId = (Guid?)null, unreadCount = 0 }
+            }, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception,
+                "Failed to publish NotificationRead (all) event for user {UserId}.",
+                userId);
+        }
         return ApiResponse<object>.SuccessResponse(
             new { UpdatedCount = updatedCount },
             "All notifications marked as read.");
@@ -126,7 +160,24 @@ public class NotificationService : INotificationService
             DateTime.UtcNow,
             cancellationToken);
         if (updatedCount > 0)
-            await PublishUnreadCountSafelyAsync(userId, cancellationToken);
+        {
+            var unreadCount = await _notifications.CountUnreadAsync(userId, cancellationToken);
+            try
+            {
+                await _eventPublisher.PublishAsync(new RealtimeEvent
+                {
+                    EventType = "NotificationRead",
+                    RecipientId = userId,
+                    Payload = new { notificationId = (Guid?)null, unreadCount }
+                }, cancellationToken);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogWarning(exception,
+                    "Failed to publish NotificationRead (reference) event for user {UserId}.",
+                    userId);
+            }
+        }
     }
 
     public async Task<ApiResponse<UnreadNotificationCountResponse>> GetUnreadCountAsync(
@@ -403,7 +454,24 @@ public class NotificationService : INotificationService
         {
             _logger.LogWarning(
                 exception,
-                "Realtime notification delivery failed for notification {NotificationId}.",
+                "Legacy realtime notification delivery failed for notification {NotificationId}.",
+                notification.Id);
+        }
+
+        try
+        {
+            await _eventPublisher.PublishAsync(new RealtimeEvent
+            {
+                EventType = "NotificationCreated",
+                RecipientId = notification.UserId,
+                Payload = new { notification = response, unreadCount }
+            }, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(
+                exception,
+                "Unified realtime notification delivery failed for notification {NotificationId}.",
                 notification.Id);
         }
 
@@ -461,29 +529,6 @@ public class NotificationService : INotificationService
                 exception,
                 "Push delivery failed for notification {NotificationId}; the in-app notification remains available.",
                 notification.Id);
-        }
-    }
-
-    private async Task PublishUnreadCountSafelyAsync(
-        Guid userId,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            var unreadCount = await _notifications.CountUnreadAsync(
-                userId,
-                cancellationToken);
-            await _realtime.PublishUnreadCountAsync(
-                userId,
-                unreadCount,
-                cancellationToken);
-        }
-        catch (Exception exception)
-        {
-            _logger.LogWarning(
-                exception,
-                "Realtime unread notification count delivery failed for user {UserId}.",
-                userId);
         }
     }
 

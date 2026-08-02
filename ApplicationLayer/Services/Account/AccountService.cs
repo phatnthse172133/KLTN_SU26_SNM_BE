@@ -319,7 +319,7 @@ public class AccountService : IAccountService
             Description = booth.Description,
             PhoneNumber = booth.PhoneNumber,
             ThumbnailUrl = booth.ThumbnailUrl,
-            LogoUrl = booth.LogoUrl,
+            LogoUrl = booth.ThumbnailUrl,
             NightMarketName = booth.NightMarket?.Name,
             ZoneName = activeLocation?.Zone?.ZoneName ?? booth.Zone?.ZoneName,
             SlotNumber = activeLocation?.SlotNumber ?? booth.SlotNumber,

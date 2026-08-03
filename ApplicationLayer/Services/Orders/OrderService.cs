@@ -176,8 +176,9 @@ namespace ApplicationLayer.Services.Orders
                 throw AppException.BadRequest("All order items must belong to the selected booth.", "MULTIPLE_BOOTHS_NOT_ALLOWED");
 
             var booth = foods[0].Booth;
-            if (booth.BoothOwnerId != dto.BoothOwnerId)
-                throw AppException.BadRequest("The booth information is invalid.", "BOOTH_MISMATCH");
+            //if (booth.BoothOwnerId != dto.BoothOwnerId)
+            //    throw AppException.BadRequest("The booth information is invalid.", "BOOTH_MISMATCH");
+            dto.BoothOwnerId = booth.BoothOwnerId;
 
             foreach (var item in dto.Items)
             {

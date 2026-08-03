@@ -3,6 +3,7 @@ using System;
 using InfrastructureLayer.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace InfrastructureLayer.Migrations
 {
     [DbContext(typeof(SNMDbContext))]
-    partial class SNMDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260803072406_ReconcileDevelopmentSchema")]
+    partial class ReconcileDevelopmentSchema
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1980,8 +1983,6 @@ namespace InfrastructureLayer.Migrations
                     b.HasIndex("MarketOwnerId");
 
                     b.HasIndex(new[] { "IsDeleted", "Status", "CreatedAt" }, "idx_nightmarket_active_status_created");
-
-                    b.HasIndex(new[] { "ModerationStatus" }, "idx_nightmarket_moderation_status");
 
                     b.ToTable("NightMarket", null, t =>
                         {

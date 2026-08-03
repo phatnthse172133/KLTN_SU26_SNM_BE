@@ -11,7 +11,26 @@ namespace InfrastructureLayer.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.Sql("ALTER TABLE \"Order\" ALTER COLUMN \"OrderCode\" TYPE bigint USING (case when \"OrderCode\" ~ '^\\d+$' then \"OrderCode\"::bigint else 0 end);");
+            // Step 1: Backfill non-numeric OrderCodes with unique numeric values.
+            // Base is computed from MAX of existing numeric OrderCodes to prevent collisions.
+            // ROW_NUMBER() guarantees uniqueness among backfilled records.
+            migrationBuilder.Sql(@"
+                UPDATE ""Order"" SET ""OrderCode"" = sub.new_code::text
+                FROM (
+                    SELECT ""Id"",
+                           (COALESCE(
+                               (SELECT MAX(ord.""OrderCode""::bigint)
+                                FROM ""Order"" ord
+                                WHERE ord.""OrderCode"" ~ '^\d+$'),
+                               0
+                           ) + ROW_NUMBER() OVER (ORDER BY ""CreatedAt""))::text AS new_code
+                    FROM ""Order""
+                    WHERE ""OrderCode"" !~ '^\d+$'
+                ) sub
+                WHERE ""Order"".""Id"" = sub.""Id"";");
+
+            // Step 3: Now all values are numeric — safe to convert column type to bigint
+            migrationBuilder.Sql("ALTER TABLE \"Order\" ALTER COLUMN \"OrderCode\" TYPE bigint USING \"OrderCode\"::bigint;");
 
             migrationBuilder.DropForeignKey(
                 name: "FK_Order_User_BoothOwnerId",

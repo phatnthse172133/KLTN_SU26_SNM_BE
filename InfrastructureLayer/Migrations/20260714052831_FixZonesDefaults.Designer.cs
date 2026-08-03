@@ -3,6 +3,7 @@ using System;
 using InfrastructureLayer.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace InfrastructureLayer.Migrations
 {
     [DbContext(typeof(SNMDbContext))]
-    partial class SNMDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260714052831_FixZonesDefaults")]
+    partial class FixZonesDefaults
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -77,7 +80,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("AIRecommendationLog", null, t =>
                         {
-                            t.HasComment("Log tÃ¡Â»â€˜i giÃ¡ÂºÂ£n cho cÃƒÂ¡c lÃ¡ÂºÂ§n AI recommendation Ã„â€˜Ã¡Â»Æ’ debug/demo");
+                            t.HasComment("Log tối giản cho các lần AI recommendation để debug/demo");
                         });
                 });
 
@@ -93,7 +96,7 @@ namespace InfrastructureLayer.Migrations
                         .HasPrecision(3, 2)
                         .HasColumnType("numeric(3,2)")
                         .HasDefaultValueSql("0")
-                        .HasComment("Cache Ã„â€˜iÃ¡Â»Æ’m trung bÃƒÂ¬nh review, cÃ¡ÂºÂ­p nhÃ¡ÂºÂ­t qua trigger hoÃ¡ÂºÂ·c job Ã„â€˜Ã¡Â»â€¹nh kÃ¡Â»Â³");
+                        .HasComment("Cache điểm trung bình review, cập nhật qua trigger hoặc job định kỳ");
 
                     b.Property<string>("BoothCode")
                         .HasMaxLength(50)
@@ -127,9 +130,6 @@ namespace InfrastructureLayer.Migrations
                         .HasPrecision(10, 7)
                         .HasColumnType("numeric(10,7)");
 
-                    b.Property<string>("LogoUrl")
-                        .HasColumnType("text");
-
                     b.Property<decimal?>("Longitude")
                         .HasPrecision(10, 7)
                         .HasColumnType("numeric(10,7)");
@@ -162,7 +162,7 @@ namespace InfrastructureLayer.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
-                    b.Property<Guid?>("RegistrationId")
+                    b.Property<Guid>("RegistrationId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("SlotNumber")
@@ -170,9 +170,11 @@ namespace InfrastructureLayer.Migrations
 
                     b.Property<string>("Status")
                         .IsRequired()
+                        .ValueGeneratedOnAdd()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
-                        .HasComment("Active | Inactive | Banned");
+                        .HasDefaultValueSql("'Pending'::character varying")
+                        .HasComment("Pending: chờ Admin duyệt | Active: hoạt động | Inactive: tạm ngừng | Suspended: bị khóa do vi phạm");
 
                     b.Property<string>("ThumbnailUrl")
                         .HasMaxLength(500)
@@ -201,7 +203,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("Booth", null, t =>
                         {
-                            t.HasComment("Gian hÃƒÂ ng Ã¡ÂºÂ©m thÃ¡Â»Â±c - thÃ¡Â»Â±c thÃ¡Â»Æ’ trung tÃƒÂ¢m, mÃ¡Â»â€”i gian hÃƒÂ ng thuÃ¡Â»â„¢c 1 NightMarket vÃƒÂ  do 1 User (BoothOwner) quÃ¡ÂºÂ£n lÃƒÂ½");
+                            t.HasComment("Gian hàng ẩm thực - thực thể trung tâm, mỗi gian hàng thuộc 1 NightMarket và do 1 User (BoothOwner) quản lý");
                         });
                 });
 
@@ -222,8 +224,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.Property<string>("DocumentType")
                         .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+                        .HasColumnType("text");
 
                     b.Property<string>("DocumentUrl")
                         .IsRequired()
@@ -234,7 +235,7 @@ namespace InfrastructureLayer.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
-                    b.Property<Guid?>("RegistrationId")
+                    b.Property<Guid>("RegistrationId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("UpdatedAt")
@@ -258,7 +259,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("BoothDocuments", t =>
                         {
-                            t.HasComment("GiÃ¡ÂºÂ¥y tÃ¡Â»Â phÃƒÂ¡p lÃƒÂ½ cÃ¡Â»Â§a gian hÃƒÂ ng Ã„â€˜Ã¡Â»Æ’ Admin xÃƒÂ¡c minh trÃ†Â°Ã¡Â»â€ºc khi cho phÃƒÂ©p hoÃ¡ÂºÂ¡t Ã„â€˜Ã¡Â»â„¢ng");
+                            t.HasComment("Giấy tờ pháp lý của gian hàng để Admin xác minh trước khi cho phép hoạt động");
                         });
                 });
 
@@ -299,7 +300,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("BoothImages", t =>
                         {
-                            t.HasComment("ThÃ†Â° viÃ¡Â»â€¡n Ã¡ÂºÂ£nh (gallery) cÃ¡Â»Â§a gian hÃƒÂ ng");
+                            t.HasComment("Thư viện ảnh (gallery) của gian hàng");
                         });
                 });
 
@@ -371,7 +372,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("BoothLocations", t =>
                         {
-                            t.HasComment("VÃ¡Â»â€¹ trÃƒÂ­ cÃ¡Â»Â¥ thÃ¡Â»Æ’ (tÃ¡Â»Âa Ã„â€˜Ã¡Â»â„¢) cÃ¡Â»Â§a 1 gian hÃƒÂ ng trÃƒÂªn 1 sÃ†Â¡ Ã„â€˜Ã¡Â»â€œ mÃ¡ÂºÂ·t bÃ¡ÂºÂ±ng");
+                            t.HasComment("Vị trí cụ thể (tọa độ) của 1 gian hàng trên 1 sơ đồ mặt bằng");
                         });
                 });
 
@@ -436,7 +437,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("BoothPaymentInfos", t =>
                         {
-                            t.HasComment("ThÃƒÂ´ng tin tÃƒÂ i khoÃ¡ÂºÂ£n/QR nhÃ¡ÂºÂ­n thanh toÃƒÂ¡n cÃ¡Â»Â§a gian hÃƒÂ ng");
+                            t.HasComment("Thông tin tài khoản/QR nhận thanh toán của gian hàng");
                         });
                 });
 
@@ -508,29 +509,10 @@ namespace InfrastructureLayer.Migrations
                     b.Property<Guid>("BoothId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("BuyerEmail")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<string>("BuyerName")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<string>("BuyerPhone")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<string>("ChangeType")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("now()");
-
-                    b.Property<decimal>("CreditAmount")
-                        .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime>("EndDate")
                         .HasColumnType("timestamp with time zone");
@@ -543,44 +525,8 @@ namespace InfrastructureLayer.Migrations
                         .HasColumnType("numeric(18,2)")
                         .HasDefaultValue(0m);
 
-                    b.Property<DateTime?>("PaidAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasComment("Timestamp when payment was confirmed via PayOS webhook");
-
-                    b.Property<DateTime?>("PausedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int?>("PausedRemainingDays")
-                        .HasColumnType("integer");
-
-                    b.Property<long?>("PayOSOrderCode")
-                        .HasColumnType("bigint")
-                        .HasComment("PayOS order code for payment tracking");
-
-                    b.Property<string>("PayOSPaymentLinkId")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasComment("PayOS payment link ID");
-
                     b.Property<string>("PaymentEvidenceUrl")
                         .HasColumnType("text");
-
-                    b.Property<DateTime?>("PaymentExpiresAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasComment("PayOS payment link expiration time");
-
-                    b.Property<DateTime?>("PolicyAcceptedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("PolicySnapshotJson")
-                        .HasColumnType("text");
-
-                    b.Property<string>("PolicyVersion")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<Guid?>("PreviousSubscriptionId")
-                        .HasColumnType("uuid");
 
                     b.Property<DateTime>("StartDate")
                         .HasColumnType("timestamp with time zone");
@@ -605,13 +551,9 @@ namespace InfrastructureLayer.Migrations
 
                     b.HasIndex("PackageId");
 
-                    b.HasIndex("PayOSOrderCode")
-                        .IsUnique()
-                        .HasDatabaseName("IX_BoothSubscriptions_PayOSOrderCode");
-
                     b.ToTable("BoothSubscriptions", t =>
                         {
-                            t.HasComment("LÃ¡Â»â€¹ch sÃ¡Â»Â­ Ã„â€˜Ã„Æ’ng kÃƒÂ½ gÃƒÂ³i dÃ¡Â»â€¹ch vÃ¡Â»Â¥ cÃ¡Â»Â§a gian hÃƒÂ ng");
+                            t.HasComment("Lịch sử đăng ký gói dịch vụ của gian hàng");
                         });
                 });
 
@@ -649,7 +591,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("Cart", null, t =>
                         {
-                            t.HasComment("GiÃ¡Â»Â hÃƒÂ ng hiÃ¡Â»â€¡n tÃ¡ÂºÂ¡i cÃ¡Â»Â§a khÃƒÂ¡ch hÃƒÂ ng");
+                            t.HasComment("Giỏ hàng hiện tại của khách hàng");
                         });
                 });
 
@@ -697,7 +639,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("CartItem", null, t =>
                         {
-                            t.HasComment("MÃƒÂ³n Ã„Æ’n trong giÃ¡Â»Â hÃƒÂ ng");
+                            t.HasComment("Món ăn trong giỏ hàng");
                         });
                 });
 
@@ -743,8 +685,8 @@ namespace InfrastructureLayer.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
-                        .HasDefaultValueSql("'Pending'::character varying")
-                        .HasComment("Pending | Resolved | Rejected");
+                        .HasDefaultValueSql("'Open'::character varying")
+                        .HasComment("Open | InProgress | Resolved | Rejected");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -761,18 +703,13 @@ namespace InfrastructureLayer.Migrations
 
                     b.HasIndex("BoothId");
 
+                    b.HasIndex("CustomerId");
+
                     b.HasIndex("OrderId");
-
-                    b.HasIndex(new[] { "CustomerId", "CreatedAt" }, "idx_complaint_customer_created")
-                        .IsDescending(false, true);
-
-                    b.HasIndex(new[] { "CustomerId", "OrderId", "BoothId" }, "uq_complaint_active_customer_order_booth")
-                        .IsUnique()
-                        .HasFilter("\"Status\" = 'Pending'");
 
                     b.ToTable("Complaints", t =>
                         {
-                            t.HasComment("Khiáº¿u náº¡i cá»§a khÃ¡ch hÃ ng vá» Ä‘Æ¡n hÃ ng/gian hÃ ng");
+                            t.HasComment("Khiếu nại của khách hàng về đơn hàng/gian hàng");
                         });
                 });
 
@@ -808,7 +745,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("ComplaintImages", t =>
                         {
-                            t.HasComment("Ã¡ÂºÂ¢nh minh chÃ¡Â»Â©ng Ã„â€˜ÃƒÂ­nh kÃƒÂ¨m theo khiÃ¡ÂºÂ¿u nÃ¡ÂºÂ¡i");
+                            t.HasComment("Ảnh minh chứng đính kèm theo khiếu nại");
                         });
                 });
 
@@ -819,11 +756,8 @@ namespace InfrastructureLayer.Migrations
                         .HasColumnType("uuid")
                         .HasDefaultValueSql("uuid_generate_v4()");
 
-                    b.Property<Guid>("BoothId")
+                    b.Property<Guid>("BoothOwnerId")
                         .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("BoothOwnerLastReadAt")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -833,21 +767,12 @@ namespace InfrastructureLayer.Migrations
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("uuid");
 
-                    b.Property<DateTime?>("CustomerLastReadAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("LastMessageAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("LastMessageId")
-                        .HasColumnType("uuid");
-
                     b.Property<string>("Status")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
-                        .HasDefaultValue("Active");
+                        .HasDefaultValueSql("'Active'::character varying");
 
                     b.Property<DateTime>("UpdatedAt")
                         .ValueGeneratedOnAdd()
@@ -857,20 +782,14 @@ namespace InfrastructureLayer.Migrations
                     b.HasKey("Id")
                         .HasName("Conversations_pkey");
 
-                    b.HasIndex("LastMessageId");
+                    b.HasIndex("BoothOwnerId");
 
-                    b.HasIndex(new[] { "BoothId", "LastMessageAt" }, "idx_conversation_booth_last_message");
-
-                    b.HasIndex(new[] { "CustomerId", "LastMessageAt" }, "idx_conversation_customer_last_message");
-
-                    b.HasIndex(new[] { "LastMessageAt" }, "idx_conversation_last_message");
-
-                    b.HasIndex(new[] { "CustomerId", "BoothId" }, "uq_conversation_customer_booth")
+                    b.HasIndex(new[] { "CustomerId", "BoothOwnerId" }, "uq_conversation_customer_boothowner")
                         .IsUnique();
 
                     b.ToTable("Conversations", t =>
                         {
-                            t.HasComment("CuÃ¡Â»â„¢c trÃƒÂ² chuyÃ¡Â»â€¡n giÃ¡Â»Â¯a 1 khÃƒÂ¡ch hÃƒÂ ng vÃƒÂ  1 gian hÃƒÂ ng - dÃƒÂ¹ng SignalR Ã„â€˜Ã¡Â»Æ’ realtime");
+                            t.HasComment("Cuộc trò chuyện giữa 1 khách hàng và 1 gian hàng - dùng SignalR để realtime");
                         });
                 });
 
@@ -919,7 +838,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("CustomerPreference", null, t =>
                         {
-                            t.HasComment("SÃ¡Â»Å¸ thÃƒÂ­ch rÃƒÂµ rÃƒÂ ng cÃ¡Â»Â§a khÃƒÂ¡ch hÃƒÂ ng theo FoodTag: Like/Avoid");
+                            t.HasComment("Sở thích rõ ràng của khách hàng theo FoodTag: Like/Avoid");
                         });
                 });
 
@@ -985,13 +904,8 @@ namespace InfrastructureLayer.Migrations
                         .HasColumnType("uuid")
                         .HasDefaultValueSql("uuid_generate_v4()");
 
-                    b.Property<Guid?>("BoothId")
+                    b.Property<Guid>("BoothId")
                         .HasColumnType("uuid");
-
-                    b.Property<string>("Code")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -1001,27 +915,7 @@ namespace InfrastructureLayer.Migrations
                     b.Property<string>("Description")
                         .HasColumnType("text");
 
-                    b.Property<int>("DisplayOrder")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0);
-
-                    b.Property<bool>("IsActive")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true);
-
                     b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<bool>("IsSelectable")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true);
-
-                    b.Property<bool>("IsSystem")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
@@ -1045,13 +939,9 @@ namespace InfrastructureLayer.Migrations
 
                     b.HasIndex(new[] { "BoothId" }, "idx_foodcategory_booth");
 
-                    b.HasIndex(new[] { "Code" }, "ux_foodcategory_code_active")
-                        .IsUnique()
-                        .HasFilter("\"IsDeleted\" = false");
-
                     b.ToTable("FoodCategories", t =>
                         {
-                            t.HasComment("Danh mÃ¡Â»Â¥c mÃƒÂ³n Ã„Æ’n cÃ¡Â»Â§a tÃ¡Â»Â«ng gian hÃƒÂ ng");
+                            t.HasComment("Danh mục món ăn của từng gian hàng");
                         });
                 });
 
@@ -1092,7 +982,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("FoodImages", t =>
                         {
-                            t.HasComment("ThÃ†Â° viÃ¡Â»â€¡n Ã¡ÂºÂ£nh (gallery) cho tÃ¡Â»Â«ng mÃƒÂ³n Ã„Æ’n");
+                            t.HasComment("Thư viện ảnh (gallery) cho từng món ăn");
                         });
                 });
 
@@ -1121,7 +1011,7 @@ namespace InfrastructureLayer.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(true)
-                        .HasComment("false khi mÃƒÂ³n hÃ¡ÂºÂ¿t nguyÃƒÂªn liÃ¡Â»â€¡u hoÃ¡ÂºÂ·c chÃ¡Â»Â§ quÃƒÂ¡n tÃ¡ÂºÂ¡m Ã¡ÂºÂ©n");
+                        .HasComment("false khi món hết nguyên liệu hoặc chủ quán tạm ẩn");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -1141,7 +1031,7 @@ namespace InfrastructureLayer.Migrations
                     b.Property<decimal>("Price")
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)")
-                        .HasComment("GiÃƒÂ¡ mÃ¡ÂºÂ·c Ã„â€˜Ã¡Â»â€¹nh. NÃ¡ÂºÂ¿u cÃƒÂ³ FoodPrice theo ngÃƒÂ y hiÃ¡Â»â€¡n tÃ¡ÂºÂ¡i thÃƒÂ¬ giÃƒÂ¡ Ã„â€˜ÃƒÂ³ Ã„â€˜Ã†Â°Ã¡Â»Â£c Ã†Â°u tiÃƒÂªn (override)");
+                        .HasComment("Giá mặc định. Nếu có FoodPrice theo ngày hiện tại thì giá đó được ưu tiên (override)");
 
                     b.Property<string>("ThumbnailUrl")
                         .HasMaxLength(500)
@@ -1161,7 +1051,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("FoodItem", null, t =>
                         {
-                            t.HasComment("MÃƒÂ³n Ã„Æ’n cÃ¡Â»Â§a tÃ¡Â»Â«ng gian hÃƒÂ ng");
+                            t.HasComment("Món ăn của từng gian hàng");
                         });
                 });
 
@@ -1185,7 +1075,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("FoodItemTag", null, t =>
                         {
-                            t.HasComment("BÃ¡ÂºÂ£ng nÃ¡Â»â€˜i gÃ¡ÂºÂ¯n tag ngÃ¡Â»Â¯ nghÃ„Â©a vÃƒÂ o mÃƒÂ³n Ã„Æ’n");
+                            t.HasComment("Bảng nối gắn tag ngữ nghĩa vào món ăn");
                         });
                 });
 
@@ -1229,7 +1119,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("FoodPrice", null, t =>
                         {
-                            t.HasComment("BÃ¡ÂºÂ£ng giÃƒÂ¡ theo ngÃƒÂ y trong tuÃ¡ÂºÂ§n - override giÃƒÂ¡ mÃ¡ÂºÂ·c Ã„â€˜Ã¡Â»â€¹nh cÃ¡Â»Â§a FoodItem");
+                            t.HasComment("Bảng giá theo ngày trong tuần - override giá mặc định của FoodItem");
                         });
                 });
 
@@ -1253,32 +1143,7 @@ namespace InfrastructureLayer.Migrations
                     b.Property<string>("Description")
                         .HasColumnType("text");
 
-                    b.Property<int>("DisplayOrder")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0);
-
-                    b.Property<bool>("IsAutoAssigned")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
                     b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<bool>("IsPreferenceSelectable")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<bool>("IsSelectable")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true);
-
-                    b.Property<bool>("IsSystem")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
@@ -1318,79 +1183,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("FoodTag", null, t =>
                         {
-                            t.HasComment("Danh sÃƒÂ¡ch tag chuÃ¡ÂºÂ©n mÃƒÂ´ tÃ¡ÂºÂ£ ngÃ¡Â»Â¯ nghÃ„Â©a mÃƒÂ³n Ã„Æ’n cho AI/recommendation");
-                        });
-                });
-
-            modelBuilder.Entity("DomainLayer.Entities.LayoutBlock", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasDefaultValueSql("uuid_generate_v4()");
-
-                    b.Property<string>("ConfigJson")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<int>("DisplayOrder")
-                        .HasColumnType("integer");
-
-                    b.Property<double>("Height")
-                        .HasColumnType("double precision");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<Guid>("LayoutId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(150)
-                        .HasColumnType("character varying(150)");
-
-                    b.Property<double>("Rotation")
-                        .HasColumnType("double precision");
-
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<double>("Width")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("X")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("Y")
-                        .HasColumnType("double precision");
-
-                    b.Property<Guid?>("ZoneId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id")
-                        .HasName("LayoutBlocks_pkey");
-
-                    b.HasIndex("LayoutId");
-
-                    b.HasIndex("ZoneId");
-
-                    b.ToTable("LayoutBlocks", null, t =>
-                        {
-                            t.HasComment("Layout zones and generated blocks");
+                            t.HasComment("Danh sách tag chuẩn mô tả ngữ nghĩa món ăn cho AI/recommendation");
                         });
                 });
 
@@ -1452,7 +1245,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("LayoutEdges", t =>
                         {
-                            t.HasComment("CÃ¡ÂºÂ¡nh nÃ¡Â»â€˜i giÃ¡Â»Â¯a 2 LayoutNode - thÃ¡Â»Æ’ hiÃ¡Â»â€¡n Ã„â€˜Ã†Â°Ã¡Â»Âng Ã„â€˜i vÃƒÂ  khoÃ¡ÂºÂ£ng cÃƒÂ¡ch, dÃƒÂ¹ng cho thuÃ¡ÂºÂ­t toÃƒÂ¡n tÃƒÂ¬m Ã„â€˜Ã†Â°Ã¡Â»Âng ngÃ¡ÂºÂ¯n nhÃ¡ÂºÂ¥t trong chÃ¡Â»Â£");
+                            t.HasComment("Cạnh nối giữa 2 LayoutNode - thể hiện đường đi và khoảng cách, dùng cho thuật toán tìm đường ngắn nhất trong chợ");
                         });
                 });
 
@@ -1462,9 +1255,6 @@ namespace InfrastructureLayer.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasDefaultValueSql("uuid_generate_v4()");
-
-                    b.Property<int?>("ColumnIndex")
-                        .HasColumnType("integer");
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -1486,9 +1276,6 @@ namespace InfrastructureLayer.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
 
-                    b.Property<Guid?>("LayoutBlockId")
-                        .HasColumnType("uuid");
-
                     b.Property<Guid>("LayoutId")
                         .HasColumnType("uuid");
 
@@ -1502,13 +1289,6 @@ namespace InfrastructureLayer.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
                         .HasDefaultValueSql("'Junction'::character varying");
-
-                    b.Property<int?>("RowIndex")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("SlotCode")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
 
                     b.Property<DateTime>("UpdatedAt")
                         .ValueGeneratedOnAdd()
@@ -1531,21 +1311,13 @@ namespace InfrastructureLayer.Migrations
                     b.HasKey("Id")
                         .HasName("LayoutNodes_pkey");
 
-                    b.HasIndex("LayoutBlockId");
-
-                    b.HasIndex("LayoutId")
-                        .HasDatabaseName("IX_LayoutNodes_LayoutId");
+                    b.HasIndex("LayoutId");
 
                     b.HasIndex("ZoneId");
 
-                    b.HasIndex("LayoutId", "SlotCode")
-                        .IsUnique()
-                        .HasDatabaseName("ux_layoutnodes_active_layout_slotcode")
-                        .HasFilter("\"IsDeleted\" = false AND \"SlotCode\" IS NOT NULL");
-
                     b.ToTable("LayoutNodes", t =>
                         {
-                            t.HasComment("CÃƒÂ¡c Ã„â€˜iÃ¡Â»Æ’m/nÃƒÂºt (node) trÃƒÂªn sÃ†Â¡ Ã„â€˜Ã¡Â»â€œ mÃ¡ÂºÂ·t bÃ¡ÂºÂ±ng - lÃƒÂ  Ã„â€˜Ã¡Â»â€°nh cÃ¡Â»Â§a Ã„â€˜Ã¡Â»â€œ thÃ¡Â»â€¹ dÃƒÂ¹ng cho tÃƒÂ¬m Ã„â€˜Ã†Â°Ã¡Â»Âng nÃ¡Â»â„¢i bÃ¡Â»â„¢ chÃ¡Â»Â£");
+                            t.HasComment("Các điểm/nút (node) trên sơ đồ mặt bằng - là đỉnh của đồ thị dùng cho tìm đường nội bộ chợ");
                         });
                 });
 
@@ -1578,20 +1350,8 @@ namespace InfrastructureLayer.Migrations
                         .HasMaxLength(150)
                         .HasColumnType("character varying(150)");
 
-                    b.Property<double?>("MarketLengthMeters")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("double precision");
-
-                    b.Property<double?>("MarketWidthMeters")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("double precision");
-
                     b.Property<Guid>("NightMarketId")
                         .HasColumnType("uuid");
-
-                    b.Property<double?>("PixelsPerMeter")
-                        .HasPrecision(8, 2)
-                        .HasColumnType("double precision");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -1630,7 +1390,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("MarketLayouts", t =>
                         {
-                            t.HasComment("SÃ†Â¡ Ã„â€˜Ã¡Â»â€œ mÃ¡ÂºÂ·t bÃ¡ÂºÂ±ng cÃ¡Â»Â§a mÃ¡Â»â„¢t chÃ¡Â»Â£ Ã„â€˜ÃƒÂªm - dÃƒÂ¹ng lÃƒÂ m nÃ¡Â»Ân Ã„â€˜Ã¡Â»Æ’ Ã„â€˜Ã¡ÂºÂ·t cÃƒÂ¡c Ã„â€˜iÃ¡Â»Æ’m (LayoutNodes) vÃƒÂ  gian hÃƒÂ ng (BoothLocations)");
+                            t.HasComment("Sơ đồ mặt bằng của một chợ đêm - dùng làm nền để đặt các điểm (LayoutNodes) và gian hàng (BoothLocations)");
                         });
                 });
 
@@ -1644,29 +1404,10 @@ namespace InfrastructureLayer.Migrations
                     b.Property<string>("AdminNotes")
                         .HasColumnType("text");
 
-                    b.Property<string>("BuyerEmail")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<string>("BuyerName")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<string>("BuyerPhone")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<string>("ChangeType")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("now()");
-
-                    b.Property<decimal>("CreditAmount")
-                        .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime>("EndDate")
                         .HasColumnType("timestamp with time zone");
@@ -1682,38 +1423,8 @@ namespace InfrastructureLayer.Migrations
                         .HasColumnType("numeric(18,2)")
                         .HasDefaultValue(0m);
 
-                    b.Property<DateTime?>("PaidAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasComment("Timestamp when payment was confirmed via PayOS webhook");
-
-                    b.Property<long?>("PayOSOrderCode")
-                        .HasColumnType("bigint")
-                        .HasComment("PayOS order code for payment tracking");
-
-                    b.Property<string>("PayOSPaymentLinkId")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasComment("PayOS payment link ID");
-
                     b.Property<string>("PaymentEvidenceUrl")
                         .HasColumnType("text");
-
-                    b.Property<DateTime?>("PaymentExpiresAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasComment("PayOS payment link expiration time");
-
-                    b.Property<DateTime?>("PolicyAcceptedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("PolicySnapshotJson")
-                        .HasColumnType("text");
-
-                    b.Property<string>("PolicyVersion")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<Guid?>("PreviousSubscriptionId")
-                        .HasColumnType("uuid");
 
                     b.Property<DateTime>("StartDate")
                         .HasColumnType("timestamp with time zone");
@@ -1738,13 +1449,9 @@ namespace InfrastructureLayer.Migrations
 
                     b.HasIndex("PackageId");
 
-                    b.HasIndex("PayOSOrderCode")
-                        .IsUnique()
-                        .HasDatabaseName("IX_MarketSubscriptions_PayOSOrderCode");
-
                     b.ToTable("MarketSubscriptions", t =>
                         {
-                            t.HasComment("LÃ¡Â»â€¹ch sÃ¡Â»Â­ Ã„â€˜Ã„Æ’ng kÃƒÂ½ gÃƒÂ³i dÃ¡Â»â€¹ch vÃ¡Â»Â¥ cÃ¡Â»Â§a Market Owner");
+                            t.HasComment("Lịch sử đăng ký gói dịch vụ của Market Owner");
                         });
                 });
 
@@ -1754,9 +1461,6 @@ namespace InfrastructureLayer.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasDefaultValueSql("uuid_generate_v4()");
-
-                    b.Property<Guid?>("ClientMessageId")
-                        .HasColumnType("uuid");
 
                     b.Property<string>("Content")
                         .IsRequired()
@@ -1770,16 +1474,10 @@ namespace InfrastructureLayer.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("now()");
 
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<bool>("IsRead")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
-
-                    b.Property<DateTime?>("ReadAt")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("SenderId")
                         .HasColumnType("uuid");
@@ -1788,7 +1486,7 @@ namespace InfrastructureLayer.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
-                        .HasComment("Snapshot vai trÃƒÂ² ngÃ†Â°Ã¡Â»Âi gÃ¡Â»Â­i: Customer | BoothOwner");
+                        .HasComment("Snapshot vai trò người gửi: Customer | BoothOwner");
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -1806,80 +1504,13 @@ namespace InfrastructureLayer.Migrations
                     b.HasKey("Id")
                         .HasName("Message_pkey");
 
-                    b.HasIndex(new[] { "ConversationId", "CreatedAt", "Id" }, "idx_message_conversation");
+                    b.HasIndex("SenderId");
 
-                    b.HasIndex(new[] { "SenderId", "ClientMessageId" }, "ux_message_sender_client_message")
-                        .IsUnique()
-                        .HasFilter("\"ClientMessageId\" IS NOT NULL");
+                    b.HasIndex(new[] { "ConversationId", "CreatedAt" }, "idx_message_conversation");
 
                     b.ToTable("Message", null, t =>
                         {
-                            t.HasComment("Tin nhÃ¡ÂºÂ¯n trong cuÃ¡Â»â„¢c trÃƒÂ² chuyÃ¡Â»â€¡n - truyÃ¡Â»Ân tÃ¡ÂºÂ£i qua SignalR Hub");
-                        });
-                });
-
-            modelBuilder.Entity("DomainLayer.Entities.ModerationActionHistory", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasDefaultValueSql("uuid_generate_v4()");
-
-                    b.Property<Guid>("AdminId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("AdminName")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<Guid?>("BoothId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("ComplaintId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<string>("NewStatus")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<Guid?>("NightMarketId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("PreviousStatus")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<string>("Reason")
-                        .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<string>("Source")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasDefaultValueSql("'DirectAdmin'::character varying");
-
-                    b.HasKey("Id")
-                        .HasName("ModerationActionHistory_pkey");
-
-                    b.HasIndex(new[] { "BoothId" }, "idx_moderationhistory_booth");
-
-                    b.HasIndex(new[] { "CreatedAt" }, "idx_moderationhistory_created");
-
-                    b.HasIndex(new[] { "NightMarketId" }, "idx_moderationhistory_nightmarket");
-
-                    b.ToTable("ModerationActionHistory", null, t =>
-                        {
-                            t.HasComment("LÃ¡Â»â€¹ch sÃ¡Â»Â­ hÃƒÂ nh Ã„â€˜Ã¡Â»â„¢ng moderation cho Booth hoÃ¡ÂºÂ·c Night Market");
+                            t.HasComment("Tin nhắn trong cuộc trò chuyện - truyền tải qua SignalR Hub");
                         });
                 });
 
@@ -1909,15 +1540,6 @@ namespace InfrastructureLayer.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("now()");
 
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("DeletedBy")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("DeletionReason")
-                        .HasColumnType("text");
-
                     b.Property<string>("Description")
                         .HasColumnType("text");
 
@@ -1937,13 +1559,6 @@ namespace InfrastructureLayer.Migrations
                     b.Property<Guid?>("MarketOwnerId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("ModerationStatus")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasDefaultValueSql("'Active'::character varying");
-
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -1957,7 +1572,7 @@ namespace InfrastructureLayer.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
-                        .HasDefaultValue("Inactive");
+                        .HasDefaultValueSql("'Active'::character varying");
 
                     b.Property<string>("ThumbnailUrl")
                         .HasMaxLength(500)
@@ -1967,7 +1582,7 @@ namespace InfrastructureLayer.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
                         .HasDefaultValue(0)
-                        .HasComment("SÃ¡Â»â€˜ lÃ†Â°Ã¡Â»Â£ng gian hÃƒÂ ng - giÃƒÂ¡ trÃ¡Â»â€¹ cache, Ã„â€˜Ã¡Â»â€œng bÃ¡Â»â„¢ qua trigger hoÃ¡ÂºÂ·c job Ã„â€˜Ã¡Â»â€¹nh kÃ¡Â»Â³");
+                        .HasComment("Số lượng gian hàng - giá trị cache, đồng bộ qua trigger hoặc job định kỳ");
 
                     b.Property<DateTime>("UpdatedAt")
                         .ValueGeneratedOnAdd()
@@ -1981,66 +1596,9 @@ namespace InfrastructureLayer.Migrations
 
                     b.HasIndex(new[] { "IsDeleted", "Status", "CreatedAt" }, "idx_nightmarket_active_status_created");
 
-                    b.HasIndex(new[] { "ModerationStatus" }, "idx_nightmarket_moderation_status");
-
                     b.ToTable("NightMarket", null, t =>
                         {
-                            t.HasComment("ThÃƒÂ´ng tin cÃƒÂ¡c chÃ¡Â»Â£ Ã„â€˜ÃƒÂªm - Ã„â€˜Ã†Â¡n vÃ¡Â»â€¹ quÃ¡ÂºÂ£n lÃƒÂ½ cÃ¡ÂºÂ¥p cao nhÃ¡ÂºÂ¥t, chÃ¡Â»Â©a nhiÃ¡Â»Âu Booth");
-                        });
-                });
-
-            modelBuilder.Entity("DomainLayer.Entities.NightMarketImage", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasDefaultValueSql("uuid_generate_v4()");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<int>("DisplayOrder")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0);
-
-                    b.Property<string>("ImageUrl")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<bool>("IsCover")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<Guid>("NightMarketId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("now()");
-
-                    b.HasKey("Id")
-                        .HasName("NightMarketImages_pkey");
-
-                    b.HasIndex(new[] { "NightMarketId" }, "idx_nightmarketimage_market");
-
-                    b.HasIndex(new[] { "NightMarketId" }, "ux_nightmarketimage_one_cover")
-                        .IsUnique()
-                        .HasFilter("\"IsCover\" = true AND \"IsDeleted\" = false");
-
-                    b.ToTable("NightMarketImages", t =>
-                        {
-                            t.HasComment("Night market image gallery");
+                            t.HasComment("Thông tin các chợ đêm - đơn vị quản lý cấp cao nhất, chứa nhiều Booth");
                         });
                 });
 
@@ -2051,12 +1609,9 @@ namespace InfrastructureLayer.Migrations
                         .HasColumnType("uuid")
                         .HasDefaultValueSql("uuid_generate_v4()");
 
-                    b.Property<Guid?>("BatchId")
-                        .HasColumnType("uuid");
-
                     b.Property<Guid?>("BoothId")
                         .HasColumnType("uuid")
-                        .HasComment("NULL khi thÃƒÂ´ng bÃƒÂ¡o khÃƒÂ´ng gÃ¡ÂºÂ¯n vÃ¡Â»â€ºi gian hÃƒÂ ng cÃ¡Â»Â¥ thÃ¡Â»Æ’ (VD: thÃƒÂ´ng bÃƒÂ¡o hÃ¡Â»â€¡ thÃ¡Â»â€˜ng)");
+                        .HasComment("NULL khi thông báo không gắn với gian hàng cụ thể (VD: thông báo hệ thống)");
 
                     b.Property<string>("Content")
                         .IsRequired()
@@ -2066,9 +1621,6 @@ namespace InfrastructureLayer.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("now()");
-
-                    b.Property<Guid?>("CreatedByUserId")
-                        .HasColumnType("uuid");
 
                     b.Property<string>("DataJson")
                         .HasColumnType("text");
@@ -2092,13 +1644,6 @@ namespace InfrastructureLayer.Migrations
                     b.Property<string>("ReferenceType")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
-
-                    b.Property<int?>("Target")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("TargetRole")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -2127,12 +1672,9 @@ namespace InfrastructureLayer.Migrations
                     b.HasIndex(new[] { "UserId", "CreatedAt" }, "idx_notification_user")
                         .IsDescending(false, true);
 
-                    b.HasIndex(new[] { "UserId", "IsRead", "CreatedAt" }, "idx_notification_user_read")
-                        .IsDescending(false, false, true);
-
                     b.ToTable("Notification", null, t =>
                         {
-                            t.HasComment("ThÃƒÂ´ng bÃƒÂ¡o Ã„â€˜Ã¡ÂºÂ©y (push notification qua FCM) cho ngÃ†Â°Ã¡Â»Âi dÃƒÂ¹ng");
+                            t.HasComment("Thông báo đẩy (push notification qua FCM) cho người dùng");
                         });
                 });
 
@@ -2142,28 +1684,6 @@ namespace InfrastructureLayer.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasDefaultValueSql("uuid_generate_v4()");
-
-                    b.Property<Guid>("BoothId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("BoothOwnerId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("CancellationReason")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<DateTime?>("CancelledAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("CheckoutCartItemIds")
-                        .HasColumnType("jsonb");
-
-                    b.Property<Guid?>("CheckoutRequestId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("CompletedAt")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -2182,45 +1702,24 @@ namespace InfrastructureLayer.Migrations
                         .HasColumnType("numeric(12,2)")
                         .HasComment("TotalAmount - DiscountAmount");
 
-                    b.Property<string>("IdempotencyKey")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
                     b.Property<string>("Note")
                         .HasColumnType("text");
 
-                    b.Property<long>("OrderCode")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("PaymentMethod")
+                    b.Property<string>("OrderCode")
                         .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
-                    b.Property<Guid?>("PromotionId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("PromotionSnapshot")
-                        .HasColumnType("jsonb");
-
-                    b.Property<string>("RequestHash")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<byte[]>("RowVersion")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("bytea")
-                        .HasDefaultValueSql("uuid_send(gen_random_uuid())");
+                    b.Property<int>("PayStatus")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasDefaultValueSql("'Placed'::character varying")
-                        .HasComment("Placed | Preparing | ReadyForPickup | Completed | Cancelled");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValueSql("'Pending'::character varying")
+                        .HasComment("Pending | Confirmed | Preparing | Completed | Cancelled");
 
                     b.Property<decimal>("TotalAmount")
                         .HasPrecision(12, 2)
@@ -2234,32 +1733,14 @@ namespace InfrastructureLayer.Migrations
                     b.HasKey("Id")
                         .HasName("Order_pkey");
 
-                    b.HasIndex("BoothId");
-
-                    b.HasIndex("BoothOwnerId");
-
                     b.HasIndex(new[] { "OrderCode" }, "Order_OrderCode_key")
                         .IsUnique();
 
                     b.HasIndex(new[] { "CustomerId" }, "idx_order_customer");
 
-                    b.HasIndex(new[] { "CustomerId", "CreatedAt" }, "idx_order_customer_created")
-                        .IsDescending(false, true);
-
-                    b.HasIndex(new[] { "CustomerId", "Status", "CreatedAt" }, "idx_order_customer_status_created")
-                        .IsDescending(false, false, true);
-
-                    b.HasIndex(new[] { "CustomerId", "CheckoutRequestId" }, "ux_order_customer_checkout_request")
-                        .IsUnique()
-                        .HasFilter("\"CheckoutRequestId\" IS NOT NULL");
-
-                    b.HasIndex(new[] { "CustomerId", "IdempotencyKey" }, "ux_order_customer_idempotency_key")
-                        .IsUnique()
-                        .HasFilter("\"IdempotencyKey\" IS NOT NULL");
-
                     b.ToTable("Order", null, t =>
                         {
-                            t.HasComment("Ã„ÂÃ†Â¡n hÃƒÂ ng cÃ¡Â»Â§a khÃƒÂ¡ch (1 Ã„â€˜Ã†Â¡n chÃ¡Â»â€° thuÃ¡Â»â„¢c vÃ¡Â»Â 1 quÃƒÂ¡n)");
+                            t.HasComment("Đơn hàng của khách");
                         });
                 });
 
@@ -2278,11 +1759,6 @@ namespace InfrastructureLayer.Migrations
                     b.Property<Guid>("FoodItemId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("FoodNameSnapshot")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
                     b.Property<Guid>("OrderId")
                         .HasColumnType("uuid");
 
@@ -2296,7 +1772,7 @@ namespace InfrastructureLayer.Migrations
                     b.Property<decimal>("UnitPrice")
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)")
-                        .HasComment("SNAPSHOT giÃƒÂ¡ tÃ¡ÂºÂ¡i thÃ¡Â»Âi Ã„â€˜iÃ¡Â»Æ’m Ã„â€˜Ã¡ÂºÂ·t hÃƒÂ ng - KHÃƒâ€NG tÃƒÂ­nh lÃ¡ÂºÂ¡i tÃ¡Â»Â« FoodItem.Price");
+                        .HasComment("SNAPSHOT giá tại thời điểm đặt hàng - KHÔNG tính lại từ FoodItem.Price");
 
                     b.Property<DateTime>("UpdatedAt")
                         .ValueGeneratedOnAdd()
@@ -2312,7 +1788,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("OrderDetail", null, t =>
                         {
-                            t.HasComment("Chi tiÃ¡ÂºÂ¿t mÃƒÂ³n Ã„Æ’n trong tÃ¡Â»Â«ng Ã„â€˜Ã†Â¡n hÃƒÂ ng");
+                            t.HasComment("Chi tiết món ăn trong từng đơn hàng");
                         });
                 });
 
@@ -2322,10 +1798,6 @@ namespace InfrastructureLayer.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasDefaultValueSql("uuid_generate_v4()");
-
-                    b.Property<string>("Code")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -2337,12 +1809,6 @@ namespace InfrastructureLayer.Migrations
 
                     b.Property<int>("DurationDays")
                         .HasColumnType("integer");
-
-                    b.Property<string>("Entitlements")
-                        .HasColumnType("jsonb");
-
-                    b.Property<string>("ImageUrl")
-                        .HasColumnType("text");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -2379,63 +1845,6 @@ namespace InfrastructureLayer.Migrations
                     b.ToTable("Package", (string)null);
                 });
 
-            modelBuilder.Entity("DomainLayer.Entities.PackagePolicy", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ContentJson")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("ContentMarkdown")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<DateTime>("EffectiveFrom")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
-
-                    b.Property<Guid>("PackageId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<string>("Version")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PackageId", "IsActive")
-                        .IsUnique()
-                        .HasFilter("\"IsActive\" = true AND \"IsDeleted\" = false");
-
-                    b.HasIndex("PackageId", "Version")
-                        .IsUnique();
-
-                    b.ToTable("PackagePolicies", (string)null);
-                });
-
             modelBuilder.Entity("DomainLayer.Entities.PackagePrice", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2447,11 +1856,6 @@ namespace InfrastructureLayer.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("now()");
-
-                    b.Property<int>("DurationDays")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(30);
 
                     b.Property<DateTime?>("EndDate")
                         .HasColumnType("timestamp with time zone");
@@ -2498,32 +1902,17 @@ namespace InfrastructureLayer.Migrations
                     b.Property<Guid>("BoothOwnerId")
                         .HasColumnType("uuid");
 
-                    b.Property<DateTime?>("CancelledAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("CheckoutUrl")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)")
-                        .HasComment("Ã„ÂÃ†Â°Ã¡Â»Âng link thanh toÃƒÂ¡n VietQR Ã„â€˜Ã¡Â»â„¢ng ngÃ¡ÂºÂ¯n hÃ¡ÂºÂ¡n do PayOS trÃ¡ÂºÂ£ vÃ¡Â»Â");
-
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("now()");
 
-                    b.Property<DateTime?>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("FailedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("FailureCode")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<string>("FailureMessage")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasDefaultValueSql("'VND'::character varying");
 
                     b.Property<string>("Gateway")
                         .IsRequired()
@@ -2533,60 +1922,16 @@ namespace InfrastructureLayer.Migrations
                     b.Property<string>("GatewayRef")
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)")
-                        .HasComment("MÃƒÂ£ tra soÃƒÂ¡t thÃ¡Â»Â±c tÃ¡ÂºÂ¿ cÃ¡Â»Â§a ngÃƒÂ¢n hÃƒÂ ng (VÃƒÂ­ dÃ¡Â»Â¥ mÃƒÂ£ giao dÃ¡Â»â€¹ch cÃ¡Â»Â§a BIDV...)");
+                        .HasComment("Mã tham chiếu từ cổng thanh toán bên thứ 3 - dùng để tra soát/khiếu nại");
 
                     b.Property<Guid>("OrderId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime?>("PaidAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasComment("ThÃ¡Â»Âi Ã„â€˜iÃ¡Â»Æ’m dÃƒÂ²ng tiÃ¡Â»Ân thÃ¡Â»Â±c tÃ¡ÂºÂ¿ Ã„â€˜Ã†Â°Ã¡Â»Â£c khÃƒÂ¡ch hÃƒÂ ng quÃƒÂ©t mÃƒÂ£ vÃƒÂ  bÃ¡ÂºÂ¯n vÃ¡Â»Â hÃ¡Â»â€¡ thÃ¡Â»â€˜ng thÃƒÂ nh cÃƒÂ´ng");
-
-                    b.Property<long?>("PayOSOrderCode")
-                        .HasColumnType("bigint")
-                        .HasComment("PayOS order code for this specific payment transaction (supplemental payments)");
-
-                    b.Property<string>("PaymentLinkId")
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)")
-                        .HasComment("ID quÃ¡ÂºÂ£n lÃƒÂ½ liÃƒÂªn kÃ¡ÂºÂ¿t link thanh toÃƒÂ¡n cÃ¡Â»Â§a hÃ¡Â»â€¡ thÃ¡Â»â€˜ng PayOS");
-
-                    b.Property<DateTime?>("PayoutCreateClaimedAt")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("PayoutId")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<string>("QrCode")
-                        .HasMaxLength(4000)
-                        .HasColumnType("character varying(4000)");
-
-                    b.Property<decimal?>("RefundAmount")
-                        .HasPrecision(12, 2)
-                        .HasColumnType("numeric(12,2)");
 
                     b.Property<string>("RefundReason")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasComment("LÃƒÂ½ do hoÃƒÂ n tiÃ¡Â»Ân (NÃ¡ÂºÂ¿u cÃƒÂ³)");
-
-                    b.Property<string>("RefundReference")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<DateTime?>("RefundRequestedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("RefundedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<byte[]>("RowVersion")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("bytea")
-                        .HasDefaultValueSql("uuid_send(gen_random_uuid())");
+                        .HasColumnType("text");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -2599,7 +1944,7 @@ namespace InfrastructureLayer.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
-                        .HasComment("TiÃ¡Â»Ân mÃ¡ÂºÂ·t hoÃ¡ÂºÂ·c PayOS");
+                        .HasComment("Payment: thu tiền | Refund: hoàn tiền");
 
                     b.Property<DateTime>("UpdatedAt")
                         .ValueGeneratedOnAdd()
@@ -2613,172 +1958,10 @@ namespace InfrastructureLayer.Migrations
 
                     b.HasIndex(new[] { "OrderId" }, "idx_payments_order");
 
-                    b.HasIndex(new[] { "PayOSOrderCode" }, "idx_payments_payos_ordercode")
-                        .IsUnique()
-                        .HasFilter("\"PayOSOrderCode\" IS NOT NULL");
-
-                    b.HasIndex(new[] { "OrderId" }, "ux_payments_one_pending_payos_per_order")
-                        .IsUnique()
-                        .HasFilter("\"Status\" = 'Pending' AND \"Gateway\" = 'Payos'");
-
-                    b.HasIndex(new[] { "PayoutId" }, "ux_payments_payout_id")
-                        .IsUnique()
-                        .HasFilter("\"PayoutId\" IS NOT NULL");
-
-                    b.HasIndex(new[] { "RefundReference" }, "ux_payments_refund_reference")
-                        .IsUnique()
-                        .HasFilter("\"RefundReference\" IS NOT NULL");
-
                     b.ToTable("Payments", t =>
                         {
-                            t.HasComment("LÃ¡Â»â€¹ch sÃ¡Â»Â­ giao dÃ¡Â»â€¹ch thanh toÃƒÂ¡n/hoÃƒÂ n tiÃ¡Â»Ân - tÃƒÂ­ch hÃ¡Â»Â£p Ã„â€˜a cÃ¡Â»â€¢ng VNPay/ZaloPay/MoMo/Payos");
+                            t.HasComment("Lịch sử giao dịch thanh toán/hoàn tiền - tích hợp đa cổng VNPay/ZaloPay/MoMo/Payos");
                         });
-                });
-
-            modelBuilder.Entity("DomainLayer.Entities.PaymentAttempt", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("AttemptNumber")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("CheckoutUrl")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("FailureCode")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<string>("FailureMessage")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<Guid>("PaymentId")
-                        .HasColumnType("uuid");
-
-                    b.Property<long>("ProviderOrderCode")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("ProviderPaymentLinkId")
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
-
-                    b.Property<string>("QrCode")
-                        .HasMaxLength(4000)
-                        .HasColumnType("character varying(4000)");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProviderOrderCode")
-                        .IsUnique();
-
-                    b.HasIndex("PaymentId", "AttemptNumber")
-                        .IsUnique();
-
-                    b.ToTable("PaymentAttempts", (string)null);
-                });
-
-            modelBuilder.Entity("DomainLayer.Entities.PaymentMethod", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("IsDefault")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("MethodType")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<string>("PaymentToken")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("PaymentMethod", null, t =>
-                        {
-                            t.HasComment("CÃ¡ÂºÂ¥u hÃƒÂ¬nh phÃ†Â°Ã†Â¡ng thÃ¡Â»Â©c thanh toÃƒÂ¡n Ã†Â°u tiÃƒÂªn cÃ¡Â»Â§a ngÃ†Â°Ã¡Â»Âi dÃƒÂ¹ng");
-                        });
-                });
-
-            modelBuilder.Entity("DomainLayer.Entities.PaymentWebhookEvent", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Error")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<long>("OrderCode")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("PayloadHash")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<DateTime?>("ProcessedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ProcessingStatus")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<string>("Provider")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
-
-                    b.Property<string>("ProviderEventKey")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
-
-                    b.Property<DateTime>("ReceivedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("SignatureHash")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Provider", "PayloadHash")
-                        .IsUnique();
-
-                    b.HasIndex("Provider", "ProviderEventKey")
-                        .IsUnique();
-
-                    b.ToTable("PaymentWebhookEvents", (string)null);
                 });
 
             modelBuilder.Entity("DomainLayer.Entities.Promotion", b =>
@@ -2803,7 +1986,7 @@ namespace InfrastructureLayer.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
-                        .HasComment("Percentage: giÃ¡ÂºÂ£m % | FixedAmount: giÃ¡ÂºÂ£m sÃ¡Â»â€˜ tiÃ¡Â»Ân cÃ¡Â»â€˜ Ã„â€˜Ã¡Â»â€¹nh");
+                        .HasComment("Percentage: giảm % | FixedAmount: giảm số tiền cố định");
 
                     b.Property<decimal>("DiscountValue")
                         .HasPrecision(12, 2)
@@ -2876,7 +2059,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("Promotion", null, t =>
                         {
-                            t.HasComment("ChÃ†Â°Ã†Â¡ng trÃƒÂ¬nh khuyÃ¡ÂºÂ¿n mÃƒÂ£i/mÃƒÂ£ giÃ¡ÂºÂ£m giÃƒÂ¡ do gian hÃƒÂ ng tÃ¡ÂºÂ¡o");
+                            t.HasComment("Chương trình khuyến mãi/mã giảm giá do gian hàng tạo");
                         });
                 });
 
@@ -2939,17 +2122,8 @@ namespace InfrastructureLayer.Migrations
                     b.Property<Guid>("OrderId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("PromotionCodeSnapshot")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
                     b.Property<Guid>("PromotionId")
                         .HasColumnType("uuid");
-
-                    b.Property<string>("PromotionTitleSnapshot")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
 
                     b.Property<DateTime?>("ReleasedAt")
                         .HasColumnType("timestamp with time zone");
@@ -2978,7 +2152,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("PromotionUsages", t =>
                         {
-                            t.HasComment("LÃ¡Â»â€¹ch sÃ¡Â»Â­ sÃ¡Â»Â­ dÃ¡Â»Â¥ng mÃƒÂ£ khuyÃ¡ÂºÂ¿n mÃƒÂ£i - kiÃ¡Â»Æ’m tra UsageLimit vÃƒÂ  chÃ¡Â»â€˜ng dÃƒÂ¹ng trÃƒÂ¹ng");
+                            t.HasComment("Lịch sử sử dụng mã khuyến mãi - kiểm tra UsageLimit và chống dùng trùng");
                         });
                 });
 
@@ -3011,7 +2185,7 @@ namespace InfrastructureLayer.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(true)
-                        .HasComment("false: Admin Ã¡ÂºÂ©n review nhÃ†Â°ng vÃ¡ÂºÂ«n giÃ¡Â»Â¯ dÃ¡Â»Â¯ liÃ¡Â»â€¡u Ã„â€˜Ã¡Â»Æ’ tÃƒÂ­nh rating");
+                        .HasComment("false: Admin ẩn review nhưng vẫn giữ dữ liệu để tính rating");
 
                     b.Property<Guid>("OrderId")
                         .HasColumnType("uuid");
@@ -3027,22 +2201,16 @@ namespace InfrastructureLayer.Migrations
                     b.HasKey("Id")
                         .HasName("Reviews_pkey");
 
+                    b.HasIndex("CustomerId");
+
                     b.HasIndex(new[] { "BoothId" }, "idx_reviews_booth");
-
-                    b.HasIndex(new[] { "BoothId", "IsVisible", "CreatedAt" }, "idx_reviews_booth_visible_created")
-                        .IsDescending(false, false, true);
-
-                    b.HasIndex(new[] { "CustomerId", "CreatedAt" }, "idx_reviews_customer_created")
-                        .IsDescending(false, true);
 
                     b.HasIndex(new[] { "OrderId" }, "uq_review_order")
                         .IsUnique();
 
                     b.ToTable("Reviews", t =>
                         {
-                            t.HasComment("Ã„ÂÃƒÂ¡nh giÃƒÂ¡ cÃ¡Â»Â§a khÃƒÂ¡ch hÃƒÂ ng cho gian hÃƒÂ ng, gÃ¡ÂºÂ¯n liÃ¡Â»Ân vÃ¡Â»â€ºi 1 Ã„â€˜Ã†Â¡n hÃƒÂ ng Ã„â€˜ÃƒÂ£ hoÃƒÂ n tÃ¡ÂºÂ¥t");
-
-                            t.HasCheckConstraint("ck_reviews_rating", "\"Rating\" BETWEEN 1 AND 5");
+                            t.HasComment("Đánh giá của khách hàng cho gian hàng, gắn liền với 1 đơn hàng đã hoàn tất");
                         });
                 });
 
@@ -3083,7 +2251,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("ReviewReplies", t =>
                         {
-                            t.HasComment("PhÃ¡ÂºÂ£n hÃ¡Â»â€œi cÃ¡Â»Â§a chÃ¡Â»Â§ gian hÃƒÂ ng Ã„â€˜Ã¡Â»â€˜i vÃ¡Â»â€ºi Ã„â€˜ÃƒÂ¡nh giÃƒÂ¡ - quan hÃ¡Â»â€¡ 1-1 vÃ¡Â»â€ºi Reviews");
+                            t.HasComment("Phản hồi của chủ gian hàng đối với đánh giá - quan hệ 1-1 với Reviews");
                         });
                 });
 
@@ -3120,213 +2288,8 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("Role", null, t =>
                         {
-                            t.HasComment("Danh sÃƒÂ¡ch vai trÃƒÂ² ngÃ†Â°Ã¡Â»Âi dÃƒÂ¹ng trong hÃ¡Â»â€¡ thÃ¡Â»â€˜ng (Customer, BoothOwner, Admin)");
+                            t.HasComment("Danh sách vai trò người dùng trong hệ thống (Customer, BoothOwner, Admin)");
                         });
-                });
-
-            modelBuilder.Entity("DomainLayer.Entities.SupportAttachment", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ContentType")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<long>("FileSize")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("FileUrl")
-                        .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<Guid?>("MessageId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("OriginalFileName")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
-
-                    b.Property<Guid>("TicketId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("MessageId");
-
-                    b.HasIndex("TicketId");
-
-                    b.ToTable("SupportAttachments", (string)null);
-                });
-
-            modelBuilder.Entity("DomainLayer.Entities.SupportMessage", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Body")
-                        .IsRequired()
-                        .HasMaxLength(4000)
-                        .HasColumnType("character varying(4000)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool>("IsInternalNote")
-                        .HasColumnType("boolean");
-
-                    b.Property<Guid>("SenderId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("SenderRole")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
-
-                    b.Property<Guid>("TicketId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("SenderId");
-
-                    b.HasIndex("TicketId");
-
-                    b.ToTable("SupportMessages", (string)null);
-                });
-
-            modelBuilder.Entity("DomainLayer.Entities.SupportStatusHistory", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("ActorId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("FromStatus")
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
-
-                    b.Property<string>("Note")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<Guid>("TicketId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ToStatus")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ActorId");
-
-                    b.HasIndex("TicketId");
-
-                    b.ToTable("SupportStatusHistories", (string)null);
-                });
-
-            modelBuilder.Entity("DomainLayer.Entities.SupportTicket", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("AssignedAdminId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("BoothId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Category")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<DateTime?>("ClosedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasMaxLength(4000)
-                        .HasColumnType("character varying(4000)");
-
-                    b.Property<DateTime>("DueAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("FirstRespondedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("NightMarketId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("PageUrl")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<string>("Priority")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<Guid>("RequesterId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("RequesterRole")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
-
-                    b.Property<DateTime?>("ResolvedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
-
-                    b.Property<string>("TicketCode")
-                        .IsRequired()
-                        .HasMaxLength(24)
-                        .HasColumnType("character varying(24)");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AssignedAdminId");
-
-                    b.HasIndex("TicketCode")
-                        .IsUnique();
-
-                    b.HasIndex("RequesterId", "CreatedAt");
-
-                    b.HasIndex("Status", "DueAt");
-
-                    b.ToTable("SupportTickets", (string)null);
                 });
 
             modelBuilder.Entity("DomainLayer.Entities.SystemSetting", b =>
@@ -3422,7 +2385,7 @@ namespace InfrastructureLayer.Migrations
                         .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)")
-                        .HasComment("MÃ¡ÂºÂ­t khÃ¡ÂºÂ©u Ã„â€˜ÃƒÂ£ Ã„â€˜Ã†Â°Ã¡Â»Â£c mÃƒÂ£ hÃƒÂ³a (hash), tuyÃ¡Â»â€¡t Ã„â€˜Ã¡Â»â€˜i khÃƒÂ´ng lÃ†Â°u plaintext");
+                        .HasComment("Mật khẩu đã được mã hóa (hash), tuyệt đối không lưu plaintext");
 
                     b.Property<DateTime?>("PasswordResetOtpExpiresAt")
                         .HasColumnType("timestamp with time zone");
@@ -3456,7 +2419,7 @@ namespace InfrastructureLayer.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
-                        .HasComment("Active: Ã„â€˜ang hoÃ¡ÂºÂ¡t Ã„â€˜Ã¡Â»â„¢ng | Inactive: chÃ†Â°a xÃƒÂ¡c thÃ¡Â»Â±c | Banned: bÃ¡Â»â€¹ khÃƒÂ³a bÃ¡Â»Å¸i Admin");
+                        .HasComment("Active: đang hoạt động | Inactive: chưa xác thực | Banned: bị khóa bởi Admin");
 
                     b.Property<DateTime>("UpdatedAt")
                         .ValueGeneratedOnAdd()
@@ -3489,7 +2452,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("User", null, t =>
                         {
-                            t.HasComment("TÃƒÂ i khoÃ¡ÂºÂ£n ngÃ†Â°Ã¡Â»Âi dÃƒÂ¹ng - dÃƒÂ¹ng chung cho Customer, BoothOwner, Admin (phÃƒÂ¢n biÃ¡Â»â€¡t qua RoleId)");
+                            t.HasComment("Tài khoản người dùng - dùng chung cho Customer, BoothOwner, Admin (phân biệt qua RoleId)");
                         });
                 });
 
@@ -3600,17 +2563,6 @@ namespace InfrastructureLayer.Migrations
                         .HasColumnType("uuid")
                         .HasDefaultValueSql("uuid_generate_v4()");
 
-                    b.Property<double?>("BoothLengthMeters")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("double precision");
-
-                    b.Property<double?>("BoothWidthMeters")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("double precision");
-
-                    b.Property<int>("Capacity")
-                        .HasColumnType("integer");
-
                     b.Property<string>("Color")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
@@ -3620,30 +2572,13 @@ namespace InfrastructureLayer.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("now()");
 
-                    b.Property<double>("DefaultBoothHeight")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("DefaultBoothWidth")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("DefaultGap")
-                        .HasColumnType("double precision");
-
                     b.Property<string>("Description")
                         .HasColumnType("text");
-
-                    b.Property<double?>("HorizontalGapMeters")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("double precision");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
-
-                    b.Property<double?>("LengthMeters")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("double precision");
 
                     b.Property<Guid>("NightMarketId")
                         .HasColumnType("uuid");
@@ -3659,17 +2594,6 @@ namespace InfrastructureLayer.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("now()");
-
-                    b.Property<double?>("VerticalGapMeters")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("double precision");
-
-                    b.Property<double?>("WidthMeters")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("double precision");
-
-                    b.Property<string>("ZoneCode")
-                        .HasColumnType("text");
 
                     b.Property<string>("ZoneName")
                         .IsRequired()
@@ -3722,7 +2646,9 @@ namespace InfrastructureLayer.Migrations
 
                     b.HasOne("DomainLayer.Entities.BoothRegistration", "Registration")
                         .WithOne("Booth")
-                        .HasForeignKey("DomainLayer.Entities.Booth", "RegistrationId");
+                        .HasForeignKey("DomainLayer.Entities.Booth", "RegistrationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("DomainLayer.Entities.Zone", "Zone")
                         .WithMany()
@@ -3739,16 +2665,16 @@ namespace InfrastructureLayer.Migrations
 
             modelBuilder.Entity("DomainLayer.Entities.BoothDocument", b =>
                 {
-                    b.HasOne("DomainLayer.Entities.Booth", "Booth")
+                    b.HasOne("DomainLayer.Entities.Booth", null)
                         .WithMany("BoothDocuments")
                         .HasForeignKey("BoothId");
 
                     b.HasOne("DomainLayer.Entities.BoothRegistration", "Registration")
                         .WithMany("BoothDocuments")
                         .HasForeignKey("RegistrationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
                         .HasConstraintName("BoothDocuments_BoothId_fkey");
-
-                    b.Navigation("Booth");
 
                     b.Navigation("Registration");
                 });
@@ -3937,11 +2863,11 @@ namespace InfrastructureLayer.Migrations
 
             modelBuilder.Entity("DomainLayer.Entities.Conversation", b =>
                 {
-                    b.HasOne("DomainLayer.Entities.Booth", "Booth")
-                        .WithMany("Conversations")
-                        .HasForeignKey("BoothId")
+                    b.HasOne("DomainLayer.Entities.User", "BoothOwner")
+                        .WithMany()
+                        .HasForeignKey("BoothOwnerId")
                         .IsRequired()
-                        .HasConstraintName("Conversations_BoothId_fkey");
+                        .HasConstraintName("Conversations_BoothOwnerId_fkey");
 
                     b.HasOne("DomainLayer.Entities.User", "Customer")
                         .WithMany("Conversations")
@@ -3949,17 +2875,9 @@ namespace InfrastructureLayer.Migrations
                         .IsRequired()
                         .HasConstraintName("Conversations_CustomerId_fkey");
 
-                    b.HasOne("DomainLayer.Entities.Message", "LastMessage")
-                        .WithMany()
-                        .HasForeignKey("LastMessageId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("Conversations_LastMessageId_fkey");
-
-                    b.Navigation("Booth");
+                    b.Navigation("BoothOwner");
 
                     b.Navigation("Customer");
-
-                    b.Navigation("LastMessage");
                 });
 
             modelBuilder.Entity("DomainLayer.Entities.CustomerPreference", b =>
@@ -3988,6 +2906,8 @@ namespace InfrastructureLayer.Migrations
                     b.HasOne("DomainLayer.Entities.Booth", "Booth")
                         .WithMany("FoodCategories")
                         .HasForeignKey("BoothId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
                         .HasConstraintName("FoodCategories_BoothId_fkey");
 
                     b.Navigation("Booth");
@@ -4058,26 +2978,6 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("FoodItem");
                 });
 
-            modelBuilder.Entity("DomainLayer.Entities.LayoutBlock", b =>
-                {
-                    b.HasOne("DomainLayer.Entities.MarketLayout", "Layout")
-                        .WithMany()
-                        .HasForeignKey("LayoutId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("LayoutBlocks_LayoutId_fkey");
-
-                    b.HasOne("DomainLayer.Entities.Zone", "Zone")
-                        .WithMany()
-                        .HasForeignKey("ZoneId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("LayoutBlocks_ZoneId_fkey");
-
-                    b.Navigation("Layout");
-
-                    b.Navigation("Zone");
-                });
-
             modelBuilder.Entity("DomainLayer.Entities.LayoutEdge", b =>
                 {
                     b.HasOne("DomainLayer.Entities.LayoutNode", "FromNode")
@@ -4110,12 +3010,6 @@ namespace InfrastructureLayer.Migrations
 
             modelBuilder.Entity("DomainLayer.Entities.LayoutNode", b =>
                 {
-                    b.HasOne("DomainLayer.Entities.LayoutBlock", "LayoutBlock")
-                        .WithMany()
-                        .HasForeignKey("LayoutBlockId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("LayoutNodes_LayoutBlockId_fkey");
-
                     b.HasOne("DomainLayer.Entities.MarketLayout", "Layout")
                         .WithMany("LayoutNodes")
                         .HasForeignKey("LayoutId")
@@ -4130,8 +3024,6 @@ namespace InfrastructureLayer.Migrations
                         .HasConstraintName("LayoutNodes_ZoneId_fkey");
 
                     b.Navigation("Layout");
-
-                    b.Navigation("LayoutBlock");
 
                     b.Navigation("Zone");
                 });
@@ -4188,25 +3080,6 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("Sender");
                 });
 
-            modelBuilder.Entity("DomainLayer.Entities.ModerationActionHistory", b =>
-                {
-                    b.HasOne("DomainLayer.Entities.Booth", "Booth")
-                        .WithMany()
-                        .HasForeignKey("BoothId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("ModerationActionHistory_BoothId_fkey");
-
-                    b.HasOne("DomainLayer.Entities.NightMarket", "NightMarket")
-                        .WithMany()
-                        .HasForeignKey("NightMarketId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("ModerationActionHistory_NightMarketId_fkey");
-
-                    b.Navigation("Booth");
-
-                    b.Navigation("NightMarket");
-                });
-
             modelBuilder.Entity("DomainLayer.Entities.NightMarket", b =>
                 {
                     b.HasOne("DomainLayer.Entities.User", "MarketOwner")
@@ -4216,18 +3089,6 @@ namespace InfrastructureLayer.Migrations
                         .HasConstraintName("NightMarket_MarketOwnerId_fkey");
 
                     b.Navigation("MarketOwner");
-                });
-
-            modelBuilder.Entity("DomainLayer.Entities.NightMarketImage", b =>
-                {
-                    b.HasOne("DomainLayer.Entities.NightMarket", "NightMarket")
-                        .WithMany("NightMarketImages")
-                        .HasForeignKey("NightMarketId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("NightMarketImages_NightMarketId_fkey");
-
-                    b.Navigation("NightMarket");
                 });
 
             modelBuilder.Entity("DomainLayer.Entities.Notification", b =>
@@ -4252,29 +3113,11 @@ namespace InfrastructureLayer.Migrations
 
             modelBuilder.Entity("DomainLayer.Entities.Order", b =>
                 {
-                    b.HasOne("DomainLayer.Entities.Booth", "Booth")
-                        .WithMany()
-                        .HasForeignKey("BoothId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("Order_BoothId_fkey");
-
-                    b.HasOne("DomainLayer.Entities.User", "BoothOwner")
-                        .WithMany()
-                        .HasForeignKey("BoothOwnerId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("Order_BoothOwnerId_fkey");
-
                     b.HasOne("DomainLayer.Entities.User", "Customer")
                         .WithMany("Orders")
                         .HasForeignKey("CustomerId")
                         .IsRequired()
                         .HasConstraintName("Order_CustomerId_fkey");
-
-                    b.Navigation("Booth");
-
-                    b.Navigation("BoothOwner");
 
                     b.Navigation("Customer");
                 });
@@ -4297,17 +3140,6 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("FoodItem");
 
                     b.Navigation("Order");
-                });
-
-            modelBuilder.Entity("DomainLayer.Entities.PackagePolicy", b =>
-                {
-                    b.HasOne("DomainLayer.Entities.Package", "Package")
-                        .WithMany("Policies")
-                        .HasForeignKey("PackageId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Package");
                 });
 
             modelBuilder.Entity("DomainLayer.Entities.PackagePrice", b =>
@@ -4340,28 +3172,6 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("BoothOwner");
 
                     b.Navigation("Order");
-                });
-
-            modelBuilder.Entity("DomainLayer.Entities.PaymentAttempt", b =>
-                {
-                    b.HasOne("DomainLayer.Entities.Payment", "Payment")
-                        .WithMany("Attempts")
-                        .HasForeignKey("PaymentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Payment");
-                });
-
-            modelBuilder.Entity("DomainLayer.Entities.PaymentMethod", b =>
-                {
-                    b.HasOne("DomainLayer.Entities.User", "User")
-                        .WithMany("PaymentMethods")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("DomainLayer.Entities.Promotion", b =>
@@ -4495,80 +3305,6 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("Review");
                 });
 
-            modelBuilder.Entity("DomainLayer.Entities.SupportAttachment", b =>
-                {
-                    b.HasOne("DomainLayer.Entities.SupportMessage", "Message")
-                        .WithMany("Attachments")
-                        .HasForeignKey("MessageId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("DomainLayer.Entities.SupportTicket", "Ticket")
-                        .WithMany("Attachments")
-                        .HasForeignKey("TicketId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Message");
-
-                    b.Navigation("Ticket");
-                });
-
-            modelBuilder.Entity("DomainLayer.Entities.SupportMessage", b =>
-                {
-                    b.HasOne("DomainLayer.Entities.User", "Sender")
-                        .WithMany()
-                        .HasForeignKey("SenderId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("DomainLayer.Entities.SupportTicket", "Ticket")
-                        .WithMany("Messages")
-                        .HasForeignKey("TicketId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Sender");
-
-                    b.Navigation("Ticket");
-                });
-
-            modelBuilder.Entity("DomainLayer.Entities.SupportStatusHistory", b =>
-                {
-                    b.HasOne("DomainLayer.Entities.User", "Actor")
-                        .WithMany()
-                        .HasForeignKey("ActorId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("DomainLayer.Entities.SupportTicket", "Ticket")
-                        .WithMany("StatusHistory")
-                        .HasForeignKey("TicketId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Actor");
-
-                    b.Navigation("Ticket");
-                });
-
-            modelBuilder.Entity("DomainLayer.Entities.SupportTicket", b =>
-                {
-                    b.HasOne("DomainLayer.Entities.User", "AssignedAdmin")
-                        .WithMany()
-                        .HasForeignKey("AssignedAdminId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("DomainLayer.Entities.User", "Requester")
-                        .WithMany()
-                        .HasForeignKey("RequesterId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("AssignedAdmin");
-
-                    b.Navigation("Requester");
-                });
-
             modelBuilder.Entity("DomainLayer.Entities.User", b =>
                 {
                     b.HasOne("DomainLayer.Entities.Role", "Role")
@@ -4636,8 +3372,6 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("BoothSubscriptions");
 
                     b.Navigation("Complaints");
-
-                    b.Navigation("Conversations");
 
                     b.Navigation("FoodCategories");
 
@@ -4729,8 +3463,6 @@ namespace InfrastructureLayer.Migrations
 
                     b.Navigation("MarketLayouts");
 
-                    b.Navigation("NightMarketImages");
-
                     b.Navigation("Zones");
                 });
 
@@ -4754,13 +3486,6 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("MarketSubscriptions");
 
                     b.Navigation("PackagePrices");
-
-                    b.Navigation("Policies");
-                });
-
-            modelBuilder.Entity("DomainLayer.Entities.Payment", b =>
-                {
-                    b.Navigation("Attempts");
                 });
 
             modelBuilder.Entity("DomainLayer.Entities.Promotion", b =>
@@ -4780,20 +3505,6 @@ namespace InfrastructureLayer.Migrations
             modelBuilder.Entity("DomainLayer.Entities.Role", b =>
                 {
                     b.Navigation("Users");
-                });
-
-            modelBuilder.Entity("DomainLayer.Entities.SupportMessage", b =>
-                {
-                    b.Navigation("Attachments");
-                });
-
-            modelBuilder.Entity("DomainLayer.Entities.SupportTicket", b =>
-                {
-                    b.Navigation("Attachments");
-
-                    b.Navigation("Messages");
-
-                    b.Navigation("StatusHistory");
                 });
 
             modelBuilder.Entity("DomainLayer.Entities.User", b =>
@@ -4821,8 +3532,6 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("Notifications");
 
                     b.Navigation("Orders");
-
-                    b.Navigation("PaymentMethods");
 
                     b.Navigation("Payments");
 

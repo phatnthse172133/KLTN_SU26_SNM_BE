@@ -10,7 +10,7 @@ public partial class Booth
 {
     public Guid Id { get; set; }
 
-    public Guid RegistrationId { get; set; }
+    public Guid? RegistrationId { get; set; }
 
     public Guid NightMarketId { get; set; }
 
@@ -29,6 +29,8 @@ public partial class Booth
     public string? SlotNumber { get; set; }
 
     public string? ThumbnailUrl { get; set; }
+
+    public string? LogoUrl { get; set; }
 
     public decimal? MapPositionX { get; set; }
 
@@ -53,7 +55,7 @@ public partial class Booth
 
     public string? PaymentQRImage { get; set; }
 
-    // Pending: chờ Admin duyệt | Active: hoạt động | Inactive: tạm ngừng | Suspended: bị khóa do vi phạm
+    // Active | Inactive | Banned
     public BoothStatus Status { get; set; }
 
     public DateTime CreatedAt { get; set; }
@@ -70,7 +72,7 @@ public partial class Booth
 
     public virtual ICollection<BoothPaymentInfo> BoothPaymentInfos { get; set; } = new List<BoothPaymentInfo>();
 
-    public virtual BoothRegistration Registration { get; set; } = null!;
+    public virtual BoothRegistration? Registration { get; set; }
 
     public virtual Zone? Zone { get; set; }
 

@@ -23,73 +23,56 @@ public partial class AddAdminUserStatusManagement : Migration
             WHERE "Status"::text NOT IN ('Active', 'Inactive');
             """);
 
-        migrationBuilder.CreateTable(
-            name: "EmailOutbox",
-            columns: table => new
-            {
-                Id = table.Column<Guid>(type: "uuid", nullable: false),
-                RecipientEmail = table.Column<string>(type: "text", nullable: false),
-                Subject = table.Column<string>(type: "text", nullable: false),
-                HtmlBody = table.Column<string>(type: "text", nullable: false),
-                EmailType = table.Column<string>(type: "text", nullable: false),
-                ReferenceId = table.Column<Guid>(type: "uuid", nullable: false),
-                Status = table.Column<string>(type: "text", nullable: false),
-                RetryCount = table.Column<int>(type: "integer", nullable: false),
-                LastError = table.Column<string>(type: "text", nullable: true),
-                NextRetryAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                SentAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-            },
-            constraints: table =>
-            {
-                table.PrimaryKey("PK_EmailOutbox", x => x.Id);
-            });
+        migrationBuilder.Sql("""
+            CREATE TABLE IF NOT EXISTS "EmailOutbox" (
+                "Id" uuid NOT NULL,
+                "RecipientEmail" text NOT NULL,
+                "Subject" text NOT NULL,
+                "HtmlBody" text NOT NULL,
+                "EmailType" text NOT NULL,
+                "ReferenceId" uuid NOT NULL,
+                "Status" text NOT NULL,
+                "RetryCount" integer NOT NULL,
+                "LastError" text,
+                "NextRetryAt" timestamp with time zone,
+                "SentAt" timestamp with time zone,
+                "CreatedAt" timestamp with time zone NOT NULL,
+                "UpdatedAt" timestamp with time zone NOT NULL,
+                CONSTRAINT "PK_EmailOutbox" PRIMARY KEY ("Id")
+            );
+            """);
 
-        migrationBuilder.CreateTable(
-            name: "UserStatusHistories",
-            columns: table => new
-            {
-                Id = table.Column<Guid>(type: "uuid", nullable: false),
-                UserId = table.Column<Guid>(type: "uuid", nullable: false),
-                ChangedByAdminId = table.Column<Guid>(type: "uuid", nullable: false),
-                PreviousStatus = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
-                NewStatus = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
-                Reason = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: false),
-                CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-            },
-            constraints: table =>
-            {
-                table.PrimaryKey("PK_UserStatusHistories", x => x.Id);
-                table.ForeignKey(
-                    name: "FK_UserStatusHistories_User_ChangedByAdminId",
-                    column: x => x.ChangedByAdminId,
-                    principalTable: "User",
-                    principalColumn: "Id",
-                    onDelete: ReferentialAction.Restrict);
-                table.ForeignKey(
-                    name: "FK_UserStatusHistories_User_UserId",
-                    column: x => x.UserId,
-                    principalTable: "User",
-                    principalColumn: "Id",
-                    onDelete: ReferentialAction.Restrict);
-            });
+        migrationBuilder.Sql("""
+            CREATE TABLE IF NOT EXISTS "UserStatusHistories" (
+                "Id" uuid NOT NULL,
+                "UserId" uuid NOT NULL,
+                "ChangedByAdminId" uuid NOT NULL,
+                "PreviousStatus" character varying(20) NOT NULL,
+                "NewStatus" character varying(20) NOT NULL,
+                "Reason" character varying(1000) NOT NULL,
+                "CreatedAt" timestamp with time zone NOT NULL,
+                CONSTRAINT "PK_UserStatusHistories" PRIMARY KEY ("Id"),
+                CONSTRAINT "FK_UserStatusHistories_User_ChangedByAdminId"
+                    FOREIGN KEY ("ChangedByAdminId") REFERENCES "User" ("Id") ON DELETE RESTRICT,
+                CONSTRAINT "FK_UserStatusHistories_User_UserId"
+                    FOREIGN KEY ("UserId") REFERENCES "User" ("Id") ON DELETE RESTRICT
+            );
+            """);
 
-        migrationBuilder.CreateIndex(
-            name: "IX_EmailOutbox_ReferenceId_EmailType",
-            table: "EmailOutbox",
-            columns: new[] { "ReferenceId", "EmailType" },
-            unique: true);
+        migrationBuilder.Sql("""
+            CREATE UNIQUE INDEX IF NOT EXISTS "IX_EmailOutbox_ReferenceId_EmailType"
+                ON "EmailOutbox" ("ReferenceId", "EmailType");
+            """);
 
-        migrationBuilder.CreateIndex(
-            name: "IX_UserStatusHistories_ChangedByAdminId",
-            table: "UserStatusHistories",
-            column: "ChangedByAdminId");
+        migrationBuilder.Sql("""
+            CREATE INDEX IF NOT EXISTS "IX_UserStatusHistories_ChangedByAdminId"
+                ON "UserStatusHistories" ("ChangedByAdminId");
+            """);
 
-        migrationBuilder.CreateIndex(
-            name: "IX_UserStatusHistories_UserId_CreatedAt",
-            table: "UserStatusHistories",
-            columns: new[] { "UserId", "CreatedAt" });
+        migrationBuilder.Sql("""
+            CREATE INDEX IF NOT EXISTS "IX_UserStatusHistories_UserId_CreatedAt"
+                ON "UserStatusHistories" ("UserId", "CreatedAt");
+            """);
     }
 
     protected override void Down(MigrationBuilder migrationBuilder)

@@ -16,5 +16,15 @@ public sealed class CustomerCheckoutController : ControllerBase
 
     [HttpGet("preview")]
     public async Task<IActionResult> Preview([FromQuery] Guid? promotionId, CancellationToken cancellationToken)
-        => Ok(await _checkout.GetPreviewAsync(CurrentUserId, promotionId, cancellationToken));
+    {
+        var result = await _checkout.GetPreviewAsync(CurrentUserId, promotionId, cancellationToken);
+        return Ok(new
+        {
+            Success = true,
+            Code = "SUCCESS",
+            Message = "Success",
+            Data = result
+        });
+    }
+        //=> Ok(await _checkout.GetPreviewAsync(CurrentUserId, promotionId, cancellationToken));
 }

@@ -213,7 +213,7 @@ public static class AISeedData
             market.OpeningHours = seed.OpenTime;
             market.ClosingHours = seed.CloseTime;
             market.TotalBooth = BoothSeeds.Count(booth => booth.MarketId == seed.Id);
-            market.Status = NightMarketStatus.Open;
+            market.Status = NightMarketStatus.Active;
             market.ModerationStatus = ModerationStatus.Active;
             market.IsDeleted = false;
             market.UpdatedAt = now;

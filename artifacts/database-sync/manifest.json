@@ -1,0 +1,63 @@
+{
+    "generatedAtUtc":  "2026-08-03T09:09:58.3535487Z",
+    "targetBranch":  "dev",
+    "sourceBaseCommit":  "ec09bda8269b5a6caf0b50cbe307971798a63164",
+    "migrationCount":  78,
+    "latestMigration":  "20260803073914_RemoveConfirmedLegacyNightMarketColumns",
+    "developmentDatabaseApplied":  true,
+    "developmentUserCount":  126,
+    "developmentBusinessRowCountDiffs":  0,
+    "freshDatabaseVerified":  true,
+    "restoredCloneVerified":  true,
+    "repeatApplyNoOp":  true,
+    "modelDrift":  "none",
+    "productionBuild":  "PresentationLayer and AiV2BackfillTool: 0 errors, 0 warnings",
+    "testBaseline":  "TestingLayer on source dev has 2 pre-existing NotificationService logger constructor compile errors; no test files changed",
+    "files":  [
+                  {
+                      "name":  "DATABASE_SYNC_GUIDE.md",
+                      "bytes":  4896,
+                      "sha256":  "9acf543a863b6bc1a49628c01cd53d45666adae53f65353a2e4177892fe1983d"
+                  },
+                  {
+                      "name":  "SCHEMA_AUDIT_REPORT.md",
+                      "bytes":  4429,
+                      "sha256":  "95db443aeaace1940a5fb071e653bacd073eb838865f8fd5ef32e1e7733f4855"
+                  },
+                  {
+                      "name":  "SmartNightMarket_columns.csv",
+                      "bytes":  60358,
+                      "sha256":  "04a16cc1886cd56130854e37dc934f686a6d4d8bfa856d78d7c6c2931517c316"
+                  },
+                  {
+                      "name":  "SmartNightMarket_constraints.csv",
+                      "bytes":  81734,
+                      "sha256":  "25ea4a5e4a215c02024495da4a1598922ff18a6fda3e3c5d3fcbdac97bd2caf3"
+                  },
+                  {
+                      "name":  "SmartNightMarket_indexes.csv",
+                      "bytes":  45250,
+                      "sha256":  "fce2a58afb5022ffb59bb433fad0da2883ab47525ab883b648969a617844939a"
+                  },
+                  {
+                      "name":  "SmartNightMarket_migration_hashes.sha256",
+                      "bytes":  22443,
+                      "sha256":  "a83e2a603e55ba0dd11fadd97029b192bea542b26720f4ef175bc4e523efc764"
+                  },
+                  {
+                      "name":  "SmartNightMarket_migration_history.txt",
+                      "bytes":  3395,
+                      "sha256":  "17751b1f30b74b9ff238f940178392545308d396d768728e05997af2c0d643c6"
+                  },
+                  {
+                      "name":  "SmartNightMarket_schema_idempotent.sql",
+                      "bytes":  269800,
+                      "sha256":  "3c699b79e78afd63605c7f2f55d3531e051f343c40c288ccd614f620b7c511d0"
+                  },
+                  {
+                      "name":  "SmartNightMarket_schema_only.sql",
+                      "bytes":  171342,
+                      "sha256":  "b64b9ef50223326b0013eeff4ff281d5a9b6f3c2c4bcaf23c90ef139da8a8446"
+                  }
+              ]
+}

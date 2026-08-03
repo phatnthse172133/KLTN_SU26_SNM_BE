@@ -57,7 +57,7 @@ public class MarketLayoutService : IMarketLayoutService
         var layout = _mapper.Map<MarketLayout>(request);
         layout.Id = Guid.NewGuid();
         layout.NightMarketId = nightMarketId;
-        layout.Status = MarketLayoutStatus.Draft;
+        layout.Status = MarketLayoutStatus.Inactive;
         layout.IsDeleted = false;
         layout.CreatedAt = now;
         layout.UpdatedAt = now;

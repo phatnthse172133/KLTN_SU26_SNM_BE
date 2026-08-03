@@ -23,6 +23,12 @@ public partial class MarketLayout : ISoftDelete
 
     public int Height { get; set; }
 
+    public double? MarketWidthMeters { get; set; }
+
+    public double? MarketLengthMeters { get; set; }
+
+    public double? PixelsPerMeter { get; set; }
+
     public MarketLayoutStatus Status { get; set; }
 
     public bool IsDeleted { get; set; }

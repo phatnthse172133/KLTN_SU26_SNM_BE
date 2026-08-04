@@ -9,6 +9,10 @@ public class MarketLayoutResponse
     public string? LayoutImageUrl { get; set; }
     public int Width { get; set; }
     public int Height { get; set; }
+    public string CoordinateUnit { get; set; } = string.Empty;
+    public decimal? MetersPerLayoutUnit { get; set; }
+    public string DistanceCalibrationStatus { get; set; } = string.Empty;
+    public int GraphRevision { get; set; }
     public string Status { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
@@ -43,6 +47,7 @@ public class LayoutEdgeResponse
     public Guid FromNodeId { get; set; }
     public Guid ToNodeId { get; set; }
     public decimal Distance { get; set; }
+    public decimal DistanceMeters { get; set; }
     public bool IsBidirectional { get; set; }
     public bool IsAccessible { get; set; }
 }

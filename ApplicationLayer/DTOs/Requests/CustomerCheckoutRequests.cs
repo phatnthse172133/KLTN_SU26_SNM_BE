@@ -16,6 +16,7 @@ public sealed class CheckoutCartBoothRequest
 
 public sealed class CreateCustomerOrderRequest
 {
+    public Guid BoothId { get; set; }
     [JsonConverter(typeof(UpperSnakeCaseEnumConverter<PaymentType>))]
     public PaymentType PaymentMethod { get; set; }
     public Guid? PromotionId { get; set; }

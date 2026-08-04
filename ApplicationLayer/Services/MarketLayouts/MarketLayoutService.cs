@@ -58,6 +58,10 @@ public class MarketLayoutService : IMarketLayoutService
         layout.Id = Guid.NewGuid();
         layout.NightMarketId = nightMarketId;
         layout.Status = MarketLayoutStatus.Draft;
+        layout.CoordinateUnit = LayoutCoordinateUnit.LayoutUnit;
+        layout.MetersPerLayoutUnit = null;
+        layout.DistanceCalibrationStatus = DistanceCalibrationStatus.Uncalibrated;
+        layout.GraphRevision = 1;
         layout.IsDeleted = false;
         layout.CreatedAt = now;
         layout.UpdatedAt = now;
@@ -91,6 +95,7 @@ public class MarketLayoutService : IMarketLayoutService
             throw AppException.Conflict("Deactivate the market layout before replacing its image.");
 
         _mapper.Map(request, layout);
+        layout.GraphRevision = checked(layout.GraphRevision + 1);
         layout.UpdatedAt = DateTime.UtcNow;
         _layouts.Update(layout);
 
@@ -114,6 +119,35 @@ public class MarketLayoutService : IMarketLayoutService
             Edges = _mapper.Map<List<LayoutEdgeResponse>>(edges),
             BoothLocations = _mapper.Map<List<BoothLocationResponse>>(layout.BoothLocations)
         });
+    }
+
+    public async Task<ApiResponse<MarketLayoutResponse>> UpdateCalibrationAsync(
+        Guid layoutId, UpdateLayoutCalibrationRequest request, CancellationToken cancellationToken = default)
+    {
+        var layout = await GetActiveLayoutAsync(layoutId, cancellationToken);
+        if (layout.Status == MarketLayoutStatus.Active)
+            throw AppException.Conflict("Clone the active layout to a draft before changing its distance calibration.", "ACTIVE_LAYOUT_IMMUTABLE");
+
+        if (request.MetersPerLayoutUnit <= 0)
+            throw AppException.BadRequest("Meters per layout unit must be greater than zero.", "INVALID_LAYOUT_SCALE");
+
+        layout.CoordinateUnit = LayoutCoordinateUnit.LayoutUnit;
+        layout.MetersPerLayoutUnit = request.MetersPerLayoutUnit;
+        layout.DistanceCalibrationStatus = DistanceCalibrationStatus.Calibrated;
+        layout.GraphRevision = checked(layout.GraphRevision + 1);
+        layout.UpdatedAt = DateTime.UtcNow;
+        _layouts.Update(layout);
+        await _layouts.SaveChangesAsync();
+        return ApiResponse<MarketLayoutResponse>.SuccessResponse(
+            _mapper.Map<MarketLayoutResponse>(layout), "Layout distance calibration updated successfully.");
+    }
+
+    public async Task<ApiResponse<MarketLayoutResponse>> CloneDraftAsync(
+        Guid layoutId, CloneMarketLayoutDraftRequest request, CancellationToken cancellationToken = default)
+    {
+        var clone = await _layouts.CloneToDraftAsync(layoutId, request.LayoutName, DateTime.UtcNow, cancellationToken);
+        return ApiResponse<MarketLayoutResponse>.SuccessResponse(
+            _mapper.Map<MarketLayoutResponse>(clone), "Active layout cloned to a new draft version.");
     }
 
     public async Task<ApiResponse<MarketLayoutValidationResponse>> ValidateAsync(

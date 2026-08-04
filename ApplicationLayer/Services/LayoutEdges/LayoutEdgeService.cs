@@ -6,6 +6,7 @@ using ApplicationLayer.Mappings;
 using AutoMapper;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
+using static DomainLayer.Enums.GeneralEnum;
 
 namespace ApplicationLayer.Services.LayoutEdges;
 
@@ -32,6 +33,7 @@ public class LayoutEdgeService : ILayoutEdgeService
     public async Task<ApiResponse<LayoutEdgeResponse>> CreateAsync(Guid layoutId, CreateLayoutEdgeRequest request, CancellationToken cancellationToken = default)
     {
         var edge = await BuildAsync(layoutId, request, null, cancellationToken);
+        await TouchGraphAsync(layoutId, cancellationToken);
         await _edges.AddAsync(edge); await _edges.SaveChangesAsync();
         return ApiResponse<LayoutEdgeResponse>.SuccessResponse(_mapper.Map<LayoutEdgeResponse>(edge), "Layout edge created successfully.");
     }
@@ -43,6 +45,7 @@ public class LayoutEdgeService : ILayoutEdgeService
         foreach (var request in requests) edges.Add(await BuildAsync(layoutId, request, null, cancellationToken));
         if (edges.GroupBy(x => new { A = x.FromNodeId, B = x.ToNodeId }).Any(x => x.Count() > 1))
             throw AppException.Conflict("The batch contains duplicate edges.");
+        await TouchGraphAsync(layoutId, cancellationToken);
         await _edges.AddRangeAsync(edges); await _edges.SaveChangesAsync();
         return ApiResponse<IReadOnlyCollection<LayoutEdgeResponse>>.SuccessResponse(_mapper.Map<List<LayoutEdgeResponse>>(edges), "Layout edges created successfully.");
     }
@@ -53,6 +56,7 @@ public class LayoutEdgeService : ILayoutEdgeService
         var replacement = await BuildAsync(edge.LayoutId, request, id, cancellationToken);
         edge.FromNodeId = replacement.FromNodeId; edge.ToNodeId = replacement.ToNodeId; edge.Distance = replacement.Distance;
         edge.IsBidirectional = request.IsBidirectional; edge.IsAccessible = request.IsAccessible; edge.UpdatedAt = DateTime.UtcNow;
+        await TouchGraphAsync(edge.LayoutId, cancellationToken);
         _edges.Update(edge); await _edges.SaveChangesAsync();
         return ApiResponse<LayoutEdgeResponse>.SuccessResponse(_mapper.Map<LayoutEdgeResponse>(edge), "Layout edge updated successfully.");
     }
@@ -60,6 +64,7 @@ public class LayoutEdgeService : ILayoutEdgeService
     public async Task<ApiResponse<LayoutEdgeResponse>> UpdateAccessibilityAsync(Guid id, UpdateAccessibilityRequest request, CancellationToken cancellationToken = default)
     {
         var edge = await GetEdgeAsync(id, cancellationToken);
+        await TouchGraphAsync(edge.LayoutId, cancellationToken);
         edge.IsAccessible = request.IsAccessible; edge.UpdatedAt = DateTime.UtcNow;
         _edges.Update(edge); await _edges.SaveChangesAsync();
         return ApiResponse<LayoutEdgeResponse>.SuccessResponse(_mapper.Map<LayoutEdgeResponse>(edge), "Edge accessibility updated successfully.");
@@ -68,13 +73,15 @@ public class LayoutEdgeService : ILayoutEdgeService
     public async Task<ApiResponse<object>> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var edge = await GetEdgeAsync(id, cancellationToken);
+        await TouchGraphAsync(edge.LayoutId, cancellationToken);
         edge.UpdatedAt = DateTime.UtcNow; _edges.Delete(edge); await _edges.SaveChangesAsync();
         return ApiResponse<object>.SuccessResponse(new { edge.Id }, "Layout edge deleted successfully.");
     }
 
     private async Task<LayoutEdge> BuildAsync(Guid layoutId, CreateLayoutEdgeRequest request, Guid? excludeId, CancellationToken token)
     {
-        await EnsureLayoutAsync(layoutId, token);
+        var layout = await EnsureLayoutAsync(layoutId, token);
+        EnsureEditable(layout);
         if (request.FromNodeId == request.ToNodeId) 
             throw AppException.BadRequest("An edge cannot connect a node to itself.");
 
@@ -87,9 +94,29 @@ public class LayoutEdgeService : ILayoutEdgeService
         if (await _edges.ExistsAsync(layoutId, from.Id, to.Id, excludeId, token))
             throw AppException.Conflict("This edge already exists.");
 
-        var distance = request.Distance ?? (decimal)Math.Sqrt(Math.Pow((double)(from.Xcoordinate - to.Xcoordinate), 2) + Math.Pow((double)(from.Ycoordinate - to.Ycoordinate), 2));
-        if (distance <= 0) 
-            throw AppException.BadRequest("Edge distance must be greater than zero.");
+        if (request.Distance.HasValue && request.DistanceMeters.HasValue && request.Distance.Value != request.DistanceMeters.Value)
+            throw AppException.BadRequest("Distance and distanceMeters must match when both compatibility fields are supplied.", "EDGE_DISTANCE_CONFLICT");
+
+        var suppliedDistanceMeters = request.DistanceMeters ?? request.Distance;
+        decimal distance;
+        if (suppliedDistanceMeters.HasValue)
+        {
+            distance = suppliedDistanceMeters.Value;
+        }
+        else
+        {
+            if (layout.DistanceCalibrationStatus != DistanceCalibrationStatus.Calibrated ||
+                !layout.MetersPerLayoutUnit.HasValue || layout.MetersPerLayoutUnit.Value <= 0)
+                throw AppException.BadRequest(
+                    "Physical distanceMeters is required until the layout has a valid metres-per-layout-unit calibration.",
+                    "LAYOUT_DISTANCE_UNCALIBRATED");
+
+            var layoutDistance = (decimal)Math.Sqrt(Math.Pow((double)(from.Xcoordinate - to.Xcoordinate), 2) + Math.Pow((double)(from.Ycoordinate - to.Ycoordinate), 2));
+            distance = decimal.Round(layoutDistance * layout.MetersPerLayoutUnit.Value, 2, MidpointRounding.AwayFromZero);
+        }
+
+        if (distance <= 0 || distance > 99_999_999.99m)
+            throw AppException.BadRequest("Edge distanceMeters must be greater than zero and fit the supported physical-distance range.", "INVALID_EDGE_DISTANCE_METERS");
 
         var now = DateTime.UtcNow;
         return new LayoutEdge { Id = Guid.NewGuid(), LayoutId = layoutId, FromNodeId = from.Id, ToNodeId = to.Id,
@@ -97,10 +124,22 @@ public class LayoutEdgeService : ILayoutEdgeService
             IsDeleted = false, CreatedAt = now, UpdatedAt = now };
     }
 
-    private async Task EnsureLayoutAsync(Guid id, CancellationToken token)
+    private async Task<MarketLayout> EnsureLayoutAsync(Guid id, CancellationToken token)
     {
-        if (await _layouts.GetActiveByIdAsync(id, token) is null) throw AppException.NotFound("Market layout was not found.");
+        return await _layouts.GetActiveByIdAsync(id, token) ?? throw AppException.NotFound("Market layout was not found.");
     }
     private async Task<LayoutEdge> GetEdgeAsync(Guid id, CancellationToken token)
         => await _edges.GetActiveByIdAsync(id, token) ?? throw AppException.NotFound("Layout edge was not found.");
+    private async Task TouchGraphAsync(Guid layoutId, CancellationToken token)
+    {
+        var layout = await EnsureLayoutAsync(layoutId, token);
+        EnsureEditable(layout);
+        layout.GraphRevision = checked(layout.GraphRevision + 1);
+        layout.UpdatedAt = DateTime.UtcNow;
+    }
+    private static void EnsureEditable(MarketLayout layout)
+    {
+        if (layout.Status == MarketLayoutStatus.Active)
+            throw AppException.Conflict("Clone the active layout to a draft before editing its graph.", "ACTIVE_LAYOUT_IMMUTABLE");
+    }
 }

@@ -382,6 +382,11 @@ namespace ApplicationLayer.Services.Orders
                 }
 
                 await _orderRepo.AddAsync(order);
+                var removedCartItemCount = await _orderRepo.ClearCheckedOutCartItemsAsync(order, utcNow);
+                if (dto.CheckoutCartItemIds.Count > 0 && removedCartItemCount != dto.CheckoutCartItemIds.Distinct().Count())
+                    throw AppException.Conflict(
+                        "The cart changed during checkout. Refresh it and try again.",
+                        "CART_CHANGED");
                 await _orderRepo.SaveChangesAsync();
                 await _orderRepo.CommitTransactionAsync();
             }

@@ -45,6 +45,7 @@ namespace TestingLayer
                 _mockUsers.Object,
                 _mockPush.Object,
                 _mockRealtime.Object,
+                Mock.Of<ApplicationLayer.Services.Realtime.IRealtimeEventPublisher>(),
                 _mockPresence.Object,
                 _mockMapper.Object,
                 _mockLogger.Object

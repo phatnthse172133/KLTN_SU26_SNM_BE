@@ -13,10 +13,6 @@ public sealed class FoodRecommendationReadRepository(SNMDbContext db) : IFoodRec
     {
         limit = Math.Clamp(limit, 1, 500);
         var foods = await db.FoodItems.AsNoTracking()
-            .Where(food => !food.IsDeleted && food.IsAvailable && !food.Category.IsDeleted && food.Category.IsActive && food.Category.IsSelectable
-                && food.Booth.Status == BoothStatus.Active && !food.Booth.NightMarket.IsDeleted
-                && food.Booth.NightMarket.ModerationStatus == ModerationStatus.Active
-                && food.Booth.NightMarket.Status == NightMarketStatus.Active)
             .OrderByDescending(food => food.IsFeatured).ThenByDescending(food => food.Booth.AverageRating).ThenBy(food => food.Id)
             .Take(limit)
             .Include(food => food.Category)

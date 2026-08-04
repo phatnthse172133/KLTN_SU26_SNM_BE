@@ -4,6 +4,7 @@ using DomainLayer.InterfaceRepository;
 using InfrastructureLayer.Data;
 using Microsoft.EntityFrameworkCore;
 using System.Linq.Expressions;
+using static DomainLayer.Enums.GeneralEnum;
 
 namespace InfrastructureLayer.Repositories;
 
@@ -201,9 +202,9 @@ public class BoothRepository : GenericRepository<Booth>, IBoothRepository
             includeImages
                 ? booth.BoothImages.OrderBy(image => image.DisplayOrder).ThenBy(image => image.Id).Select(image => image.ImageUrl).ToList()
                 : new List<string>(),
-            booth.BoothLocations.Where(location => !location.IsDeleted).Select(location => (Guid?)location.LayoutId).FirstOrDefault(),
-            booth.BoothLocations.Where(location => !location.IsDeleted).Select(location => (Guid?)location.LayoutNodeId).FirstOrDefault(),
-            booth.BoothLocations.Where(location => !location.IsDeleted).Select(location => location.SlotNumber).FirstOrDefault(),
-            booth.BoothLocations.Where(location => !location.IsDeleted).Select(location => location.ZoneId).FirstOrDefault(),
-            booth.BoothLocations.Where(location => !location.IsDeleted).Select(location => location.Zone == null ? null : location.Zone.ZoneName).FirstOrDefault()));
+            booth.BoothLocations.Where(location => !location.IsDeleted && location.Layout.Status == MarketLayoutStatus.Active).Select(location => (Guid?)location.LayoutId).FirstOrDefault(),
+            booth.BoothLocations.Where(location => !location.IsDeleted && location.Layout.Status == MarketLayoutStatus.Active).Select(location => (Guid?)location.LayoutNodeId).FirstOrDefault(),
+            booth.BoothLocations.Where(location => !location.IsDeleted && location.Layout.Status == MarketLayoutStatus.Active).Select(location => location.SlotNumber).FirstOrDefault(),
+            booth.BoothLocations.Where(location => !location.IsDeleted && location.Layout.Status == MarketLayoutStatus.Active).Select(location => location.ZoneId).FirstOrDefault(),
+            booth.BoothLocations.Where(location => !location.IsDeleted && location.Layout.Status == MarketLayoutStatus.Active).Select(location => location.Zone == null ? null : location.Zone.ZoneName).FirstOrDefault()));
 }

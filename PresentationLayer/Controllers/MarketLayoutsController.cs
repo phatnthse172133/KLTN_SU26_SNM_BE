@@ -38,6 +38,14 @@ public class MarketLayoutsController : ControllerBase
     public async Task<IActionResult> UpdateImage(Guid layoutId, [FromForm] UpdateMarketLayoutImageRequest request, CancellationToken cancellationToken)
         => Ok(await _service.UpdateImageAsync(layoutId, request, cancellationToken));
 
+    [HttpPut("api/layouts/{layoutId:guid}/calibration")]
+    public async Task<IActionResult> UpdateCalibration(Guid layoutId, UpdateLayoutCalibrationRequest request, CancellationToken cancellationToken)
+        => Ok(await _service.UpdateCalibrationAsync(layoutId, request, cancellationToken));
+
+    [HttpPost("api/layouts/{layoutId:guid}/clone-draft")]
+    public async Task<IActionResult> CloneDraft(Guid layoutId, CloneMarketLayoutDraftRequest request, CancellationToken cancellationToken)
+        => Ok(await _service.CloneDraftAsync(layoutId, request, cancellationToken));
+
     [HttpGet("api/layouts/{layoutId:guid}/editor-data")]
     public async Task<IActionResult> GetEditorData(Guid layoutId, CancellationToken cancellationToken)
         => Ok(await _service.GetEditorDataAsync(layoutId, cancellationToken));

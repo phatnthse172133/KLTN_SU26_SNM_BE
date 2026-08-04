@@ -12,5 +12,5 @@ public interface IBoothLocationService
     Task<ApiResponse<NodeAvailabilityResponse>> GetAvailabilityAsync(Guid nodeId, CancellationToken cancellationToken = default);
     Task<ApiResponse<BoothLocationResponse>> AssignAsync(Guid boothId, AssignBoothLocationRequest request, CancellationToken cancellationToken = default);
     Task<ApiResponse<BoothLocationResponse>> MoveAsync(Guid boothId, AssignBoothLocationRequest request, CancellationToken cancellationToken = default);
-    Task<ApiResponse<object>> ReleaseAsync(Guid boothId, CancellationToken cancellationToken = default);
+    Task<ApiResponse<object>> ReleaseAsync(Guid boothId, Guid? layoutId = null, CancellationToken cancellationToken = default);
 }

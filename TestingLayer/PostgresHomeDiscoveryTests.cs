@@ -82,7 +82,7 @@ public class PostgresHomeDiscoveryTests
 
     [Fact]
     [Trait("Category", "PostgreSQLIntegration")]
-    public async Task LatestMigrations_HomeDiscoveryQueries_ReturnEmptyPagesOnPostgres()
+    public async Task LatestMigrations_HomeDiscoveryQueries_FindOnlyTheDeterministicFixtureWhenFiltered()
     {
         var adminConnection = Environment.GetEnvironmentVariable("SNM_TEST_POSTGRES");
         if (string.IsNullOrWhiteSpace(adminConnection))
@@ -104,11 +104,13 @@ public class PostgresHomeDiscoveryTests
 
             await using var context = new SNMDbContext(options);
             await context.Database.MigrateAsync();
+            await SeedLatestHomeFixtureAsync(databaseBuilder.ConnectionString);
+            context.ChangeTracker.Clear();
 
             var pendingMigrations = await context.Database.GetPendingMigrationsAsync();
             Assert.Empty(pendingMigrations);
 
-            await AssertHomeQueriesAsync(context, expectEmpty: true);
+            await AssertHomeQueriesAsync(context, new HomeFixture(MarketId, BoothId, FoodId));
         }
         finally
         {
@@ -134,29 +136,31 @@ public class PostgresHomeDiscoveryTests
             .Options;
         await using var context = new SNMDbContext(options);
 
-        await AssertHomeQueriesAsync(context, expectEmpty: false);
+        await AssertHomeQueriesAsync(context, null);
     }
 
-    private static async Task AssertHomeQueriesAsync(SNMDbContext context, bool expectEmpty)
+    private static async Task AssertHomeQueriesAsync(SNMDbContext context, HomeFixture? fixture)
     {
+        var marketFilter = fixture is null ? null : "pg-home-fixture";
+        var marketId = fixture?.MarketId;
         var markets = await new NightMarketRepository(context).GetActivePagedAsync(
-            null, NightMarketStatus.Active, 1, 6, "name", true);
+            marketFilter, NightMarketStatus.Active, 1, 100, "name", true);
         var foods = await new FoodItemRepository(context).GetCustomerPagedAsync(
-            null, null, null, null, null, null, true,
-            DateTime.UtcNow, new TimeOnly(20, 0), 1, 6, "featured");
+            marketId, null, null, null, null, null, true,
+            FixtureUtcNow, FixtureLocalTime, 1, 100, "featured");
         var foodsByName = await new FoodItemRepository(context).GetCustomerPagedAsync(
-            null, null, null, null, null, null, true,
-            DateTime.UtcNow, new TimeOnly(20, 0), 1, 6, "name");
+            marketId, null, null, null, null, null, true,
+            FixtureUtcNow, FixtureLocalTime, 1, 100, "name");
         var foodsByPrice = await new FoodItemRepository(context).GetCustomerPagedAsync(
-            null, null, null, null, 0, decimal.MaxValue, true,
-            DateTime.UtcNow, new TimeOnly(20, 0), 1, 6, "priceAsc");
+            marketId, null, null, null, 0, decimal.MaxValue, true,
+            FixtureUtcNow, FixtureLocalTime, 1, 100, "priceAsc");
         var foodsByPriceDescending = await new FoodItemRepository(context).GetCustomerPagedAsync(
-            null, null, null, null, null, null, true,
-            DateTime.UtcNow, new TimeOnly(20, 0), 1, 6, "priceDesc");
+            marketId, null, null, null, null, null, true,
+            FixtureUtcNow, FixtureLocalTime, 1, 100, "priceDesc");
         var aiOrderableFoods = await new FoodItemRepository(context).GetAiOrderableCandidatesAsync(
-            null, new TimeOnly(20, 0), 200);
+            marketId, FixtureLocalTime, 200);
         var booths = await new BoothRepository(context).GetCustomerPagedAsync(
-            null, null, null, new TimeOnly(20, 0), null, 1, 6, "featured");
+            marketId, null, null, FixtureLocalTime, null, 1, 100, "featured");
         var foodTagRepository = new FoodTagRepository(context);
         var foodTags = await foodTagRepository.GetPagedTagsAsync(null, null, 1, 100);
         var aiHome = await CreateAiService(foodTagRepository).GetHomeAsync(null);
@@ -173,22 +177,49 @@ public class PostgresHomeDiscoveryTests
         Assert.NotNull(aiHome.Data!.PopularTags);
         Assert.Equal(5, aiHome.Data.DiningStyles.Count);
 
-        if (!expectEmpty)
+        if (fixture is null)
             return;
 
-        Assert.Empty(markets.Items);
-        Assert.Empty(foods.Items);
-        Assert.Empty(foodsByName.Items);
-        Assert.Empty(foodsByPrice.Items);
-        Assert.Empty(foodsByPriceDescending.Items);
-        Assert.Empty(booths.Items);
-        Assert.Empty(foodTags.Items);
-        Assert.Empty(aiHome.Data!.PopularTags);
-        Assert.Equal(0, markets.TotalCount);
-        Assert.Equal(0, foods.TotalCount);
-        Assert.Equal(0, booths.TotalCount);
-        Assert.Equal(0, foodTags.TotalCount);
+        Assert.Equal(fixture.MarketId, Assert.Single(markets.Items).Id);
+        Assert.Equal(fixture.FoodId, Assert.Single(foods.Items).Id);
+        Assert.Equal(fixture.FoodId, Assert.Single(foodsByName.Items).Id);
+        Assert.Equal(fixture.FoodId, Assert.Single(foodsByPrice.Items).Id);
+        Assert.Equal(fixture.FoodId, Assert.Single(foodsByPriceDescending.Items).Id);
+        Assert.Equal(fixture.FoodId, Assert.Single(aiOrderableFoods).Id);
+        Assert.Equal(fixture.BoothId, Assert.Single(booths.Items).Id);
+        Assert.Equal(1, markets.TotalCount);
+        Assert.Equal(1, foods.TotalCount);
+        Assert.Equal(1, booths.TotalCount);
     }
+
+    private static async Task SeedLatestHomeFixtureAsync(string connectionString)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand(
+            """
+            SET session_replication_role = replica;
+            INSERT INTO "User" ("Id","RoleId","UserName","PasswordHash","FullName","Email","AuthProvider","Status","CreatedAt","UpdatedAt") VALUES
+            ('51000000-0000-0000-0000-000000000001','51000000-0000-0000-0000-000000000099','pg-home-owner','hash','PG Home Owner','pg-home-owner@test.local','Local','Active',now(),now());
+            INSERT INTO "NightMarket" ("Id","Name","Address","OpeningHours","ClosingHours","Status","ModerationStatus","IsDeleted","TotalBooth","CreatedAt","UpdatedAt") VALUES
+            ('52000000-0000-0000-0000-000000000001','pg-home-fixture-market','pg-home-fixture-address','00:00','23:59','Active','Active',false,1,now(),now());
+            INSERT INTO "Booth" ("Id","RegistrationId","NightMarketId","BoothOwnerId","BoothName","OpenTime","CloseTime","Status","CreatedAt","UpdatedAt") VALUES
+            ('53000000-0000-0000-0000-000000000001','53000000-0000-0000-0000-000000000099','52000000-0000-0000-0000-000000000001','51000000-0000-0000-0000-000000000001','pg-home-fixture-booth','00:00','23:59','Active',now(),now());
+            INSERT INTO "FoodCategories" ("Id","BoothId","Code","Name","IsSystem","IsActive","DisplayOrder","IsSelectable","IsDeleted","CreatedAt","UpdatedAt") VALUES
+            ('54000000-0000-0000-0000-000000000001','53000000-0000-0000-0000-000000000001','PG_HOME_FIXTURE','PG home fixture',false,true,0,true,false,now(),now());
+            INSERT INTO "FoodItem" ("Id","BoothId","CategoryId","Name","Description","Price","IsAvailable","IsFeatured","IsDeleted","SpiceLevel","CreatedAt","UpdatedAt") VALUES
+            ('55000000-0000-0000-0000-000000000001','53000000-0000-0000-0000-000000000001','54000000-0000-0000-0000-000000000001','pg-home-fixture-food','Deterministic PostgreSQL home fixture',42000,true,true,false,'NON_SPICY',now(),now());
+            SET session_replication_role = origin;
+            """, connection);
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private static readonly Guid MarketId = Guid.Parse("52000000-0000-0000-0000-000000000001");
+    private static readonly Guid BoothId = Guid.Parse("53000000-0000-0000-0000-000000000001");
+    private static readonly Guid FoodId = Guid.Parse("55000000-0000-0000-0000-000000000001");
+    private static readonly DateTime FixtureUtcNow = new(2026, 8, 4, 13, 0, 0, DateTimeKind.Utc);
+    private static readonly TimeOnly FixtureLocalTime = new(20, 0);
+    private sealed record HomeFixture(Guid MarketId, Guid BoothId, Guid FoodId);
 
     private static AIRecommendationService CreateAiService(FoodTagRepository foodTags)
         => new(

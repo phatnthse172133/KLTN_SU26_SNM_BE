@@ -8,6 +8,11 @@ namespace InfrastructureLayer.Repositories;
 
 public sealed class AiRecommendationSessionRepository(SNMDbContext db) : IAiRecommendationSessionRepository
 {
+    public Task<string?> GetActiveParsedIntentJsonAsync(Guid customerId, Guid sessionId, DateTime utcNow, CancellationToken cancellationToken)
+        => db.AiRecommendationSessions.AsNoTracking()
+            .Where(value => value.Id == sessionId && value.CustomerId == customerId && value.ExpiresAt > utcNow)
+            .Select(value => value.ParsedPreferenceJson).SingleOrDefaultAsync(cancellationToken);
+
     public async Task SaveSessionAsync(AiRecommendationSession session, IReadOnlyCollection<AiRecommendationResult> results, CancellationToken cancellationToken)
     {
         await using var transaction = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(cancellationToken) : null;

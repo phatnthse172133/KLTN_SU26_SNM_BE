@@ -23,6 +23,14 @@ public partial class MarketLayout : ISoftDelete
 
     public int Height { get; set; }
 
+    public LayoutCoordinateUnit CoordinateUnit { get; set; }
+
+    public decimal? MetersPerLayoutUnit { get; set; }
+
+    public DistanceCalibrationStatus DistanceCalibrationStatus { get; set; }
+
+    public int GraphRevision { get; set; }
+
     public MarketLayoutStatus Status { get; set; }
 
     public bool IsDeleted { get; set; }
@@ -36,6 +44,8 @@ public partial class MarketLayout : ISoftDelete
     public virtual ICollection<LayoutNode> LayoutNodes { get; set; } = new List<LayoutNode>();
 
     public virtual ICollection<LayoutEdge> LayoutEdges { get; set; } = new List<LayoutEdge>();
+
+    public virtual ICollection<LayoutNavigationAnchor> NavigationAnchors { get; set; } = new List<LayoutNavigationAnchor>();
 
     public virtual NightMarket NightMarket { get; set; } = null!;
 }

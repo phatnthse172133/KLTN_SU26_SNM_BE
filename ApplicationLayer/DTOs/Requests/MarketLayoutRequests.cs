@@ -40,3 +40,9 @@ public class UpdateMarketLayoutImageRequest
     [Range(1, int.MaxValue)]
     public int Height { get; set; }
 }
+
+public class CloneMarketLayoutDraftRequest
+{
+    [StringLength(150)]
+    public string? LayoutName { get; set; }
+}

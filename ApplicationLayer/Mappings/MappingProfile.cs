@@ -341,6 +341,10 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.LayoutImageUrl, o => o.Ignore())
                 .ForMember(d => d.Width, o => o.Ignore())
                 .ForMember(d => d.Height, o => o.Ignore())
+                .ForMember(d => d.CoordinateUnit, o => o.Ignore())
+                .ForMember(d => d.MetersPerLayoutUnit, o => o.Ignore())
+                .ForMember(d => d.DistanceCalibrationStatus, o => o.Ignore())
+                .ForMember(d => d.GraphRevision, o => o.Ignore())
                 .ForMember(d => d.Status, o => o.Ignore())
                 .ForMember(d => d.IsDeleted, o => o.Ignore())
                 .ForMember(d => d.CreatedAt, o => o.Ignore())
@@ -348,6 +352,7 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.BoothLocations, o => o.Ignore())
                 .ForMember(d => d.LayoutNodes, o => o.Ignore())
                 .ForMember(d => d.LayoutEdges, o => o.Ignore())
+                .ForMember(d => d.NavigationAnchors, o => o.Ignore())
                 .ForMember(d => d.NightMarket, o => o.Ignore());
             CreateMap<UpdateMarketLayoutRequest, MarketLayout>()
                 .IncludeBase<CreateMarketLayoutRequest, MarketLayout>();
@@ -356,6 +361,10 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.NightMarketId, o => o.Ignore())
                 .ForMember(d => d.LayoutName, o => o.Ignore())
                 .ForMember(d => d.Version, o => o.Ignore())
+                .ForMember(d => d.CoordinateUnit, o => o.Ignore())
+                .ForMember(d => d.MetersPerLayoutUnit, o => o.Ignore())
+                .ForMember(d => d.DistanceCalibrationStatus, o => o.Ignore())
+                .ForMember(d => d.GraphRevision, o => o.Ignore())
                 .ForMember(d => d.Status, o => o.Ignore())
                 .ForMember(d => d.IsDeleted, o => o.Ignore())
                 .ForMember(d => d.CreatedAt, o => o.Ignore())
@@ -363,9 +372,12 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.BoothLocations, o => o.Ignore())
                 .ForMember(d => d.LayoutNodes, o => o.Ignore())
                 .ForMember(d => d.LayoutEdges, o => o.Ignore())
+                .ForMember(d => d.NavigationAnchors, o => o.Ignore())
                 .ForMember(d => d.NightMarket, o => o.Ignore());
             CreateMap<MarketLayout, MarketLayoutResponse>()
-                .ForMember(d => d.Status, o => o.MapFrom(s => s.Status.ToString()));
+                .ForMember(d => d.Status, o => o.MapFrom(s => s.Status.ToString()))
+                .ForMember(d => d.CoordinateUnit, o => o.MapFrom(s => s.CoordinateUnit.ToString()))
+                .ForMember(d => d.DistanceCalibrationStatus, o => o.MapFrom(s => s.DistanceCalibrationStatus.ToString()));
             CreateMap<CreateLayoutNodeRequest, LayoutNode>()
                 .ForMember(d => d.Id, o => o.Ignore())
                 .ForMember(d => d.LayoutId, o => o.Ignore())
@@ -378,7 +390,8 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.Zone, o => o.Ignore())
                 .ForMember(d => d.OutgoingEdges, o => o.Ignore())
                 .ForMember(d => d.IncomingEdges, o => o.Ignore())
-                .ForMember(d => d.BoothLocations, o => o.Ignore());
+                .ForMember(d => d.BoothLocations, o => o.Ignore())
+                .ForMember(d => d.NavigationAnchors, o => o.Ignore());
             CreateMap<UpdateLayoutNodeRequest, LayoutNode>().IncludeBase<CreateLayoutNodeRequest, LayoutNode>();
             CreateMap<LayoutNode, LayoutNodeResponse>()
                 .ForMember(d => d.NodeType, o => o.MapFrom(s => s.NodeType.ToString()))
@@ -396,7 +409,8 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.FromNode, o => o.Ignore())
                 .ForMember(d => d.ToNode, o => o.Ignore());
             CreateMap<UpdateLayoutEdgeRequest, LayoutEdge>().IncludeBase<CreateLayoutEdgeRequest, LayoutEdge>();
-            CreateMap<LayoutEdge, LayoutEdgeResponse>();
+            CreateMap<LayoutEdge, LayoutEdgeResponse>()
+                .ForMember(d => d.DistanceMeters, o => o.MapFrom(s => s.Distance));
             CreateMap<BoothLocation, BoothLocationResponse>()
                 .ForMember(d => d.XCoordinate, o => o.MapFrom(s => s.Xcoordinate))
                 .ForMember(d => d.YCoordinate, o => o.MapFrom(s => s.Ycoordinate));

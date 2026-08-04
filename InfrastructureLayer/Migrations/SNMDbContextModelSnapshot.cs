@@ -874,15 +874,17 @@ namespace InfrastructureLayer.Migrations
                     b.HasKey("Id")
                         .HasName("BoothLocations_pkey");
 
-                    b.HasIndex("LayoutId");
+                    b.HasIndex("BoothId");
+
+                    b.HasIndex("LayoutNodeId");
 
                     b.HasIndex("ZoneId");
 
-                    b.HasIndex(new[] { "BoothId" }, "ux_boothlocation_active_booth")
+                    b.HasIndex(new[] { "LayoutId", "BoothId" }, "ux_boothlocation_active_layout_booth")
                         .IsUnique()
                         .HasFilter("\"IsDeleted\" = false");
 
-                    b.HasIndex(new[] { "LayoutNodeId" }, "ux_boothlocation_active_node")
+                    b.HasIndex(new[] { "LayoutId", "LayoutNodeId" }, "ux_boothlocation_active_layout_node")
                         .IsUnique()
                         .HasFilter("\"IsDeleted\" = false");
 
@@ -2592,6 +2594,120 @@ namespace InfrastructureLayer.Migrations
                     b.ToTable("LayoutEdges", t =>
                         {
                             t.HasComment("CÃ¡ÂºÂ¡nh nÃ¡Â»â€˜i giÃ¡Â»Â¯a 2 LayoutNode - thÃ¡Â»Æ’ hiÃ¡Â»â€¡n Ã„â€˜Ã†Â°Ã¡Â»Âng Ã„â€˜i vÃƒÂ  khoÃ¡ÂºÂ£ng cÃƒÂ¡ch, dÃƒÂ¹ng cho thuÃ¡ÂºÂ­t toÃƒÂ¡n tÃƒÂ¬m Ã„â€˜Ã†Â°Ã¡Â»Âng ngÃ¡ÂºÂ¯n nhÃ¡ÂºÂ¥t trong chÃ¡Â»Â£");
+
+                            t.HasCheckConstraint("ck_layoutedge_distance_positive", "\"Distance\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.LayoutNavigationAnchor", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("uuid_generate_v4()");
+
+                    b.Property<string>("AnchorCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("AnchorType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<TimeOnly?>("ClosingTime")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsCustomerAccessible")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsQrEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<decimal>("Latitude")
+                        .HasPrecision(10, 7)
+                        .HasColumnType("numeric(10,7)");
+
+                    b.Property<Guid>("LayoutId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("LayoutNodeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Longitude")
+                        .HasPrecision(10, 7)
+                        .HasColumnType("numeric(10,7)");
+
+                    b.Property<TimeOnly?>("OpeningTime")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<string>("PublicTokenHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("QrValidFrom")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("QrValidUntil")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("TokenVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("Id")
+                        .HasName("LayoutNavigationAnchors_pkey");
+
+                    b.HasIndex("LayoutNodeId");
+
+                    b.HasIndex(new[] { "LayoutId", "AnchorCode" }, "ux_navigationanchor_layout_code")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
+
+                    b.ToTable("LayoutNavigationAnchors", t =>
+                        {
+                            t.HasCheckConstraint("ck_navigationanchor_hours_pair", "(\"OpeningTime\" IS NULL) = (\"ClosingTime\" IS NULL)");
+
+                            t.HasCheckConstraint("ck_navigationanchor_latitude", "\"Latitude\" >= -90 AND \"Latitude\" <= 90");
+
+                            t.HasCheckConstraint("ck_navigationanchor_longitude", "\"Longitude\" >= -180 AND \"Longitude\" <= 180");
+
+                            t.HasCheckConstraint("ck_navigationanchor_qr_hash", "\"IsQrEnabled\" = false OR \"PublicTokenHash\" IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_navigationanchor_qr_validity", "\"QrValidFrom\" IS NULL OR \"QrValidUntil\" IS NULL OR \"QrValidFrom\" < \"QrValidUntil\"");
+
+                            t.HasCheckConstraint("ck_navigationanchor_token_version", "\"TokenVersion\" > 0");
                         });
                 });
 
@@ -2674,10 +2790,29 @@ namespace InfrastructureLayer.Migrations
                         .HasColumnType("uuid")
                         .HasDefaultValueSql("uuid_generate_v4()");
 
+                    b.Property<string>("CoordinateUnit")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasDefaultValueSql("'LayoutUnit'::character varying");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("now()");
+
+                    b.Property<string>("DistanceCalibrationStatus")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasDefaultValueSql("'Uncalibrated'::character varying");
+
+                    b.Property<int>("GraphRevision")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
 
                     b.Property<int>("Height")
                         .HasColumnType("integer");
@@ -2695,6 +2830,10 @@ namespace InfrastructureLayer.Migrations
                         .IsRequired()
                         .HasMaxLength(150)
                         .HasColumnType("character varying(150)");
+
+                    b.Property<decimal?>("MetersPerLayoutUnit")
+                        .HasPrecision(12, 6)
+                        .HasColumnType("numeric(12,6)");
 
                     b.Property<Guid>("NightMarketId")
                         .HasColumnType("uuid");
@@ -2737,6 +2876,10 @@ namespace InfrastructureLayer.Migrations
                     b.ToTable("MarketLayouts", t =>
                         {
                             t.HasComment("SÃ†Â¡ Ã„â€˜Ã¡Â»â€œ mÃ¡ÂºÂ·t bÃ¡ÂºÂ±ng cÃ¡Â»Â§a mÃ¡Â»â„¢t chÃ¡Â»Â£ Ã„â€˜ÃƒÂªm - dÃƒÂ¹ng lÃƒÂ m nÃ¡Â»Ân Ã„â€˜Ã¡Â»Æ’ Ã„â€˜Ã¡ÂºÂ·t cÃƒÂ¡c Ã„â€˜iÃ¡Â»Æ’m (LayoutNodes) vÃƒÂ  gian hÃƒÂ ng (BoothLocations)");
+
+                            t.HasCheckConstraint("ck_marketlayout_graph_revision_positive", "\"GraphRevision\" > 0");
+
+                            t.HasCheckConstraint("ck_marketlayout_positive_scale", "\"MetersPerLayoutUnit\" IS NULL OR \"MetersPerLayoutUnit\" > 0");
                         });
                 });
 
@@ -5487,6 +5630,27 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("ToNode");
                 });
 
+            modelBuilder.Entity("DomainLayer.Entities.LayoutNavigationAnchor", b =>
+                {
+                    b.HasOne("DomainLayer.Entities.MarketLayout", "Layout")
+                        .WithMany("NavigationAnchors")
+                        .HasForeignKey("LayoutId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("LayoutNavigationAnchors_LayoutId_fkey");
+
+                    b.HasOne("DomainLayer.Entities.LayoutNode", "LayoutNode")
+                        .WithMany("NavigationAnchors")
+                        .HasForeignKey("LayoutNodeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("LayoutNavigationAnchors_LayoutNodeId_fkey");
+
+                    b.Navigation("Layout");
+
+                    b.Navigation("LayoutNode");
+                });
+
             modelBuilder.Entity("DomainLayer.Entities.LayoutNode", b =>
                 {
                     b.HasOne("DomainLayer.Entities.MarketLayout", "Layout")
@@ -6082,6 +6246,8 @@ namespace InfrastructureLayer.Migrations
 
                     b.Navigation("IncomingEdges");
 
+                    b.Navigation("NavigationAnchors");
+
                     b.Navigation("OutgoingEdges");
                 });
 
@@ -6092,6 +6258,8 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("LayoutEdges");
 
                     b.Navigation("LayoutNodes");
+
+                    b.Navigation("NavigationAnchors");
                 });
 
             modelBuilder.Entity("DomainLayer.Entities.NightMarket", b =>

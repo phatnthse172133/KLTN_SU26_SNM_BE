@@ -95,6 +95,8 @@ namespace InfrastructureLayer.Data
 
         public virtual DbSet<LayoutNode> LayoutNodes { get; set; }
 
+        public virtual DbSet<LayoutNavigationAnchor> LayoutNavigationAnchors { get; set; }
+
         public virtual DbSet<MarketLayout> MarketLayouts { get; set; }
 
         public virtual DbSet<Message> Messages { get; set; }
@@ -362,8 +364,8 @@ namespace InfrastructureLayer.Data
 
                 entity.ToTable(tb => tb.HasComment("VÃ¡Â»â€¹ trÃƒÂ­ cÃ¡Â»Â¥ thÃ¡Â»Æ’ (tÃ¡Â»Âa Ã„â€˜Ã¡Â»â„¢) cÃ¡Â»Â§a 1 gian hÃƒÂ ng trÃƒÂªn 1 sÃ†Â¡ Ã„â€˜Ã¡Â»â€œ mÃ¡ÂºÂ·t bÃ¡ÂºÂ±ng"));
 
-                entity.HasIndex(e => e.BoothId, "ux_boothlocation_active_booth").IsUnique().HasFilter("\"IsDeleted\" = false");
-                entity.HasIndex(e => e.LayoutNodeId, "ux_boothlocation_active_node").IsUnique().HasFilter("\"IsDeleted\" = false");
+                entity.HasIndex(e => new { e.LayoutId, e.BoothId }, "ux_boothlocation_active_layout_booth").IsUnique().HasFilter("\"IsDeleted\" = false");
+                entity.HasIndex(e => new { e.LayoutId, e.LayoutNodeId }, "ux_boothlocation_active_layout_node").IsUnique().HasFilter("\"IsDeleted\" = false");
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
@@ -805,6 +807,8 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.IsAccessible).HasDefaultValue(true);
                 entity.Property(e => e.IsDeleted).HasDefaultValue(false);
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+                entity.ToTable(table => table.HasCheckConstraint(
+                    "ck_layoutedge_distance_positive", "\"Distance\" > 0"));
 
                 entity.HasIndex(e => new { e.LayoutId, e.FromNodeId, e.ToNodeId }, "ux_layoutedge_active")
                     .IsUnique()
@@ -857,6 +861,48 @@ namespace InfrastructureLayer.Data
                     .HasConstraintName("LayoutNodes_ZoneId_fkey");
             });
 
+            modelBuilder.Entity<LayoutNavigationAnchor>(entity =>
+            {
+                entity.HasKey(e => e.Id).HasName("LayoutNavigationAnchors_pkey");
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.AnchorType).HasConversion<string>().HasMaxLength(30);
+                entity.Property(e => e.AnchorCode).HasMaxLength(50);
+                entity.Property(e => e.DisplayName).HasMaxLength(150);
+                entity.Property(e => e.PublicTokenHash).HasMaxLength(64);
+                entity.Property(e => e.TokenVersion).HasDefaultValue(1);
+                entity.Property(e => e.IsQrEnabled).HasDefaultValue(false);
+                entity.Property(e => e.PublicTokenHash).HasMaxLength(64);
+                entity.Property(e => e.TokenVersion).HasDefaultValue(1);
+                entity.Property(e => e.IsQrEnabled).HasDefaultValue(false);
+                entity.Property(e => e.Latitude).HasPrecision(10, 7);
+                entity.Property(e => e.Longitude).HasPrecision(10, 7);
+                entity.Property(e => e.IsCustomerAccessible).HasDefaultValue(true);
+                entity.Property(e => e.IsActive).HasDefaultValue(true);
+                entity.Property(e => e.IsDeleted).HasDefaultValue(false);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+                entity.HasIndex(e => new { e.LayoutId, e.AnchorCode }, "ux_navigationanchor_layout_code")
+                    .IsUnique().HasFilter("\"IsDeleted\" = false");
+                entity.ToTable(table =>
+                {
+                    table.HasCheckConstraint("ck_navigationanchor_latitude", "\"Latitude\" >= -90 AND \"Latitude\" <= 90");
+                    table.HasCheckConstraint("ck_navigationanchor_longitude", "\"Longitude\" >= -180 AND \"Longitude\" <= 180");
+                    table.HasCheckConstraint("ck_navigationanchor_hours_pair", "(\"OpeningTime\" IS NULL) = (\"ClosingTime\" IS NULL)");
+                    table.HasCheckConstraint("ck_navigationanchor_token_version", "\"TokenVersion\" > 0");
+                    table.HasCheckConstraint("ck_navigationanchor_qr_hash", "\"IsQrEnabled\" = false OR \"PublicTokenHash\" IS NOT NULL");
+                    table.HasCheckConstraint("ck_navigationanchor_qr_validity", "\"QrValidFrom\" IS NULL OR \"QrValidUntil\" IS NULL OR \"QrValidFrom\" < \"QrValidUntil\"");
+                    table.HasCheckConstraint("ck_navigationanchor_token_version", "\"TokenVersion\" > 0");
+                    table.HasCheckConstraint("ck_navigationanchor_qr_hash", "\"IsQrEnabled\" = false OR \"PublicTokenHash\" IS NOT NULL");
+                    table.HasCheckConstraint("ck_navigationanchor_qr_validity", "\"QrValidFrom\" IS NULL OR \"QrValidUntil\" IS NULL OR \"QrValidFrom\" < \"QrValidUntil\"");
+                });
+                entity.HasOne(e => e.Layout).WithMany(e => e.NavigationAnchors)
+                    .HasForeignKey(e => e.LayoutId).OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("LayoutNavigationAnchors_LayoutId_fkey");
+                entity.HasOne(e => e.LayoutNode).WithMany(e => e.NavigationAnchors)
+                    .HasForeignKey(e => e.LayoutNodeId).OnDelete(DeleteBehavior.Restrict)
+                    .HasConstraintName("LayoutNavigationAnchors_LayoutNodeId_fkey");
+            });
+
             modelBuilder.Entity<MarketLayout>(entity =>
             {
                 entity.HasKey(e => e.Id).HasName("MarketLayouts_pkey");
@@ -868,12 +914,26 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.LayoutName).HasMaxLength(150);
                 entity.Property(e => e.LayoutImageUrl).HasMaxLength(500);
                 entity.Property(e => e.Version).HasDefaultValue(1);
+                entity.Property(e => e.GraphRevision).HasDefaultValue(1);
+                entity.Property(e => e.CoordinateUnit)
+                    .HasConversion<string>()
+                    .HasMaxLength(30)
+                    .HasDefaultValueSql("'LayoutUnit'::character varying");
+                entity.Property(e => e.MetersPerLayoutUnit).HasPrecision(12, 6);
+                entity.Property(e => e.DistanceCalibrationStatus)
+                    .HasConversion<string>()
+                    .HasMaxLength(30)
+                    .HasDefaultValueSql("'Uncalibrated'::character varying");
                 entity.Property(e => e.Status)
                     .HasConversion<string>()
                     .HasMaxLength(20)
                     .HasDefaultValueSql("'Draft'::character varying");
                 entity.Property(e => e.IsDeleted).HasDefaultValue(false);
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+                entity.ToTable(table => table.HasCheckConstraint(
+                    "ck_marketlayout_positive_scale", "\"MetersPerLayoutUnit\" IS NULL OR \"MetersPerLayoutUnit\" > 0"));
+                entity.ToTable(table => table.HasCheckConstraint(
+                    "ck_marketlayout_graph_revision_positive", "\"GraphRevision\" > 0"));
 
                 entity.HasIndex(e => new { e.NightMarketId, e.LayoutName }, "ux_marketlayout_market_name_active")
                     .IsUnique()

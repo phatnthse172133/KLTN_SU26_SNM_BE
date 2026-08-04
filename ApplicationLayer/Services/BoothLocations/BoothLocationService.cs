@@ -58,30 +58,36 @@ public class BoothLocationService : IBoothLocationService
 
     public async Task<ApiResponse<BoothLocationResponse>> AssignAsync(Guid boothId, AssignBoothLocationRequest request, CancellationToken cancellationToken = default)
     {
-        if (await _locations.GetCurrentByBoothAsync(boothId, cancellationToken) is not null)
+        if (await _locations.GetCurrentByLayoutAndBoothAsync(request.LayoutId, boothId, cancellationToken) is not null)
             throw AppException.Conflict("The booth already has a location. Use the move endpoint.");
         return await SaveAsync(boothId, request, false, cancellationToken);
     }
 
     public async Task<ApiResponse<BoothLocationResponse>> MoveAsync(Guid boothId, AssignBoothLocationRequest request, CancellationToken cancellationToken = default)
     {
-        if (await _locations.GetCurrentByBoothAsync(boothId, cancellationToken) is null)
+        if (await _locations.GetCurrentByLayoutAndBoothAsync(request.LayoutId, boothId, cancellationToken) is null)
             throw AppException.NotFound("The booth does not have an active location.");
         return await SaveAsync(boothId, request, true, cancellationToken);
     }
 
-    public async Task<ApiResponse<object>> ReleaseAsync(Guid boothId, CancellationToken cancellationToken = default)
+    public async Task<ApiResponse<object>> ReleaseAsync(Guid boothId, Guid? layoutId = null, CancellationToken cancellationToken = default)
     {
-        if (await _locations.GetCurrentByBoothAsync(boothId, cancellationToken) is null)
+        var current = layoutId.HasValue
+            ? await _locations.GetCurrentByLayoutAndBoothAsync(layoutId.Value, boothId, cancellationToken)
+            : await _locations.GetCurrentByBoothAsync(boothId, cancellationToken);
+        if (current is null)
             throw AppException.NotFound("The booth does not have an active location.");
-        await _locations.ReleaseAsync(boothId, DateTime.UtcNow, cancellationToken);
-        return ApiResponse<object>.SuccessResponse(new { BoothId = boothId }, "Booth location released successfully.");
+        var layout = await EnsureEditableLayoutAsync(current.LayoutId, cancellationToken);
+        layout.GraphRevision = checked(layout.GraphRevision + 1);
+        layout.UpdatedAt = DateTime.UtcNow;
+        await _locations.ReleaseAsync(current.LayoutId, boothId, DateTime.UtcNow, cancellationToken);
+        return ApiResponse<object>.SuccessResponse(new { BoothId = boothId, LayoutId = current.LayoutId }, "Booth location released successfully.");
     }
 
     private async Task<ApiResponse<BoothLocationResponse>> SaveAsync(Guid boothId, AssignBoothLocationRequest request, bool moving, CancellationToken token)
     {
         var booth = await _booths.GetByIdAsync(boothId) ?? throw AppException.NotFound("Booth was not found.");
-        var layout = await EnsureLayoutAsync(request.LayoutId, token);
+        var layout = await EnsureEditableLayoutAsync(request.LayoutId, token);
         var node = await _nodes.GetActiveByIdAsync(request.LayoutNodeId, token) ?? throw AppException.NotFound("Layout node was not found.");
         if (layout.NightMarketId != booth.NightMarketId || node.LayoutId != layout.Id)
             throw AppException.BadRequest("Booth, layout and node must belong to the same night market layout.");
@@ -102,6 +108,8 @@ public class BoothLocationService : IBoothLocationService
             Xcoordinate = node.Xcoordinate, Ycoordinate = node.Ycoordinate, IsDeleted = false,
             CreatedAt = now, UpdatedAt = now
         };
+        layout.GraphRevision = checked(layout.GraphRevision + 1);
+        layout.UpdatedAt = now;
         await _locations.AssignOrMoveAsync(location, now, token);
         return ApiResponse<BoothLocationResponse>.SuccessResponse(_mapper.Map<BoothLocationResponse>(location),
             moving ? "Booth location moved successfully." : "Booth location assigned successfully.");
@@ -109,6 +117,14 @@ public class BoothLocationService : IBoothLocationService
 
     private async Task<MarketLayout> EnsureLayoutAsync(Guid id, CancellationToken token)
         => await _layouts.GetActiveByIdAsync(id, token) ?? throw AppException.NotFound("Market layout was not found.");
+
+    private async Task<MarketLayout> EnsureEditableLayoutAsync(Guid id, CancellationToken token)
+    {
+        var layout = await EnsureLayoutAsync(id, token);
+        if (layout.Status == MarketLayoutStatus.Active)
+            throw AppException.Conflict("Clone the active layout to a draft before editing its graph.", "ACTIVE_LAYOUT_IMMUTABLE");
+        return layout;
+    }
 
     private async Task ValidateZoneFilterAsync(Guid layoutId, Guid? zoneId, CancellationToken token)
     {

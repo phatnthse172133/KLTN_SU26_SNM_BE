@@ -7,6 +7,7 @@ using DomainLayer.Entities;
 using DomainLayer.Enums;
 using DomainLayer.InterfaceRepository;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Moq;
 using static DomainLayer.Enums.GeneralEnum;
@@ -32,6 +33,7 @@ public sealed class FoodRecommendationV2Tests
         }, CancellationToken.None);
 
         Assert.True(response.Success);
+        Assert.Null(response.Data!.Diagnostics);
         Assert.Equal(foodId, response.Data!.Items.Single().FoodId);
         Assert.NotEqual(Guid.Empty, response.Data.SessionId);
         Assert.Null(saved!.Latitude);
@@ -39,18 +41,18 @@ public sealed class FoodRecommendationV2Tests
     }
 
     [Fact]
-    public async Task Recommend_NearMeWithoutLocation_ReturnsLocationRequiredWithoutReadingCandidates()
+    public async Task Recommend_NearMeWithoutLocation_ContinuesWithoutDistanceRanking()
     {
-        var read = new Mock<IFoodRecommendationReadRepository>(MockBehavior.Strict);
         AiRecommendationSession? saved = null;
-        var service = CreateService(Intent(desired: ["bo"], near: true), [], read, session => saved = session);
+        var service = CreateService(Intent(desired: ["bo"], near: true), [Candidate(Guid.NewGuid())], capture: session => saved = session);
 
         var response = await service.RecommendAsync(Guid.NewGuid(), new() { Query = "bò gần tôi" }, CancellationToken.None);
 
-        Assert.Equal("LOCATION_REQUIRED", response.Data!.Status);
-        Assert.Empty(response.Data.Items);
+        Assert.NotEqual("LOCATION_REQUIRED", response.Data!.Status);
+        Assert.NotEmpty(response.Data.Items.Concat(response.Data.NearMatches));
+        Assert.Contains("LOCATION_NOT_PROVIDED_DISTANCE_UNAVAILABLE", response.Data.Warnings);
+        Assert.All(response.Data.Items.Concat(response.Data.NearMatches), item => Assert.False(item.DistanceAvailable));
         Assert.NotNull(saved);
-        read.VerifyNoOtherCalls();
     }
 
     [Fact]
@@ -200,6 +202,35 @@ public sealed class FoodRecommendationV2Tests
         Assert.NotEqual(RecommendationMatchTier.LOW_MATCH, ranked.Tier);
     }
 
+    [Theory]
+    [InlineData("Tôi muốn ăn gì đó lạnh lạnh")]
+    [InlineData("lạnh lạnh")]
+    public void VietnameseColdIntentRanksColdFoodAsBroadMatch(string query)
+    {
+        var intent = new DeterministicFoodIntentParser().Parse(new FoodRecommendationIntentRequest(
+            query, new([], [], [], [], [], Enum.GetNames<FoodCourse>(), Enum.GetNames<DiningPurpose>()), "vi", "vi")).ParsedResult!;
+        var candidate = Candidate(Guid.NewGuid(), foodName: "Nước sâm", servingTemperature: ServingTemperature.COLD,
+            searchText: "thanh mát giải nhiệt");
+        var ranked = new FoodRecommendationRanker(Options.Create(new RecommendationV2Options())).Rank(intent, candidate,
+            new DeterministicFoodSemanticMatcher().Match(intent, candidate), null);
+
+        Assert.True(ranked.BaseScore >= 60);
+    }
+
+    [Theory]
+    [InlineData("Tôi muốn ăn món cho no")]
+    [InlineData("no no")]
+    public void VietnameseFillingIntentRanksMainFullMealAsBroadMatch(string query)
+    {
+        var intent = new DeterministicFoodIntentParser().Parse(new FoodRecommendationIntentRequest(
+            query, new([], [], [], [], [], Enum.GetNames<FoodCourse>(), Enum.GetNames<DiningPurpose>()), "vi", "vi")).ParsedResult!;
+        var candidate = Candidate(Guid.NewGuid(), foodName: "Cơm gà", courses: [FoodCourse.MAIN_COURSE], purposes: [DiningPurpose.FULL_MEAL]);
+        var ranked = new FoodRecommendationRanker(Options.Create(new RecommendationV2Options())).Rank(intent, candidate,
+            new DeterministicFoodSemanticMatcher().Match(intent, candidate), null);
+
+        Assert.True(ranked.BaseScore >= 60);
+    }
+
     [Fact]
     public void DiversityReranker_PrefersAnotherBoothInsideConfiguredScoreWindow()
     {
@@ -288,7 +319,8 @@ public sealed class FoodRecommendationV2Tests
         return new FoodRecommendationV2Service(intentExtractor, explanationGenerator, new DeterministicRecommendationReasonBuilder(),
             new FoodRecommendationIntentNormalizer(options), new DeterministicFoodSemanticMatcher(), new FoodRecommendationRanker(options),
             new FoodRecommendationDiversityReranker(options), readRepository.Object, session ?? sessionRepository!.Object, metadata.Object,
-            options, new FixedTimeProvider(Now), NullLogger<FoodRecommendationV2Service>.Instance);
+            options, new FixedTimeProvider(Now), Mock.Of<IHostEnvironment>(value => value.EnvironmentName == Environments.Production),
+            NullLogger<FoodRecommendationV2Service>.Instance);
     }
 
     private static FoodRecommendationIntent Intent(IReadOnlyCollection<string>? desired = null, IReadOnlyCollection<string>? ingredients = null,
@@ -303,7 +335,8 @@ public sealed class FoodRecommendationV2Tests
         decimal price = 80_000, bool available = true, bool deleted = false, BoothStatus boothStatus = BoothStatus.Active,
         NightMarketStatus marketStatus = NightMarketStatus.Active, bool marketDeleted = false, bool categoryActive = true,
         decimal? marketLatitude = null, decimal? marketLongitude = null, decimal? rating = 4.5m, int reviewCount = 20,
-        string foodName = "Bò nướng", ServingTemperature? servingTemperature = null, string? searchText = null) => new()
+        string foodName = "Bò nướng", ServingTemperature? servingTemperature = null, string? searchText = null,
+        IReadOnlyCollection<FoodCourse>? courses = null, IReadOnlyCollection<DiningPurpose>? purposes = null) => new()
     {
         FoodId = foodId, FoodName = foodName, CategoryId = Guid.NewGuid(), CategoryCode = "CAT_GRILL", CategoryName = "Món nướng",
         CurrentPrice = price, IsAvailable = available, IsDeleted = deleted, CategoryIsActive = categoryActive, CategoryIsSelectable = true,
@@ -312,7 +345,8 @@ public sealed class FoodRecommendationV2Tests
         MarketDeleted = marketDeleted, MarketOpenTime = new TimeOnly(0, 0), MarketCloseTime = new TimeOnly(23, 59),
         MarketLatitude = marketLatitude, MarketLongitude = marketLongitude, Rating = rating, ReviewCount = reviewCount,
         ServingTemperature = servingTemperature, SearchText = searchText,
-        IngredientCodes = ingredients ?? [], PreparationMethodCodes = methods ?? [], Courses = [FoodCourse.MAIN_COURSE], SpiceLevel = FoodSpiceLevel.MILD
+        IngredientCodes = ingredients ?? [], PreparationMethodCodes = methods ?? [], Courses = courses ?? [FoodCourse.MAIN_COURSE],
+        DiningPurposes = purposes ?? [], SpiceLevel = FoodSpiceLevel.MILD
     };
 
     private static FoodSemanticCatalogSet Catalogs() => new(

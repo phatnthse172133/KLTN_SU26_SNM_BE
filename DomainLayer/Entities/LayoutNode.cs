@@ -42,4 +42,6 @@ public partial class LayoutNode : ISoftDelete
     public virtual ICollection<LayoutEdge> IncomingEdges { get; set; } = new List<LayoutEdge>();
 
     public virtual ICollection<BoothLocation> BoothLocations { get; set; } = new List<BoothLocation>();
+
+    public virtual ICollection<LayoutNavigationAnchor> NavigationAnchors { get; set; } = new List<LayoutNavigationAnchor>();
 }

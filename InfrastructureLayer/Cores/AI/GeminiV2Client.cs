@@ -27,6 +27,7 @@ public sealed class GeminiV2Client(HttpClient httpClient, IOptions<AiProviderRun
 {
     private readonly AiProviderRuntimeOptions _runtime = runtime.Value;
     private readonly string _apiKey = secret.Value.ApiKey;
+    public bool ApiKeyLoaded => !string.IsNullOrWhiteSpace(_apiKey);
 
     public async Task<GeminiJsonResult> GenerateJsonOnceAsync(string systemInstruction, object payload, object jsonSchema, decimal temperature, CancellationToken cancellationToken)
     {

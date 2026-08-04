@@ -65,6 +65,41 @@ namespace DomainLayer.Enums
             Archived = 3
         }
 
+        public enum LayoutCoordinateUnit
+        {
+            LayoutUnit = 0
+        }
+
+        public enum DistanceCalibrationStatus
+        {
+            Uncalibrated = 0,
+            Calibrated = 1
+        }
+
+        public enum NavigationAnchorType
+        {
+            Entrance = 0,
+            Exit = 1,
+            Both = 2,
+            Landmark = 3,
+            InformationDesk = 4,
+            FutureCheckpoint = 5
+        }
+
+        public enum IndoorPositionSource
+        {
+            EntranceHandoff,
+            MapTap,
+            ManualStartingPoint
+        }
+
+        public enum IndoorPositionConfidence
+        {
+            Low,
+            Medium,
+            High
+        }
+
         public enum LayoutNodeType
         {
             Junction = 0,    // Điểm giao nhau hoặc điểm trung chuyển giữa các lối đi

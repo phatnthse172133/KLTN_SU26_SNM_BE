@@ -41,6 +41,6 @@ public class BoothLocationsController : ControllerBase
         => Ok(await _service.MoveAsync(boothId, request, token));
 
     [HttpDelete("api/booths/{boothId:guid}/location")]
-    public async Task<IActionResult> Release(Guid boothId, CancellationToken token)
-        => Ok(await _service.ReleaseAsync(boothId, token));
+    public async Task<IActionResult> Release(Guid boothId, [FromQuery] Guid? layoutId, CancellationToken token)
+        => Ok(await _service.ReleaseAsync(boothId, layoutId, token));
 }

@@ -22,7 +22,15 @@ public class BoothLocationRepository : GenericRepository<BoothLocation>, IBoothL
     }
 
     public Task<BoothLocation?> GetCurrentByBoothAsync(Guid boothId, CancellationToken cancellationToken = default)
-        => _dbSet.AsNoTracking().FirstOrDefaultAsync(x => x.BoothId == boothId && !x.IsDeleted, cancellationToken);
+        => _dbSet.AsNoTracking()
+            .Where(x => x.BoothId == boothId && !x.IsDeleted)
+            .OrderByDescending(x => x.Layout.Status == DomainLayer.Enums.GeneralEnum.MarketLayoutStatus.Active)
+            .ThenByDescending(x => x.Layout.Version)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    public Task<BoothLocation?> GetCurrentByLayoutAndBoothAsync(Guid layoutId, Guid boothId, CancellationToken cancellationToken = default)
+        => _dbSet.AsNoTracking().FirstOrDefaultAsync(
+            x => x.LayoutId == layoutId && x.BoothId == boothId && !x.IsDeleted, cancellationToken);
 
     public Task<BoothLocation?> GetCurrentByNodeAsync(Guid nodeId, CancellationToken cancellationToken = default)
         => _dbSet.AsNoTracking().FirstOrDefaultAsync(x => x.LayoutNodeId == nodeId && !x.IsDeleted, cancellationToken);
@@ -53,7 +61,8 @@ public class BoothLocationRepository : GenericRepository<BoothLocation>, IBoothL
     public async Task AssignOrMoveAsync(BoothLocation location, DateTime now, CancellationToken cancellationToken = default)
     {
         await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
-        var current = await _dbSet.FirstOrDefaultAsync(x => x.BoothId == location.BoothId && !x.IsDeleted, cancellationToken);
+        var current = await _dbSet.FirstOrDefaultAsync(
+            x => x.LayoutId == location.LayoutId && x.BoothId == location.BoothId && !x.IsDeleted, cancellationToken);
         if (current is not null)
         {
             current.IsDeleted = true;
@@ -65,13 +74,31 @@ public class BoothLocationRepository : GenericRepository<BoothLocation>, IBoothL
         await transaction.CommitAsync(cancellationToken);
     }
 
-    public async Task ReleaseAsync(Guid boothId, DateTime now, CancellationToken cancellationToken = default)
+    public async Task ReleaseAsync(Guid layoutId, Guid boothId, DateTime now, CancellationToken cancellationToken = default)
     {
-        var current = await _dbSet.FirstOrDefaultAsync(x => x.BoothId == boothId && !x.IsDeleted, cancellationToken);
+        var current = await _dbSet.FirstOrDefaultAsync(
+            x => x.LayoutId == layoutId && x.BoothId == boothId && !x.IsDeleted, cancellationToken);
         if (current is null) return;
         current.IsDeleted = true;
         current.ReleasedAt = now;
         current.UpdatedAt = now;
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task ReleaseDraftLocationsAsync(Guid boothId, DateTime now, CancellationToken cancellationToken = default)
+    {
+        var current = await _dbSet.Include(x => x.Layout)
+            .Where(x => x.BoothId == boothId && !x.IsDeleted &&
+                        x.Layout.Status == DomainLayer.Enums.GeneralEnum.MarketLayoutStatus.Draft)
+            .ToListAsync(cancellationToken);
+        foreach (var location in current)
+        {
+            location.IsDeleted = true;
+            location.ReleasedAt = now;
+            location.UpdatedAt = now;
+            location.Layout.GraphRevision = checked(location.Layout.GraphRevision + 1);
+            location.Layout.UpdatedAt = now;
+        }
         await _context.SaveChangesAsync(cancellationToken);
     }
 }

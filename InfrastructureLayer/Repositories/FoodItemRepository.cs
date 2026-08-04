@@ -133,7 +133,7 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
                 item.Booth.CloseTime,
                 item.Booth.NightMarket.OpeningHours,
                 item.Booth.NightMarket.ClosingHours,
-                item.Booth.NightMarket.Status == NightMarketStatus.Open,
+                item.Booth.NightMarket.Status == NightMarketStatus.Active,
                 item.IsFeatured))
             .ToList();
 
@@ -233,9 +233,7 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
                 item.IsAvailable
                 && !item.Category.IsDeleted
                 && item.Booth.Status == BoothStatus.Active
-                && (item.Booth.NightMarket.Status == NightMarketStatus.Upcoming
-                    || item.Booth.NightMarket.Status == NightMarketStatus.Open
-                    || item.Booth.NightMarket.Status == NightMarketStatus.Closed)
+                && item.Booth.NightMarket.Status == NightMarketStatus.Active
                 && item.Booth.NightMarket.ModerationStatus == ModerationStatus.Active
                 && !item.Booth.NightMarket.IsDeleted);
 
@@ -324,14 +322,12 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
             item.Booth.Status == BoothStatus.Active &&
             !item.Booth.NightMarket.IsDeleted &&
             item.Booth.NightMarket.ModerationStatus == ModerationStatus.Active &&
-            (item.Booth.NightMarket.Status == NightMarketStatus.Upcoming ||
-             item.Booth.NightMarket.Status == NightMarketStatus.Open ||
-             item.Booth.NightMarket.Status == NightMarketStatus.Closed));
+            item.Booth.NightMarket.Status == NightMarketStatus.Active);
 
     private static Expression<Func<FoodItem, bool>> IsCustomerOrderableAt(TimeOnly localTime)
         => item =>
             item.IsAvailable &&
-            item.Booth.NightMarket.Status == NightMarketStatus.Open &&
+            item.Booth.NightMarket.Status == NightMarketStatus.Active &&
             item.Booth.NightMarket.OpeningHours.HasValue &&
             item.Booth.NightMarket.ClosingHours.HasValue &&
             item.Booth.NightMarket.OpeningHours.Value != item.Booth.NightMarket.ClosingHours.Value &&
@@ -369,7 +365,7 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
             priced.FoodItem.Booth.CloseTime,
             priced.FoodItem.Booth.NightMarket.OpeningHours,
             priced.FoodItem.Booth.NightMarket.ClosingHours,
-            priced.FoodItem.Booth.NightMarket.Status == NightMarketStatus.Open,
+            priced.FoodItem.Booth.NightMarket.Status == NightMarketStatus.Active,
             includeImages
                 ? priced.FoodItem.FoodImages.OrderBy(image => image.DisplayOrder).ThenBy(image => image.Id).Select(image => image.ImageUrl).ToList()
                 : new List<string>())
@@ -457,7 +453,7 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
             item.Booth.CloseTime,
             item.Booth.NightMarket.OpeningHours,
             item.Booth.NightMarket.ClosingHours,
-            item.Booth.NightMarket.Status == NightMarketStatus.Open,
+            item.Booth.NightMarket.Status == NightMarketStatus.Active,
             includeImages
                 ? item.FoodImages.OrderBy(image => image.DisplayOrder).ThenBy(image => image.Id).Select(image => image.ImageUrl).ToList()
                 : new List<string>())

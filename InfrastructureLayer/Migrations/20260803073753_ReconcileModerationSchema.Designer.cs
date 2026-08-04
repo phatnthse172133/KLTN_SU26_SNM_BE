@@ -3,6 +3,7 @@ using System;
 using InfrastructureLayer.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace InfrastructureLayer.Migrations
 {
     [DbContext(typeof(SNMDbContext))]
-    partial class SNMDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260803073753_ReconcileModerationSchema")]
+    partial class ReconcileModerationSchema
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -77,7 +80,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("AIRecommendationLog", null, t =>
                         {
-                            t.HasComment("Log tÃ¡Â»â€˜i giÃ¡ÂºÂ£n cho cÃƒÂ¡c lÃ¡ÂºÂ§n AI recommendation Ã„â€˜Ã¡Â»Æ’ debug/demo");
+                            t.HasComment("Log tÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi giÃƒÂ¡Ã‚ÂºÃ‚Â£n cho cÃƒÆ’Ã‚Â¡c lÃƒÂ¡Ã‚ÂºÃ‚Â§n AI recommendation Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã†â€™ debug/demo");
                         });
                 });
 
@@ -613,7 +616,7 @@ namespace InfrastructureLayer.Migrations
                         .HasPrecision(3, 2)
                         .HasColumnType("numeric(3,2)")
                         .HasDefaultValueSql("0")
-                        .HasComment("Cache Ã„â€˜iÃ¡Â»Æ’m trung bÃƒÂ¬nh review, cÃ¡ÂºÂ­p nhÃ¡ÂºÂ­t qua trigger hoÃ¡ÂºÂ·c job Ã„â€˜Ã¡Â»â€¹nh kÃ¡Â»Â³");
+                        .HasComment("Cache Ãƒâ€žÃ¢â‚¬ËœiÃƒÂ¡Ã‚Â»Ã†â€™m trung bÃƒÆ’Ã‚Â¬nh review, cÃƒÂ¡Ã‚ÂºÃ‚Â­p nhÃƒÂ¡Ã‚ÂºÃ‚Â­t qua trigger hoÃƒÂ¡Ã‚ÂºÃ‚Â·c job Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹nh kÃƒÂ¡Ã‚Â»Ã‚Â³");
 
                     b.Property<string>("BoothCode")
                         .HasMaxLength(50)
@@ -721,7 +724,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("Booth", null, t =>
                         {
-                            t.HasComment("Gian hÃƒÂ ng Ã¡ÂºÂ©m thÃ¡Â»Â±c - thÃ¡Â»Â±c thÃ¡Â»Æ’ trung tÃƒÂ¢m, mÃ¡Â»â€”i gian hÃƒÂ ng thuÃ¡Â»â„¢c 1 NightMarket vÃƒÂ  do 1 User (BoothOwner) quÃ¡ÂºÂ£n lÃƒÂ½");
+                            t.HasComment("Gian hÃƒÆ’Ã‚Â ng ÃƒÂ¡Ã‚ÂºÃ‚Â©m thÃƒÂ¡Ã‚Â»Ã‚Â±c - thÃƒÂ¡Ã‚Â»Ã‚Â±c thÃƒÂ¡Ã‚Â»Ã†â€™ trung tÃƒÆ’Ã‚Â¢m, mÃƒÂ¡Ã‚Â»Ã¢â‚¬â€i gian hÃƒÆ’Ã‚Â ng thuÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢c 1 NightMarket vÃƒÆ’Ã‚Â  do 1 User (BoothOwner) quÃƒÂ¡Ã‚ÂºÃ‚Â£n lÃƒÆ’Ã‚Â½");
                         });
                 });
 
@@ -778,7 +781,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("BoothDocuments", t =>
                         {
-                            t.HasComment("GiÃ¡ÂºÂ¥y tÃ¡Â»Â phÃƒÂ¡p lÃƒÂ½ cÃ¡Â»Â§a gian hÃƒÂ ng Ã„â€˜Ã¡Â»Æ’ Admin xÃƒÂ¡c minh trÃ†Â°Ã¡Â»â€ºc khi cho phÃƒÂ©p hoÃ¡ÂºÂ¡t Ã„â€˜Ã¡Â»â„¢ng");
+                            t.HasComment("GiÃƒÂ¡Ã‚ÂºÃ‚Â¥y tÃƒÂ¡Ã‚Â»Ã‚Â phÃƒÆ’Ã‚Â¡p lÃƒÆ’Ã‚Â½ cÃƒÂ¡Ã‚Â»Ã‚Â§a gian hÃƒÆ’Ã‚Â ng Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã†â€™ Admin xÃƒÆ’Ã‚Â¡c minh trÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºc khi cho phÃƒÆ’Ã‚Â©p hoÃƒÂ¡Ã‚ÂºÃ‚Â¡t Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢ng");
                         });
                 });
 
@@ -819,7 +822,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("BoothImages", t =>
                         {
-                            t.HasComment("ThÃ†Â° viÃ¡Â»â€¡n Ã¡ÂºÂ£nh (gallery) cÃ¡Â»Â§a gian hÃƒÂ ng");
+                            t.HasComment("ThÃƒâ€ Ã‚Â° viÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡n ÃƒÂ¡Ã‚ÂºÃ‚Â£nh (gallery) cÃƒÂ¡Ã‚Â»Ã‚Â§a gian hÃƒÆ’Ã‚Â ng");
                         });
                 });
 
@@ -877,23 +880,21 @@ namespace InfrastructureLayer.Migrations
                     b.HasKey("Id")
                         .HasName("BoothLocations_pkey");
 
-                    b.HasIndex("BoothId");
-
-                    b.HasIndex("LayoutNodeId");
+                    b.HasIndex("LayoutId");
 
                     b.HasIndex("ZoneId");
 
-                    b.HasIndex(new[] { "LayoutId", "BoothId" }, "ux_boothlocation_active_layout_booth")
+                    b.HasIndex(new[] { "BoothId" }, "ux_boothlocation_active_booth")
                         .IsUnique()
                         .HasFilter("\"IsDeleted\" = false");
 
-                    b.HasIndex(new[] { "LayoutId", "LayoutNodeId" }, "ux_boothlocation_active_layout_node")
+                    b.HasIndex(new[] { "LayoutNodeId" }, "ux_boothlocation_active_node")
                         .IsUnique()
                         .HasFilter("\"IsDeleted\" = false");
 
                     b.ToTable("BoothLocations", t =>
                         {
-                            t.HasComment("VÃ¡Â»â€¹ trÃƒÂ­ cÃ¡Â»Â¥ thÃ¡Â»Æ’ (tÃ¡Â»Âa Ã„â€˜Ã¡Â»â„¢) cÃ¡Â»Â§a 1 gian hÃƒÂ ng trÃƒÂªn 1 sÃ†Â¡ Ã„â€˜Ã¡Â»â€œ mÃ¡ÂºÂ·t bÃ¡ÂºÂ±ng");
+                            t.HasComment("VÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹ trÃƒÆ’Ã‚Â­ cÃƒÂ¡Ã‚Â»Ã‚Â¥ thÃƒÂ¡Ã‚Â»Ã†â€™ (tÃƒÂ¡Ã‚Â»Ã‚Âa Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢) cÃƒÂ¡Ã‚Â»Ã‚Â§a 1 gian hÃƒÆ’Ã‚Â ng trÃƒÆ’Ã‚Âªn 1 sÃƒâ€ Ã‚Â¡ Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â‚¬Å“ mÃƒÂ¡Ã‚ÂºÃ‚Â·t bÃƒÂ¡Ã‚ÂºÃ‚Â±ng");
                         });
                 });
 
@@ -958,7 +959,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("BoothPaymentInfos", t =>
                         {
-                            t.HasComment("ThÃƒÂ´ng tin tÃƒÂ i khoÃ¡ÂºÂ£n/QR nhÃ¡ÂºÂ­n thanh toÃƒÂ¡n cÃ¡Â»Â§a gian hÃƒÂ ng");
+                            t.HasComment("ThÃƒÆ’Ã‚Â´ng tin tÃƒÆ’Ã‚Â i khoÃƒÂ¡Ã‚ÂºÃ‚Â£n/QR nhÃƒÂ¡Ã‚ÂºÃ‚Â­n thanh toÃƒÆ’Ã‚Â¡n cÃƒÂ¡Ã‚Â»Ã‚Â§a gian hÃƒÆ’Ã‚Â ng");
                         });
                 });
 
@@ -1133,7 +1134,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("BoothSubscriptions", t =>
                         {
-                            t.HasComment("LÃ¡Â»â€¹ch sÃ¡Â»Â­ Ã„â€˜Ã„Æ’ng kÃƒÂ½ gÃƒÂ³i dÃ¡Â»â€¹ch vÃ¡Â»Â¥ cÃ¡Â»Â§a gian hÃƒÂ ng");
+                            t.HasComment("LÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹ch sÃƒÂ¡Ã‚Â»Ã‚Â­ Ãƒâ€žÃ¢â‚¬ËœÃƒâ€žÃ†â€™ng kÃƒÆ’Ã‚Â½ gÃƒÆ’Ã‚Â³i dÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹ch vÃƒÂ¡Ã‚Â»Ã‚Â¥ cÃƒÂ¡Ã‚Â»Ã‚Â§a gian hÃƒÆ’Ã‚Â ng");
                         });
                 });
 
@@ -1171,7 +1172,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("Cart", null, t =>
                         {
-                            t.HasComment("GiÃ¡Â»Â hÃƒÂ ng hiÃ¡Â»â€¡n tÃ¡ÂºÂ¡i cÃ¡Â»Â§a khÃƒÂ¡ch hÃƒÂ ng");
+                            t.HasComment("GiÃƒÂ¡Ã‚Â»Ã‚Â hÃƒÆ’Ã‚Â ng hiÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡n tÃƒÂ¡Ã‚ÂºÃ‚Â¡i cÃƒÂ¡Ã‚Â»Ã‚Â§a khÃƒÆ’Ã‚Â¡ch hÃƒÆ’Ã‚Â ng");
                         });
                 });
 
@@ -1219,7 +1220,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("CartItem", null, t =>
                         {
-                            t.HasComment("MÃƒÂ³n Ã„Æ’n trong giÃ¡Â»Â hÃƒÂ ng");
+                            t.HasComment("MÃƒÆ’Ã‚Â³n Ãƒâ€žÃ†â€™n trong giÃƒÂ¡Ã‚Â»Ã‚Â hÃƒÆ’Ã‚Â ng");
                         });
                 });
 
@@ -1294,7 +1295,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("Complaints", t =>
                         {
-                            t.HasComment("Khiáº¿u náº¡i cá»§a khÃ¡ch hÃ ng vá» Ä‘Æ¡n hÃ ng/gian hÃ ng");
+                            t.HasComment("KhiÃ¡ÂºÂ¿u nÃ¡ÂºÂ¡i cÃ¡Â»Â§a khÃƒÂ¡ch hÃƒÂ ng vÃ¡Â»Â Ã„â€˜Ã†Â¡n hÃƒÂ ng/gian hÃƒÂ ng");
                         });
                 });
 
@@ -1330,7 +1331,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("ComplaintImages", t =>
                         {
-                            t.HasComment("Ã¡ÂºÂ¢nh minh chÃ¡Â»Â©ng Ã„â€˜ÃƒÂ­nh kÃƒÂ¨m theo khiÃ¡ÂºÂ¿u nÃ¡ÂºÂ¡i");
+                            t.HasComment("ÃƒÂ¡Ã‚ÂºÃ‚Â¢nh minh chÃƒÂ¡Ã‚Â»Ã‚Â©ng Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â­nh kÃƒÆ’Ã‚Â¨m theo khiÃƒÂ¡Ã‚ÂºÃ‚Â¿u nÃƒÂ¡Ã‚ÂºÃ‚Â¡i");
                         });
                 });
 
@@ -1392,7 +1393,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("Conversations", t =>
                         {
-                            t.HasComment("CuÃ¡Â»â„¢c trÃƒÂ² chuyÃ¡Â»â€¡n giÃ¡Â»Â¯a 1 khÃƒÂ¡ch hÃƒÂ ng vÃƒÂ  1 gian hÃƒÂ ng - dÃƒÂ¹ng SignalR Ã„â€˜Ã¡Â»Æ’ realtime");
+                            t.HasComment("CuÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢c trÃƒÆ’Ã‚Â² chuyÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡n giÃƒÂ¡Ã‚Â»Ã‚Â¯a 1 khÃƒÆ’Ã‚Â¡ch hÃƒÆ’Ã‚Â ng vÃƒÆ’Ã‚Â  1 gian hÃƒÆ’Ã‚Â ng - dÃƒÆ’Ã‚Â¹ng SignalR Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã†â€™ realtime");
                         });
                 });
 
@@ -1561,7 +1562,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("CustomerPreference", null, t =>
                         {
-                            t.HasComment("SÃ¡Â»Å¸ thÃƒÂ­ch rÃƒÂµ rÃƒÂ ng cÃ¡Â»Â§a khÃƒÂ¡ch hÃƒÂ ng theo FoodTag: Like/Avoid");
+                            t.HasComment("SÃƒÂ¡Ã‚Â»Ã…Â¸ thÃƒÆ’Ã‚Â­ch rÃƒÆ’Ã‚Âµ rÃƒÆ’Ã‚Â ng cÃƒÂ¡Ã‚Â»Ã‚Â§a khÃƒÆ’Ã‚Â¡ch hÃƒÆ’Ã‚Â ng theo FoodTag: Like/Avoid");
                         });
                 });
 
@@ -1901,7 +1902,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("FoodCategories", t =>
                         {
-                            t.HasComment("Danh mÃ¡Â»Â¥c mÃƒÂ³n Ã„Æ’n cÃ¡Â»Â§a tÃ¡Â»Â«ng gian hÃƒÂ ng");
+                            t.HasComment("Danh mÃƒÂ¡Ã‚Â»Ã‚Â¥c mÃƒÆ’Ã‚Â³n Ãƒâ€žÃ†â€™n cÃƒÂ¡Ã‚Â»Ã‚Â§a tÃƒÂ¡Ã‚Â»Ã‚Â«ng gian hÃƒÆ’Ã‚Â ng");
                         });
                 });
 
@@ -1942,7 +1943,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("FoodImages", t =>
                         {
-                            t.HasComment("ThÃ†Â° viÃ¡Â»â€¡n Ã¡ÂºÂ£nh (gallery) cho tÃ¡Â»Â«ng mÃƒÂ³n Ã„Æ’n");
+                            t.HasComment("ThÃƒâ€ Ã‚Â° viÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡n ÃƒÂ¡Ã‚ÂºÃ‚Â£nh (gallery) cho tÃƒÂ¡Ã‚Â»Ã‚Â«ng mÃƒÆ’Ã‚Â³n Ãƒâ€žÃ†â€™n");
                         });
                 });
 
@@ -1974,7 +1975,7 @@ namespace InfrastructureLayer.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(true)
-                        .HasComment("false khi mÃƒÂ³n hÃ¡ÂºÂ¿t nguyÃƒÂªn liÃ¡Â»â€¡u hoÃ¡ÂºÂ·c chÃ¡Â»Â§ quÃƒÂ¡n tÃ¡ÂºÂ¡m Ã¡ÂºÂ©n");
+                        .HasComment("false khi mÃƒÆ’Ã‚Â³n hÃƒÂ¡Ã‚ÂºÃ‚Â¿t nguyÃƒÆ’Ã‚Âªn liÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡u hoÃƒÂ¡Ã‚ÂºÃ‚Â·c chÃƒÂ¡Ã‚Â»Ã‚Â§ quÃƒÆ’Ã‚Â¡n tÃƒÂ¡Ã‚ÂºÃ‚Â¡m ÃƒÂ¡Ã‚ÂºÃ‚Â©n");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -1997,7 +1998,7 @@ namespace InfrastructureLayer.Migrations
                     b.Property<decimal>("Price")
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)")
-                        .HasComment("GiÃƒÂ¡ mÃ¡ÂºÂ·c Ã„â€˜Ã¡Â»â€¹nh. NÃ¡ÂºÂ¿u cÃƒÂ³ FoodPrice theo ngÃƒÂ y hiÃ¡Â»â€¡n tÃ¡ÂºÂ¡i thÃƒÂ¬ giÃƒÂ¡ Ã„â€˜ÃƒÂ³ Ã„â€˜Ã†Â°Ã¡Â»Â£c Ã†Â°u tiÃƒÂªn (override)");
+                        .HasComment("GiÃƒÆ’Ã‚Â¡ mÃƒÂ¡Ã‚ÂºÃ‚Â·c Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹nh. NÃƒÂ¡Ã‚ÂºÃ‚Â¿u cÃƒÆ’Ã‚Â³ FoodPrice theo ngÃƒÆ’Ã‚Â y hiÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡n tÃƒÂ¡Ã‚ÂºÃ‚Â¡i thÃƒÆ’Ã‚Â¬ giÃƒÆ’Ã‚Â¡ Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â³ Ãƒâ€žÃ¢â‚¬ËœÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã‚Â£c Ãƒâ€ Ã‚Â°u tiÃƒÆ’Ã‚Âªn (override)");
 
                     b.Property<DateTime?>("SemanticProfileUpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -2040,7 +2041,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("FoodItem", null, t =>
                         {
-                            t.HasComment("MÃƒÂ³n Ã„Æ’n cÃ¡Â»Â§a tÃ¡Â»Â«ng gian hÃƒÂ ng");
+                            t.HasComment("MÃƒÆ’Ã‚Â³n Ãƒâ€žÃ†â€™n cÃƒÂ¡Ã‚Â»Ã‚Â§a tÃƒÂ¡Ã‚Â»Ã‚Â«ng gian hÃƒÆ’Ã‚Â ng");
 
                             t.HasCheckConstraint("ck_fooditem_estimated_serving_count", "\"EstimatedServingCount\" IS NULL OR \"EstimatedServingCount\" > 0");
                         });
@@ -2260,7 +2261,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("FoodItemTag", null, t =>
                         {
-                            t.HasComment("BÃ¡ÂºÂ£ng nÃ¡Â»â€˜i gÃ¡ÂºÂ¯n tag ngÃ¡Â»Â¯ nghÃ„Â©a vÃƒÂ o mÃƒÂ³n Ã„Æ’n");
+                            t.HasComment("BÃƒÂ¡Ã‚ÂºÃ‚Â£ng nÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi gÃƒÂ¡Ã‚ÂºÃ‚Â¯n tag ngÃƒÂ¡Ã‚Â»Ã‚Â¯ nghÃƒâ€žÃ‚Â©a vÃƒÆ’Ã‚Â o mÃƒÆ’Ã‚Â³n Ãƒâ€žÃ†â€™n");
                         });
                 });
 
@@ -2330,7 +2331,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("FoodPrice", null, t =>
                         {
-                            t.HasComment("BÃ¡ÂºÂ£ng giÃƒÂ¡ theo ngÃƒÂ y trong tuÃ¡ÂºÂ§n - override giÃƒÂ¡ mÃ¡ÂºÂ·c Ã„â€˜Ã¡Â»â€¹nh cÃ¡Â»Â§a FoodItem");
+                            t.HasComment("BÃƒÂ¡Ã‚ÂºÃ‚Â£ng giÃƒÆ’Ã‚Â¡ theo ngÃƒÆ’Ã‚Â y trong tuÃƒÂ¡Ã‚ÂºÃ‚Â§n - override giÃƒÆ’Ã‚Â¡ mÃƒÂ¡Ã‚ÂºÃ‚Â·c Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹nh cÃƒÂ¡Ã‚Â»Ã‚Â§a FoodItem");
                         });
                 });
 
@@ -2473,7 +2474,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("FoodTag", null, t =>
                         {
-                            t.HasComment("Danh sÃƒÂ¡ch tag chuÃ¡ÂºÂ©n mÃƒÂ´ tÃ¡ÂºÂ£ ngÃ¡Â»Â¯ nghÃ„Â©a mÃƒÂ³n Ã„Æ’n cho AI/recommendation");
+                            t.HasComment("Danh sÃƒÆ’Ã‚Â¡ch tag chuÃƒÂ¡Ã‚ÂºÃ‚Â©n mÃƒÆ’Ã‚Â´ tÃƒÂ¡Ã‚ÂºÃ‚Â£ ngÃƒÂ¡Ã‚Â»Ã‚Â¯ nghÃƒâ€žÃ‚Â©a mÃƒÆ’Ã‚Â³n Ãƒâ€žÃ†â€™n cho AI/recommendation");
                         });
                 });
 
@@ -2668,121 +2669,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("LayoutEdges", t =>
                         {
-                            t.HasComment("CÃ¡ÂºÂ¡nh nÃ¡Â»â€˜i giÃ¡Â»Â¯a 2 LayoutNode - thÃ¡Â»Æ’ hiÃ¡Â»â€¡n Ã„â€˜Ã†Â°Ã¡Â»Âng Ã„â€˜i vÃƒÂ  khoÃ¡ÂºÂ£ng cÃƒÂ¡ch, dÃƒÂ¹ng cho thuÃ¡ÂºÂ­t toÃƒÂ¡n tÃƒÂ¬m Ã„â€˜Ã†Â°Ã¡Â»Âng ngÃ¡ÂºÂ¯n nhÃ¡ÂºÂ¥t trong chÃ¡Â»Â£");
-
-                            t.HasCheckConstraint("ck_layoutedge_distance_positive", "\"Distance\" > 0");
-                        });
-                });
-
-            modelBuilder.Entity("DomainLayer.Entities.LayoutNavigationAnchor", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasDefaultValueSql("uuid_generate_v4()");
-
-                    b.Property<string>("AnchorCode")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<string>("AnchorType")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
-
-                    b.Property<TimeOnly?>("ClosingTime")
-                        .HasColumnType("time without time zone");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<string>("DisplayName")
-                        .IsRequired()
-                        .HasMaxLength(150)
-                        .HasColumnType("character varying(150)");
-
-                    b.Property<bool>("IsActive")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true);
-
-                    b.Property<bool>("IsCustomerAccessible")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true);
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<bool>("IsQrEnabled")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<decimal>("Latitude")
-                        .HasPrecision(10, 7)
-                        .HasColumnType("numeric(10,7)");
-
-                    b.Property<Guid>("LayoutId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("LayoutNodeId")
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("Longitude")
-                        .HasPrecision(10, 7)
-                        .HasColumnType("numeric(10,7)");
-
-                    b.Property<TimeOnly?>("OpeningTime")
-                        .HasColumnType("time without time zone");
-
-                    b.Property<string>("PublicTokenHash")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<DateTime?>("QrValidFrom")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("QrValidUntil")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("TokenVersion")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(1);
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("now()");
-
-                    b.HasKey("Id")
-                        .HasName("LayoutNavigationAnchors_pkey");
-
-                    b.HasIndex("LayoutNodeId");
-
-                    b.HasIndex(new[] { "LayoutId", "AnchorCode" }, "ux_navigationanchor_layout_code")
-                        .IsUnique()
-                        .HasFilter("\"IsDeleted\" = false");
-
-                    b.ToTable("LayoutNavigationAnchors", t =>
-                        {
-                            t.HasCheckConstraint("ck_navigationanchor_hours_pair", "(\"OpeningTime\" IS NULL) = (\"ClosingTime\" IS NULL)");
-
-                            t.HasCheckConstraint("ck_navigationanchor_latitude", "\"Latitude\" >= -90 AND \"Latitude\" <= 90");
-
-                            t.HasCheckConstraint("ck_navigationanchor_longitude", "\"Longitude\" >= -180 AND \"Longitude\" <= 180");
-
-                            t.HasCheckConstraint("ck_navigationanchor_qr_hash", "\"IsQrEnabled\" = false OR \"PublicTokenHash\" IS NOT NULL");
-
-                            t.HasCheckConstraint("ck_navigationanchor_qr_validity", "\"QrValidFrom\" IS NULL OR \"QrValidUntil\" IS NULL OR \"QrValidFrom\" < \"QrValidUntil\"");
-
-                            t.HasCheckConstraint("ck_navigationanchor_token_version", "\"TokenVersion\" > 0");
+                            t.HasComment("CÃƒÂ¡Ã‚ÂºÃ‚Â¡nh nÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi giÃƒÂ¡Ã‚Â»Ã‚Â¯a 2 LayoutNode - thÃƒÂ¡Ã‚Â»Ã†â€™ hiÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡n Ãƒâ€žÃ¢â‚¬ËœÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã‚Âng Ãƒâ€žÃ¢â‚¬Ëœi vÃƒÆ’Ã‚Â  khoÃƒÂ¡Ã‚ÂºÃ‚Â£ng cÃƒÆ’Ã‚Â¡ch, dÃƒÆ’Ã‚Â¹ng cho thuÃƒÂ¡Ã‚ÂºÃ‚Â­t toÃƒÆ’Ã‚Â¡n tÃƒÆ’Ã‚Â¬m Ãƒâ€žÃ¢â‚¬ËœÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã‚Âng ngÃƒÂ¡Ã‚ÂºÃ‚Â¯n nhÃƒÂ¡Ã‚ÂºÃ‚Â¥t trong chÃƒÂ¡Ã‚Â»Ã‚Â£");
                         });
                 });
 
@@ -2875,7 +2762,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("LayoutNodes", t =>
                         {
-                            t.HasComment("CÃƒÂ¡c Ã„â€˜iÃ¡Â»Æ’m/nÃƒÂºt (node) trÃƒÂªn sÃ†Â¡ Ã„â€˜Ã¡Â»â€œ mÃ¡ÂºÂ·t bÃ¡ÂºÂ±ng - lÃƒÂ  Ã„â€˜Ã¡Â»â€°nh cÃ¡Â»Â§a Ã„â€˜Ã¡Â»â€œ thÃ¡Â»â€¹ dÃƒÂ¹ng cho tÃƒÂ¬m Ã„â€˜Ã†Â°Ã¡Â»Âng nÃ¡Â»â„¢i bÃ¡Â»â„¢ chÃ¡Â»Â£");
+                            t.HasComment("CÃƒÆ’Ã‚Â¡c Ãƒâ€žÃ¢â‚¬ËœiÃƒÂ¡Ã‚Â»Ã†â€™m/nÃƒÆ’Ã‚Âºt (node) trÃƒÆ’Ã‚Âªn sÃƒâ€ Ã‚Â¡ Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â‚¬Å“ mÃƒÂ¡Ã‚ÂºÃ‚Â·t bÃƒÂ¡Ã‚ÂºÃ‚Â±ng - lÃƒÆ’Ã‚Â  Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â‚¬Â°nh cÃƒÂ¡Ã‚Â»Ã‚Â§a Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â‚¬Å“ thÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹ dÃƒÆ’Ã‚Â¹ng cho tÃƒÆ’Ã‚Â¬m Ãƒâ€žÃ¢â‚¬ËœÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã‚Âng nÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢i bÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢ chÃƒÂ¡Ã‚Â»Ã‚Â£");
                         });
                 });
 
@@ -2886,29 +2773,10 @@ namespace InfrastructureLayer.Migrations
                         .HasColumnType("uuid")
                         .HasDefaultValueSql("uuid_generate_v4()");
 
-                    b.Property<string>("CoordinateUnit")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasDefaultValueSql("'LayoutUnit'::character varying");
-
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("now()");
-
-                    b.Property<string>("DistanceCalibrationStatus")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasDefaultValueSql("'Uncalibrated'::character varying");
-
-                    b.Property<int>("GraphRevision")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(1);
 
                     b.Property<int>("Height")
                         .HasColumnType("integer");
@@ -2934,10 +2802,6 @@ namespace InfrastructureLayer.Migrations
                     b.Property<double?>("MarketWidthMeters")
                         .HasPrecision(10, 2)
                         .HasColumnType("double precision");
-
-                    b.Property<decimal?>("MetersPerLayoutUnit")
-                        .HasPrecision(12, 6)
-                        .HasColumnType("numeric(12,6)");
 
                     b.Property<Guid>("NightMarketId")
                         .HasColumnType("uuid");
@@ -2983,11 +2847,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("MarketLayouts", t =>
                         {
-                            t.HasComment("SÃ†Â¡ Ã„â€˜Ã¡Â»â€œ mÃ¡ÂºÂ·t bÃ¡ÂºÂ±ng cÃ¡Â»Â§a mÃ¡Â»â„¢t chÃ¡Â»Â£ Ã„â€˜ÃƒÂªm - dÃƒÂ¹ng lÃƒÂ m nÃ¡Â»Ân Ã„â€˜Ã¡Â»Æ’ Ã„â€˜Ã¡ÂºÂ·t cÃƒÂ¡c Ã„â€˜iÃ¡Â»Æ’m (LayoutNodes) vÃƒÂ  gian hÃƒÂ ng (BoothLocations)");
-
-                            t.HasCheckConstraint("ck_marketlayout_graph_revision_positive", "\"GraphRevision\" > 0");
-
-                            t.HasCheckConstraint("ck_marketlayout_positive_scale", "\"MetersPerLayoutUnit\" IS NULL OR \"MetersPerLayoutUnit\" > 0");
+                            t.HasComment("SÃƒâ€ Ã‚Â¡ Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â‚¬Å“ mÃƒÂ¡Ã‚ÂºÃ‚Â·t bÃƒÂ¡Ã‚ÂºÃ‚Â±ng cÃƒÂ¡Ã‚Â»Ã‚Â§a mÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢t chÃƒÂ¡Ã‚Â»Ã‚Â£ Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Âªm - dÃƒÆ’Ã‚Â¹ng lÃƒÆ’Ã‚Â m nÃƒÂ¡Ã‚Â»Ã‚Ân Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã†â€™ Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚ÂºÃ‚Â·t cÃƒÆ’Ã‚Â¡c Ãƒâ€žÃ¢â‚¬ËœiÃƒÂ¡Ã‚Â»Ã†â€™m (LayoutNodes) vÃƒÆ’Ã‚Â  gian hÃƒÆ’Ã‚Â ng (BoothLocations)");
                         });
                 });
 
@@ -3101,7 +2961,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("MarketSubscriptions", t =>
                         {
-                            t.HasComment("LÃ¡Â»â€¹ch sÃ¡Â»Â­ Ã„â€˜Ã„Æ’ng kÃƒÂ½ gÃƒÂ³i dÃ¡Â»â€¹ch vÃ¡Â»Â¥ cÃ¡Â»Â§a Market Owner");
+                            t.HasComment("LÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹ch sÃƒÂ¡Ã‚Â»Ã‚Â­ Ãƒâ€žÃ¢â‚¬ËœÃƒâ€žÃ†â€™ng kÃƒÆ’Ã‚Â½ gÃƒÆ’Ã‚Â³i dÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹ch vÃƒÂ¡Ã‚Â»Ã‚Â¥ cÃƒÂ¡Ã‚Â»Ã‚Â§a Market Owner");
                         });
                 });
 
@@ -3145,7 +3005,7 @@ namespace InfrastructureLayer.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
-                        .HasComment("Snapshot vai trÃƒÂ² ngÃ†Â°Ã¡Â»Âi gÃ¡Â»Â­i: Customer | BoothOwner");
+                        .HasComment("Snapshot vai trÃƒÆ’Ã‚Â² ngÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã‚Âi gÃƒÂ¡Ã‚Â»Ã‚Â­i: Customer | BoothOwner");
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -3171,7 +3031,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("Message", null, t =>
                         {
-                            t.HasComment("Tin nhÃ¡ÂºÂ¯n trong cuÃ¡Â»â„¢c trÃƒÂ² chuyÃ¡Â»â€¡n - truyÃ¡Â»Ân tÃ¡ÂºÂ£i qua SignalR Hub");
+                            t.HasComment("Tin nhÃƒÂ¡Ã‚ÂºÃ‚Â¯n trong cuÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢c trÃƒÆ’Ã‚Â² chuyÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡n - truyÃƒÂ¡Ã‚Â»Ã‚Ân tÃƒÂ¡Ã‚ÂºÃ‚Â£i qua SignalR Hub");
                         });
                 });
 
@@ -3236,7 +3096,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("ModerationActionHistory", null, t =>
                         {
-                            t.HasComment("LÃ¡Â»â€¹ch sÃ¡Â»Â­ hÃƒÂ nh Ã„â€˜Ã¡Â»â„¢ng moderation cho Booth hoÃ¡ÂºÂ·c Night Market");
+                            t.HasComment("LÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹ch sÃƒÂ¡Ã‚Â»Ã‚Â­ hÃƒÆ’Ã‚Â nh Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢ng moderation cho Booth hoÃƒÂ¡Ã‚ÂºÃ‚Â·c Night Market");
                         });
                 });
 
@@ -3324,7 +3184,7 @@ namespace InfrastructureLayer.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
                         .HasDefaultValue(0)
-                        .HasComment("SÃ¡Â»â€˜ lÃ†Â°Ã¡Â»Â£ng gian hÃƒÂ ng - giÃƒÂ¡ trÃ¡Â»â€¹ cache, Ã„â€˜Ã¡Â»â€œng bÃ¡Â»â„¢ qua trigger hoÃ¡ÂºÂ·c job Ã„â€˜Ã¡Â»â€¹nh kÃ¡Â»Â³");
+                        .HasComment("SÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœ lÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã‚Â£ng gian hÃƒÆ’Ã‚Â ng - giÃƒÆ’Ã‚Â¡ trÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹ cache, Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â‚¬Å“ng bÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢ qua trigger hoÃƒÂ¡Ã‚ÂºÃ‚Â·c job Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹nh kÃƒÂ¡Ã‚Â»Ã‚Â³");
 
                     b.Property<DateTime>("UpdatedAt")
                         .ValueGeneratedOnAdd()
@@ -3342,7 +3202,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("NightMarket", null, t =>
                         {
-                            t.HasComment("ThÃƒÂ´ng tin cÃƒÂ¡c chÃ¡Â»Â£ Ã„â€˜ÃƒÂªm - Ã„â€˜Ã†Â¡n vÃ¡Â»â€¹ quÃ¡ÂºÂ£n lÃƒÂ½ cÃ¡ÂºÂ¥p cao nhÃ¡ÂºÂ¥t, chÃ¡Â»Â©a nhiÃ¡Â»Âu Booth");
+                            t.HasComment("ThÃƒÆ’Ã‚Â´ng tin cÃƒÆ’Ã‚Â¡c chÃƒÂ¡Ã‚Â»Ã‚Â£ Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Âªm - Ãƒâ€žÃ¢â‚¬ËœÃƒâ€ Ã‚Â¡n vÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹ quÃƒÂ¡Ã‚ÂºÃ‚Â£n lÃƒÆ’Ã‚Â½ cÃƒÂ¡Ã‚ÂºÃ‚Â¥p cao nhÃƒÂ¡Ã‚ÂºÃ‚Â¥t, chÃƒÂ¡Ã‚Â»Ã‚Â©a nhiÃƒÂ¡Ã‚Â»Ã‚Âu Booth");
                         });
                 });
 
@@ -3413,7 +3273,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.Property<Guid?>("BoothId")
                         .HasColumnType("uuid")
-                        .HasComment("NULL khi thÃƒÂ´ng bÃƒÂ¡o khÃƒÂ´ng gÃ¡ÂºÂ¯n vÃ¡Â»â€ºi gian hÃƒÂ ng cÃ¡Â»Â¥ thÃ¡Â»Æ’ (VD: thÃƒÂ´ng bÃƒÂ¡o hÃ¡Â»â€¡ thÃ¡Â»â€˜ng)");
+                        .HasComment("NULL khi thÃƒÆ’Ã‚Â´ng bÃƒÆ’Ã‚Â¡o khÃƒÆ’Ã‚Â´ng gÃƒÂ¡Ã‚ÂºÃ‚Â¯n vÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºi gian hÃƒÆ’Ã‚Â ng cÃƒÂ¡Ã‚Â»Ã‚Â¥ thÃƒÂ¡Ã‚Â»Ã†â€™ (VD: thÃƒÆ’Ã‚Â´ng bÃƒÆ’Ã‚Â¡o hÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡ thÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœng)");
 
                     b.Property<string>("Content")
                         .IsRequired()
@@ -3489,7 +3349,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("Notification", null, t =>
                         {
-                            t.HasComment("ThÃƒÂ´ng bÃƒÂ¡o Ã„â€˜Ã¡ÂºÂ©y (push notification qua FCM) cho ngÃ†Â°Ã¡Â»Âi dÃƒÂ¹ng");
+                            t.HasComment("ThÃƒÆ’Ã‚Â´ng bÃƒÆ’Ã‚Â¡o Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚ÂºÃ‚Â©y (push notification qua FCM) cho ngÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã‚Âi dÃƒÆ’Ã‚Â¹ng");
                         });
                 });
 
@@ -3616,7 +3476,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("Order", null, t =>
                         {
-                            t.HasComment("Ã„ÂÃ†Â¡n hÃƒÂ ng cÃ¡Â»Â§a khÃƒÂ¡ch (1 Ã„â€˜Ã†Â¡n chÃ¡Â»â€° thuÃ¡Â»â„¢c vÃ¡Â»Â 1 quÃƒÂ¡n)");
+                            t.HasComment("Ãƒâ€žÃ‚ÂÃƒâ€ Ã‚Â¡n hÃƒÆ’Ã‚Â ng cÃƒÂ¡Ã‚Â»Ã‚Â§a khÃƒÆ’Ã‚Â¡ch (1 Ãƒâ€žÃ¢â‚¬ËœÃƒâ€ Ã‚Â¡n chÃƒÂ¡Ã‚Â»Ã¢â‚¬Â° thuÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢c vÃƒÂ¡Ã‚Â»Ã‚Â 1 quÃƒÆ’Ã‚Â¡n)");
                         });
                 });
 
@@ -3653,7 +3513,7 @@ namespace InfrastructureLayer.Migrations
                     b.Property<decimal>("UnitPrice")
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)")
-                        .HasComment("SNAPSHOT giÃƒÂ¡ tÃ¡ÂºÂ¡i thÃ¡Â»Âi Ã„â€˜iÃ¡Â»Æ’m Ã„â€˜Ã¡ÂºÂ·t hÃƒÂ ng - KHÃƒâ€NG tÃƒÂ­nh lÃ¡ÂºÂ¡i tÃ¡Â»Â« FoodItem.Price");
+                        .HasComment("SNAPSHOT giÃƒÆ’Ã‚Â¡ tÃƒÂ¡Ã‚ÂºÃ‚Â¡i thÃƒÂ¡Ã‚Â»Ã‚Âi Ãƒâ€žÃ¢â‚¬ËœiÃƒÂ¡Ã‚Â»Ã†â€™m Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚ÂºÃ‚Â·t hÃƒÆ’Ã‚Â ng - KHÃƒÆ’Ã¢â‚¬ÂNG tÃƒÆ’Ã‚Â­nh lÃƒÂ¡Ã‚ÂºÃ‚Â¡i tÃƒÂ¡Ã‚Â»Ã‚Â« FoodItem.Price");
 
                     b.Property<DateTime>("UpdatedAt")
                         .ValueGeneratedOnAdd()
@@ -3669,7 +3529,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("OrderDetail", null, t =>
                         {
-                            t.HasComment("Chi tiÃ¡ÂºÂ¿t mÃƒÂ³n Ã„Æ’n trong tÃ¡Â»Â«ng Ã„â€˜Ã†Â¡n hÃƒÂ ng");
+                            t.HasComment("Chi tiÃƒÂ¡Ã‚ÂºÃ‚Â¿t mÃƒÆ’Ã‚Â³n Ãƒâ€žÃ†â€™n trong tÃƒÂ¡Ã‚Â»Ã‚Â«ng Ãƒâ€žÃ¢â‚¬ËœÃƒâ€ Ã‚Â¡n hÃƒÆ’Ã‚Â ng");
                         });
                 });
 
@@ -3861,7 +3721,7 @@ namespace InfrastructureLayer.Migrations
                     b.Property<string>("CheckoutUrl")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)")
-                        .HasComment("Ã„ÂÃ†Â°Ã¡Â»Âng link thanh toÃƒÂ¡n VietQR Ã„â€˜Ã¡Â»â„¢ng ngÃ¡ÂºÂ¯n hÃ¡ÂºÂ¡n do PayOS trÃ¡ÂºÂ£ vÃ¡Â»Â");
+                        .HasComment("Ãƒâ€žÃ‚ÂÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã‚Âng link thanh toÃƒÆ’Ã‚Â¡n VietQR Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢ng ngÃƒÂ¡Ã‚ÂºÃ‚Â¯n hÃƒÂ¡Ã‚ÂºÃ‚Â¡n do PayOS trÃƒÂ¡Ã‚ÂºÃ‚Â£ vÃƒÂ¡Ã‚Â»Ã‚Â");
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -3890,14 +3750,14 @@ namespace InfrastructureLayer.Migrations
                     b.Property<string>("GatewayRef")
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)")
-                        .HasComment("MÃƒÂ£ tra soÃƒÂ¡t thÃ¡Â»Â±c tÃ¡ÂºÂ¿ cÃ¡Â»Â§a ngÃƒÂ¢n hÃƒÂ ng (VÃƒÂ­ dÃ¡Â»Â¥ mÃƒÂ£ giao dÃ¡Â»â€¹ch cÃ¡Â»Â§a BIDV...)");
+                        .HasComment("MÃƒÆ’Ã‚Â£ tra soÃƒÆ’Ã‚Â¡t thÃƒÂ¡Ã‚Â»Ã‚Â±c tÃƒÂ¡Ã‚ÂºÃ‚Â¿ cÃƒÂ¡Ã‚Â»Ã‚Â§a ngÃƒÆ’Ã‚Â¢n hÃƒÆ’Ã‚Â ng (VÃƒÆ’Ã‚Â­ dÃƒÂ¡Ã‚Â»Ã‚Â¥ mÃƒÆ’Ã‚Â£ giao dÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹ch cÃƒÂ¡Ã‚Â»Ã‚Â§a BIDV...)");
 
                     b.Property<Guid>("OrderId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime?>("PaidAt")
                         .HasColumnType("timestamp with time zone")
-                        .HasComment("ThÃ¡Â»Âi Ã„â€˜iÃ¡Â»Æ’m dÃƒÂ²ng tiÃ¡Â»Ân thÃ¡Â»Â±c tÃ¡ÂºÂ¿ Ã„â€˜Ã†Â°Ã¡Â»Â£c khÃƒÂ¡ch hÃƒÂ ng quÃƒÂ©t mÃƒÂ£ vÃƒÂ  bÃ¡ÂºÂ¯n vÃ¡Â»Â hÃ¡Â»â€¡ thÃ¡Â»â€˜ng thÃƒÂ nh cÃƒÂ´ng");
+                        .HasComment("ThÃƒÂ¡Ã‚Â»Ã‚Âi Ãƒâ€žÃ¢â‚¬ËœiÃƒÂ¡Ã‚Â»Ã†â€™m dÃƒÆ’Ã‚Â²ng tiÃƒÂ¡Ã‚Â»Ã‚Ân thÃƒÂ¡Ã‚Â»Ã‚Â±c tÃƒÂ¡Ã‚ÂºÃ‚Â¿ Ãƒâ€žÃ¢â‚¬ËœÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã‚Â£c khÃƒÆ’Ã‚Â¡ch hÃƒÆ’Ã‚Â ng quÃƒÆ’Ã‚Â©t mÃƒÆ’Ã‚Â£ vÃƒÆ’Ã‚Â  bÃƒÂ¡Ã‚ÂºÃ‚Â¯n vÃƒÂ¡Ã‚Â»Ã‚Â hÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡ thÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœng thÃƒÆ’Ã‚Â nh cÃƒÆ’Ã‚Â´ng");
 
                     b.Property<long?>("PayOSOrderCode")
                         .HasColumnType("bigint")
@@ -3906,7 +3766,7 @@ namespace InfrastructureLayer.Migrations
                     b.Property<string>("PaymentLinkId")
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)")
-                        .HasComment("ID quÃ¡ÂºÂ£n lÃƒÂ½ liÃƒÂªn kÃ¡ÂºÂ¿t link thanh toÃƒÂ¡n cÃ¡Â»Â§a hÃ¡Â»â€¡ thÃ¡Â»â€˜ng PayOS");
+                        .HasComment("ID quÃƒÂ¡Ã‚ÂºÃ‚Â£n lÃƒÆ’Ã‚Â½ liÃƒÆ’Ã‚Âªn kÃƒÂ¡Ã‚ÂºÃ‚Â¿t link thanh toÃƒÆ’Ã‚Â¡n cÃƒÂ¡Ã‚Â»Ã‚Â§a hÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡ thÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœng PayOS");
 
                     b.Property<DateTime?>("PayoutCreateClaimedAt")
                         .HasColumnType("timestamp with time zone");
@@ -3926,7 +3786,7 @@ namespace InfrastructureLayer.Migrations
                     b.Property<string>("RefundReason")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)")
-                        .HasComment("LÃƒÂ½ do hoÃƒÂ n tiÃ¡Â»Ân (NÃ¡ÂºÂ¿u cÃƒÂ³)");
+                        .HasComment("LÃƒÆ’Ã‚Â½ do hoÃƒÆ’Ã‚Â n tiÃƒÂ¡Ã‚Â»Ã‚Ân (NÃƒÂ¡Ã‚ÂºÃ‚Â¿u cÃƒÆ’Ã‚Â³)");
 
                     b.Property<string>("RefundReference")
                         .HasMaxLength(100)
@@ -3956,7 +3816,7 @@ namespace InfrastructureLayer.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
-                        .HasComment("TiÃ¡Â»Ân mÃ¡ÂºÂ·t hoÃ¡ÂºÂ·c PayOS");
+                        .HasComment("TiÃƒÂ¡Ã‚Â»Ã‚Ân mÃƒÂ¡Ã‚ÂºÃ‚Â·t hoÃƒÂ¡Ã‚ÂºÃ‚Â·c PayOS");
 
                     b.Property<DateTime>("UpdatedAt")
                         .ValueGeneratedOnAdd()
@@ -3988,7 +3848,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("Payments", t =>
                         {
-                            t.HasComment("LÃ¡Â»â€¹ch sÃ¡Â»Â­ giao dÃ¡Â»â€¹ch thanh toÃƒÂ¡n/hoÃƒÂ n tiÃ¡Â»Ân - tÃƒÂ­ch hÃ¡Â»Â£p Ã„â€˜a cÃ¡Â»â€¢ng VNPay/ZaloPay/MoMo/Payos");
+                            t.HasComment("LÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹ch sÃƒÂ¡Ã‚Â»Ã‚Â­ giao dÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹ch thanh toÃƒÆ’Ã‚Â¡n/hoÃƒÆ’Ã‚Â n tiÃƒÂ¡Ã‚Â»Ã‚Ân - tÃƒÆ’Ã‚Â­ch hÃƒÂ¡Ã‚Â»Ã‚Â£p Ãƒâ€žÃ¢â‚¬Ëœa cÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¢ng VNPay/ZaloPay/MoMo/Payos");
                         });
                 });
 
@@ -4079,7 +3939,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("PaymentMethod", null, t =>
                         {
-                            t.HasComment("CÃ¡ÂºÂ¥u hÃƒÂ¬nh phÃ†Â°Ã†Â¡ng thÃ¡Â»Â©c thanh toÃƒÂ¡n Ã†Â°u tiÃƒÂªn cÃ¡Â»Â§a ngÃ†Â°Ã¡Â»Âi dÃƒÂ¹ng");
+                            t.HasComment("CÃƒÂ¡Ã‚ÂºÃ‚Â¥u hÃƒÆ’Ã‚Â¬nh phÃƒâ€ Ã‚Â°Ãƒâ€ Ã‚Â¡ng thÃƒÂ¡Ã‚Â»Ã‚Â©c thanh toÃƒÆ’Ã‚Â¡n Ãƒâ€ Ã‚Â°u tiÃƒÆ’Ã‚Âªn cÃƒÂ¡Ã‚Â»Ã‚Â§a ngÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã‚Âi dÃƒÆ’Ã‚Â¹ng");
                         });
                 });
 
@@ -4214,7 +4074,7 @@ namespace InfrastructureLayer.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
-                        .HasComment("Percentage: giÃ¡ÂºÂ£m % | FixedAmount: giÃ¡ÂºÂ£m sÃ¡Â»â€˜ tiÃ¡Â»Ân cÃ¡Â»â€˜ Ã„â€˜Ã¡Â»â€¹nh");
+                        .HasComment("Percentage: giÃƒÂ¡Ã‚ÂºÃ‚Â£m % | FixedAmount: giÃƒÂ¡Ã‚ÂºÃ‚Â£m sÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœ tiÃƒÂ¡Ã‚Â»Ã‚Ân cÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœ Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹nh");
 
                     b.Property<decimal>("DiscountValue")
                         .HasPrecision(12, 2)
@@ -4287,7 +4147,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("Promotion", null, t =>
                         {
-                            t.HasComment("ChÃ†Â°Ã†Â¡ng trÃƒÂ¬nh khuyÃ¡ÂºÂ¿n mÃƒÂ£i/mÃƒÂ£ giÃ¡ÂºÂ£m giÃƒÂ¡ do gian hÃƒÂ ng tÃ¡ÂºÂ¡o");
+                            t.HasComment("ChÃƒâ€ Ã‚Â°Ãƒâ€ Ã‚Â¡ng trÃƒÆ’Ã‚Â¬nh khuyÃƒÂ¡Ã‚ÂºÃ‚Â¿n mÃƒÆ’Ã‚Â£i/mÃƒÆ’Ã‚Â£ giÃƒÂ¡Ã‚ÂºÃ‚Â£m giÃƒÆ’Ã‚Â¡ do gian hÃƒÆ’Ã‚Â ng tÃƒÂ¡Ã‚ÂºÃ‚Â¡o");
                         });
                 });
 
@@ -4389,7 +4249,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("PromotionUsages", t =>
                         {
-                            t.HasComment("LÃ¡Â»â€¹ch sÃ¡Â»Â­ sÃ¡Â»Â­ dÃ¡Â»Â¥ng mÃƒÂ£ khuyÃ¡ÂºÂ¿n mÃƒÂ£i - kiÃ¡Â»Æ’m tra UsageLimit vÃƒÂ  chÃ¡Â»â€˜ng dÃƒÂ¹ng trÃƒÂ¹ng");
+                            t.HasComment("LÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹ch sÃƒÂ¡Ã‚Â»Ã‚Â­ sÃƒÂ¡Ã‚Â»Ã‚Â­ dÃƒÂ¡Ã‚Â»Ã‚Â¥ng mÃƒÆ’Ã‚Â£ khuyÃƒÂ¡Ã‚ÂºÃ‚Â¿n mÃƒÆ’Ã‚Â£i - kiÃƒÂ¡Ã‚Â»Ã†â€™m tra UsageLimit vÃƒÆ’Ã‚Â  chÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœng dÃƒÆ’Ã‚Â¹ng trÃƒÆ’Ã‚Â¹ng");
                         });
                 });
 
@@ -4422,7 +4282,7 @@ namespace InfrastructureLayer.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(true)
-                        .HasComment("false: Admin Ã¡ÂºÂ©n review nhÃ†Â°ng vÃ¡ÂºÂ«n giÃ¡Â»Â¯ dÃ¡Â»Â¯ liÃ¡Â»â€¡u Ã„â€˜Ã¡Â»Æ’ tÃƒÂ­nh rating");
+                        .HasComment("false: Admin ÃƒÂ¡Ã‚ÂºÃ‚Â©n review nhÃƒâ€ Ã‚Â°ng vÃƒÂ¡Ã‚ÂºÃ‚Â«n giÃƒÂ¡Ã‚Â»Ã‚Â¯ dÃƒÂ¡Ã‚Â»Ã‚Â¯ liÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡u Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã†â€™ tÃƒÆ’Ã‚Â­nh rating");
 
                     b.Property<Guid>("OrderId")
                         .HasColumnType("uuid");
@@ -4451,7 +4311,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("Reviews", t =>
                         {
-                            t.HasComment("Ã„ÂÃƒÂ¡nh giÃƒÂ¡ cÃ¡Â»Â§a khÃƒÂ¡ch hÃƒÂ ng cho gian hÃƒÂ ng, gÃ¡ÂºÂ¯n liÃ¡Â»Ân vÃ¡Â»â€ºi 1 Ã„â€˜Ã†Â¡n hÃƒÂ ng Ã„â€˜ÃƒÂ£ hoÃƒÂ n tÃ¡ÂºÂ¥t");
+                            t.HasComment("Ãƒâ€žÃ‚ÂÃƒÆ’Ã‚Â¡nh giÃƒÆ’Ã‚Â¡ cÃƒÂ¡Ã‚Â»Ã‚Â§a khÃƒÆ’Ã‚Â¡ch hÃƒÆ’Ã‚Â ng cho gian hÃƒÆ’Ã‚Â ng, gÃƒÂ¡Ã‚ÂºÃ‚Â¯n liÃƒÂ¡Ã‚Â»Ã‚Ân vÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºi 1 Ãƒâ€žÃ¢â‚¬ËœÃƒâ€ Ã‚Â¡n hÃƒÆ’Ã‚Â ng Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â£ hoÃƒÆ’Ã‚Â n tÃƒÂ¡Ã‚ÂºÃ‚Â¥t");
 
                             t.HasCheckConstraint("ck_reviews_rating", "\"Rating\" BETWEEN 1 AND 5");
                         });
@@ -4494,7 +4354,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("ReviewReplies", t =>
                         {
-                            t.HasComment("PhÃ¡ÂºÂ£n hÃ¡Â»â€œi cÃ¡Â»Â§a chÃ¡Â»Â§ gian hÃƒÂ ng Ã„â€˜Ã¡Â»â€˜i vÃ¡Â»â€ºi Ã„â€˜ÃƒÂ¡nh giÃƒÂ¡ - quan hÃ¡Â»â€¡ 1-1 vÃ¡Â»â€ºi Reviews");
+                            t.HasComment("PhÃƒÂ¡Ã‚ÂºÃ‚Â£n hÃƒÂ¡Ã‚Â»Ã¢â‚¬Å“i cÃƒÂ¡Ã‚Â»Ã‚Â§a chÃƒÂ¡Ã‚Â»Ã‚Â§ gian hÃƒÆ’Ã‚Â ng Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi vÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºi Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â¡nh giÃƒÆ’Ã‚Â¡ - quan hÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡ 1-1 vÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºi Reviews");
                         });
                 });
 
@@ -4531,7 +4391,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("Role", null, t =>
                         {
-                            t.HasComment("Danh sÃƒÂ¡ch vai trÃƒÂ² ngÃ†Â°Ã¡Â»Âi dÃƒÂ¹ng trong hÃ¡Â»â€¡ thÃ¡Â»â€˜ng (Customer, BoothOwner, Admin)");
+                            t.HasComment("Danh sÃƒÆ’Ã‚Â¡ch vai trÃƒÆ’Ã‚Â² ngÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã‚Âi dÃƒÆ’Ã‚Â¹ng trong hÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡ thÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœng (Customer, BoothOwner, Admin)");
                         });
                 });
 
@@ -4887,7 +4747,7 @@ namespace InfrastructureLayer.Migrations
                         .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)")
-                        .HasComment("MÃ¡ÂºÂ­t khÃ¡ÂºÂ©u Ã„â€˜ÃƒÂ£ Ã„â€˜Ã†Â°Ã¡Â»Â£c mÃƒÂ£ hÃƒÂ³a (hash), tuyÃ¡Â»â€¡t Ã„â€˜Ã¡Â»â€˜i khÃƒÂ´ng lÃ†Â°u plaintext");
+                        .HasComment("MÃƒÂ¡Ã‚ÂºÃ‚Â­t khÃƒÂ¡Ã‚ÂºÃ‚Â©u Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â£ Ãƒâ€žÃ¢â‚¬ËœÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã‚Â£c mÃƒÆ’Ã‚Â£ hÃƒÆ’Ã‚Â³a (hash), tuyÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡t Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi khÃƒÆ’Ã‚Â´ng lÃƒâ€ Ã‚Â°u plaintext");
 
                     b.Property<DateTime?>("PasswordResetOtpExpiresAt")
                         .HasColumnType("timestamp with time zone");
@@ -4921,7 +4781,7 @@ namespace InfrastructureLayer.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
-                        .HasComment("Active: Ã„â€˜ang hoÃ¡ÂºÂ¡t Ã„â€˜Ã¡Â»â„¢ng | Inactive: chÃ†Â°a xÃƒÂ¡c thÃ¡Â»Â±c | Banned: bÃ¡Â»â€¹ khÃƒÂ³a bÃ¡Â»Å¸i Admin");
+                        .HasComment("Active: Ãƒâ€žÃ¢â‚¬Ëœang hoÃƒÂ¡Ã‚ÂºÃ‚Â¡t Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢ng | Inactive: chÃƒâ€ Ã‚Â°a xÃƒÆ’Ã‚Â¡c thÃƒÂ¡Ã‚Â»Ã‚Â±c | Banned: bÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹ khÃƒÆ’Ã‚Â³a bÃƒÂ¡Ã‚Â»Ã…Â¸i Admin");
 
                     b.Property<DateTime>("UpdatedAt")
                         .ValueGeneratedOnAdd()
@@ -4954,7 +4814,7 @@ namespace InfrastructureLayer.Migrations
 
                     b.ToTable("User", null, t =>
                         {
-                            t.HasComment("TÃƒÂ i khoÃ¡ÂºÂ£n ngÃ†Â°Ã¡Â»Âi dÃƒÂ¹ng - dÃƒÂ¹ng chung cho Customer, BoothOwner, Admin (phÃƒÂ¢n biÃ¡Â»â€¡t qua RoleId)");
+                            t.HasComment("TÃƒÆ’Ã‚Â i khoÃƒÂ¡Ã‚ÂºÃ‚Â£n ngÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã‚Âi dÃƒÆ’Ã‚Â¹ng - dÃƒÆ’Ã‚Â¹ng chung cho Customer, BoothOwner, Admin (phÃƒÆ’Ã‚Â¢n biÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡t qua RoleId)");
                         });
                 });
 
@@ -6002,27 +5862,6 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("ToNode");
                 });
 
-            modelBuilder.Entity("DomainLayer.Entities.LayoutNavigationAnchor", b =>
-                {
-                    b.HasOne("DomainLayer.Entities.MarketLayout", "Layout")
-                        .WithMany("NavigationAnchors")
-                        .HasForeignKey("LayoutId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("LayoutNavigationAnchors_LayoutId_fkey");
-
-                    b.HasOne("DomainLayer.Entities.LayoutNode", "LayoutNode")
-                        .WithMany("NavigationAnchors")
-                        .HasForeignKey("LayoutNodeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("LayoutNavigationAnchors_LayoutNodeId_fkey");
-
-                    b.Navigation("Layout");
-
-                    b.Navigation("LayoutNode");
-                });
-
             modelBuilder.Entity("DomainLayer.Entities.LayoutNode", b =>
                 {
                     b.HasOne("DomainLayer.Entities.LayoutBlock", "LayoutBlock")
@@ -6700,8 +6539,6 @@ namespace InfrastructureLayer.Migrations
 
                     b.Navigation("IncomingEdges");
 
-                    b.Navigation("NavigationAnchors");
-
                     b.Navigation("OutgoingEdges");
                 });
 
@@ -6712,8 +6549,6 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("LayoutEdges");
 
                     b.Navigation("LayoutNodes");
-
-                    b.Navigation("NavigationAnchors");
                 });
 
             modelBuilder.Entity("DomainLayer.Entities.NightMarket", b =>

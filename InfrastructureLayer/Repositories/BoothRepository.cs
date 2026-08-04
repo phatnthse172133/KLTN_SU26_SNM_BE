@@ -98,7 +98,7 @@ public class BoothRepository : GenericRepository<Booth>, IBoothRepository
                 booth.CloseTime,
                 booth.NightMarket.OpeningHours,
                 booth.NightMarket.ClosingHours,
-                booth.NightMarket.Status == DomainLayer.Enums.GeneralEnum.NightMarketStatus.Open,
+                booth.NightMarket.Status == DomainLayer.Enums.GeneralEnum.NightMarketStatus.Active,
                 booth.AverageRating,
                 booth.IsFeatured))
             .Skip((page - 1) * pageSize)
@@ -152,13 +152,11 @@ public class BoothRepository : GenericRepository<Booth>, IBoothRepository
             booth.Status == DomainLayer.Enums.GeneralEnum.BoothStatus.Active &&
             !booth.NightMarket.IsDeleted &&
             booth.NightMarket.ModerationStatus == DomainLayer.Enums.GeneralEnum.ModerationStatus.Active &&
-            (booth.NightMarket.Status == DomainLayer.Enums.GeneralEnum.NightMarketStatus.Upcoming ||
-             booth.NightMarket.Status == DomainLayer.Enums.GeneralEnum.NightMarketStatus.Open ||
-             booth.NightMarket.Status == DomainLayer.Enums.GeneralEnum.NightMarketStatus.Closed));
+            booth.NightMarket.Status == DomainLayer.Enums.GeneralEnum.NightMarketStatus.Active);
 
     private static Expression<Func<Booth, bool>> IsCustomerOpenAt(TimeOnly localTime)
         => booth =>
-            booth.NightMarket.Status == DomainLayer.Enums.GeneralEnum.NightMarketStatus.Open &&
+            booth.NightMarket.Status == DomainLayer.Enums.GeneralEnum.NightMarketStatus.Active &&
             booth.NightMarket.OpeningHours.HasValue &&
             booth.NightMarket.ClosingHours.HasValue &&
             booth.NightMarket.OpeningHours.Value != booth.NightMarket.ClosingHours.Value &&
@@ -194,7 +192,7 @@ public class BoothRepository : GenericRepository<Booth>, IBoothRepository
             booth.CloseTime,
             booth.NightMarket.OpeningHours,
             booth.NightMarket.ClosingHours,
-            booth.NightMarket.Status == DomainLayer.Enums.GeneralEnum.NightMarketStatus.Open,
+            booth.NightMarket.Status == DomainLayer.Enums.GeneralEnum.NightMarketStatus.Active,
             booth.AverageRating ?? 0,
             booth.Reviews.Count(review => review.IsVisible),
             booth.FoodItems.Count(item => item.IsAvailable && !item.IsDeleted && !item.Category.IsDeleted),

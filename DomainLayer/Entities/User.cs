@@ -1,11 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using static DomainLayer.Enums.GeneralEnum;
 
 namespace DomainLayer.Entities;
 
-/// <summary>
-/// Tài khoản người dùng - dùng chung cho Customer, BoothOwner, Admin (phân biệt qua RoleId)
-/// </summary>
+
+// TÃ i khoáº£n ngÆ°á»i dÃ¹ng - dÃ¹ng chung cho Customer, BoothOwner, Admin (phÃ¢n biá»‡t qua RoleId)
 public partial class User
 {
     public Guid Id { get; set; }
@@ -14,9 +14,7 @@ public partial class User
 
     public string UserName { get; set; } = null!;
 
-    /// <summary>
-    /// Mật khẩu đã được mã hóa (hash), tuyệt đối không lưu plaintext
-    /// </summary>
+    // Máº­t kháº©u Ä‘Ã£ Ä‘Æ°á»£c mÃ£ hÃ³a (hash), tuyá»‡t Ä‘á»‘i khÃ´ng lÆ°u plaintext
     public string PasswordHash { get; set; } = null!;
 
     public string FullName { get; set; } = null!;
@@ -31,16 +29,50 @@ public partial class User
 
     public string? AvatarUrl { get; set; }
 
-    /// <summary>
-    /// Active: đang hoạt động | Inactive: chưa xác thực | Banned: bị khóa bởi Admin
-    /// </summary>
-    public string Status { get; set; } = null!;
+    // Local | Google | Local,Google
+    public AuthProvider AuthProvider { get; set; }
+
+    public string? GoogleId { get; set; }
+
+    // Authentication tokens are hashed before being persisted.
+    public string? RefreshTokenHash { get; set; }
+
+    public DateTime? RefreshTokenExpiresAt { get; set; }
+
+    public string? EmailVerificationTokenHash { get; set; }
+
+    public DateTime? EmailVerificationTokenExpiresAt { get; set; }
+
+    public string? PasswordResetOtpHash { get; set; }
+
+    public DateTime? PasswordResetOtpExpiresAt { get; set; }
+
+    public string? PasswordResetTokenHash { get; set; }
+
+    public DateTime? PasswordResetTokenExpiresAt { get; set; }
+
+    /// Active | Inactive | Suspended
+    public UserStatus Status { get; set; }
 
     public DateTime CreatedAt { get; set; }
 
     public DateTime UpdatedAt { get; set; }
 
-    public virtual ICollection<Booth> Booths { get; set; } = new List<Booth>();
+    public virtual Booth? Booth { get; set; }
+
+    public virtual ICollection<Cart> Carts { get; set; } = new List<Cart>();
+
+    public virtual ICollection<CustomerPreference> CustomerPreferences { get; set; } = new List<CustomerPreference>();
+
+    public virtual CustomerFoodProfile? CustomerFoodProfile { get; set; }
+
+    public virtual ICollection<AiRecommendationSession> AiRecommendationSessions { get; set; } = new List<AiRecommendationSession>();
+
+    public virtual ICollection<AiMealPlanSession> AiMealPlanSessions { get; set; } = new List<AiMealPlanSession>();
+
+    public virtual ICollection<MarketSubscription> MarketSubscriptions { get; set; } = new List<MarketSubscription>();
+
+    public virtual ICollection<AIRecommendationLog> AIRecommendationLogs { get; set; } = new List<AIRecommendationLog>();
 
     public virtual ICollection<Complaint> Complaints { get; set; } = new List<Complaint>();
 
@@ -49,6 +81,8 @@ public partial class User
     public virtual ICollection<Message> Messages { get; set; } = new List<Message>();
 
     public virtual ICollection<Notification> Notifications { get; set; } = new List<Notification>();
+
+    public virtual ICollection<UserDeviceToken> DeviceTokens { get; set; } = new List<UserDeviceToken>();
 
     public virtual ICollection<Order> Orders { get; set; } = new List<Order>();
 
@@ -61,4 +95,8 @@ public partial class User
     public virtual ICollection<Review> Reviews { get; set; } = new List<Review>();
 
     public virtual Role Role { get; set; } = null!;
+
+    public virtual ICollection<BoothRegistration> BoothRegistrations { get; set; } = new List<BoothRegistration>();
+
+    public virtual ICollection<PaymentMethod> PaymentMethods { get; set; } = new List<PaymentMethod>();
 }

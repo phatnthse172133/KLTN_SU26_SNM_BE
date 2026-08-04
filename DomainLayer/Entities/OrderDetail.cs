@@ -3,9 +3,8 @@ using System.Collections.Generic;
 
 namespace DomainLayer.Entities;
 
-/// <summary>
-/// Chi tiết món ăn trong từng đơn hàng
-/// </summary>
+
+// Chi tiết món ăn trong từng đơn hàng
 public partial class OrderDetail
 {
     public Guid Id { get; set; }
@@ -14,11 +13,12 @@ public partial class OrderDetail
 
     public Guid FoodItemId { get; set; }
 
+    // Immutable display snapshot for customer order history.
+    public string FoodNameSnapshot { get; set; } = null!;
+
     public int Quantity { get; set; }
 
-    /// <summary>
-    /// SNAPSHOT giá tại thời điểm đặt hàng - KHÔNG tính lại từ FoodItem.Price
-    /// </summary>
+    // SNAPSHOT giá tại thời điểm đặt hàng - KHÔNG tính lại từ FoodItem.Price
     public decimal UnitPrice { get; set; }
 
     public decimal TotalPrice { get; set; }

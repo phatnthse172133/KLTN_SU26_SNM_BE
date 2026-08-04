@@ -1,28 +1,36 @@
 ﻿using System;
 using System.Collections.Generic;
+using static DomainLayer.Enums.GeneralEnum;
 
 namespace DomainLayer.Entities;
 
-/// <summary>
-/// Gian hàng ẩm thực - thực thể trung tâm, mỗi gian hàng thuộc 1 NightMarket và do 1 User (BoothOwner) quản lý
-/// </summary>
+
+// Gian hàng ẩm thực - thực thể trung tâm, mỗi gian hàng thuộc 1 NightMarket và do 1 User (BoothOwner) quản lý
 public partial class Booth
 {
     public Guid Id { get; set; }
+
+    public Guid? RegistrationId { get; set; }
 
     public Guid NightMarketId { get; set; }
 
     public Guid BoothOwnerId { get; set; }
 
+    public Guid? ZoneId { get; set; }
+
     public string BoothName { get; set; } = null!;
 
-    public string? BoothNumber { get; set; }
-
-    public string? PhoneNumber { get; set; }
+    public string? BoothCode { get; set; }
 
     public string? Description { get; set; }
 
+    public string? PhoneNumber { get; set; }
+
+    public string? SlotNumber { get; set; }
+
     public string? ThumbnailUrl { get; set; }
+
+    public string? LogoUrl { get; set; }
 
     public decimal? MapPositionX { get; set; }
 
@@ -36,9 +44,7 @@ public partial class Booth
 
     public TimeOnly? CloseTime { get; set; }
 
-    /// <summary>
-    /// Cache điểm trung bình review, cập nhật qua trigger hoặc job định kỳ
-    /// </summary>
+    // Cache điểm trung bình review, cập nhật qua trigger hoặc job định kỳ
     public decimal? AverageRating { get; set; }
 
     public bool IsFeatured { get; set; }
@@ -47,10 +53,10 @@ public partial class Booth
 
     public DateTime? PackageExpiryDate { get; set; }
 
-    /// <summary>
-    /// Pending: chờ Admin duyệt | Active: hoạt động | Inactive: tạm ngừng | Suspended: bị khóa do vi phạm
-    /// </summary>
-    public string Status { get; set; } = null!;
+    public string? PaymentQRImage { get; set; }
+
+    // Active | Inactive | Banned
+    public BoothStatus Status { get; set; }
 
     public DateTime CreatedAt { get; set; }
 
@@ -60,15 +66,15 @@ public partial class Booth
 
     public virtual ICollection<BoothImage> BoothImages { get; set; } = new List<BoothImage>();
 
-    public virtual BoothLocation? BoothLocation { get; set; }
+    public virtual ICollection<BoothLocation> BoothLocations { get; set; } = new List<BoothLocation>();
 
     public virtual User BoothOwner { get; set; } = null!;
 
     public virtual ICollection<BoothPaymentInfo> BoothPaymentInfos { get; set; } = new List<BoothPaymentInfo>();
 
-    public virtual ICollection<BoothPromotionalPackage> BoothPromotionalPackages { get; set; } = new List<BoothPromotionalPackage>();
+    public virtual BoothRegistration? Registration { get; set; }
 
-    public virtual BoothQrcode? BoothQrcode { get; set; }
+    public virtual Zone? Zone { get; set; }
 
     public virtual ICollection<BoothSubscription> BoothSubscriptions { get; set; } = new List<BoothSubscription>();
 
@@ -77,6 +83,10 @@ public partial class Booth
     public virtual ICollection<Conversation> Conversations { get; set; } = new List<Conversation>();
 
     public virtual ICollection<FoodItem> FoodItems { get; set; } = new List<FoodItem>();
+
+    public virtual ICollection<AiMealPlanItem> AiMealPlanItems { get; set; } = new List<AiMealPlanItem>();
+
+    public virtual ICollection<FoodCategory> FoodCategories { get; set; } = new List<FoodCategory>();
 
     public virtual NightMarket NightMarket { get; set; } = null!;
 

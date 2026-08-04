@@ -1,38 +1,56 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using static DomainLayer.Enums.GeneralEnum;
 
 namespace DomainLayer.Entities;
 
-/// <summary>
-/// Lịch sử giao dịch thanh toán/hoàn tiền - tích hợp đa cổng VNPay/ZaloPay/MoMo/Payos
-/// </summary>
+
+// Lịch sử giao dịch thanh toán/hoàn tiền - tích hợp đa cổng VNPay/ZaloPay/MoMo/Payos
 public partial class Payment
 {
     public Guid Id { get; set; }
 
     public Guid OrderId { get; set; }
 
-    public Guid CustomerId { get; set; }
+    // FK tới User – chủ gian hàng nhận tiền
+    public Guid BoothOwnerId { get; set; }
 
-    /// <summary>
-    /// Payment: thu tiền | Refund: hoàn tiền
-    /// </summary>
-    public string Type { get; set; } = null!;
+    public PaymentType Type { get; set; } //Cash hoặc PayOS
 
-    public string Gateway { get; set; } = null!;
+    public PaymentGateway Gateway { get; set; }
 
     public decimal Amount { get; set; }
 
-    public string Currency { get; set; } = null!;
+    //public string Currency { get; set; } = null!;
 
-    public string Status { get; set; } = null!;
+    public PaymentStatus Status { get; set; }
 
-    /// <summary>
-    /// Mã tham chiếu từ cổng thanh toán bên thứ 3 - dùng để tra soát/khiếu nại
-    /// </summary>
+    // Cổng PayOS cần các trường này để lưu link thanh toán
+    public string? CheckoutUrl { get; set; }
+    public string? QrCode { get; set; }
+    public string? PaymentLinkId { get; set; }
     public string? GatewayRef { get; set; }
 
+    // PayOS order code for this specific payment transaction (used for supplemental payments)
+    public long? PayOSOrderCode { get; set; }
+
+    public DateTime? ExpiresAt { get; set; }
+    public DateTime? CancelledAt { get; set; }
+    public DateTime? FailedAt { get; set; }
+    public string? FailureCode { get; set; }
+    public string? FailureMessage { get; set; }
+    public byte[] RowVersion { get; set; } = [];
+
     public string? RefundReason { get; set; }
+
+    // Authoritative refund snapshot and PayOS payout identifiers. Destination
+    // bank data is deliberately not persisted here.
+    public decimal? RefundAmount { get; set; }
+    public string? RefundReference { get; set; }
+    public string? PayoutId { get; set; }
+    public DateTime? PayoutCreateClaimedAt { get; set; }
+    public DateTime? RefundRequestedAt { get; set; }
+    public DateTime? RefundedAt { get; set; }
 
     public DateTime? PaidAt { get; set; }
 
@@ -40,7 +58,51 @@ public partial class Payment
 
     public DateTime UpdatedAt { get; set; }
 
-    public virtual User Customer { get; set; } = null!;
+    // Navigation: chủ gian hàng nhận tiền
+    public virtual User BoothOwner { get; set; } = null!;
 
     public virtual Order Order { get; set; } = null!;
+
+    public virtual ICollection<PaymentAttempt> Attempts { get; set; } = new List<PaymentAttempt>();
+
+    public void MarkPending(DateTime now)
+    {
+        if (Status == PaymentStatus.Paid) throw new InvalidOperationException("A paid payment cannot become pending.");
+        Status = PaymentStatus.Pending;
+        UpdatedAt = now;
+    }
+
+    public void MarkPaid(DateTime now)
+    {
+        if (Status == PaymentStatus.Paid) return;
+        if (Status is PaymentStatus.Refunded or PaymentStatus.RefundProcessing) throw new InvalidOperationException("A refunded payment cannot be marked paid.");
+        Status = PaymentStatus.Paid;
+        PaidAt = now;
+        UpdatedAt = now;
+    }
+
+    public void MarkFailed(string? code, string? message, DateTime now)
+    {
+        if (Status == PaymentStatus.Paid) throw new InvalidOperationException("A paid payment cannot fail.");
+        Status = PaymentStatus.Failed;
+        FailureCode = code;
+        FailureMessage = message;
+        FailedAt = now;
+        UpdatedAt = now;
+    }
+
+    public void MarkCancelled(DateTime now)
+    {
+        if (Status == PaymentStatus.Paid) throw new InvalidOperationException("A paid payment cannot be cancelled.");
+        Status = PaymentStatus.Cancelled;
+        CancelledAt = now;
+        UpdatedAt = now;
+    }
+
+    public void MarkExpired(DateTime now)
+    {
+        if (Status == PaymentStatus.Paid) throw new InvalidOperationException("A paid payment cannot expire.");
+        Status = PaymentStatus.Expired;
+        UpdatedAt = now;
+    }
 }

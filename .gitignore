@@ -11,6 +11,10 @@ obj/
 
 # Visual Studio files
 .vs/
+.data-protection-keys/
+PresentationLayer/.data-protection-keys/
+.local-api*.log
+.local-api.lock
 *.user
 *.suo
 *.userosscache

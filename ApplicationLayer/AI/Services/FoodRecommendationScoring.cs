@@ -35,7 +35,10 @@ public sealed class DeterministicFoodSemanticMatcher : IFoodSemanticMatcher
         return new(Math.Clamp(score, 0m, 1m),
             matchedDesired.Concat(matchedTokens).Concat(matchedContext).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray());
     }
-    private static IEnumerable<string> Tokens(string value) => Regex.Matches(value, @"[\p{L}\p{Nd}_]+", RegexOptions.CultureInvariant).Select(match => match.Value);
+    // Enum/code metadata uses separators (FULL_MEAL, MAIN_COURSE). Treat them as
+    // token boundaries so natural-language context can match normalized metadata.
+    private static IEnumerable<string> Tokens(string value) => Regex.Matches(value, @"[\p{L}\p{Nd}]+", RegexOptions.CultureInvariant).Select(match => match.Value);
+
 }
 
 public sealed class FoodRecommendationRanker(IOptions<RecommendationV2Options> options) : IFoodRecommendationRanker
@@ -63,6 +66,13 @@ public sealed class FoodRecommendationRanker(IOptions<RecommendationV2Options> o
         if (intent.AvoidedTasteCodes.Intersect(candidate.TasteCodes, StringComparer.Ordinal).Any()) tasteRatio = Math.Max(0, tasteRatio - .3m);
         var preparationRatio = Ratio(methods.Count, intent.PreparationMethodCodes.Count);
         var courseRatio = Ratio(courseMatches.Length, intent.PreferredCourseCodes.Count + intent.MealPurposeCodes.Count);
+        var temperatureMatch = intent.PreferredServingTemperatures.Count > 0 && candidate.ServingTemperature.HasValue
+            && intent.PreferredServingTemperatures.Contains(candidate.ServingTemperature.Value);
+        var temperatureRatio = intent.PreferredServingTemperatures.Count == 0 ? 0m : temperatureMatch ? 1m : 0m;
+        var shareSignals = (intent.IsShareablePreferred == true ? 1 : 0) + (intent.PartySize.HasValue ? 1 : 0);
+        var shareMatches = (intent.IsShareablePreferred == true && candidate.IsShareable == true ? 1 : 0)
+            + (intent.PartySize.HasValue && candidate.EstimatedServingCount >= intent.PartySize ? 1 : 0);
+        var shareRatio = Ratio(shareMatches, shareSignals);
         var budgetRatio = BudgetScore(intent, candidate.CurrentPrice);
         var dietaryMatches = candidate.DietaryAttributes.Count(value => intent.DietaryRequirementCodes.Contains(value.Code)
             && value.IsConfirmed && value.Status == DietarySuitabilityStatus.SUITABLE);
@@ -79,10 +89,13 @@ public sealed class FoodRecommendationRanker(IOptions<RecommendationV2Options> o
         if (tasteSignals > 0) Add(tasteRatio, 10m);
         if (intent.PreparationMethodCodes.Count > 0) Add(preparationRatio, 8m);
         if (intent.PreferredCourseCodes.Count + intent.MealPurposeCodes.Count > 0) Add(courseRatio, 10m);
+        if (intent.PreferredServingTemperatures.Count > 0) Add(temperatureRatio, 10m);
+        if (shareSignals > 0) Add(shareRatio, 10m);
         if (intent.MinimumPrice.HasValue || intent.MaximumPrice.HasValue) Add(budgetRatio, 10m);
         if (intent.DietaryRequirementCodes.Count > 0) Add(dietaryRatio, 15m);
-        if (distanceMeters.HasValue && (intent.PreferNearMe || intent.MaximumDistanceMeters.HasValue)) Add(distanceRatio, 8m);
-        Add(ratingRatio, intent.ContextualTerms.Contains("popular", StringComparer.Ordinal) ? 20m : 5m);
+        if (distanceMeters.HasValue && intent.DistanceRankingEnabled) Add(distanceRatio, intent.PreferNearMe ? 15m : 6m);
+        if (intent.PopularityPreference == true || intent.ContextualTerms.Contains("popular", StringComparer.Ordinal)
+            || intent.SortPreference == FoodRecommendationSortPreference.HIGHEST_RATED_RELEVANT) Add(ratingRatio, 20m);
         var final = Round(applicable == 0 ? 0 : earned / applicable * 100m);
         var semanticPoints = Round(semanticRatio * 30m);
         var nameCategoryPoints = Round(nameCategoryRatio * 40m);
@@ -92,7 +105,7 @@ public sealed class FoodRecommendationRanker(IOptions<RecommendationV2Options> o
         var coursePoints = Round(courseRatio * 10m);
         var budgetPoints = Round(budgetRatio * 10m);
         var dietaryPoints = Round(dietaryRatio * 15m);
-        var distancePoints = Round(distanceRatio * 8m);
+        var distancePoints = intent.DistanceRankingEnabled ? Round(distanceRatio * (intent.PreferNearMe ? 15m : 6m)) : 0m;
         var ratingPoints = Round(ratingRatio * 5m);
         var strong = Math.Clamp(_options.StrongMatchThreshold, 1m, 100m);
         var near = Math.Clamp(_options.NearMatchThreshold, 0m, strong);
@@ -110,7 +123,11 @@ public sealed class FoodRecommendationRanker(IOptions<RecommendationV2Options> o
             Evidence = new RecommendationReasonEvidence
             {
                 DesiredTerms = semantic.MatchedTerms, Ingredients = ingredients, TastesAndSpice = tastes.Concat(spiceMatch ? [candidate.SpiceLevel.ToString()] : []).ToArray(),
-                Preparations = methods, CoursesAndPurposes = courseMatches,
+                Preparations = methods, CoursesAndPurposes = courseMatches
+                    .Concat(temperatureMatch ? [candidate.ServingTemperature!.Value.ToString()] : [])
+                    .Concat(intent.IsShareablePreferred == true && candidate.IsShareable == true ? ["SHAREABLE"] : [])
+                    .Concat(intent.PartySize.HasValue && candidate.EstimatedServingCount >= intent.PartySize ? [$"SERVES_{candidate.EstimatedServingCount}"] : [])
+                    .ToArray(),
                 Dietary = candidate.DietaryAttributes.Where(value => intent.DietaryRequirementCodes.Contains(value.Code) && value.IsConfirmed && value.Status == DietarySuitabilityStatus.SUITABLE).Select(value => value.Code).ToArray(),
                 Budget = intent.MaximumPrice.HasValue ? $"giá {candidate.CurrentPrice:0} nằm trong ngân sách {intent.MaximumPrice.Value:0}" : null,
                 Distance = distanceMeters.HasValue ? $"cách khoảng {distanceMeters.Value} m" : null,

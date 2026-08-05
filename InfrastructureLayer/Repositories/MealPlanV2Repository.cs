@@ -24,6 +24,9 @@ public sealed class MealPlanV2Repository(SNMDbContext db) : IMealPlanV2Repositor
     public Task<AiMealPlanSession?> FindSessionAsync(Guid customerId, string idempotencyKey, CancellationToken cancellationToken)
         => SessionQuery(false).SingleOrDefaultAsync(value => value.CustomerId == customerId && value.IdempotencyKey == idempotencyKey, cancellationToken);
 
+    public Task<AiMealPlanSession?> GetActiveSessionAsync(Guid customerId, Guid sessionId, DateTime utcNow, CancellationToken cancellationToken)
+        => SessionQuery(false).SingleOrDefaultAsync(value => value.Id == sessionId && value.CustomerId == customerId && value.ExpiresAt > utcNow, cancellationToken);
+
     public async Task<MealPlanIdempotencyResult> SaveCreateAsync(AiMealPlanSession session, CancellationToken cancellationToken)
     {
         var existing = await FindSessionAsync(session.CustomerId!.Value, session.IdempotencyKey!, cancellationToken);
@@ -102,6 +105,7 @@ public sealed class MealPlanV2Repository(SNMDbContext db) : IMealPlanV2Repositor
     private sealed class Mutation(SNMDbContext db, IDbContextTransaction transaction, AiMealPlan plan) : IMealPlanMutation
     {
         private bool _committed;
+        private readonly HashSet<Guid> _existingItemIds = plan.Items.Select(item => item.Id).ToHashSet();
         public AiMealPlan Plan { get; } = plan;
         public Task<AiMealPlanCartOperation?> FindCartOperationAsync(Guid customerId, string idempotencyKey,
             CancellationToken cancellationToken)
@@ -115,8 +119,8 @@ public sealed class MealPlanV2Repository(SNMDbContext db) : IMealPlanV2Repositor
             foreach (var item in Plan.Items)
             {
                 item.PlanId = Plan.Id;
-                if (db.Entry(item).State == EntityState.Detached)
-                    db.AiMealPlanItems.Add(item);
+                if (!_existingItemIds.Contains(item.Id)) db.Entry(item).State = EntityState.Added;
+                else if (db.Entry(item).State == EntityState.Detached) db.AiMealPlanItems.Attach(item);
             }
             await db.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);

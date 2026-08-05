@@ -21,6 +21,9 @@ public sealed class AiV2ProviderTests
     {
         var handler = Handler(Ok(ValidIntent())); var result = await Extractor(handler).ExtractFoodRecommendationIntentAsync(Request("Món bò cay nhẹ dưới 100k."), default);
         Assert.True(result.IsSuccess); Assert.False(result.UsedFallback); Assert.Equal("ING_BEEF", Assert.Single(result.ParsedResult!.PreferredIngredientCodes));
+        Assert.True(result.RuntimeTrace.ProviderAttempted); Assert.Equal("GEMINI", result.RuntimeTrace.ProviderUsed);
+        Assert.False(result.RuntimeTrace.FallbackUsed); Assert.True(result.RuntimeTrace.ApiKeyLoaded);
+        Assert.All(result.ParsedResult.SignalEvidence, signal => Assert.Equal("LLM_INFERENCE", signal.Source));
     }
 
     [Fact] public async Task Invalid_json_retries_once_then_uses_fallback()
@@ -137,6 +140,8 @@ public sealed class AiV2ProviderTests
     {
         var handler = Handler(Ok(ValidIntent())); var result = await Extractor(handler, enabled: false).ExtractFoodRecommendationIntentAsync(Request("Món bò."), default);
         Assert.True(result.UsedFallback); Assert.Equal(AiProviderFailureCategory.DISABLED, result.FailureCategory); Assert.Equal(0, handler.Calls);
+        Assert.False(result.RuntimeTrace.ProviderAttempted); Assert.Equal("DETERMINISTIC_FALLBACK", result.RuntimeTrace.ProviderUsed);
+        Assert.True(result.RuntimeTrace.FallbackUsed); Assert.Equal("DISABLED", result.RuntimeTrace.FallbackReason);
     }
 
     [Fact] public async Task Fallback_insufficient_is_explicit()
@@ -178,6 +183,16 @@ public sealed class AiV2ProviderTests
         Assert.DoesNotContain(secret, JsonSerializer.Serialize(result));
         Assert.All(logger.Messages, message => Assert.DoesNotContain(secret, message));
         Assert.All(logger.Exceptions, exception => Assert.DoesNotContain(secret, exception ?? string.Empty));
+    }
+
+    [Fact] public async Task Raw_email_and_phone_are_redacted_before_provider_egress()
+    {
+        var handler = Handler(Ok(ValidIntent()));
+        await Extractor(handler).ExtractFoodRecommendationIntentAsync(
+            Request("Món bò cho user@example.com, số 0912 345 678"), default);
+        Assert.DoesNotContain("user@example.com", handler.LastBody, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("0912 345 678", handler.LastBody, StringComparison.Ordinal);
+        Assert.Contains("redacted-email", handler.LastBody); Assert.Contains("redacted-phone", handler.LastBody);
     }
 
     [Fact] public async Task Non_official_host_is_rejected_without_http_call()

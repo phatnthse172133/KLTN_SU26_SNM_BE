@@ -345,7 +345,8 @@ public sealed class PostgresCustomerHistoryReviewComplaintVerificationTests
             .ReturnsAsync(Array.Empty<Guid>());
         return new NotificationService(
             new NotificationRepository(context), Mock.Of<IUserDeviceTokenRepository>(), users.Object,
-            Mock.Of<IPushNotificationService>(), realtime.Object, presence.Object, mapper.Object,
+            Mock.Of<IPushNotificationService>(), realtime.Object,
+            Mock.Of<ApplicationLayer.Services.Realtime.IRealtimeEventPublisher>(), presence.Object, mapper.Object,
             NullLogger<NotificationService>.Instance);
     }
 

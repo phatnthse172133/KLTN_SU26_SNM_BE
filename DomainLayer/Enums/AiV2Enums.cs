@@ -50,5 +50,5 @@ public enum MealPlanDiningStyle
 {
     FULL_MEAL, LIGHT_MEAL, FOOD_TOUR, FAMILY, DATE, FRIEND_GROUP, BUDGET_FRIENDLY, LOCAL_SPECIALTY
 }
-public enum MealPlanStrategy { NEAREST, BEST_MATCH, BUDGET_FRIENDLY }
+public enum MealPlanStrategy { NEAREST, BEST_MATCH, BUDGET_FRIENDLY, DIVERSE }
 public enum FoodAiProfileStatus { PENDING, READY, STALE, FAILED, DISABLED }

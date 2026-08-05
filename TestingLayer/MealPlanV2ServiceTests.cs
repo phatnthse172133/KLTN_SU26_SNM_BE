@@ -24,7 +24,10 @@ public sealed class MealPlanV2ServiceTests
         var request = Request();
         var first = await fixture.Service.CreateAsync(Customer, request, default);
         Assert.Equal("SUCCESS", first.Data!.Status); Assert.Equal(3, first.Data.Plans.Count);
-        Assert.Equal(3, first.Data.Plans.Select(value => value.Market.Id).Distinct().Count());
+        Assert.Equal(3, first.Data.Plans.Select(value => value.PlanId).Distinct().Count());
+        Assert.Equal(3, fixture.Repository.Sessions.Single().Plans
+            .Select(plan => string.Join(',', plan.Items.Where(item => !item.IsRemoved).Select(item => item.FoodItemId).Order()))
+            .Distinct().Count());
         Assert.All(first.Data.Plans, value => { Assert.True(value.IsComplete); Assert.Equal(1, value.Version); Assert.True(value.TotalPrice <= value.Budget); });
         var replay = await fixture.Service.CreateAsync(Customer, request, default);
         Assert.Equal(first.Data.SessionId, replay.Data!.SessionId); Assert.Equal(1, fixture.Extractor.Calls);
@@ -34,18 +37,44 @@ public sealed class MealPlanV2ServiceTests
     }
 
     [Fact]
-    public async Task One_feasible_market_returns_partial_without_fake_plans()
+    public async Task One_feasible_market_can_return_three_distinct_real_plans()
     {
         var fixture = Fixture(1);
         var response = await fixture.Service.CreateAsync(Customer, Request(), default);
-        Assert.Equal("PARTIAL_PLANS", response.Data!.Status); Assert.Single(response.Data.Plans);
+        Assert.Equal("SUCCESS", response.Data!.Status); Assert.Equal(3, response.Data.Plans.Count);
+        Assert.All(response.Data.Plans, plan => Assert.Equal(response.Data.Plans.First().Market.Id, plan.Market.Id));
+        Assert.Equal(new[] { "BEST_MATCH", "BUDGET_FRIENDLY", "DIVERSE" }, response.Data.Plans.Select(plan => plan.Strategy));
+    }
+
+    [Fact]
+    public async Task Empty_natural_language_request_uses_neutral_intent_without_calling_provider()
+    {
+        var fixture = Fixture(1);
+        var request = Request(); request.Request = null; request.NaturalLanguageRequest = "   ";
+        var response = await fixture.Service.CreateAsync(Customer, request, default);
+        Assert.NotEmpty(response.Data!.Plans);
+        Assert.Equal("NEUTRAL", response.Data.Provider);
+        Assert.Equal(0, fixture.Extractor.Calls);
+    }
+
+    [Fact]
+    public async Task Soft_distance_ranking_does_not_persist_ephemeral_customer_coordinates()
+    {
+        var fixture = Fixture(3);
+        var request = Request(1); request.MaxDistanceMeters = null; request.MaximumDistanceMeters = null;
+
+        var response = await fixture.Service.CreateAsync(Customer, request, default);
+
+        Assert.NotNull(Assert.Single(response.Data!.Plans).Market.DistanceMeters);
+        var session = Assert.Single(fixture.Repository.Sessions);
+        Assert.Null(session.Latitude); Assert.Null(session.Longitude);
     }
 
     [Fact]
     public async Task Alternatives_replace_remove_and_regenerate_are_server_recalculated_and_versioned()
     {
         var fixture = Fixture(1);
-        var created = (await fixture.Service.CreateAsync(Customer, Request(), default)).Data!;
+        var created = (await fixture.Service.CreateAsync(Customer, Request(1), default)).Data!;
         var planId = Assert.Single(created.Plans).PlanId;
         var detail = (await fixture.Service.GetDetailAsync(Customer, planId, default)).Data!;
         var main = detail.CourseGroups.Single(group => group.Course == "MAIN_COURSE").Items.Single();
@@ -66,14 +95,14 @@ public sealed class MealPlanV2ServiceTests
         var drink = regenerated.CourseGroups.Single(group => group.Course == "DRINK").Items.Single();
         var removed = (await fixture.Service.RemoveAsync(Customer, planId, drink.PlanItemId, regenerated.Version, default)).Data!;
         Assert.Equal(regenerated.Version + 1, removed.Version); Assert.True(removed.TotalPrice < regenerated.TotalPrice);
-        Assert.False(removed.IsComplete);
+        Assert.True(removed.IsComplete); // Drink is optional; the serving-complete main course remains valid.
     }
 
     [Fact]
     public async Task Expired_session_blocks_alternatives_and_mutations_but_detail_remains_read_only()
     {
         var fixture = Fixture(1);
-        var created = (await fixture.Service.CreateAsync(Customer, Request(), default)).Data!;
+        var created = (await fixture.Service.CreateAsync(Customer, Request(1), default)).Data!;
         var session = fixture.Repository.Sessions.Single(); session.ExpiresAt = DateTime.UtcNow.AddMinutes(-1);
         var planId = Assert.Single(created.Plans).PlanId;
         var detail = (await fixture.Service.GetDetailAsync(Customer, planId, default)).Data!;
@@ -86,7 +115,7 @@ public sealed class MealPlanV2ServiceTests
     public async Task Add_to_cart_uses_one_authoritative_batch_call_and_replays_without_duplicate_quantity()
     {
         var fixture = Fixture(1);
-        var created = (await fixture.Service.CreateAsync(Customer, Request(), default)).Data!;
+        var created = (await fixture.Service.CreateAsync(Customer, Request(1), default)).Data!;
         var summary = Assert.Single(created.Plans);
         var expectedFoods = (await fixture.Service.GetDetailAsync(Customer, summary.PlanId, default)).Data!
             .CourseGroups.SelectMany(group => group.Items).Select(item => item.FoodId!.Value).Order().ToArray();
@@ -119,10 +148,11 @@ public sealed class MealPlanV2ServiceTests
         return new(service, repository, extractor, cart);
     }
 
-    private static CreateMealPlanV2Request Request() => new()
+    private static CreateMealPlanV2Request Request(int requestedPlanCount = 3) => new()
     {
         PartySize = 2, Budget = 500_000, DiningStyle = "FULL_MEAL", Request = "bua an day du",
-        Latitude = 10.77m, Longitude = 106.70m, MaxDistanceMeters = 50_000, IdempotencyKey = "create-key"
+        Latitude = 10.77m, Longitude = 106.70m, MaxDistanceMeters = 50_000,
+        RequestedPlanCount = requestedPlanCount, IdempotencyKey = "create-key"
     };
 
     private static IEnumerable<FoodRecommendationCandidate> Candidates(int number)
@@ -172,6 +202,8 @@ public sealed class MealPlanV2ServiceTests
         public List<AiMealPlanCartOperation> CartOperations { get; } = [];
         public Task<AiMealPlanSession?> FindSessionAsync(Guid customerId, string key, CancellationToken cancellationToken)
             => Task.FromResult(Sessions.SingleOrDefault(value => value.CustomerId == customerId && value.IdempotencyKey == key));
+        public Task<AiMealPlanSession?> GetActiveSessionAsync(Guid customerId, Guid sessionId, DateTime utcNow, CancellationToken cancellationToken)
+            => Task.FromResult(Sessions.SingleOrDefault(value => value.Id == sessionId && value.CustomerId == customerId && value.ExpiresAt > utcNow));
         public Task<MealPlanIdempotencyResult> SaveCreateAsync(AiMealPlanSession session, CancellationToken cancellationToken)
         {
             var existing = Sessions.SingleOrDefault(value => value.CustomerId == session.CustomerId && value.IdempotencyKey == session.IdempotencyKey);

@@ -4,6 +4,7 @@ using InfrastructureLayer.Data.Backfill;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
+using System.Text.Json;
 using Xunit.Abstractions;
 
 namespace TestingLayer;
@@ -49,19 +50,25 @@ public sealed class PostgresAiV2BackfillTests
 
             int legacyFoodRelations;
             int legacyPreferences;
+            string completeBefore;
+            string curatedBefore;
             AiV2BackfillReport dry;
             await using (var scope = provider.CreateAsyncScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<SNMDbContext>();
-                legacyFoodRelations = await db.FoodItemTags.CountAsync();
-                legacyPreferences = await db.CustomerPreferences.CountAsync();
+                legacyFoodRelations = await db.FoodItemTags.CountAsync(value => FixtureFoodIds.Contains(value.FoodItemId));
+                legacyPreferences = await db.CustomerPreferences.CountAsync(value => FixtureCustomerIds.Contains(value.CustomerId));
+                completeBefore = await SnapshotFoodAsync(db, CompleteFoodId, includeProfile: true);
+                curatedBefore = await SnapshotFoodAsync(db, CuratedSentinelFoodId, includeProfile: false);
                 dry = await new AiV2FoodMetadataBackfillService(db).RunAsync(new(AiV2BackfillMode.DryRun, 7));
                 _output.WriteLine("DRY_RUN\n" + dry.ToJson());
-                Assert.Equal(0, await db.Ingredients.CountAsync());
-                Assert.Equal(0, await db.FoodAiProfiles.CountAsync());
+                Assert.Empty(await db.FoodAiProfiles.Where(value => MissingMetadataFoodIds.Contains(value.FoodItemId)).ToListAsync());
+                Assert.Empty(await db.FoodItemIngredients.Where(value => MissingMetadataFoodIds.Contains(value.FoodItemId)).ToListAsync());
                 Assert.False(dry.TransactionCommitted);
-                Assert.Equal(12, dry.SoupResolutions.Count);
-                Assert.Equal(dry.FoodItemTagBefore + dry.CustomerPreferenceBefore, dry.CoveredLegacyRelations);
+                Assert.Equal(MissingMetadataFoodIds.Order(), dry.SoupResolutions
+                    .Where(value => MissingMetadataFoodIds.Contains(value.FoodItemId)).Select(value => value.FoodItemId).Order());
+                Assert.Equal(completeBefore, await SnapshotFoodAsync(db, CompleteFoodId, includeProfile: true));
+                Assert.Equal(curatedBefore, await SnapshotFoodAsync(db, CuratedSentinelFoodId, includeProfile: false));
             }
 
             AiV2BackfillReport executed;
@@ -71,21 +78,27 @@ public sealed class PostgresAiV2BackfillTests
                 executed = await new AiV2FoodMetadataBackfillService(db).RunAsync(new(AiV2BackfillMode.Execute, 7));
                 _output.WriteLine("EXECUTE\n" + executed.ToJson());
                 Assert.True(executed.TransactionCommitted);
-                Assert.Equal(12, await db.FoodAiProfiles.CountAsync());
-                Assert.Equal(legacyFoodRelations, await db.FoodItemTags.CountAsync());
-                Assert.Equal(legacyPreferences, await db.CustomerPreferences.CountAsync());
-                Assert.Equal(0, await db.FoodItemCourses.CountAsync(value => value.Course == FoodCourse.SOUP));
-                Assert.True(await db.FoodItemCourses.AnyAsync(value => value.Course == FoodCourse.DRINK));
-                Assert.True(await db.FoodItemCourses.AnyAsync(value => value.Course == FoodCourse.DESSERT));
-                Assert.True(await db.CustomerPreferredCourses.AnyAsync(value => value.Course == FoodCourse.DRINK));
-                Assert.True(await db.CustomerPreferredCourses.AnyAsync(value => value.Course == FoodCourse.DESSERT));
-                Assert.Empty(await db.FoodItemAllergens.ToListAsync());
-                Assert.All(await db.FoodItemDietaryAttributes.ToListAsync(), value =>
+                Assert.Equal(FixtureFoodIds.Length, await db.FoodAiProfiles.CountAsync(value => FixtureFoodIds.Contains(value.FoodItemId)));
+                Assert.Equal(legacyFoodRelations, await db.FoodItemTags.CountAsync(value => FixtureFoodIds.Contains(value.FoodItemId)));
+                Assert.Equal(legacyPreferences, await db.CustomerPreferences.CountAsync(value => FixtureCustomerIds.Contains(value.CustomerId)));
+                Assert.Empty(await db.FoodItemCourses.Where(value => MissingMetadataFoodIds.Contains(value.FoodItemId) && value.Course == FoodCourse.SOUP).ToListAsync());
+                Assert.Equal(DrinkFoodIds.Order(), (await db.FoodItemCourses.Where(value => MissingMetadataFoodIds.Contains(value.FoodItemId) && value.Course == FoodCourse.DRINK)
+                    .Select(value => value.FoodItemId).ToListAsync()).Order());
+                Assert.Equal(DessertFoodIds.Order(), (await db.FoodItemCourses.Where(value => MissingMetadataFoodIds.Contains(value.FoodItemId) && value.Course == FoodCourse.DESSERT)
+                    .Select(value => value.FoodItemId).ToListAsync()).Order());
+                Assert.True(await db.CustomerPreferredCourses.AnyAsync(value => FixtureCustomerIds.Contains(value.CustomerId) && value.Course == FoodCourse.DRINK));
+                Assert.True(await db.CustomerPreferredCourses.AnyAsync(value => FixtureCustomerIds.Contains(value.CustomerId) && value.Course == FoodCourse.DESSERT));
+                Assert.Empty(await db.FoodItemAllergens.Where(value => FixtureFoodIds.Contains(value.FoodItemId)).ToListAsync());
+                Assert.All(await db.FoodItemDietaryAttributes.Where(value => FixtureFoodIds.Contains(value.FoodItemId)).ToListAsync(), value =>
                 {
                     Assert.False(value.IsConfirmed);
                     Assert.Equal(DietarySuitabilityStatus.UNVERIFIED, value.SuitabilityStatus);
                 });
-                Assert.DoesNotContain(await db.FoodAiProfiles.ToListAsync(), value => value.SearchText.Contains("budget", StringComparison.OrdinalIgnoreCase) || value.SearchText.Contains("quick_serve", StringComparison.OrdinalIgnoreCase));
+                Assert.DoesNotContain(await db.FoodAiProfiles.Where(value => FixtureFoodIds.Contains(value.FoodItemId)).ToListAsync(),
+                    value => value.SearchText.Contains("budget", StringComparison.OrdinalIgnoreCase) || value.SearchText.Contains("quick_serve", StringComparison.OrdinalIgnoreCase));
+                Assert.Equal(completeBefore, await SnapshotFoodAsync(db, CompleteFoodId, includeProfile: true));
+                Assert.Equal(curatedBefore, await SnapshotFoodAsync(db, CuratedSentinelFoodId, includeProfile: false));
+                Assert.False(await db.FoodItemTags.AnyAsync(value => value.FoodItemId == CuratedSentinelFoodId));
             }
 
             Assert.Equal(dry.PlannedWrites, executed.PlannedWrites);
@@ -97,8 +110,10 @@ public sealed class PostgresAiV2BackfillTests
                 _output.WriteLine("RERUN\n" + rerun.ToJson());
                 Assert.True(rerun.TransactionCommitted);
                 Assert.All(rerun.PlannedWrites, value => Assert.Equal(0, value.Value));
-                Assert.Equal(legacyFoodRelations, await db.FoodItemTags.CountAsync());
-                Assert.Equal(legacyPreferences, await db.CustomerPreferences.CountAsync());
+                Assert.Equal(legacyFoodRelations, await db.FoodItemTags.CountAsync(value => FixtureFoodIds.Contains(value.FoodItemId)));
+                Assert.Equal(legacyPreferences, await db.CustomerPreferences.CountAsync(value => FixtureCustomerIds.Contains(value.CustomerId)));
+                Assert.Equal(completeBefore, await SnapshotFoodAsync(db, CompleteFoodId, includeProfile: true));
+                Assert.Equal(curatedBefore, await SnapshotFoodAsync(db, CuratedSentinelFoodId, includeProfile: false));
             }
         }
         finally
@@ -149,19 +164,70 @@ public sealed class PostgresAiV2BackfillTests
               ('99999999-9999-9999-9999-999999990603','44444444-4444-4444-4444-444444444001','88888888-8888-8888-8888-888888888001','Sữa chua nếp cẩm','Tráng miệng lạnh, vị ngọt nhẹ.',25000,true,false,false,'UNKNOWN',0,now(),now()),
               ('99999999-9999-9999-9999-999999990903','44444444-4444-4444-4444-444444444001','88888888-8888-8888-8888-888888888001','Sữa chua phô mai','Tráng miệng lạnh, vị béo ngọt.',25000,true,false,false,'UNKNOWN',0,now(),now()),
               ('99999999-9999-9999-9999-999999990304','44444444-4444-4444-4444-444444444001','88888888-8888-8888-8888-888888888001','Trái cây dầm','Tráng miệng lạnh, nhiều trái cây.',30000,true,false,false,'UNKNOWN',0,now(),now());
+            INSERT INTO "FoodItem" ("Id","BoothId","CategoryId","Name","Description","Price","IsAvailable","IsFeatured","IsDeleted","SpiceLevel","ServingTemperature","EstimatedServingCount","IsShareable","SemanticProfileVersion","CreatedAt","UpdatedAt") VALUES
+              ('99999999-9999-9999-9999-999999990999','44444444-4444-4444-4444-444444444001','88888888-8888-8888-8888-888888888001','Complete fixture food','Already normalized',70000,true,false,false,'NON_SPICY','HOT',2,true,2,now(),now());
+            INSERT INTO "FoodItemIngredient" ("FoodItemId","IngredientId","IsPrimary","IsOptional","CreatedAt")
+              SELECT '99999999-9999-9999-9999-999999990999', "Id", true, false, now() FROM "Ingredient" WHERE "Code"='ING_BEEF' LIMIT 1;
+            INSERT INTO "FoodItemCourse" ("FoodItemId","Course","IsPrimary","CreatedAt") VALUES
+              ('99999999-9999-9999-9999-999999990999','MAIN_COURSE',true,now());
+            INSERT INTO "FoodAiProfile" ("FoodItemId","SearchText","ContentHash","Status","Version","CreatedAt","UpdatedAt") VALUES
+              ('99999999-9999-9999-9999-999999990999',@completeSearch,@completeHash,'READY',2,now(),now());
             INSERT INTO "FoodTag" ("Id","Name","Code","TagGroup","Status","IsSystem","DisplayOrder","IsSelectable","IsPreferenceSelectable","IsAutoAssigned","IsDeleted","CreatedAt","UpdatedAt")
               SELECT uuid_generate_v4(), code, code, grp, status, false, 0, true, true, false, false, now(), now()
               FROM (VALUES ('SOUP','CookingMethod','Inactive'),('DRINK','MealPurpose','Active'),('DESSERT','MealPurpose','Active'),('BUDGETFRIENDLY','Budget','Active'),('NOODLE','Ingredient','Active'),('HOT','Temperature','Active'),('GRILLED','CookingMethod','Active'),('SPICY','Taste','Active'),('BEEF','Ingredient','Active'),('CHICKEN','Ingredient','Active'),('PORK','Ingredient','Active'),('SEAFOOD','Ingredient','Active'),('VIETNAMESE','Other','Active')) value(code,grp,status);
-            INSERT INTO "FoodItemTag" ("FoodItemId","FoodTagId","CreatedAt") SELECT food."Id", tag."Id", now() FROM "FoodItem" food CROSS JOIN "FoodTag" tag WHERE tag."Code"='SOUP';
-            INSERT INTO "FoodItemTag" ("FoodItemId","FoodTagId","CreatedAt") SELECT food."Id", tag."Id", now() FROM "FoodItem" food CROSS JOIN "FoodTag" tag WHERE tag."Code"='BUDGETFRIENDLY';
-            INSERT INTO "FoodItemTag" ("FoodItemId","FoodTagId","CreatedAt") SELECT food."Id", tag."Id", now() FROM "FoodItem" food CROSS JOIN "FoodTag" tag WHERE tag."Code"='DRINK' AND food."Name" LIKE 'Nước%';
-            INSERT INTO "FoodItemTag" ("FoodItemId","FoodTagId","CreatedAt") SELECT food."Id", tag."Id", now() FROM "FoodItem" food CROSS JOIN "FoodTag" tag WHERE tag."Code"='DESSERT' AND food."Name" IN ('Chè ba màu','Sữa chua nếp cẩm','Sữa chua phô mai','Trái cây dầm');
+            INSERT INTO "FoodItemTag" ("FoodItemId","FoodTagId","CreatedAt") SELECT food."Id", tag."Id", now() FROM "FoodItem" food CROSS JOIN "FoodTag" tag WHERE food."SemanticProfileVersion"=0 AND tag."Code"='SOUP';
+            INSERT INTO "FoodItemTag" ("FoodItemId","FoodTagId","CreatedAt") SELECT food."Id", tag."Id", now() FROM "FoodItem" food CROSS JOIN "FoodTag" tag WHERE food."SemanticProfileVersion"=0 AND tag."Code"='BUDGETFRIENDLY';
+            INSERT INTO "FoodItemTag" ("FoodItemId","FoodTagId","CreatedAt") SELECT food."Id", tag."Id", now() FROM "FoodItem" food CROSS JOIN "FoodTag" tag WHERE food."SemanticProfileVersion"=0 AND tag."Code"='DRINK' AND food."Name" LIKE 'Nước%';
+            INSERT INTO "FoodItemTag" ("FoodItemId","FoodTagId","CreatedAt") SELECT food."Id", tag."Id", now() FROM "FoodItem" food CROSS JOIN "FoodTag" tag WHERE food."SemanticProfileVersion"=0 AND tag."Code"='DESSERT' AND food."Name" IN ('Chè ba màu','Sữa chua nếp cẩm','Sữa chua phô mai','Trái cây dầm');
             INSERT INTO "FoodItemTag" ("FoodItemId","FoodTagId","CreatedAt") SELECT '99999999-9999-9999-9999-999999990403', tag."Id", now() FROM "FoodTag" tag WHERE tag."Code" IN ('CHICKEN','GRILLED','SPICY');
             INSERT INTO "FoodItemTag" ("FoodItemId","FoodTagId","CreatedAt") SELECT '99999999-9999-9999-9999-999999990401', tag."Id", now() FROM "FoodTag" tag WHERE tag."Code" IN ('BEEF','NOODLE','SPICY');
             INSERT INTO "CustomerPreference" ("Id","CustomerId","FoodTagId","PreferenceKind","PreferenceSource","CreatedAt","UpdatedAt")
               SELECT uuid_generate_v4(),'22222222-2222-2222-2222-222222222101',"Id",CASE WHEN "Code"='SEAFOOD' THEN 'Avoid' ELSE 'Like' END,'UserSelected',now(),now() FROM "FoodTag" WHERE "Code" IN ('DRINK','DESSERT','SEAFOOD');
             SET session_replication_role = origin;
             """, connection);
+        var completeSearch = AiV2FoodMetadataBackfillService.BuildSearchText([
+            "Complete fixture food", "Already normalized", "LEGACY_AUDIT", "Legacy audit",
+            "DIET_NON_SPICY", "TEMP_HOT", "SHAREABLE", "serves 2"
+        ]);
+        command.Parameters.AddWithValue("completeSearch", completeSearch);
+        command.Parameters.AddWithValue("completeHash", AiV2FoodMetadataBackfillService.ComputeContentHash(completeSearch));
         await command.ExecuteNonQueryAsync();
     }
+
+    private static async Task<string> SnapshotFoodAsync(SNMDbContext db, Guid foodId, bool includeProfile)
+    {
+        var food = await db.FoodItems.AsNoTracking().SingleAsync(value => value.Id == foodId);
+        var ingredientCodes = await db.FoodItemIngredients.AsNoTracking().Where(value => value.FoodItemId == foodId)
+            .Select(value => value.Ingredient.Code).OrderBy(value => value).ToArrayAsync();
+        var courses = await db.FoodItemCourses.AsNoTracking().Where(value => value.FoodItemId == foodId)
+            .Select(value => value.Course).OrderBy(value => value).ToArrayAsync();
+        var legacyTagCodes = await db.FoodItemTags.AsNoTracking().Where(value => value.FoodItemId == foodId)
+            .Select(value => value.FoodTag.Code).OrderBy(value => value).ToArrayAsync();
+        var profile = includeProfile ? await db.FoodAiProfiles.AsNoTracking().Where(value => value.FoodItemId == foodId)
+            .Select(value => new { value.SearchText, value.ContentHash, value.Status, value.Version }).SingleAsync() : null;
+        return JsonSerializer.Serialize(new { food.Id, food.Name, food.Description, food.Price, food.SpiceLevel,
+            food.ServingTemperature, food.EstimatedServingCount, food.IsShareable, IngredientCodes = ingredientCodes,
+            Courses = courses, LegacyTagCodes = legacyTagCodes, Profile = profile });
+    }
+
+    private static readonly Guid[] MissingMetadataFoodIds =
+    [
+        Guid.Parse("99999999-9999-9999-9999-999999990803"), Guid.Parse("99999999-9999-9999-9999-999999990401"),
+        Guid.Parse("99999999-9999-9999-9999-999999990202"), Guid.Parse("99999999-9999-9999-9999-999999990301"),
+        Guid.Parse("99999999-9999-9999-9999-999999990403"), Guid.Parse("99999999-9999-9999-9999-999999990904"),
+        Guid.Parse("99999999-9999-9999-9999-999999990604"), Guid.Parse("99999999-9999-9999-9999-999999990104"),
+        Guid.Parse("99999999-9999-9999-9999-999999990303"), Guid.Parse("99999999-9999-9999-9999-999999990603"),
+        Guid.Parse("99999999-9999-9999-9999-999999990903"), Guid.Parse("99999999-9999-9999-9999-999999990304")
+    ];
+    private static readonly Guid CompleteFoodId = Guid.Parse("99999999-9999-9999-9999-999999990999");
+    private static readonly Guid[] FixtureFoodIds = [.. MissingMetadataFoodIds, CompleteFoodId];
+    private static readonly Guid[] FixtureCustomerIds =
+    [Guid.Parse("22222222-2222-2222-2222-222222222101"), Guid.Parse("22222222-2222-2222-2222-222222222102")];
+    private static readonly Guid[] DrinkFoodIds =
+    [Guid.Parse("99999999-9999-9999-9999-999999990904"), Guid.Parse("99999999-9999-9999-9999-999999990604"),
+     Guid.Parse("99999999-9999-9999-9999-999999990104"), Guid.Parse("99999999-9999-9999-9999-999999990303")];
+    private static readonly Guid[] DessertFoodIds =
+    [Guid.Parse("99999999-9999-9999-9999-999999990301"), Guid.Parse("99999999-9999-9999-9999-999999990603"),
+     Guid.Parse("99999999-9999-9999-9999-999999990903"), Guid.Parse("99999999-9999-9999-9999-999999990304")];
+    private static readonly Guid CuratedSentinelFoodId = Guid.Parse("a2650000-0000-0000-0000-000000000001");
 }

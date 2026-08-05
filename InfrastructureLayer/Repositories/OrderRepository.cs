@@ -409,13 +409,45 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
                 .SetProperty(order => order.UpdatedAt, updatedAt),
                 cancellationToken);
 
-    public async Task ClearCheckedOutCartItemsAsync(Order order, DateTime updatedAt, CancellationToken cancellationToken = default)
+    public async Task<int> ClearCheckedOutCartItemsAsync(Order order, DateTime updatedAt, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(order.CheckoutCartItemIds)) return;
+        if (string.IsNullOrWhiteSpace(order.CheckoutCartItemIds)) return 0;
         var ids = JsonSerializer.Deserialize<Guid[]>(order.CheckoutCartItemIds) ?? [];
-        if (ids.Length == 0) return;
-        await _context.CartItems
-            .Where(item => ids.Contains(item.Id) && item.Cart.CustomerId == order.CustomerId && !item.IsDeleted)
+        if (ids.Length == 0) return 0;
+
+        if (_context.Database.ProviderName == "Npgsql.EntityFrameworkCore.PostgreSQL")
+        {
+            foreach (var id in ids.Order())
+            {
+                await _context.Database
+                    .SqlQuery<Guid>($"SELECT \"Id\" AS \"Value\" FROM \"CartItem\" WHERE \"Id\" = {id} FOR UPDATE")
+                    .SingleOrDefaultAsync(cancellationToken);
+            }
+        }
+
+        var currentItems = await _context.CartItems
+            .Where(item => ids.Contains(item.Id)
+                && item.Cart.CustomerId == order.CustomerId
+                && item.FoodItem.BoothId == order.BoothId
+                && !item.IsDeleted)
+            .Select(item => new { item.Id, item.FoodItemId, item.Quantity })
+            .ToListAsync(cancellationToken);
+        var expectedLines = order.OrderDetails
+            .OrderBy(detail => detail.FoodItemId)
+            .Select(detail => (detail.FoodItemId, detail.Quantity))
+            .ToArray();
+        var currentLines = currentItems
+            .OrderBy(item => item.FoodItemId)
+            .Select(item => (item.FoodItemId, item.Quantity))
+            .ToArray();
+        if (currentItems.Count != ids.Distinct().Count() || !currentLines.SequenceEqual(expectedLines))
+            return 0;
+
+        return await _context.CartItems
+            .Where(item => ids.Contains(item.Id)
+                && item.Cart.CustomerId == order.CustomerId
+                && item.FoodItem.BoothId == order.BoothId
+                && !item.IsDeleted)
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(item => item.IsDeleted, true)
                 .SetProperty(item => item.UpdatedAt, updatedAt), cancellationToken);

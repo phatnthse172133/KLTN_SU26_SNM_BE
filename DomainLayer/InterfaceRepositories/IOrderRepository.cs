@@ -36,7 +36,7 @@ public interface IOrderRepository : IGenericRepository<Order>
     Task<Payment?> GetPendingPayOSPaymentByOrderIdAsync(Guid orderId);
     Task AddPaymentAsync(Payment payment);
     Task AddPaymentAttemptAsync(PaymentAttempt attempt);
-    Task ClearCheckedOutCartItemsAsync(Order order, DateTime updatedAt, CancellationToken cancellationToken = default);
+    Task<int> ClearCheckedOutCartItemsAsync(Order order, DateTime updatedAt, CancellationToken cancellationToken = default);
     Task<Guid?> TryRecordWebhookEventAsync(PaymentWebhookEvent webhookEvent, CancellationToken cancellationToken = default);
     Task CompleteWebhookEventAsync(Guid eventId, WebhookProcessingStatus status, string? error, DateTime processedAt, CancellationToken cancellationToken = default);
     Task<PagedResult<Order>> GetByBoothOwnerPagedAsync(

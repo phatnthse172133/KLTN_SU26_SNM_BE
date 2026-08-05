@@ -53,10 +53,10 @@ public static class IntegrationDemoDataSeeder
 
     private static readonly EdgeSeed[] Edges =
     [
-        new(1, 1, 2, 18), new(2, 2, 3, 14), new(3, 3, 4, 22),
-        new(4, 2, 6, 24), new(5, 6, 4, 16), new(6, 4, 7, 22),
-        new(7, 6, 10, 12), new(8, 10, 8, 22), new(9, 8, 7, 20),
-        new(10, 2, 5, 18), new(11, 5, 9, 22), new(12, 9, 10, 14)
+        new(1, 1, 2, 10), new(2, 2, 3, 14), new(3, 3, 4, 20),
+        new(4, 2, 6, 20), new(5, 6, 4, 14), new(6, 4, 7, 20),
+        new(7, 6, 10, 6), new(8, 10, 8, 20), new(9, 8, 7, 20),
+        new(10, 2, 5, 14), new(11, 5, 9, 20), new(12, 9, 10, 8)
     ];
 
     private static readonly FoodSeed[][] Menus =
@@ -228,11 +228,29 @@ public static class IntegrationDemoDataSeeder
 
         await AddIfMissingAsync(db.Zones, ZoneAId, () => new Zone { Id = ZoneAId, NightMarketId = MarketId, ZoneName = "Khu A — Đồ nướng & Hải sản", Description = "Các quầy món nóng ở phía bắc layout.", Color = "#E76F51", Status = ZoneStatus.Active, CreatedAt = now, UpdatedAt = now });
         await AddIfMissingAsync(db.Zones, ZoneBId, () => new Zone { Id = ZoneBId, NightMarketId = MarketId, ZoneName = "Khu B — Tráng miệng & Ăn vặt", Description = "Các quầy đồ uống, món ngọt và ăn vặt.", Color = "#2A9D8F", Status = ZoneStatus.Active, CreatedAt = now, UpdatedAt = now });
-        await AddIfMissingAsync(db.MarketLayouts, LayoutId, () => new MarketLayout { Id = LayoutId, NightMarketId = MarketId, LayoutName = "Mặt bằng demo Phase 03.5", Version = 1, LayoutImageUrl = $"{AssetRoot}/layout.svg", Width = 800, Height = 500, Status = MarketLayoutStatus.Active, CreatedAt = now, UpdatedAt = now });
+        await AddIfMissingAsync(db.MarketLayouts, LayoutId, () => new MarketLayout
+        {
+            Id = LayoutId, NightMarketId = MarketId, LayoutName = "Mặt bằng demo Phase 03.5", Version = 1,
+            LayoutImageUrl = $"{AssetRoot}/layout.svg", Width = 800, Height = 500,
+            CoordinateUnit = LayoutCoordinateUnit.LayoutUnit, MetersPerLayoutUnit = 0.1m,
+            DistanceCalibrationStatus = DistanceCalibrationStatus.Calibrated,
+            GraphRevision = 1,
+            Status = MarketLayoutStatus.Active, CreatedAt = now, UpdatedAt = now
+        });
         await db.SaveChangesAsync(ct);
 
         foreach (var node in Nodes)
             await AddIfMissingAsync(db.LayoutNodes, NodeId(node.Index), () => new LayoutNode { Id = NodeId(node.Index), LayoutId = LayoutId, ZoneId = node.ZoneId, NodeName = node.Name, NodeType = node.Type, Xcoordinate = node.X, Ycoordinate = node.Y, IsAccessible = true, IsStartingPoint = node.StartingPoint, CreatedAt = now, UpdatedAt = now });
+        await db.SaveChangesAsync(ct);
+
+        await AddIfMissingAsync(db.LayoutNavigationAnchors, Id("350"), () => new LayoutNavigationAnchor
+        {
+            Id = Id("350"), LayoutId = LayoutId, LayoutNodeId = MainEntranceNodeId,
+            AnchorType = NavigationAnchorType.Entrance, AnchorCode = "MAIN_ENTRANCE",
+            DisplayName = "Cổng chính", Latitude = 10.87510m, Longitude = 106.80020m,
+            IsCustomerAccessible = true, IsActive = true, OpeningTime = new TimeOnly(0, 0),
+            ClosingTime = new TimeOnly(23, 59), CreatedAt = now, UpdatedAt = now
+        });
         await db.SaveChangesAsync(ct);
 
         foreach (var edge in Edges)

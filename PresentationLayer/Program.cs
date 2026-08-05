@@ -523,7 +523,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 // Thêm Middleware
-//app.UseRateLimiter();
+app.UseRateLimiter();
 
 // Liveness intentionally checks only whether the process can serve HTTP.
 app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions

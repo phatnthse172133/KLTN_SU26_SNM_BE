@@ -34,6 +34,7 @@ public interface IMealPlanCartIntegrationService
 public interface IMealPlanV2Repository
 {
     Task<AiMealPlanSession?> FindSessionAsync(Guid customerId, string idempotencyKey, CancellationToken cancellationToken);
+    Task<AiMealPlanSession?> GetActiveSessionAsync(Guid customerId, Guid sessionId, DateTime utcNow, CancellationToken cancellationToken);
     Task<MealPlanIdempotencyResult> SaveCreateAsync(AiMealPlanSession session, CancellationToken cancellationToken);
     Task<AiMealPlan?> GetOwnedPlanAsync(Guid customerId, Guid planId, CancellationToken cancellationToken);
     Task<IMealPlanMutation?> BeginOwnedMutationAsync(Guid customerId, Guid planId, CancellationToken cancellationToken);

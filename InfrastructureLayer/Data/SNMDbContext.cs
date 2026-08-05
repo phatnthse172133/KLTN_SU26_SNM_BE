@@ -93,7 +93,11 @@ namespace InfrastructureLayer.Data
 
         public virtual DbSet<LayoutEdge> LayoutEdges { get; set; }
 
+        public virtual DbSet<LayoutBlock> LayoutBlocks { get; set; }
+
         public virtual DbSet<LayoutNode> LayoutNodes { get; set; }
+
+        public virtual DbSet<LayoutNavigationAnchor> LayoutNavigationAnchors { get; set; }
 
         public virtual DbSet<MarketLayout> MarketLayouts { get; set; }
 
@@ -147,6 +151,10 @@ namespace InfrastructureLayer.Data
 
         public virtual DbSet<SystemSetting> SystemSettings { get; set; }
         public virtual DbSet<PackagePolicy> PackagePolicies { get; set; }
+        public virtual DbSet<SupportTicket> SupportTickets { get; set; }
+        public virtual DbSet<SupportMessage> SupportMessages { get; set; }
+        public virtual DbSet<SupportAttachment> SupportAttachments { get; set; }
+        public virtual DbSet<SupportStatusHistory> SupportStatusHistories { get; set; }
 
         public virtual DbSet<ModerationActionHistory> ModerationActionHistories { get; set; }
 
@@ -362,8 +370,8 @@ namespace InfrastructureLayer.Data
 
                 entity.ToTable(tb => tb.HasComment("VÃ¡Â»â€¹ trÃƒÂ­ cÃ¡Â»Â¥ thÃ¡Â»Æ’ (tÃ¡Â»Âa Ã„â€˜Ã¡Â»â„¢) cÃ¡Â»Â§a 1 gian hÃƒÂ ng trÃƒÂªn 1 sÃ†Â¡ Ã„â€˜Ã¡Â»â€œ mÃ¡ÂºÂ·t bÃ¡ÂºÂ±ng"));
 
-                entity.HasIndex(e => e.BoothId, "ux_boothlocation_active_booth").IsUnique().HasFilter("\"IsDeleted\" = false");
-                entity.HasIndex(e => e.LayoutNodeId, "ux_boothlocation_active_node").IsUnique().HasFilter("\"IsDeleted\" = false");
+                entity.HasIndex(e => new { e.LayoutId, e.BoothId }, "ux_boothlocation_active_layout_booth").IsUnique().HasFilter("\"IsDeleted\" = false");
+                entity.HasIndex(e => new { e.LayoutId, e.LayoutNodeId }, "ux_boothlocation_active_layout_node").IsUnique().HasFilter("\"IsDeleted\" = false");
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
@@ -417,7 +425,7 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.Status)
                     .HasConversion<string>()
                     .HasMaxLength(20)
-                    .HasDefaultValueSql("'Draft'::character varying");
+                    .HasDefaultValueSql("'Inactive'::character varying");
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
 
                 entity.HasOne(d => d.Booth).WithMany(p => p.BoothPaymentInfos)
@@ -805,6 +813,8 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.IsAccessible).HasDefaultValue(true);
                 entity.Property(e => e.IsDeleted).HasDefaultValue(false);
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+                entity.ToTable(table => table.HasCheckConstraint(
+                    "ck_layoutedge_distance_positive", "\"Distance\" > 0"));
 
                 entity.HasIndex(e => new { e.LayoutId, e.FromNodeId, e.ToNodeId }, "ux_layoutedge_active")
                     .IsUnique()
@@ -821,6 +831,25 @@ namespace InfrastructureLayer.Data
                     .HasForeignKey(d => d.ToNodeId)
                     .OnDelete(DeleteBehavior.Restrict)
                     .HasConstraintName("LayoutEdges_ToNodeId_fkey");
+            });
+
+            modelBuilder.Entity<LayoutBlock>(entity =>
+            {
+                entity.HasKey(e => e.Id).HasName("LayoutBlocks_pkey");
+                entity.ToTable("LayoutBlocks", tb => tb.HasComment("Layout zones and generated blocks"));
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+                entity.Property(e => e.IsDeleted).HasDefaultValue(false);
+                entity.Property(e => e.Type).HasMaxLength(50);
+                entity.Property(e => e.Name).HasMaxLength(150);
+                entity.HasOne(e => e.Layout).WithMany()
+                    .HasForeignKey(e => e.LayoutId)
+                    .HasConstraintName("LayoutBlocks_LayoutId_fkey");
+                entity.HasOne(e => e.Zone).WithMany()
+                    .HasForeignKey(e => e.ZoneId)
+                    .OnDelete(DeleteBehavior.SetNull)
+                    .HasConstraintName("LayoutBlocks_ZoneId_fkey");
             });
 
             modelBuilder.Entity<LayoutNode>(entity =>
@@ -846,6 +875,14 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.Ycoordinate)
                     .HasPrecision(10, 2)
                     .HasColumnName("YCoordinate");
+                entity.Property(e => e.SlotCode).HasMaxLength(50);
+
+                entity.HasIndex(e => e.LayoutId)
+                    .HasDatabaseName("IX_LayoutNodes_LayoutId");
+                entity.HasIndex(e => new { e.LayoutId, e.SlotCode })
+                    .IsUnique()
+                    .HasFilter("\"IsDeleted\" = false AND \"SlotCode\" IS NOT NULL")
+                    .HasDatabaseName("ux_layoutnodes_active_layout_slotcode");
 
                 entity.HasOne(d => d.Layout).WithMany(p => p.LayoutNodes)
                     .HasForeignKey(d => d.LayoutId)
@@ -855,6 +892,53 @@ namespace InfrastructureLayer.Data
                     .HasForeignKey(d => d.ZoneId)
                     .OnDelete(DeleteBehavior.SetNull)
                     .HasConstraintName("LayoutNodes_ZoneId_fkey");
+
+                entity.HasOne(d => d.LayoutBlock).WithMany()
+                    .HasForeignKey(d => d.LayoutBlockId)
+                    .OnDelete(DeleteBehavior.SetNull)
+                    .HasConstraintName("LayoutNodes_LayoutBlockId_fkey");
+            });
+
+            modelBuilder.Entity<LayoutNavigationAnchor>(entity =>
+            {
+                entity.HasKey(e => e.Id).HasName("LayoutNavigationAnchors_pkey");
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.AnchorType).HasConversion<string>().HasMaxLength(30);
+                entity.Property(e => e.AnchorCode).HasMaxLength(50);
+                entity.Property(e => e.DisplayName).HasMaxLength(150);
+                entity.Property(e => e.PublicTokenHash).HasMaxLength(64);
+                entity.Property(e => e.TokenVersion).HasDefaultValue(1);
+                entity.Property(e => e.IsQrEnabled).HasDefaultValue(false);
+                entity.Property(e => e.PublicTokenHash).HasMaxLength(64);
+                entity.Property(e => e.TokenVersion).HasDefaultValue(1);
+                entity.Property(e => e.IsQrEnabled).HasDefaultValue(false);
+                entity.Property(e => e.Latitude).HasPrecision(10, 7);
+                entity.Property(e => e.Longitude).HasPrecision(10, 7);
+                entity.Property(e => e.IsCustomerAccessible).HasDefaultValue(true);
+                entity.Property(e => e.IsActive).HasDefaultValue(true);
+                entity.Property(e => e.IsDeleted).HasDefaultValue(false);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+                entity.HasIndex(e => new { e.LayoutId, e.AnchorCode }, "ux_navigationanchor_layout_code")
+                    .IsUnique().HasFilter("\"IsDeleted\" = false");
+                entity.ToTable(table =>
+                {
+                    table.HasCheckConstraint("ck_navigationanchor_latitude", "\"Latitude\" >= -90 AND \"Latitude\" <= 90");
+                    table.HasCheckConstraint("ck_navigationanchor_longitude", "\"Longitude\" >= -180 AND \"Longitude\" <= 180");
+                    table.HasCheckConstraint("ck_navigationanchor_hours_pair", "(\"OpeningTime\" IS NULL) = (\"ClosingTime\" IS NULL)");
+                    table.HasCheckConstraint("ck_navigationanchor_token_version", "\"TokenVersion\" > 0");
+                    table.HasCheckConstraint("ck_navigationanchor_qr_hash", "\"IsQrEnabled\" = false OR \"PublicTokenHash\" IS NOT NULL");
+                    table.HasCheckConstraint("ck_navigationanchor_qr_validity", "\"QrValidFrom\" IS NULL OR \"QrValidUntil\" IS NULL OR \"QrValidFrom\" < \"QrValidUntil\"");
+                    table.HasCheckConstraint("ck_navigationanchor_token_version", "\"TokenVersion\" > 0");
+                    table.HasCheckConstraint("ck_navigationanchor_qr_hash", "\"IsQrEnabled\" = false OR \"PublicTokenHash\" IS NOT NULL");
+                    table.HasCheckConstraint("ck_navigationanchor_qr_validity", "\"QrValidFrom\" IS NULL OR \"QrValidUntil\" IS NULL OR \"QrValidFrom\" < \"QrValidUntil\"");
+                });
+                entity.HasOne(e => e.Layout).WithMany(e => e.NavigationAnchors)
+                    .HasForeignKey(e => e.LayoutId).OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("LayoutNavigationAnchors_LayoutId_fkey");
+                entity.HasOne(e => e.LayoutNode).WithMany(e => e.NavigationAnchors)
+                    .HasForeignKey(e => e.LayoutNodeId).OnDelete(DeleteBehavior.Restrict)
+                    .HasConstraintName("LayoutNavigationAnchors_LayoutNodeId_fkey");
             });
 
             modelBuilder.Entity<MarketLayout>(entity =>
@@ -867,13 +951,30 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
                 entity.Property(e => e.LayoutName).HasMaxLength(150);
                 entity.Property(e => e.LayoutImageUrl).HasMaxLength(500);
+                entity.Property(e => e.MarketWidthMeters).HasPrecision(10, 2);
+                entity.Property(e => e.MarketLengthMeters).HasPrecision(10, 2);
+                entity.Property(e => e.PixelsPerMeter).HasPrecision(8, 2);
                 entity.Property(e => e.Version).HasDefaultValue(1);
+                entity.Property(e => e.GraphRevision).HasDefaultValue(1);
+                entity.Property(e => e.CoordinateUnit)
+                    .HasConversion<string>()
+                    .HasMaxLength(30)
+                    .HasDefaultValueSql("'LayoutUnit'::character varying");
+                entity.Property(e => e.MetersPerLayoutUnit).HasPrecision(12, 6);
+                entity.Property(e => e.DistanceCalibrationStatus)
+                    .HasConversion<string>()
+                    .HasMaxLength(30)
+                    .HasDefaultValueSql("'Uncalibrated'::character varying");
                 entity.Property(e => e.Status)
                     .HasConversion<string>()
                     .HasMaxLength(20)
-                    .HasDefaultValueSql("'Draft'::character varying");
+                    .HasDefaultValueSql("'Inactive'::character varying");
                 entity.Property(e => e.IsDeleted).HasDefaultValue(false);
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+                entity.ToTable(table => table.HasCheckConstraint(
+                    "ck_marketlayout_positive_scale", "\"MetersPerLayoutUnit\" IS NULL OR \"MetersPerLayoutUnit\" > 0"));
+                entity.ToTable(table => table.HasCheckConstraint(
+                    "ck_marketlayout_graph_revision_positive", "\"GraphRevision\" > 0"));
 
                 entity.HasIndex(e => new { e.NightMarketId, e.LayoutName }, "ux_marketlayout_market_name_active")
                     .IsUnique()
@@ -933,6 +1034,7 @@ namespace InfrastructureLayer.Data
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.HasIndex(e => new { e.IsDeleted, e.Status, e.CreatedAt }, "idx_nightmarket_active_status_created");
+                entity.HasIndex(e => e.ModerationStatus, "idx_nightmarket_moderation_status");
 
                 entity.Property(e => e.Address).HasMaxLength(500);
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
@@ -1559,6 +1661,12 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.ZoneName).HasMaxLength(100);
                 entity.Property(e => e.Color).HasMaxLength(50);
+                entity.Property(e => e.WidthMeters).HasPrecision(10, 2);
+                entity.Property(e => e.LengthMeters).HasPrecision(10, 2);
+                entity.Property(e => e.BoothWidthMeters).HasPrecision(10, 2);
+                entity.Property(e => e.BoothLengthMeters).HasPrecision(10, 2);
+                entity.Property(e => e.HorizontalGapMeters).HasPrecision(10, 2);
+                entity.Property(e => e.VerticalGapMeters).HasPrecision(10, 2);
                 entity.Property(e => e.Status)
                     .HasConversion<string>()
                     .HasMaxLength(20)
@@ -1575,48 +1683,6 @@ namespace InfrastructureLayer.Data
                     .HasForeignKey(d => d.NightMarketId)
                     .HasConstraintName("Zones_NightMarketId_fkey");
             });
-            modelBuilder.Entity<UserStatusHistory>(entity =>
-            {
-                entity.ToTable("UserStatusHistories");
-                entity.HasKey(e => e.Id);
-
-                entity.Property(e => e.UserId).IsRequired();
-                entity.Property(e => e.ChangedByAdminId).IsRequired();
-                entity.Property(e => e.PreviousStatus)
-                    .IsRequired()
-                    .HasConversion<string>()
-                    .HasMaxLength(20);
-                entity.Property(e => e.NewStatus)
-                    .IsRequired()
-                    .HasConversion<string>()
-                    .HasMaxLength(20);
-                entity.Property(e => e.Reason).IsRequired().HasMaxLength(1000);
-                entity.Property(e => e.CreatedAt).IsRequired().HasColumnType("timestamp with time zone");
-
-                entity.HasIndex(e => new { e.UserId, e.CreatedAt });
-                entity.HasIndex(e => e.ChangedByAdminId);
-
-                entity.HasOne(e => e.User)
-                    .WithMany()
-                    .HasForeignKey(e => e.UserId)
-                    .OnDelete(DeleteBehavior.Restrict);
-                entity.HasOne(e => e.ChangedByAdmin)
-                    .WithMany()
-                    .HasForeignKey(e => e.ChangedByAdminId)
-                    .OnDelete(DeleteBehavior.Restrict);
-            });
-
-            modelBuilder.Entity<EmailOutbox>(entity =>
-            {
-                entity.ToTable("EmailOutbox");
-                entity.HasKey(e => e.Id);
-                entity.HasIndex(e => new { e.ReferenceId, e.EmailType }).IsUnique();
-                entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone");
-                entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
-                entity.Property(e => e.NextRetryAt).HasColumnType("timestamp with time zone");
-                entity.Property(e => e.SentAt).HasColumnType("timestamp with time zone");
-            });
-
             modelBuilder.Entity<UserStatusHistory>(entity =>
             {
                 entity.ToTable("UserStatusHistories");
@@ -1727,6 +1793,57 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.Description).HasMaxLength(500);
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+            });
+
+            modelBuilder.Entity<SupportTicket>(entity =>
+            {
+                entity.ToTable("SupportTickets");
+                entity.HasKey(e => e.Id);
+                entity.HasIndex(e => e.TicketCode).IsUnique();
+                entity.HasIndex(e => new { e.RequesterId, e.CreatedAt });
+                entity.HasIndex(e => new { e.Status, e.DueAt });
+                entity.Property(e => e.TicketCode).HasMaxLength(24).IsRequired();
+                entity.Property(e => e.RequesterRole).HasMaxLength(30).IsRequired();
+                entity.Property(e => e.Category).HasMaxLength(50).IsRequired();
+                entity.Property(e => e.Title).HasMaxLength(200).IsRequired();
+                entity.Property(e => e.Description).HasMaxLength(4000).IsRequired();
+                entity.Property(e => e.Status).HasMaxLength(30).IsRequired();
+                entity.Property(e => e.Priority).HasMaxLength(20).IsRequired();
+                entity.Property(e => e.PageUrl).HasMaxLength(1000);
+                entity.HasOne(e => e.Requester).WithMany().HasForeignKey(e => e.RequesterId).OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.AssignedAdmin).WithMany().HasForeignKey(e => e.AssignedAdminId).OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<SupportMessage>(entity =>
+            {
+                entity.ToTable("SupportMessages");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.SenderRole).HasMaxLength(30).IsRequired();
+                entity.Property(e => e.Body).HasMaxLength(4000).IsRequired();
+                entity.HasOne(e => e.Ticket).WithMany(e => e.Messages).HasForeignKey(e => e.TicketId).OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.Sender).WithMany().HasForeignKey(e => e.SenderId).OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<SupportAttachment>(entity =>
+            {
+                entity.ToTable("SupportAttachments");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.FileUrl).HasMaxLength(1000).IsRequired();
+                entity.Property(e => e.OriginalFileName).HasMaxLength(255).IsRequired();
+                entity.Property(e => e.ContentType).HasMaxLength(100).IsRequired();
+                entity.HasOne(e => e.Ticket).WithMany(e => e.Attachments).HasForeignKey(e => e.TicketId).OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.Message).WithMany(e => e.Attachments).HasForeignKey(e => e.MessageId).OnDelete(DeleteBehavior.SetNull);
+            });
+
+            modelBuilder.Entity<SupportStatusHistory>(entity =>
+            {
+                entity.ToTable("SupportStatusHistories");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.FromStatus).HasMaxLength(30);
+                entity.Property(e => e.ToStatus).HasMaxLength(30).IsRequired();
+                entity.Property(e => e.Note).HasMaxLength(1000);
+                entity.HasOne(e => e.Ticket).WithMany(e => e.StatusHistory).HasForeignKey(e => e.TicketId).OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.Actor).WithMany().HasForeignKey(e => e.ActorId).OnDelete(DeleteBehavior.Restrict);
             });
         }
     }

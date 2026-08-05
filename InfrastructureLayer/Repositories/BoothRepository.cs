@@ -4,6 +4,7 @@ using DomainLayer.InterfaceRepository;
 using InfrastructureLayer.Data;
 using Microsoft.EntityFrameworkCore;
 using System.Linq.Expressions;
+using static DomainLayer.Enums.GeneralEnum;
 
 namespace InfrastructureLayer.Repositories;
 
@@ -97,7 +98,7 @@ public class BoothRepository : GenericRepository<Booth>, IBoothRepository
                 booth.CloseTime,
                 booth.NightMarket.OpeningHours,
                 booth.NightMarket.ClosingHours,
-                booth.NightMarket.Status == DomainLayer.Enums.GeneralEnum.NightMarketStatus.Open,
+                booth.NightMarket.Status == DomainLayer.Enums.GeneralEnum.NightMarketStatus.Active,
                 booth.AverageRating,
                 booth.IsFeatured))
             .Skip((page - 1) * pageSize)
@@ -151,13 +152,11 @@ public class BoothRepository : GenericRepository<Booth>, IBoothRepository
             booth.Status == DomainLayer.Enums.GeneralEnum.BoothStatus.Active &&
             !booth.NightMarket.IsDeleted &&
             booth.NightMarket.ModerationStatus == DomainLayer.Enums.GeneralEnum.ModerationStatus.Active &&
-            (booth.NightMarket.Status == DomainLayer.Enums.GeneralEnum.NightMarketStatus.Upcoming ||
-             booth.NightMarket.Status == DomainLayer.Enums.GeneralEnum.NightMarketStatus.Open ||
-             booth.NightMarket.Status == DomainLayer.Enums.GeneralEnum.NightMarketStatus.Closed));
+            booth.NightMarket.Status == DomainLayer.Enums.GeneralEnum.NightMarketStatus.Active);
 
     private static Expression<Func<Booth, bool>> IsCustomerOpenAt(TimeOnly localTime)
         => booth =>
-            booth.NightMarket.Status == DomainLayer.Enums.GeneralEnum.NightMarketStatus.Open &&
+            booth.NightMarket.Status == DomainLayer.Enums.GeneralEnum.NightMarketStatus.Active &&
             booth.NightMarket.OpeningHours.HasValue &&
             booth.NightMarket.ClosingHours.HasValue &&
             booth.NightMarket.OpeningHours.Value != booth.NightMarket.ClosingHours.Value &&
@@ -193,7 +192,7 @@ public class BoothRepository : GenericRepository<Booth>, IBoothRepository
             booth.CloseTime,
             booth.NightMarket.OpeningHours,
             booth.NightMarket.ClosingHours,
-            booth.NightMarket.Status == DomainLayer.Enums.GeneralEnum.NightMarketStatus.Open,
+            booth.NightMarket.Status == DomainLayer.Enums.GeneralEnum.NightMarketStatus.Active,
             booth.AverageRating ?? 0,
             booth.Reviews.Count(review => review.IsVisible),
             booth.FoodItems.Count(item => item.IsAvailable && !item.IsDeleted && !item.Category.IsDeleted),
@@ -201,9 +200,9 @@ public class BoothRepository : GenericRepository<Booth>, IBoothRepository
             includeImages
                 ? booth.BoothImages.OrderBy(image => image.DisplayOrder).ThenBy(image => image.Id).Select(image => image.ImageUrl).ToList()
                 : new List<string>(),
-            booth.BoothLocations.Where(location => !location.IsDeleted).Select(location => (Guid?)location.LayoutId).FirstOrDefault(),
-            booth.BoothLocations.Where(location => !location.IsDeleted).Select(location => (Guid?)location.LayoutNodeId).FirstOrDefault(),
-            booth.BoothLocations.Where(location => !location.IsDeleted).Select(location => location.SlotNumber).FirstOrDefault(),
-            booth.BoothLocations.Where(location => !location.IsDeleted).Select(location => location.ZoneId).FirstOrDefault(),
-            booth.BoothLocations.Where(location => !location.IsDeleted).Select(location => location.Zone == null ? null : location.Zone.ZoneName).FirstOrDefault()));
+            booth.BoothLocations.Where(location => !location.IsDeleted && location.Layout.Status == MarketLayoutStatus.Active).Select(location => (Guid?)location.LayoutId).FirstOrDefault(),
+            booth.BoothLocations.Where(location => !location.IsDeleted && location.Layout.Status == MarketLayoutStatus.Active).Select(location => (Guid?)location.LayoutNodeId).FirstOrDefault(),
+            booth.BoothLocations.Where(location => !location.IsDeleted && location.Layout.Status == MarketLayoutStatus.Active).Select(location => location.SlotNumber).FirstOrDefault(),
+            booth.BoothLocations.Where(location => !location.IsDeleted && location.Layout.Status == MarketLayoutStatus.Active).Select(location => location.ZoneId).FirstOrDefault(),
+            booth.BoothLocations.Where(location => !location.IsDeleted && location.Layout.Status == MarketLayoutStatus.Active).Select(location => location.Zone == null ? null : location.Zone.ZoneName).FirstOrDefault()));
 }

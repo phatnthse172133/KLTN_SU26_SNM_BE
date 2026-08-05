@@ -14,6 +14,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Text.Json;
 using static DomainLayer.Enums.GeneralEnum;
 
 namespace TestingLayer;
@@ -188,20 +189,40 @@ public sealed class IntegrationDemoDataSeederTests
             mapper);
 
         var map = await navigation.GetMapAsync(IntegrationDemoDataSeeder.MarketId);
+        Assert.Equal(IntegrationDemoDataSeeder.MarketId, map.Data!.MarketId);
+        Assert.Equal(IntegrationDemoDataSeeder.LayoutId, map.Data.Layout.Id);
+        Assert.Equal(1, map.Data.Layout.Version);
         Assert.Equal(5, map.Data!.Booths.Count);
         Assert.Equal(2, map.Data.StartingPoints.Count);
+        Assert.NotEmpty(map.Data.Nodes);
+        Assert.NotEmpty(map.Data.Edges);
+        Assert.All(map.Data.Nodes, node => Assert.Equal(map.Data.Layout.Id, node.LayoutId));
+        Assert.All(map.Data.Edges, edge => Assert.Equal(map.Data.Layout.Id, edge.LayoutId));
+        var publicNodeIds = map.Data.Nodes.Select(node => node.Id).ToHashSet();
+        Assert.All(map.Data.Edges, edge =>
+        {
+            Assert.Contains(edge.FromNodeId, publicNodeIds);
+            Assert.Contains(edge.ToNodeId, publicNodeIds);
+        });
+        Assert.All(map.Data.Booths, booth => Assert.Contains(booth.NodeId, publicNodeIds));
+
+        var mapJson = JsonSerializer.Serialize(map.Data, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.Contains("\"nodes\"", mapJson);
+        Assert.Contains("\"edges\"", mapJson);
+        Assert.DoesNotContain("isDeleted", mapJson, StringComparison.OrdinalIgnoreCase);
 
         var boothOneRoute = await navigation.FindRouteToBoothAsync(
             IntegrationDemoDataSeeder.LayoutId,
             IntegrationDemoDataSeeder.MainEntranceNodeId,
             IntegrationDemoDataSeeder.BoothId(1));
-        Assert.Equal(32m, boothOneRoute.Data!.TotalDistance);
+        Assert.Equal(24m, boothOneRoute.Data!.TotalDistanceMeters);
+        Assert.True(boothOneRoute.Data.IsDistanceCalibrated);
 
         var boothTwoRoute = await navigation.FindRouteToBoothAsync(
             IntegrationDemoDataSeeder.LayoutId,
             IntegrationDemoDataSeeder.MainEntranceNodeId,
             IntegrationDemoDataSeeder.BoothId(2));
-        Assert.Equal(54m, boothTwoRoute.Data!.TotalDistance);
+        Assert.Equal(44m, boothTwoRoute.Data!.TotalDistanceMeters);
         Assert.Equal(
             new[] { IntegrationDemoDataSeeder.NodeId(1), IntegrationDemoDataSeeder.NodeId(2), IntegrationDemoDataSeeder.NodeId(3), IntegrationDemoDataSeeder.NodeId(4) },
             boothTwoRoute.Data.Path.Select(x => x.NodeId));

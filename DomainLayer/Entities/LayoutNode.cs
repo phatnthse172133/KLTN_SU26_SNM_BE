@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using DomainLayer.Common;
 using static DomainLayer.Enums.GeneralEnum;
@@ -33,13 +33,22 @@ public partial class LayoutNode : ISoftDelete
 
     public DateTime UpdatedAt { get; set; }
 
+    public Guid? LayoutBlockId { get; set; }
+    public string? SlotCode { get; set; }
+    public int? RowIndex { get; set; }
+    public int? ColumnIndex { get; set; }
+
     public virtual MarketLayout Layout { get; set; } = null!;
 
     public virtual Zone? Zone { get; set; }
+
+    public virtual LayoutBlock? LayoutBlock { get; set; }
 
     public virtual ICollection<LayoutEdge> OutgoingEdges { get; set; } = new List<LayoutEdge>();
 
     public virtual ICollection<LayoutEdge> IncomingEdges { get; set; } = new List<LayoutEdge>();
 
     public virtual ICollection<BoothLocation> BoothLocations { get; set; } = new List<BoothLocation>();
+
+    public virtual ICollection<LayoutNavigationAnchor> NavigationAnchors { get; set; } = new List<LayoutNavigationAnchor>();
 }

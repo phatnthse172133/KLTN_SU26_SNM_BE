@@ -35,12 +35,13 @@ public class LayoutNodeService : ILayoutNodeService
 
     public async Task<ApiResponse<LayoutNodeResponse>> CreateAsync(Guid layoutId, CreateLayoutNodeRequest request, CancellationToken cancellationToken = default)
     {
-        var layout = await GetLayoutAsync(layoutId, cancellationToken);
+        var layout = await GetEditableLayoutAsync(layoutId, cancellationToken);
         ValidatePosition(layout, request.XCoordinate, request.YCoordinate);
         await ValidateZoneAsync(layout, request.ZoneId, cancellationToken);
         var node = _mapper.Map<LayoutNode>(request);
         var now = DateTime.UtcNow;
         node.Id = Guid.NewGuid(); node.LayoutId = layoutId; node.IsDeleted = false; node.CreatedAt = now; node.UpdatedAt = now;
+        TouchGraph(layout);
         await _nodes.AddAsync(node); await _nodes.SaveChangesAsync();
         return ApiResponse<LayoutNodeResponse>.SuccessResponse(_mapper.Map<LayoutNodeResponse>(node), "Layout node created successfully.");
     }
@@ -48,7 +49,7 @@ public class LayoutNodeService : ILayoutNodeService
     public async Task<ApiResponse<IReadOnlyCollection<LayoutNodeResponse>>> CreateBatchAsync(Guid layoutId, IReadOnlyCollection<CreateLayoutNodeRequest> requests, CancellationToken cancellationToken = default)
     {
         if (requests.Count == 0) throw AppException.BadRequest("At least one node is required.");
-        var layout = await GetLayoutAsync(layoutId, cancellationToken);
+        var layout = await GetEditableLayoutAsync(layoutId, cancellationToken);
         foreach (var request in requests) await ValidateZoneAsync(layout, request.ZoneId, cancellationToken);
         var now = DateTime.UtcNow;
         var nodes = requests.Select(request =>
@@ -58,6 +59,7 @@ public class LayoutNodeService : ILayoutNodeService
             node.Id = Guid.NewGuid(); node.LayoutId = layoutId; node.IsDeleted = false; node.CreatedAt = now; node.UpdatedAt = now;
             return node;
         }).ToList();
+        TouchGraph(layout);
         await _nodes.AddRangeAsync(nodes); await _nodes.SaveChangesAsync();
         return ApiResponse<IReadOnlyCollection<LayoutNodeResponse>>.SuccessResponse(_mapper.Map<List<LayoutNodeResponse>>(nodes), "Layout nodes created successfully.");
     }
@@ -65,10 +67,10 @@ public class LayoutNodeService : ILayoutNodeService
     public async Task<ApiResponse<LayoutNodeResponse>> UpdateAsync(Guid id, UpdateLayoutNodeRequest request, CancellationToken cancellationToken = default)
     {
         var node = await GetNodeAsync(id, cancellationToken);
-        var layout = await GetLayoutAsync(node.LayoutId, cancellationToken);
+        var layout = await GetEditableLayoutAsync(node.LayoutId, cancellationToken);
         ValidatePosition(layout, request.XCoordinate, request.YCoordinate);
         await ValidateZoneAsync(layout, request.ZoneId, cancellationToken);
-        _mapper.Map(request, node); node.UpdatedAt = DateTime.UtcNow;
+        _mapper.Map(request, node); node.UpdatedAt = DateTime.UtcNow; TouchGraph(layout);
         _nodes.Update(node); await _nodes.SaveChangesAsync();
         return ApiResponse<LayoutNodeResponse>.SuccessResponse(_mapper.Map<LayoutNodeResponse>(node), "Layout node updated successfully.");
     }
@@ -76,8 +78,10 @@ public class LayoutNodeService : ILayoutNodeService
     public async Task<ApiResponse<LayoutNodeResponse>> UpdatePositionAsync(Guid id, UpdateLayoutNodePositionRequest request, CancellationToken cancellationToken = default)
     {
         var node = await GetNodeAsync(id, cancellationToken);
-        ValidatePosition(await GetLayoutAsync(node.LayoutId, cancellationToken), request.XCoordinate, request.YCoordinate);
+        var layout = await GetEditableLayoutAsync(node.LayoutId, cancellationToken);
+        ValidatePosition(layout, request.XCoordinate, request.YCoordinate);
         node.Xcoordinate = request.XCoordinate; node.Ycoordinate = request.YCoordinate; node.UpdatedAt = DateTime.UtcNow;
+        TouchGraph(layout);
         _nodes.Update(node); await _nodes.SaveChangesAsync();
         return ApiResponse<LayoutNodeResponse>.SuccessResponse(_mapper.Map<LayoutNodeResponse>(node), "Node position updated successfully.");
     }
@@ -85,7 +89,9 @@ public class LayoutNodeService : ILayoutNodeService
     public async Task<ApiResponse<LayoutNodeResponse>> UpdateAccessibilityAsync(Guid id, UpdateAccessibilityRequest request, CancellationToken cancellationToken = default)
     {
         var node = await GetNodeAsync(id, cancellationToken);
+        var layout = await GetEditableLayoutAsync(node.LayoutId, cancellationToken);
         node.IsAccessible = request.IsAccessible; node.UpdatedAt = DateTime.UtcNow;
+        TouchGraph(layout);
         _nodes.Update(node); await _nodes.SaveChangesAsync();
         return ApiResponse<LayoutNodeResponse>.SuccessResponse(_mapper.Map<LayoutNodeResponse>(node), "Node accessibility updated successfully.");
     }
@@ -93,11 +99,13 @@ public class LayoutNodeService : ILayoutNodeService
     public async Task<ApiResponse<object>> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var node = await GetNodeAsync(id, cancellationToken);
+        var layout = await GetEditableLayoutAsync(node.LayoutId, cancellationToken);
         if (await _locations.GetCurrentByNodeAsync(id, cancellationToken) is not null)
             throw AppException.Conflict("Release the booth location before deleting this node.");
         var edges = await _edges.GetByLayoutAsync(node.LayoutId, cancellationToken: cancellationToken);
         _edges.DeleteRange(edges.Where(x => x.FromNodeId == id || x.ToNodeId == id));
         _nodes.Delete(node); node.UpdatedAt = DateTime.UtcNow;
+        TouchGraph(layout);
         await _nodes.SaveChangesAsync();
         return ApiResponse<object>.SuccessResponse(new { node.Id }, "Layout node deleted successfully.");
     }
@@ -106,6 +114,18 @@ public class LayoutNodeService : ILayoutNodeService
         => await _nodes.GetActiveByIdAsync(id, token) ?? throw AppException.NotFound("Layout node was not found.");
     private async Task<MarketLayout> GetLayoutAsync(Guid id, CancellationToken token)
         => await _layouts.GetActiveByIdAsync(id, token) ?? throw AppException.NotFound("Market layout was not found.");
+    private async Task<MarketLayout> GetEditableLayoutAsync(Guid id, CancellationToken token)
+    {
+        var layout = await GetLayoutAsync(id, token);
+        if (layout.Status == DomainLayer.Enums.GeneralEnum.MarketLayoutStatus.Active)
+            throw AppException.Conflict("Clone the active layout to a draft before editing its graph.", "ACTIVE_LAYOUT_IMMUTABLE");
+        return layout;
+    }
+    private static void TouchGraph(MarketLayout layout)
+    {
+        layout.GraphRevision = checked(layout.GraphRevision + 1);
+        layout.UpdatedAt = DateTime.UtcNow;
+    }
     private static void ValidatePosition(MarketLayout layout, decimal x, decimal y)
     {
         if (layout.Width <= 0 || layout.Height <= 0) throw AppException.BadRequest("Upload a valid layout image before adding nodes.");

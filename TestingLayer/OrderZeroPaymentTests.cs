@@ -153,6 +153,7 @@ public class OrderZeroPaymentTests
         var ownerId = Guid.NewGuid();
         var boothId = Guid.NewGuid();
         var food = CreateOrderableFood(boothId, ownerId, 45_000m);
+        var cartItemId = Guid.NewGuid();
         var orders = new Mock<IOrderRepository>();
         Order? savedOrder = null;
         orders.Setup(repository => repository.AddAsync(It.IsAny<Order>()))
@@ -162,6 +163,11 @@ public class OrderZeroPaymentTests
         orders.Setup(repository => repository.CommitTransactionAsync()).Returns(Task.CompletedTask);
         orders.Setup(repository => repository.RollbackTransactionAsync()).Returns(Task.CompletedTask);
         orders.Setup(repository => repository.SaveChangesAsync()).ReturnsAsync(1);
+        orders.Setup(repository => repository.ClearCheckedOutCartItemsAsync(
+                It.Is<Order>(order => order.BoothId == boothId && order.CustomerId == customerId),
+                It.IsAny<DateTime>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
         var foods = new Mock<IFoodItemRepository>();
         foods.Setup(repository => repository.GetAllFoodItemsByIdsAsync(It.IsAny<List<Guid>>()))
             .ReturnsAsync([food]);
@@ -192,6 +198,7 @@ public class OrderZeroPaymentTests
             BoothId = boothId,
             BoothOwnerId = ownerId,
             PaymentMethod = PaymentType.Cash,
+            CheckoutCartItemIds = [cartItemId],
             Items = [new CartItemDto { FoodItemId = food.Id, Quantity = 1, UnitPrice = 45_000m }]
         });
 
@@ -204,6 +211,74 @@ public class OrderZeroPaymentTests
         Assert.Null(payment.CheckoutUrl);
         Assert.Null(response.Data!.PaymentUrl);
         payos.Verify(provider => provider.CreatePaymentLinkAsync(It.IsAny<PayOSPaymentRequest>()), Times.Never);
+        orders.Verify(repository => repository.ClearCheckedOutCartItemsAsync(
+            It.Is<Order>(order => order.CheckoutCartItemIds.Contains(cartItemId.ToString())),
+            It.IsAny<DateTime>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task PendingPayOSOrder_RemovesCheckedOutItemsBeforeReturningPaymentLink()
+    {
+        var customerId = Guid.NewGuid();
+        var ownerId = Guid.NewGuid();
+        var boothId = Guid.NewGuid();
+        var cartItemId = Guid.NewGuid();
+        var food = CreateOrderableFood(boothId, ownerId, 50_000m);
+        var orders = new Mock<IOrderRepository>();
+        Order? savedOrder = null;
+        orders.Setup(repository => repository.AddAsync(It.IsAny<Order>()))
+            .Callback<Order>(order => savedOrder = order)
+            .Returns(Task.CompletedTask);
+        orders.Setup(repository => repository.BeginTransactionAsync()).Returns(Task.CompletedTask);
+        orders.Setup(repository => repository.CommitTransactionAsync()).Returns(Task.CompletedTask);
+        orders.Setup(repository => repository.RollbackTransactionAsync()).Returns(Task.CompletedTask);
+        orders.Setup(repository => repository.SaveChangesAsync()).ReturnsAsync(1);
+        orders.Setup(repository => repository.ClearCheckedOutCartItemsAsync(
+                It.IsAny<Order>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+        var foods = new Mock<IFoodItemRepository>();
+        foods.Setup(repository => repository.GetAllFoodItemsByIdsAsync(It.IsAny<List<Guid>>()))
+            .ReturnsAsync([food]);
+        var payos = new Mock<IPayOSService>();
+        payos.Setup(provider => provider.CreatePaymentLinkAsync(It.IsAny<PayOSPaymentRequest>()))
+            .ReturnsAsync(new PayOSPaymentResponse
+            {
+                OrderCode = 100_000_000_000_004L,
+                PaymentLinkId = "payment-link",
+                CheckoutUrl = "https://pay.payos.vn/web/test",
+                QrCode = "qr",
+                Amount = 50_000m,
+                Status = "PENDING"
+            });
+        var codeGenerator = new Mock<IPayOSOrderCodeGenerator>();
+        codeGenerator.Setup(generator => generator.GenerateAsync(PayOSOrderSource.Order))
+            .ReturnsAsync(100_000_000_000_004L);
+        var service = new OrderService(
+            orders.Object, Mock.Of<IPromotionRepository>(), Mock.Of<IPromotionValidationService>(),
+            Mock.Of<IPayOSPayoutService>(), Mock.Of<IRealtimeNotificationPublisher>(), foods.Object,
+            Mock.Of<ILogger<OrderService>>(), new ConfigurationBuilder().Build(), payos.Object,
+            codeGenerator.Object, Mock.Of<IBoothRepository>(), Mock.Of<IPromotionUsageRepository>());
+
+        var response = await service.CreateOrderAsync(new CreateOrderDto
+        {
+            CheckoutRequestId = Guid.NewGuid(),
+            CheckoutCartItemIds = [cartItemId],
+            CustomerId = customerId,
+            BoothId = boothId,
+            BoothOwnerId = ownerId,
+            PaymentMethod = PaymentType.PayOS,
+            RequestHash = "customer-checkout",
+            Items = [new CartItemDto { FoodItemId = food.Id, Quantity = 1, UnitPrice = 50_000m }]
+        });
+
+        Assert.NotNull(savedOrder);
+        Assert.Equal(OrderStatus.PendingPayment, savedOrder.Status);
+        Assert.Equal(PaymentStatus.Pending, Assert.Single(savedOrder.Payments).Status);
+        Assert.Equal("https://pay.payos.vn/web/test", response.Data!.CheckoutUrl);
+        orders.Verify(repository => repository.ClearCheckedOutCartItemsAsync(
+            savedOrder, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()), Times.Once);
+        orders.Verify(repository => repository.CommitTransactionAsync(), Times.Once);
     }
 
     [Fact]

@@ -1,5 +1,6 @@
 using DomainLayer.Enums;
 using ApplicationLayer.DTOs.Responses;
+using ApplicationLayer.AI.V2.Models;
 
 namespace ApplicationLayer.AI.V2.MealPlans;
 
@@ -8,12 +9,23 @@ public sealed class CreateMealPlanV2Request
     public int PartySize { get; set; }
     public decimal Budget { get; set; }
     public string DiningStyle { get; set; } = string.Empty;
-    public string Request { get; set; } = string.Empty;
+    // Request is retained for backwards compatibility. New clients should use
+    // NaturalLanguageRequest; both are optional.
+    public string? Request { get; set; }
+    public string? NaturalLanguageRequest { get; set; }
+    public Guid? MarketId { get; set; }
+    public string? Scope { get; set; }
+    public int RequestedPlanCount { get; set; } = 3;
+    public Guid? PreviousSessionId { get; set; }
     public string InputLanguage { get; set; } = "auto";
     public string ResponseLanguage { get; set; } = "vi";
     public decimal? Latitude { get; set; }
     public decimal? Longitude { get; set; }
     public int? MaxDistanceMeters { get; set; }
+    public int? MaximumDistanceMeters { get; set; }
+    public decimal? LocationAccuracyMeters { get; set; }
+    public DateTimeOffset? LocationCapturedAt { get; set; }
+    public bool UseDistanceRanking { get; set; } = true;
     public string IdempotencyKey { get; set; } = string.Empty;
 }
 
@@ -68,6 +80,11 @@ public sealed class MealPlanV2Response
     public Guid SessionId { get; set; }
     public string Status { get; set; } = string.Empty;
     public bool UsedProviderFallback { get; set; }
+    public string Provider { get; set; } = "NEUTRAL";
+    public int RequestedPlanCount { get; set; } = 3;
+    public int GeneratedPlanCount { get; set; }
+    public IReadOnlyCollection<string> Limitations { get; set; } = [];
+    public AiProviderRuntimeTrace ProviderRuntime { get; set; } = new();
     public UnderstoodMealPlanRequest UnderstoodRequest { get; set; } = new();
     public IReadOnlyCollection<MealPlanSummaryResponse> Plans { get; set; } = [];
     public IReadOnlyCollection<string> Warnings { get; set; } = [];
@@ -87,6 +104,7 @@ public sealed class UnderstoodMealPlanRequest
     public IReadOnlyCollection<string> Preferences { get; set; } = [];
     public IReadOnlyCollection<string> Exclusions { get; set; } = [];
     public IReadOnlyCollection<string> Warnings { get; set; } = [];
+    public IReadOnlyCollection<IntentSignalEvidence> SignalEvidence { get; set; } = [];
 }
 
 public class MealPlanSummaryResponse
@@ -100,10 +118,15 @@ public class MealPlanSummaryResponse
     public decimal Budget { get; set; }
     public decimal TotalPrice { get; set; }
     public decimal RemainingBudget { get; set; }
+    public decimal BudgetUtilizationPercent { get; set; }
+    public decimal ServingCoverage { get; set; }
+    public decimal CourseCoverage { get; set; }
     public int FoodCount { get; set; }
     public int BoothCount { get; set; }
     public int? EstimatedServingCount { get; set; }
     public decimal CompatibilityScore { get; set; }
+    public decimal DistanceContribution { get; set; }
+    public string CompatibilityLabel { get; set; } = string.Empty;
     public bool IsComplete { get; set; }
     public int Version { get; set; }
 }
@@ -116,7 +139,7 @@ public sealed class MealPlanDetailResponse : MealPlanSummaryResponse
     public IReadOnlyCollection<MealPlanCourseGroupResponse> CourseGroups { get; set; } = [];
 }
 
-public sealed class MealPlanMarketResponse { public Guid Id { get; set; } public string Name { get; set; } = string.Empty; public string? ImageUrl { get; set; } public int? DistanceMeters { get; set; } }
+public sealed class MealPlanMarketResponse { public Guid Id { get; set; } public string Name { get; set; } = string.Empty; public string? ImageUrl { get; set; } public int? DistanceMeters { get; set; } public bool DistanceAvailable { get; set; } }
 public sealed class MealPlanBoothResponse { public Guid Id { get; set; } public string Name { get; set; } = string.Empty; }
 public sealed class MealPlanCourseGroupResponse { public string Course { get; set; } = string.Empty; public bool IsRequired { get; set; } public bool IsComplete { get; set; } public IReadOnlyCollection<MealPlanItemResponse> Items { get; set; } = []; }
 public sealed class MealPlanItemResponse

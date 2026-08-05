@@ -11,6 +11,8 @@ public interface IMarketLayoutService
     Task<ApiResponse<MarketLayoutResponse>> CreateAsync(Guid nightMarketId, CreateMarketLayoutRequest request, CancellationToken cancellationToken = default);
     Task<ApiResponse<MarketLayoutResponse>> UpdateAsync(Guid layoutId, UpdateMarketLayoutRequest request, CancellationToken cancellationToken = default);
     Task<ApiResponse<MarketLayoutResponse>> UpdateImageAsync(Guid layoutId, UpdateMarketLayoutImageRequest request, CancellationToken cancellationToken = default);
+    Task<ApiResponse<MarketLayoutResponse>> UpdateCalibrationAsync(Guid layoutId, UpdateLayoutCalibrationRequest request, CancellationToken cancellationToken = default);
+    Task<ApiResponse<MarketLayoutResponse>> CloneDraftAsync(Guid layoutId, CloneMarketLayoutDraftRequest request, CancellationToken cancellationToken = default);
     Task<ApiResponse<MarketLayoutEditorDataResponse>> GetEditorDataAsync(Guid layoutId, CancellationToken cancellationToken = default);
     Task<ApiResponse<MarketLayoutValidationResponse>> ValidateAsync(Guid layoutId, CancellationToken cancellationToken = default);
     Task<ApiResponse<MarketLayoutResponse>> ActivateAsync(Guid layoutId, CancellationToken cancellationToken = default);

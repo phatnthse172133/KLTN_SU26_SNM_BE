@@ -16,7 +16,7 @@ public sealed class MealPlanPolicyResolver : IMealPlanPolicyResolver
         MealPlanDiningStyle.FRIEND_GROUP => Policy(style, 2, 6, 2, 1m, .90m, [FoodCourse.MAIN_COURSE], [FoodCourse.SHARED_DISH, FoodCourse.SIDE_DISH, FoodCourse.DRINK]),
         MealPlanDiningStyle.BUDGET_FRIENDLY => Policy(style, 1, 4, 1, 1m, .70m, [FoodCourse.MAIN_COURSE], [FoodCourse.SIDE_DISH, FoodCourse.DRINK]),
         MealPlanDiningStyle.LOCAL_SPECIALTY => Policy(style, 2, 5, 2, 1m, .90m, [FoodCourse.MAIN_COURSE], [FoodCourse.APPETIZER, FoodCourse.SHARED_DISH, FoodCourse.DRINK]),
-        _ => Policy(style, 2, 5, 1, 1m, .90m, [FoodCourse.MAIN_COURSE], [FoodCourse.APPETIZER, FoodCourse.SIDE_DISH, FoodCourse.DRINK, FoodCourse.DESSERT])
+        _ => Policy(style, 1, 5, 1, 1m, .90m, [FoodCourse.MAIN_COURSE], [FoodCourse.APPETIZER, FoodCourse.SHARED_DISH, FoodCourse.SIDE_DISH, FoodCourse.DRINK, FoodCourse.DESSERT])
     };
 
     private static MealPlanStylePolicy Policy(MealPlanDiningStyle style, int min, int max, int booths,
@@ -49,21 +49,20 @@ public sealed class MealPlanRecalculationService : IMealPlanRecalculationService
 
         var total = items.Sum(item => item.UnitPriceSnapshot * item.Quantity);
         if (total > budget) throw new InvalidOperationException("The plan exceeds its budget.");
-        var compatibility = items.Length == 0 ? 0 : Math.Clamp(items.Average(item => item.CompatibilityScore) / 100m * 35m, 0, 35);
+        var compatibility = items.Length == 0 ? 0 : Math.Clamp(items.Average(item => item.CompatibilityScore) / 100m * 45m, 0, 45);
         var completeness = courseComplete && foodCountComplete ? 20m : courseComplete ? 10m : 0m;
         var servingPoints = servingComplete ? 15m : servingKnown && serving > 0 ? Math.Min(14m, 15m * serving.Value / requiredServing) : 0m;
         var target = budget * policy.BudgetTarget;
         var budgetPoints = target <= 0 ? 0 : Math.Clamp(10m - Math.Abs(target - total) / target * 10m, 0, 10);
-        var distance = plan.DistanceMeters.HasValue ? Math.Clamp(10m - plan.DistanceMeters.Value / 10_000m * 10m, 0, 10) : 0m;
         var rated = items.Where(item => item.RatingSnapshot.HasValue && item.ReviewCountSnapshot > 0).ToArray();
         var rating = rated.Length == 0 ? 0 : Math.Clamp(rated.Average(item => item.RatingSnapshot!.Value) / 5m * 5m, 0, 5);
         var booths = boothComplete ? 5m : items.Select(item => item.BoothId).Distinct().Count() > 0 ? 2m : 0m;
-        var score = Round(compatibility + completeness + servingPoints + budgetPoints + distance + rating + booths);
+        var score = Round(compatibility + completeness + servingPoints + budgetPoints + rating + booths);
         var complete = items.Length > 0 && courseComplete && servingComplete && foodCountComplete && boothComplete;
         plan.ApplyAuthoritativeCalculation(budget, serving, complete, score,
             JsonSerializer.Serialize(warnings.Distinct(StringComparer.Ordinal).OrderBy(value => value), Json), utcNow, incrementVersion);
         return new() { FoodCompatibility = Round(compatibility), Completeness = completeness, ServingAdequacy = Round(servingPoints),
-            BudgetUtilization = Round(budgetPoints), Distance = Round(distance), RatingQuality = Round(rating),
+            BudgetUtilization = Round(budgetPoints), Distance = 0, RatingQuality = Round(rating),
             BoothComposition = Round(booths), Total = score };
     }
 

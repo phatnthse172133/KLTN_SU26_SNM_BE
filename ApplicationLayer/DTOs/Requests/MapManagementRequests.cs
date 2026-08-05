@@ -38,8 +38,15 @@ public class CreateLayoutEdgeRequest
     [Required] public Guid FromNodeId { get; set; }
     [Required] public Guid ToNodeId { get; set; }
     [Range(0.01, double.MaxValue)] public decimal? Distance { get; set; }
+    [Range(0.01, double.MaxValue)] public decimal? DistanceMeters { get; set; }
     public bool IsBidirectional { get; set; } = true;
     public bool IsAccessible { get; set; } = true;
+}
+
+public class UpdateLayoutCalibrationRequest
+{
+    [Range(0.000001, double.MaxValue)]
+    public decimal MetersPerLayoutUnit { get; set; }
 }
 
 public class UpdateLayoutEdgeRequest : CreateLayoutEdgeRequest { }

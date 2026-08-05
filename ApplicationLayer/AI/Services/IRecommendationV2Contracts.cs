@@ -13,6 +13,7 @@ public interface IFoodRecommendationReadRepository
 
 public interface IAiRecommendationSessionRepository
 {
+    Task<string?> GetActiveParsedIntentJsonAsync(Guid customerId, Guid sessionId, DateTime utcNow, CancellationToken cancellationToken);
     Task SaveSessionAsync(AiRecommendationSession session, IReadOnlyCollection<AiRecommendationResult> results, CancellationToken cancellationToken);
     Task<RecommendationFeedbackRecordResult> RecordFeedbackAsync(Guid customerId, Guid sessionId, Guid foodId, AiRecommendationFeedbackAction action,
         DateTime utcNow, int feedbackWindowMinutes, CancellationToken cancellationToken);

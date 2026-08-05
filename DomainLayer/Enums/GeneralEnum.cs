@@ -266,7 +266,8 @@ namespace DomainLayer.Enums
             BoothSuspended = 34,
             AccountDeactivated = 35,
             AccountReactivated = 36,
-            SubscriptionRejected = 37
+            SubscriptionRejected = 37,
+            OrderApproved = 38,
         }
 
         public enum DevicePlatform

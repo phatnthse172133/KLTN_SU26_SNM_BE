@@ -282,14 +282,12 @@ namespace ApplicationLayer.Services.Orders
 
             order.FinalAmount = order.TotalAmount - order.DiscountAmount;
             var isZeroPaymentOrder = order.FinalAmount == 0m;
-            if (isZeroPaymentOrder || dto.PaymentMethod == PaymentType.Cash)
+            if (isZeroPaymentOrder)
             {
                 // A fully discounted order is financially settled without an
                 // external provider. It follows the same operational state as
                 // a successfully paid PayOS order.
-                order.Status = isZeroPaymentOrder && string.IsNullOrWhiteSpace(dto.RequestHash)
-                    ? OrderStatus.Preparing
-                    : OrderStatus.Placed;
+                order.Status = OrderStatus.Preparing;
                 PromotionUsageLifecycle.ConsumeReserved(
                     order.PromotionUsages,
                     utcNow);
@@ -307,10 +305,7 @@ namespace ApplicationLayer.Services.Orders
                     : dto.PaymentMethod == PaymentType.PayOS
                         ? PaymentGateway.Payos
                         : PaymentGateway.None,
-                Status = isZeroPaymentOrder ? PaymentStatus.Paid
-                    : dto.PaymentMethod == PaymentType.Cash && !string.IsNullOrWhiteSpace(dto.RequestHash)
-                        ? PaymentStatus.Unpaid
-                        : PaymentStatus.Pending,
+                Status = isZeroPaymentOrder ? PaymentStatus.Paid : PaymentStatus.Pending,
                 PayOSOrderCode = dto.PaymentMethod == PaymentType.PayOS && !isZeroPaymentOrder
                     ? orderCode
                     : null,
@@ -438,7 +433,8 @@ namespace ApplicationLayer.Services.Orders
             }
 
             if (dto.PaymentMethod == PaymentType.Cash || isZeroPaymentOrder)
-                await TryPublishOrderCreatedAsync(order, utcNow, isZeroPaymentOrder);
+                await TryPublishOrderPendingApprovalAsync(order, utcNow);
+            //await TryPublishOrderCreatedAsync(order, utcNow, isZeroPaymentOrder);
 
             return ApiResponse<OrderResponseDto>.SuccessResponse(new OrderResponseDto
             {
@@ -1868,6 +1864,63 @@ namespace ApplicationLayer.Services.Orders
             }
         }
 
+        private async Task TryPublishOrderPendingApprovalAsync(Order order, DateTime utcNow)
+        {
+            try
+            {
+                // For BoothOwnerId
+                await PublishPersistedNotificationAsync(
+                    order.BoothOwnerId,
+                    NotificationType.OrderCreated,
+                    "New cash order!",
+                    $"Order #{order.OrderCode} ({order.FinalAmount:N0} VND) is pending your approval.",
+                    order.Id);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogError(exception, "Order {OrderCode} created but owner notification failed.", order.OrderCode);
+            }
+        }
+
+        private async Task TryPublishOrderApprovedAsync(Order order, DateTime utcNow)
+        {
+            try
+            {
+                await PublishPersistedNotificationAsync(
+                    order.CustomerId, // Target: Customer
+                    NotificationType.OrderApproved,
+                    "The order has been approved!",
+                    $"Order #{order.OrderCode} has been approved by the booth. Please proceed to the booth to pay {order.FinalAmount:N0} VND in cash.",
+                    order.Id);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogError(
+                    exception,
+                    "Order {OrderCode} approved but customer notification failed.",
+                    order.OrderCode);
+            }
+        }
+
+        private async Task TryPublishOrderPreparingAsync(Order order, DateTime utcNow)
+        {
+            try
+            {
+                // CHỈ gửi cho Khách hàng (CustomerId) - Cắt hoàn toàn Notify cho Chủ quầy
+                await PublishPersistedNotificationAsync(
+                    order.CustomerId,
+                    NotificationType.OrderPreparing,
+                    "Preparing the food",
+                    $"Payment succeeded! The booth is starting to prepare order #{order.OrderCode}.",
+                    order.Id);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogError(exception, "Order {OrderCode} preparing notification failed.", order.OrderCode);
+            }
+        }
+
+
         public async Task<ApiResponse<PaginationResp<BoothOwnerOrderListItemResponse>>> GetBoothOwnerOrdersAsync(
             Guid boothOwnerId,
             BoothOwnerOrderQuery query,
@@ -1999,14 +2052,29 @@ namespace ApplicationLayer.Services.Orders
                 boothOwnerId, orderCode, cancellationToken)
                 ?? throw AppException.NotFound("Order not found.", "ORDER_NOT_FOUND");
 
-            if (request.Status is not OrderStatus.Preparing and not OrderStatus.ReadyForPickup and not OrderStatus.Completed)
-                throw AppException.BadRequest("Status must be PREPARING, READY_FOR_PICKUP or COMPLETED.", "ORDER_STATUS_INVALID");
+            if (request.Status is not OrderStatus.PendingPayment
+                and not OrderStatus.Preparing
+                and not OrderStatus.ReadyForPickup
+                and not OrderStatus.Completed)
+                throw AppException.BadRequest("Status must be PENDING_PAYMENT, PREPARING, READY_FOR_PICKUP or COMPLETED.", "ORDER_STATUS_INVALID");
             if (!IsValidTransition(order.Status, request.Status))
                 throw AppException.Conflict(
                     $"The order cannot move from {order.Status} to {request.Status}.",
                     "INVALID_ORDER_TRANSITION");
 
             var payment = LatestPayment(order);
+
+            if (request.Status == OrderStatus.Preparing && payment?.Type == PaymentType.Cash)
+            {
+                payment.Status = PaymentStatus.Paid;
+                payment.PaidAt = DateTime.UtcNow;
+
+                if (order.PromotionUsages.Any())
+                {
+                    PromotionUsageLifecycle.ConsumeReserved(order.PromotionUsages, DateTime.UtcNow);
+                }
+            }
+
             if (request.Status == OrderStatus.Preparing
                 && payment?.Type == PaymentType.PayOS
                 && payment.Status != PaymentStatus.Paid)
@@ -2024,6 +2092,17 @@ namespace ApplicationLayer.Services.Orders
                 throw AppException.Conflict(
                     "The order was updated by another request. Refresh and try again.",
                     "ORDER_STATUS_CONFLICT");
+
+            if (request.Status == OrderStatus.PendingPayment && payment?.Type == PaymentType.Cash)
+            {
+                // Booth owner clicks "Approve" -> Notify Customer that the order is approved and they can pay cash
+                _ = TryPublishOrderApprovedAsync(order, DateTime.UtcNow);
+            }
+            else if (request.Status == OrderStatus.Preparing && payment?.Type == PaymentType.Cash)
+            {
+                // Booth owner clicks "Start Preparing" -> Notify Customer that the booth is preparing the order
+                _ = TryPublishOrderPreparingAsync(order, DateTime.UtcNow);
+            }
 
             await PublishOrderStatusAsync(order, request.Status);
             return ApiResponse<bool>.SuccessResponse(true, "Order status updated successfully.");
@@ -2095,6 +2174,8 @@ namespace ApplicationLayer.Services.Orders
         private static bool IsValidTransition(OrderStatus current, OrderStatus next)
             => (current, next) switch
             {
+                (OrderStatus.Placed, OrderStatus.PendingPayment) => true,
+                (OrderStatus.PendingPayment, OrderStatus.Preparing) => true,
                 (OrderStatus.Placed, OrderStatus.Preparing) => true,
                 (OrderStatus.Placed, OrderStatus.Cancelled) => true,
                 (OrderStatus.Preparing, OrderStatus.ReadyForPickup) => true,

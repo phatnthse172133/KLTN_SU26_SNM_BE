@@ -8,7 +8,7 @@ public class UpdateMyBoothRequest
 {
     [Required, StringLength(200)] public string BoothName { get; set; } = string.Empty;
     [StringLength(2000)] public string? Description { get; set; }
-    [Phone, StringLength(20)] public string? PhoneNumber { get; set; }
+    [StringLength(20)] public string? PhoneNumber { get; set; }
     [StringLength(500)] public string? ThumbnailUrl { get; set; }
     [StringLength(500)] public string? PaymentQrImage { get; set; }
     public TimeOnly? OpenTime { get; set; }
@@ -29,7 +29,7 @@ public class MarketOwnerCreateBoothRequest
     [Required] public Guid BoothOwnerId { get; set; }
     [Required, StringLength(200)] public string BoothName { get; set; } = string.Empty;
     [StringLength(2000)] public string? Description { get; set; }
-    [Phone, StringLength(20)] public string? PhoneNumber { get; set; }
+    [StringLength(20)] public string? PhoneNumber { get; set; }
     [StringLength(500)] public string? ThumbnailUrl { get; set; }
     public TimeOnly? OpenTime { get; set; }
     public TimeOnly? CloseTime { get; set; }
@@ -39,7 +39,7 @@ public class MarketOwnerUpdateBoothRequest
 {
     [Required, StringLength(200)] public string BoothName { get; set; } = string.Empty;
     [StringLength(2000)] public string? Description { get; set; }
-    [Phone, StringLength(20)] public string? PhoneNumber { get; set; }
+    [StringLength(20)] public string? PhoneNumber { get; set; }
     [StringLength(500)] public string? ThumbnailUrl { get; set; }
     public TimeOnly? OpenTime { get; set; }
     public TimeOnly? CloseTime { get; set; }

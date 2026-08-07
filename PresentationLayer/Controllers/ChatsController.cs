@@ -22,6 +22,7 @@ public class ChatsController : ControllerBase
     private Guid CurrentUserId
         => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
+    [Authorize(Roles = "Customer")]
     [HttpPost("customer-booth")]
     [Authorize(Roles = "Customer")]
     public async Task<IActionResult> CreateCustomerBoothConversation(

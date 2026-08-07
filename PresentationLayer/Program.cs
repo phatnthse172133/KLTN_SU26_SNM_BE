@@ -300,12 +300,30 @@ builder.Services.AddControllers(options =>
     {
         options.InvalidModelStateResponseFactory = context =>
         {
-            var details = string.Join(
-                " ",
-                context.ModelState.Values
-                    .SelectMany(value => value.Errors)
-                    .Select(error => error.ErrorMessage)
-                    .Where(message => !string.IsNullOrWhiteSpace(message)));
+            var validationErrors = context.ModelState
+                .SelectMany(entry =>
+                {
+                    var rawKey = entry.Key.Split('.').LastOrDefault() ?? entry.Key;
+                    var fieldKey = string.IsNullOrEmpty(rawKey)
+                        ? "request"
+                        : char.ToLowerInvariant(rawKey[0]) + rawKey[1..];
+
+                    return entry.Value?.Errors.Select(error => new
+                    {
+                        Field = fieldKey,
+                        Message = string.IsNullOrWhiteSpace(error.ErrorMessage)
+                            ? "The supplied value is invalid."
+                            : error.ErrorMessage
+                    }) ?? [];
+                })
+                .ToList();
+            var fieldErrors = validationErrors
+                .GroupBy(error => error.Field, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group.Select(error => error.Message).Distinct().ToArray(),
+                    StringComparer.OrdinalIgnoreCase);
+            var details = string.Join(" ", validationErrors.Select(error => error.Message));
             var response = ApiResponse<ErrorResponse>.Failure(
                 "Request validation failed.",
                 "VALIDATION_ERROR",
@@ -313,7 +331,8 @@ builder.Services.AddControllers(options =>
                 {
                     TraceId = context.HttpContext.TraceIdentifier,
                     ErrorCode = "VALIDATION_ERROR",
-                    Details = details
+                    Details = details,
+                    FieldErrors = fieldErrors
                 });
             return new BadRequestObjectResult(response);
         };
@@ -397,8 +416,16 @@ builder.Services.AddAuthorization();
 builder.Services.AddSignalR();
 builder.Services.AddScoped<IRealtimeNotificationPublisher, SignalRNotificationPublisher>();
 builder.Services.AddScoped<ApplicationLayer.Services.Chats.IRealtimeChatPublisher, SignalRChatPublisher>();
-builder.Services.AddScoped<IRealtimeEventPublisher, SignalREventPublisher>();
-builder.Services.AddScoped<IFileStorageService, LocalFileStorageService>();
+builder.Services.AddScoped<ApplicationLayer.Services.Realtime.IRealtimeEventPublisher, SignalREventPublisher>();
+builder.Services.AddScoped<IFileStorageService>(serviceProvider =>
+{
+    var configuration = serviceProvider.GetRequiredService<IConfiguration>();
+    var provider = configuration["ImageStorage:Provider"];
+
+    return string.Equals(provider, "Cloudinary", StringComparison.OrdinalIgnoreCase)
+        ? ActivatorUtilities.CreateInstance<CloudinaryFileStorageService>(serviceProvider)
+        : ActivatorUtilities.CreateInstance<LocalFileStorageService>(serviceProvider);
+});
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddHealthChecks()
     .AddCheck<DatabaseReadinessHealthCheck>("postgresql", tags: ["ready"]);
@@ -505,6 +532,19 @@ if (builder.Configuration.GetValue("HttpsRedirection:Enabled", true))
 app.UseCors(CustomerAppCorsPolicy);
 
 app.UseStaticFiles();
+
+// Seed package artwork is shipped with the application. Keep the historic
+// /uploads/images/packages/seed URLs working even when external upload storage
+// is disabled or points to another physical directory.
+var seedPackageImageRoot = Path.Combine(app.Environment.WebRootPath, "images", "packages", "seed");
+if (Directory.Exists(seedPackageImageRoot))
+{
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new PhysicalFileProvider(seedPackageImageRoot),
+        RequestPath = "/uploads/images/packages/seed"
+    });
+}
 
 var uploadRoot = builder.Configuration["UploadStorage:RootPath"];
 if (!string.IsNullOrWhiteSpace(uploadRoot))

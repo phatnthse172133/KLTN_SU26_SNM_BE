@@ -52,9 +52,10 @@ public class ZoneRepository : GenericRepository<Zone>, IZoneRepository
             cancellationToken);
 
     public async Task<IReadOnlyCollection<Zone>> GetActiveByNightMarketIdAsync(
-        Guid nightMarketId, CancellationToken cancellationToken = default)
+        Guid nightMarketId, bool activeStatusOnly = false, CancellationToken cancellationToken = default)
         => await _dbSet.AsNoTracking()
-            .Where(zone => zone.NightMarketId == nightMarketId && !zone.IsDeleted)
+            .Where(zone => zone.NightMarketId == nightMarketId && !zone.IsDeleted
+                && (!activeStatusOnly || zone.Status == ZoneStatus.Active))
             .OrderBy(zone => zone.ZoneName)
             .ToListAsync(cancellationToken);
 
@@ -67,5 +68,33 @@ public class ZoneRepository : GenericRepository<Zone>, IZoneRepository
             !zone.IsDeleted &&
             zone.ZoneName.ToLower() == normalized &&
             (!excludeId.HasValue || zone.Id != excludeId.Value), cancellationToken);
+    }
+
+    public Task<bool> ActiveZoneCodeExistsAsync(
+        Guid nightMarketId, string code, Guid? excludeId = null, CancellationToken cancellationToken = default)
+    {
+        var normalized = code.Trim().ToUpperInvariant();
+        return _dbSet.AnyAsync(zone =>
+            zone.NightMarketId == nightMarketId &&
+            !zone.IsDeleted &&
+            zone.ZoneCode != null &&
+            zone.ZoneCode.ToUpper() == normalized &&
+            (!excludeId.HasValue || zone.Id != excludeId.Value), cancellationToken);
+    }
+
+    public async Task<Dictionary<Guid, int>> GetAssignedSlotCountsByMarketAsync(
+        Guid nightMarketId, CancellationToken cancellationToken = default)
+    {
+        // Count BoothSlot nodes that have an active BoothLocation, grouped by ZoneId
+        return await _context.Set<LayoutNode>()
+            .AsNoTracking()
+            .Where(n =>
+                n.Layout.NightMarketId == nightMarketId &&
+                !n.IsDeleted &&
+                n.ZoneId.HasValue &&
+                n.BoothLocations.Any(bl => !bl.IsDeleted && bl.ReleasedAt == null))
+            .GroupBy(n => n.ZoneId!.Value)
+            .Select(g => new { ZoneId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.ZoneId, x => x.Count, cancellationToken);
     }
 }

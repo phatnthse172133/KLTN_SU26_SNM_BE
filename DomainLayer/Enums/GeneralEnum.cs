@@ -59,7 +59,6 @@ namespace DomainLayer.Enums
 
         public enum MarketLayoutStatus
         {
-            Draft = 0,
             Active = 1,
             Inactive = 2,
             Archived = 3
@@ -113,12 +112,7 @@ namespace DomainLayer.Enums
         public enum NightMarketStatus
         {
             Active = 1,
-            Inactive = 2,
-            Open = Active,
-            Draft = 0,
-            Upcoming = 3,
-            Closed = 4,
-            Cancelled = 5
+            Inactive = 2
         }
 
         public enum ModerationStatus

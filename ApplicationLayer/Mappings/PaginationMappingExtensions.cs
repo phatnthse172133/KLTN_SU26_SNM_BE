@@ -14,4 +14,17 @@ public static class PaginationMappingExtensions
             mapper.Map<List<TDestination>>(source.Items),
             source.TotalCount,
             request);
+
+    /// <summary>
+    /// Overload that accepts pre-mapped items (useful when manual enrichment is needed per-item).
+    /// </summary>
+    public static PaginationResp<TDestination> MapPage<TSource, TDestination>(
+        this IMapper mapper,
+        PagedResult<TSource> source,
+        PaginationReq request,
+        IEnumerable<TDestination> mappedItems)
+        => PaginationResp<TDestination>.Create(
+            mappedItems.ToList(),
+            source.TotalCount,
+            request);
 }

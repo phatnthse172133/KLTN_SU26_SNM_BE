@@ -17,6 +17,8 @@ public interface IZoneRepository : IGenericRepository<Zone>
         CancellationToken cancellationToken = default);
 
     Task<Zone?> GetActiveByIdAsync(Guid id, CancellationToken cancellationToken = default);
-    Task<IReadOnlyCollection<Zone>> GetActiveByNightMarketIdAsync(Guid nightMarketId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyCollection<Zone>> GetActiveByNightMarketIdAsync(Guid nightMarketId, bool activeStatusOnly = false, CancellationToken cancellationToken = default);
     Task<bool> ActiveNameExistsAsync(Guid nightMarketId, string name, Guid? excludeId = null, CancellationToken cancellationToken = default);
+    Task<bool> ActiveZoneCodeExistsAsync(Guid nightMarketId, string code, Guid? excludeId = null, CancellationToken cancellationToken = default);
+    Task<Dictionary<Guid, int>> GetAssignedSlotCountsByMarketAsync(Guid nightMarketId, CancellationToken cancellationToken = default);
 }

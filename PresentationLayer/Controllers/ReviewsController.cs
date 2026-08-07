@@ -58,6 +58,11 @@ public class ReviewsController : ControllerBase
         return response.Success ? Ok(response) : BadRequest(response);
     }
 
+    [Authorize(Roles = "MarketOwner")]
+    [HttpGet("market-owner")]
+    public async Task<IActionResult> GetByMarketOwner([FromQuery] MarketOwnerReviewQueryRequest query, CancellationToken cancellationToken)
+        => Ok(await _service.GetByMarketOwnerAsync(CurrentUserId, query, cancellationToken));
+
     [Authorize(Roles = "BoothOwner")]
     [HttpPut("{reviewId:guid}/reply")]
     public async Task<IActionResult> UpsertReply(Guid reviewId, UpsertReviewReplyRequest request, CancellationToken cancellationToken)

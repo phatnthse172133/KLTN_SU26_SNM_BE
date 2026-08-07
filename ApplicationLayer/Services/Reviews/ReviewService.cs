@@ -217,6 +217,23 @@ public class ReviewService : IReviewService
         return ApiResponse<ReviewResponse>.SuccessResponse(ToResponse(response!), "Review reply saved successfully.");
     }
 
+    public async Task<ApiResponse<PaginationResp<ReviewResponse>>> GetByMarketOwnerAsync(
+        Guid marketOwnerId,
+        MarketOwnerReviewQueryRequest query,
+        CancellationToken cancellationToken = default)
+    {
+        var page = await _reviews.GetPagedByMarketOwnerWithReplyAsync(
+            marketOwnerId,
+            query.Rating,
+            query.MarketId,
+            query.Page,
+            query.PageSize,
+            cancellationToken);
+
+        return ApiResponse<PaginationResp<ReviewResponse>>.SuccessResponse(
+            _mapper.MapPage<Review, ReviewResponse>(page, query));
+    }
+
     private async Task TryNotifyAsync(NotificationMessage message, CancellationToken cancellationToken)
     {
         try

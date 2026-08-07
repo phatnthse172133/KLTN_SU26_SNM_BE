@@ -138,4 +138,30 @@ public class ReviewRepository : GenericRepository<Review>, IReviewRepository
 
         return new PagedResult<Review>(items, totalCount);
     }
+
+    public async Task<PagedResult<Review>> GetPagedByMarketOwnerWithReplyAsync(
+        Guid marketOwnerId, short? rating, Guid? marketId, int page, int pageSize, CancellationToken cancellationToken = default)
+    {
+        var query = from review in QueryWithReply()
+                    join booth in _context.Booths on review.BoothId equals booth.Id
+                    join market in _context.NightMarkets on booth.NightMarketId equals market.Id
+                    where market.MarketOwnerId == marketOwnerId && !market.IsDeleted
+                    select new { review, booth, market };
+
+        if (rating.HasValue)
+            query = query.Where(x => x.review.Rating == rating.Value);
+
+        if (marketId.HasValue)
+            query = query.Where(x => x.market.Id == marketId.Value);
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query
+            .OrderByDescending(x => x.review.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(x => x.review)
+            .ToListAsync(cancellationToken);
+
+        return new PagedResult<Review>(items, totalCount);
+    }
 }

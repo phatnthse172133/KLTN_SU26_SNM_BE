@@ -415,8 +415,8 @@ public sealed class PostgresCustomerHistoryReviewComplaintVerificationTests
                 (@customerA, @role, 'verify-a', 'hash', 'Customer A', 'verify-a@test.local', 'Local', 'Active', now(), now()),
                 (@customerB, @role, 'verify-b', 'hash', 'Customer B', 'verify-b@test.local', 'Local', 'Active', now(), now());
             INSERT INTO "Booth"
-                ("Id", "RegistrationId", "NightMarketId", "BoothOwnerId", "BoothName", "Status", "CreatedAt", "UpdatedAt")
-            VALUES (@booth, @registration, @market, @owner, 'Verification booth', 'Active', now(), now());
+                ("Id", "NightMarketId", "BoothOwnerId", "BoothName", "Status", "CreatedAt", "UpdatedAt")
+            VALUES (@booth, @market, @owner, 'Verification booth', 'Active', now(), now());
             INSERT INTO "FoodCategories" ("Id", "BoothId", "Code", "Name", "IsActive", "IsSelectable", "IsDeleted", "CreatedAt", "UpdatedAt")
             VALUES (@category, @booth, 'VERIFICATION_CATEGORY', 'Category', true, true, false, now(), now());
             INSERT INTO "FoodItem"
@@ -430,7 +430,6 @@ public sealed class PostgresCustomerHistoryReviewComplaintVerificationTests
         command.Parameters.AddWithValue("customerB", seed.CustomerB);
         command.Parameters.AddWithValue("role", Guid.NewGuid());
         command.Parameters.AddWithValue("booth", seed.Booth);
-        command.Parameters.AddWithValue("registration", Guid.NewGuid());
         command.Parameters.AddWithValue("category", seed.Category);
         command.Parameters.AddWithValue("food", seed.Food);
         await command.ExecuteNonQueryAsync();

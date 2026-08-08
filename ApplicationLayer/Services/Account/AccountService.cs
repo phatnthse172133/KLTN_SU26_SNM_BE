@@ -299,9 +299,6 @@ public class AccountService : IAccountService
             .OrderByDescending(subscription => subscription.EndDate)
             .FirstOrDefault();
         var documents = booth.BoothDocuments
-            .Concat(booth.Registration?.BoothDocuments ?? [])
-            .GroupBy(document => document.Id)
-            .Select(group => group.First())
             .OrderByDescending(document => document.CreatedAt)
             .Select(document => new BoothDocumentResponse
             {

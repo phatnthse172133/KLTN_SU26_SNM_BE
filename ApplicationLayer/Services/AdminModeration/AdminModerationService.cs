@@ -516,9 +516,6 @@ public class AdminModerationService : IAdminModerationService
             CreatedAt = booth.CreatedAt,
             UpdatedAt = booth.UpdatedAt,
             Documents = (booth.BoothDocuments ?? Enumerable.Empty<BoothDocument>())
-                .Concat(booth.Registration?.BoothDocuments ?? Enumerable.Empty<BoothDocument>())
-                .GroupBy(d => d.Id)
-                .Select(g => g.First())
                 .OrderBy(d => d.CreatedAt)
                 .Select(d => new BoothDocumentResponse
                 {

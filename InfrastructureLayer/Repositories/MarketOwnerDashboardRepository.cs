@@ -52,41 +52,6 @@ public class MarketOwnerDashboardRepository : IMarketOwnerDashboardRepository
             .CountAsync(b => filtered.Contains(b.NightMarketId) && b.Status == BoothStatus.Active, ct);
     }
 
-    public Task<int> CountPendingRegistrationsAsync(List<Guid> marketIds, Guid? marketId, CancellationToken ct = default)
-    {
-        if (marketIds.Count == 0) return Task.FromResult(0);
-        var filtered = marketId.HasValue ? new List<Guid> { marketId.Value } : marketIds;
-        return _context.BoothRegistrations
-            .AsNoTracking()
-            .CountAsync(br => filtered.Contains(br.RequestedNightMarketId) && br.Status == BoothRegistrationStatus.PendingReview, ct);
-    }
-
-    public async Task<RegistrationStatusCounts> CountRegistrationStatusesAsync(
-        List<Guid> marketIds, Guid? marketId, DateTime fromUtc, DateTime toUtc, CancellationToken ct = default)
-    {
-        if (marketIds.Count == 0)
-            return new RegistrationStatusCounts(0, 0, 0);
-
-        var filtered = marketId.HasValue ? new List<Guid> { marketId.Value } : marketIds;
-
-        var groups = await _context.BoothRegistrations
-            .AsNoTracking()
-            .Where(br => filtered.Contains(br.RequestedNightMarketId)
-                && br.CreatedAt >= fromUtc && br.CreatedAt < toUtc
-                && (br.Status == BoothRegistrationStatus.PendingReview
-                    || br.Status == BoothRegistrationStatus.Approved
-                    || br.Status == BoothRegistrationStatus.Rejected))
-            .GroupBy(br => br.Status)
-            .Select(g => new { Status = g.Key, Count = g.Count() })
-            .ToListAsync(ct);
-
-        var pending = groups.FirstOrDefault(x => x.Status == BoothRegistrationStatus.PendingReview)?.Count ?? 0;
-        var approved = groups.FirstOrDefault(x => x.Status == BoothRegistrationStatus.Approved)?.Count ?? 0;
-        var rejected = groups.FirstOrDefault(x => x.Status == BoothRegistrationStatus.Rejected)?.Count ?? 0;
-
-        return new RegistrationStatusCounts(pending, approved, rejected);
-    }
-
     public async Task<ComplaintStatusCounts> CountComplaintStatusesAsync(
         List<Guid> marketIds, Guid? marketId, DateTime fromUtc, DateTime toUtc, CancellationToken ct = default)
     {

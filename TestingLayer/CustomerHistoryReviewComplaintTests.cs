@@ -30,7 +30,7 @@ public sealed class CustomerHistoryReviewComplaintTests
         var customerId = Guid.NewGuid();
         var booth = new Booth
         {
-            Id = Guid.NewGuid(), RegistrationId = Guid.NewGuid(), NightMarketId = Guid.NewGuid(),
+            Id = Guid.NewGuid(), NightMarketId = Guid.NewGuid(),
             BoothOwnerId = Guid.NewGuid(), BoothName = "Original booth", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
         };
         var food = new FoodItem

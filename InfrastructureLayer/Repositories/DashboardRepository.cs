@@ -156,24 +156,5 @@ namespace InfrastructureLayer.Repositories
                 })
                 .ToListAsync();
         }
-
-        public async Task<List<DashboardRecentRegistrationModel>> GetRecentBoothRegistrationsAsync(int limit = 5)
-        {
-            return await _context.BoothRegistrations
-                .Include(b => b.Owner)
-                .Include(b => b.RequestedNightMarket)
-                .OrderByDescending(b => b.CreatedAt)
-                .Take(limit)
-                .Select(b => new DashboardRecentRegistrationModel
-                {
-                    Id = b.Id,
-                    BoothName = b.BoothName,
-                    OwnerName = b.Owner != null ? b.Owner.FullName : "Unknown",
-                    MarketName = b.RequestedNightMarket != null ? b.RequestedNightMarket.Name : "Unknown",
-                    CreatedAt = b.CreatedAt,
-                    Status = b.Status.ToString()
-                })
-                .ToListAsync();
-        }
     }
 }

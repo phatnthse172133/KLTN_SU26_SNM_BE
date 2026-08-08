@@ -49,10 +49,7 @@ public class BoothMediaService : IBoothMediaService
 
     private async Task<List<BoothDocument>> GetBoothDocumentsAsync(Booth booth)
     {
-        var registrationId = booth.RegistrationId;
-        var docs = registrationId.HasValue
-            ? await _documents.FindAsync(d => d.BoothId == booth.Id || d.RegistrationId == registrationId)
-            : await _documents.FindAsync(d => d.BoothId == booth.Id);
+        var docs = await _documents.FindAsync(d => d.BoothId == booth.Id);
         return docs.GroupBy(d => d.Id).Select(g => g.First()).OrderBy(d => d.CreatedAt).ToList();
     }
 
@@ -132,7 +129,6 @@ public class BoothMediaService : IBoothMediaService
             {
                 Id = Guid.NewGuid(),
                 BoothId = booth.Id,
-                RegistrationId = null,
                 DocumentType = parsedType,
                 DocumentUrl = newUrl,
                 FileUrl = newUrl,
@@ -186,10 +182,7 @@ public class BoothMediaService : IBoothMediaService
     {
         var booth = await GetOwnBoothAsync(ownerId, cancellationToken);
 
-        var registrationId = booth.RegistrationId;
-        var document = registrationId.HasValue
-            ? await _documents.FirstOrDefaultAsync(d => d.Id == documentId && (d.BoothId == booth.Id || d.RegistrationId == registrationId))
-            : await _documents.FirstOrDefaultAsync(d => d.Id == documentId && d.BoothId == booth.Id);
+        var document = await _documents.FirstOrDefaultAsync(d => d.Id == documentId && d.BoothId == booth.Id);
 
         if (document is null)
             throw AppException.NotFound("Document was not found.", "DOCUMENT_NOT_FOUND");

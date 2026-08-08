@@ -8,7 +8,6 @@ using InfrastructureLayer.Repositories;
 using InfrastructureLayer.Workers;
 using ApplicationLayer.Services.Auth;
 using ApplicationLayer.Services.Account;
-using ApplicationLayer.Services.BoothRegistrations;
 using ApplicationLayer.Services.Booths;
 using ApplicationLayer.Services.FoodCategories;
 using ApplicationLayer.Services.Menus;
@@ -79,7 +78,6 @@ namespace InfrastructureLayer
             services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
             services.AddScoped<IUnitOfWork, UnitOfWork>();
             services.AddScoped<IBoothRepository, BoothRepository>();
-            services.AddScoped<IBoothRegistrationRepository, BoothRegistrationRepository>();
             services.AddScoped<IFoodCategoryRepository, FoodCategoryRepository>();
             services.AddScoped<IFoodItemRepository, FoodItemRepository>();
             services.AddScoped<IFoodSemanticMetadataRepository, FoodSemanticMetadataRepository>();
@@ -124,7 +122,6 @@ namespace InfrastructureLayer
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<IAccountService, AccountService>();
 
-            services.AddScoped<IBoothRegistrationService, BoothRegistrationService>();
             services.AddScoped<IBoothService, BoothService>();
 
             services.AddScoped<IOrderService, OrderService>();

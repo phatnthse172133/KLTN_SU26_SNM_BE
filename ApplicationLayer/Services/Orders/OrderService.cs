@@ -2,10 +2,11 @@ using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
+using ApplicationLayer.Services.CustomerDiscovery;
 using ApplicationLayer.Services.Notifications;
 using ApplicationLayer.Services.PayOS;
+using ApplicationLayer.Services.PayOutClients;
 using ApplicationLayer.Services.Promotions;
-using ApplicationLayer.Services.CustomerDiscovery;
 using DomainLayer.Common;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
@@ -28,7 +29,7 @@ namespace ApplicationLayer.Services.Orders
         private readonly IOrderRepository _orderRepo;
         private readonly IPromotionRepository _promotionRepo;
         private readonly IPromotionValidationService _validation;
-        private readonly IPayOSPayoutService _payouts;
+        //private readonly IPayOSPayoutService _payouts;
         private readonly IPayOSService _payos;
         private readonly IRealtimeNotificationPublisher _notificationPublisher;
         private readonly IFoodItemRepository _foodItemRepo;
@@ -40,11 +41,13 @@ namespace ApplicationLayer.Services.Orders
         private readonly INotificationService? _notifications;
         private readonly IReviewRepository? _reviews;
         private readonly IComplaintRepository? _complaints;
+        private readonly IPayOSPayoutClientFactory _payoutClientFactory;
 
         public OrderService(IOrderRepository orderRepo,
                             IPromotionRepository promotionRepo,
                             IPromotionValidationService validation,
-                            IPayOSPayoutService payouts,
+                            //IPayOSPayoutService payouts,
+                            IPayOSPayoutClientFactory payoutClientFactory,
                              IRealtimeNotificationPublisher notificationPublisher,
                              IFoodItemRepository foodItemRepo,
                              ILogger<OrderService> logger,
@@ -60,7 +63,7 @@ namespace ApplicationLayer.Services.Orders
             _orderRepo = orderRepo;
             _promotionRepo = promotionRepo;
             _validation = validation;
-            _payouts = payouts;
+            //_payouts = payouts;
             _notificationPublisher = notificationPublisher;
             _foodItemRepo = foodItemRepo;
             _config = config;
@@ -72,6 +75,7 @@ namespace ApplicationLayer.Services.Orders
             _notifications = notifications;
             _reviews = reviews;
             _complaints = complaints;
+            _payoutClientFactory = payoutClientFactory;
         }
 
         //DÃƒÂ nh cho customer lÃ¡ÂºÂ«n khÃƒÂ¡ch vang lai (Walk-in) Ã„â€˜Ã¡ÂºÂ·t mÃƒÂ³n, trÃ¡ÂºÂ£ vÃ¡Â»Â link thanh toÃƒÂ¡n nÃ¡ÂºÂ¿u chÃ¡Â»Ân online
@@ -1331,7 +1335,7 @@ namespace ApplicationLayer.Services.Orders
                 {
                     await _orderRepo.CommitTransactionAsync();
                     transactionOpen = false;
-                    return await DispatchOrReconcileRefundAsync(refundPayment, orderCode, request);
+                    return await DispatchOrReconcileRefundAsync(refundPayment, orderCode, request, order.BoothId);
                 }
 
                 if (order.Status == OrderStatus.Cancelled)
@@ -1405,7 +1409,7 @@ namespace ApplicationLayer.Services.Orders
             if (!needsPayout || refundPayment is null)
                 return ApiResponse<bool>.SuccessResponse(true, "Order was cancelled successfully.");
 
-            return await DispatchOrReconcileRefundAsync(refundPayment, orderCode, request);
+            return await DispatchOrReconcileRefundAsync(refundPayment, orderCode, request, order.BoothId);
 
             async Task<ApiResponse<bool>> RollbackFailureAsync(string message, string code)
             {
@@ -1431,13 +1435,14 @@ namespace ApplicationLayer.Services.Orders
             if (payment.Status == PaymentStatus.Refunded)
                 return ApiResponse<bool>.SuccessResponse(true, "Refund was already completed.");
 
-            return await DispatchOrReconcileRefundAsync(payment, orderCode, request: null);
+            return await DispatchOrReconcileRefundAsync(payment, orderCode, request: null, order.BoothId);
         }
 
         private async Task<ApiResponse<bool>> DispatchOrReconcileRefundAsync(
             Payment payment,
             long orderCode,
-            RefundQRRequest? request)
+            RefundQRRequest? request,
+            Guid boothId)
         {
             if (payment.RefundAmount is null || string.IsNullOrWhiteSpace(payment.RefundReference))
                 return ApiResponse<bool>.Failure(
@@ -1447,16 +1452,19 @@ namespace ApplicationLayer.Services.Orders
 
             try
             {
+                var payOsClient = await _payoutClientFactory.CreateClientAsync(boothId);
+                var payoutService = new PayOSPayoutService(payOsClient);
+
                 PayOSPayoutSnapshot? snapshot;
                 if (!string.IsNullOrWhiteSpace(payment.PayoutId))
                 {
-                    snapshot = await _payouts.GetAsync(payment.PayoutId);
+                    snapshot = await payoutService.GetAsync(payment.PayoutId);
                     return await ApplyPayoutSnapshotAsync(orderCode, payment.Id, snapshot, allowCompletion: true);
                 }
 
                 // Always query first. This closes the timeout gap where PayOS accepted
                 // the previous request but the application did not receive its response.
-                snapshot = await _payouts.FindByReferenceAsync(payment.RefundReference);
+                snapshot = await payoutService.FindByReferenceAsync(payment.RefundReference);
                 if (snapshot is not null)
                     return await ApplyPayoutSnapshotAsync(orderCode, payment.Id, snapshot, allowCompletion: true);
 
@@ -1479,7 +1487,7 @@ namespace ApplicationLayer.Services.Orders
                         "REFUND_ALREADY_PROCESSING",
                         false);
 
-                snapshot = await _payouts.CreateAsync(new PayOSPayoutCommand(
+                snapshot = await payoutService.CreateAsync(new PayOSPayoutCommand(
                     payment.RefundReference,
                     payment.Id.ToString("N"),
                     decimal.ToInt64(payment.RefundAmount.Value),

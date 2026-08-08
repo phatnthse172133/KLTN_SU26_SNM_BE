@@ -147,8 +147,8 @@ public sealed class PostgresAiV2BackfillTests
               ('22222222-2222-2222-2222-222222222103','22222222-2222-2222-2222-222222222002','owner-a','hash','Owner','owner-a@test.local','Local','Active',now(),now());
             INSERT INTO "NightMarket" ("Id","Name","Address","Status","ModerationStatus","IsDeleted","TotalBooth","CreatedAt","UpdatedAt")
               VALUES ('33333333-3333-3333-3333-333333333001','Audit market','Audit','Open','Active',false,1,now(),now());
-            INSERT INTO "Booth" ("Id","RegistrationId","NightMarketId","BoothOwnerId","BoothName","Status","CreatedAt","UpdatedAt")
-              VALUES ('44444444-4444-4444-4444-444444444001','44444444-4444-4444-4444-444444444099','33333333-3333-3333-3333-333333333001','22222222-2222-2222-2222-222222222103','Audit booth','Active',now(),now());
+            INSERT INTO "Booth" ("Id","NightMarketId","BoothOwnerId","BoothName","Status","CreatedAt","UpdatedAt")
+              VALUES ('44444444-4444-4444-4444-444444444001','33333333-3333-3333-3333-333333333001','22222222-2222-2222-2222-222222222103','Audit booth','Active',now(),now());
             INSERT INTO "FoodCategories" ("Id","BoothId","Code","Name","IsSystem","IsActive","DisplayOrder","IsSelectable","IsDeleted","CreatedAt","UpdatedAt")
               VALUES ('88888888-8888-8888-8888-888888888001','44444444-4444-4444-4444-444444444001','LEGACY_AUDIT','Legacy audit',false,true,0,true,false,now(),now());
             INSERT INTO "FoodItem" ("Id","BoothId","CategoryId","Name","Description","Price","IsAvailable","IsFeatured","IsDeleted","SpiceLevel","SemanticProfileVersion","CreatedAt","UpdatedAt") VALUES

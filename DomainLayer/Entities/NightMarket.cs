@@ -61,7 +61,5 @@ public partial class NightMarket : ISoftDelete
 
     public virtual ICollection<Zone> Zones { get; set; } = new List<Zone>();
 
-    public virtual ICollection<BoothRegistration> BoothRegistrations { get; set; } = new List<BoothRegistration>();
-
     public virtual User? MarketOwner { get; set; }
 }

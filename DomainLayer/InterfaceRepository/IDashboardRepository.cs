@@ -9,6 +9,5 @@ namespace DomainLayer.InterfaceRepository
         Task<DashboardStatsModel> GetAdminStatsAsync(DateTime startDate, DateTime endDate);
         Task<List<RevenueChartModel>> GetRevenueChartAsync(DateTime startDate, DateTime endDate, string granularity);
         Task<List<DashboardPendingComplaintModel>> GetPendingComplaintsAsync(int limit = 5);
-        Task<List<DashboardRecentRegistrationModel>> GetRecentBoothRegistrationsAsync(int limit = 5);
     }
 }

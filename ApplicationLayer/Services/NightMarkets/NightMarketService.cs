@@ -21,7 +21,6 @@ public class NightMarketService : INightMarketService
     private readonly ISubscriptionEntitlementService _entitlements;
     private readonly IBoothRepository _booths;
     private readonly ISubscriptionRepository _subscriptions;
-    private readonly IBoothRegistrationRepository _registrations;
     private readonly IMarketLayoutRepository _layouts;
     private readonly IZoneRepository _zones;
     private readonly IOrderRepository _orders;
@@ -35,7 +34,6 @@ public class NightMarketService : INightMarketService
         ISubscriptionEntitlementService entitlements,
         IBoothRepository booths,
         ISubscriptionRepository subscriptions,
-        IBoothRegistrationRepository registrations,
         IMarketLayoutRepository layouts,
         IZoneRepository zones,
         IOrderRepository orders,
@@ -48,7 +46,6 @@ public class NightMarketService : INightMarketService
         _entitlements = entitlements;
         _booths = booths;
         _subscriptions = subscriptions;
-        _registrations = registrations;
         _layouts = layouts;
         _zones = zones;
         _orders = orders;
@@ -339,7 +336,6 @@ public class NightMarketService : INightMarketService
         {
             impact.ActiveBooths,
             impact.OpenOrders,
-            impact.PendingRegistrations,
             impact.Layouts,
             impact.Zones
         });
@@ -359,16 +355,12 @@ public class NightMarketService : INightMarketService
                 boothOwnerIds.Contains(o.BoothOwnerId)
                 && (o.Status == OrderStatus.Placed || o.Status == OrderStatus.Preparing || o.Status == OrderStatus.ReadyForPickup));
 
-        var pendingRegistrations = await _registrations.CountAsync(
-            r => r.RequestedNightMarketId == nightMarketId
-                && r.Status == BoothRegistrationStatus.PendingReview);
         var layouts = await _layouts.CountAsync(l => l.NightMarketId == nightMarketId);
         var zones = await _zones.CountAsync(z => z.NightMarketId == nightMarketId);
 
         return new NightMarketDeletionImpact(
             booths.Count(b => b.Status == BoothStatus.Active),
             openOrders,
-            pendingRegistrations,
             layouts,
             zones);
     }
@@ -379,7 +371,6 @@ public class NightMarketService : INightMarketService
     private sealed record NightMarketDeletionImpact(
         int ActiveBooths,
         int OpenOrders,
-        int PendingRegistrations,
         int Layouts,
         int Zones);
 

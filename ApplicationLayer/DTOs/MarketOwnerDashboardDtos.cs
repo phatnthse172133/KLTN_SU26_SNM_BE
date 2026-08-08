@@ -18,7 +18,6 @@ public class MarketOwnerDashboardResponse
     public DashboardSummary Summary { get; set; } = new();
     public DashboardEntitlements Entitlements { get; set; } = new();
     public List<OrderTrendBucket>? OrderTrend { get; set; }
-    public RegistrationStatusBreakdown? RegistrationStatus { get; set; }
     public ComplaintStatusBreakdown? ComplaintStatus { get; set; }
     public BoothStatusBreakdown? BoothStatus { get; set; }
     public AdvancedInsights? Advanced { get; set; }
@@ -36,7 +35,6 @@ public class DashboardSummary
 {
     public int NightMarkets { get; set; }
     public int ActiveBooths { get; set; }
-    public int PendingRegistrations { get; set; }
     public int? ValidOrders { get; set; }
     public int? PendingComplaints { get; set; }
 }
@@ -53,13 +51,6 @@ public class OrderTrendBucket
     public DateTime BucketStart { get; set; }
     public string Label { get; set; } = string.Empty;
     public int OrderCount { get; set; }
-}
-
-public class RegistrationStatusBreakdown
-{
-    public int PendingReview { get; set; }
-    public int Approved { get; set; }
-    public int Rejected { get; set; }
 }
 
 public class ComplaintStatusBreakdown

@@ -394,7 +394,6 @@ public class BoothService : IBoothService
         var booth = new Booth
         {
             Id = Guid.NewGuid(),
-            RegistrationId = null,
             NightMarketId = marketId,
             BoothOwnerId = boothOwner.Id,
             BoothName = request.BoothName.Trim(),
@@ -633,7 +632,6 @@ public class BoothService : IBoothService
             var booth = new Booth
             {
                 Id = Guid.NewGuid(),
-                RegistrationId = null,
                 NightMarketId = marketId,
                 BoothOwnerId = boothOwner.Id,
                 BoothName = request.BoothName.Trim(),

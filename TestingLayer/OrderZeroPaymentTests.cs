@@ -360,7 +360,6 @@ public class OrderZeroPaymentTests
         var booth = new Booth
         {
             Id = boothId,
-            RegistrationId = Guid.NewGuid(),
             NightMarketId = market.Id,
             BoothOwnerId = ownerId,
             BoothName = "Booth",

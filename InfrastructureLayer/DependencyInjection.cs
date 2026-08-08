@@ -12,7 +12,7 @@ using ApplicationLayer.Services.BoothDashboard;
 using ApplicationLayer.Services.BoothLocations;
 using ApplicationLayer.Services.BoothMedia;
 using ApplicationLayer.Services.BoothPayOsCredentials;
-using ApplicationLayer.Services.BoothRegistrations;
+//using ApplicationLayer.Services.BoothRegistrations;
 using ApplicationLayer.Services.Booths;
 using ApplicationLayer.Services.Carts;
 using ApplicationLayer.Services.Chats;
@@ -82,7 +82,6 @@ namespace InfrastructureLayer
             services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
             services.AddScoped<IUnitOfWork, UnitOfWork>();
             services.AddScoped<IBoothRepository, BoothRepository>();
-            services.AddScoped<IBoothRegistrationRepository, BoothRegistrationRepository>();
             services.AddScoped<IFoodCategoryRepository, FoodCategoryRepository>();
             services.AddScoped<IFoodItemRepository, FoodItemRepository>();
             services.AddScoped<IFoodSemanticMetadataRepository, FoodSemanticMetadataRepository>();
@@ -127,7 +126,6 @@ namespace InfrastructureLayer
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<IAccountService, AccountService>();
 
-            services.AddScoped<IBoothRegistrationService, BoothRegistrationService>();
             services.AddScoped<IBoothService, BoothService>();
 
             services.AddScoped<IBoothPayOsCredentialRepository, BoothPayOsCredentialRepository>();

@@ -3,6 +3,7 @@ using System;
 using InfrastructureLayer.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace InfrastructureLayer.Migrations
 {
     [DbContext(typeof(SNMDbContext))]
-    partial class SNMDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260808170350_RemoveLegacyBoothRegistrationFlow")]
+    partial class RemoveLegacyBoothRegistrationFlow
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -884,47 +887,6 @@ namespace InfrastructureLayer.Migrations
                         {
                             t.HasComment("VÃ¡Â»â€¹ trÃƒÂ­ cÃ¡Â»Â¥ thÃ¡Â»Æ’ (tÃ¡Â»Âa Ã„â€˜Ã¡Â»â„¢) cÃ¡Â»Â§a 1 gian hÃƒÂ ng trÃƒÂªn 1 sÃ†Â¡ Ã„â€˜Ã¡Â»â€œ mÃ¡ÂºÂ·t bÃ¡ÂºÂ±ng");
                         });
-                });
-
-            modelBuilder.Entity("DomainLayer.Entities.BoothPayOsCredential", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("BoothId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("EncryptedApiKey")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("EncryptedChecksumKey")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("EncryptedClientId")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("EncryptedPayoutApiKey")
-                        .HasColumnType("text");
-
-                    b.Property<string>("EncryptedPayoutChecksumKey")
-                        .HasColumnType("text");
-
-                    b.Property<string>("EncryptedPayoutClientId")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("BoothPayOsCredentials");
                 });
 
             modelBuilder.Entity("DomainLayer.Entities.BoothPaymentInfo", b =>

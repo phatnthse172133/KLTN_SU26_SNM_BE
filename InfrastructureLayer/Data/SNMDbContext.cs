@@ -62,8 +62,6 @@ namespace InfrastructureLayer.Data
 
         public virtual DbSet<BoothPaymentInfo> BoothPaymentInfos { get; set; }
 
-        public virtual DbSet<BoothRegistration> BoothRegistrations { get; set; }
-
         public virtual DbSet<BoothSubscription> BoothSubscriptions { get; set; }
 
         public virtual DbSet<MarketSubscription> MarketSubscriptions { get; set; }
@@ -322,13 +320,6 @@ namespace InfrastructureLayer.Data
                     .HasConstraintName("Booth_NightMarketId_fkey");
             });
 
-            modelBuilder.Entity<BoothRegistration>(entity =>
-            {
-                entity.HasIndex(e => e.OwnerId, "uq_pending_booth_registration_owner")
-                    .IsUnique()
-                    .HasFilter("\"Status\" = 1");
-            });
-
             modelBuilder.Entity<BoothDocument>(entity =>
             {
                 entity.HasKey(e => e.Id).HasName("BoothDocuments_pkey");
@@ -347,9 +338,8 @@ namespace InfrastructureLayer.Data
                     .HasMaxLength(20)
                     .HasDefaultValueSql("'Pending'::character varying");
 
-                entity.HasOne(d => d.Registration).WithMany(p => p.BoothDocuments)
-                    .HasForeignKey(d => d.RegistrationId)
-                    .HasConstraintName("BoothDocuments_BoothId_fkey");
+                entity.HasOne(d => d.Booth).WithMany(p => p.BoothDocuments)
+                    .HasForeignKey(d => d.BoothId);
             });
 
             modelBuilder.Entity<BoothImage>(entity =>

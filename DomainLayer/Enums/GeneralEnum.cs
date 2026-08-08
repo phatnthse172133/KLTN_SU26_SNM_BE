@@ -16,15 +16,6 @@ namespace DomainLayer.Enums
             Banned = 3
         }
 
-        public enum BoothRegistrationStatus
-        {
-            Draft = 0,              // chưa submit
-            PendingReview = 1,      // chờ duyệt
-            Approved = 2,           // duyệt
-            Rejected = 3,           // từ chối
-            Cancelled = 4           // owner hủy đơn
-        }
-
         public enum BoothDocumentType
         {
             BusinessLicense = 0,          // Giấy phép kinh doanh
@@ -263,9 +254,6 @@ namespace DomainLayer.Enums
             OrderCancelled = 15,
             RefundPending = 16,
             RefundCompleted = 17,
-            RegistrationSubmitted = 18,
-            RegistrationApproved = 19,
-            RegistrationRejected = 20,
             NewReview = 21,
             ReviewReplied = 22,
             ComplaintSubmitted = 23,

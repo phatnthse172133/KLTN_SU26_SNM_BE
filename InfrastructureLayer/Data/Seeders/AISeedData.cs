@@ -213,7 +213,7 @@ public static class AISeedData
             market.OpeningHours = seed.OpenTime;
             market.ClosingHours = seed.CloseTime;
             market.TotalBooth = BoothSeeds.Count(booth => booth.MarketId == seed.Id);
-            market.Status = NightMarketStatus.Open;
+            market.Status = NightMarketStatus.Active;
             market.ModerationStatus = ModerationStatus.Active;
             market.IsDeleted = false;
             market.UpdatedAt = now;
@@ -380,33 +380,12 @@ public static class AISeedData
     private static async Task SeedDemoBoothsAndMenuAsync(SNMDbContext dbContext)
     {
         var now = DateTime.UtcNow;
-        var existingRegistrationIds = (await dbContext.BoothRegistrations.Select(registration => registration.Id).ToListAsync()).ToHashSet();
-        foreach (var seed in BoothSeeds.Where(seed => !existingRegistrationIds.Contains(RegistrationId(seed.Index))))
-        {
-            dbContext.BoothRegistrations.Add(new BoothRegistration
-            {
-                Id = RegistrationId(seed.Index),
-                OwnerId = OwnerId(seed.Index),
-                RequestedNightMarketId = seed.MarketId,
-                PreferredZoneId = seed.ZoneId,
-                BoothName = seed.Name,
-                Description = seed.Description,
-                Phone = $"09000003{seed.Index:00}",
-                Status = BoothRegistrationStatus.Approved,
-                CreatedAt = now,
-                UpdatedAt = now
-            });
-        }
-
-        await dbContext.SaveChangesAsync();
-
         var existingBoothIds = (await dbContext.Booths.Select(booth => booth.Id).ToListAsync()).ToHashSet();
         foreach (var seed in BoothSeeds.Where(seed => !existingBoothIds.Contains(BoothId(seed.Index))))
         {
             dbContext.Booths.Add(new Booth
             {
                 Id = BoothId(seed.Index),
-                RegistrationId = RegistrationId(seed.Index),
                 NightMarketId = seed.MarketId,
                 BoothOwnerId = OwnerId(seed.Index),
                 ZoneId = seed.ZoneId,
@@ -812,7 +791,6 @@ public static class AISeedData
         };
 
     private static Guid OwnerId(int index) => Guid.Parse($"55555555-5555-5555-5555-555555555{index:000}");
-    private static Guid RegistrationId(int index) => Guid.Parse($"66666666-6666-6666-6666-666666666{index:000}");
     private static Guid BoothId(int index) => Guid.Parse($"77777777-7777-7777-7777-777777777{index:000}");
     private static Guid CategoryId(int index) => Guid.Parse($"88888888-8888-8888-8888-888888888{index:000}");
     private static Guid FoodId(int boothIndex, int foodIndex) => Guid.Parse($"99999999-9999-9999-9999-99999999{boothIndex:00}{foodIndex:00}");

@@ -10,6 +10,8 @@ public interface ICartService
 
     Task<ApiResponse<CartItemResponse>> AddItemAsync(Guid customerId, AddCartItemRequest request, CancellationToken cancellationToken = default);
 
+    Task<ApiResponse<CartBatchAddResponse>> AddItemsAsync(Guid customerId, AddCartItemsRequest request, CancellationToken cancellationToken = default);
+
     Task<ApiResponse<CartItemResponse>> UpdateQuantityAsync(Guid customerId, Guid cartItemId, UpdateCartItemQuantityRequest request, CancellationToken cancellationToken = default);
 
     Task<ApiResponse<object>> RemoveItemAsync(Guid customerId, Guid cartItemId, CancellationToken cancellationToken = default);

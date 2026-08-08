@@ -2,10 +2,11 @@ using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
+using ApplicationLayer.Services.CustomerDiscovery;
 using ApplicationLayer.Services.Notifications;
 using ApplicationLayer.Services.PayOS;
+using ApplicationLayer.Services.PayOutClients;
 using ApplicationLayer.Services.Promotions;
-using ApplicationLayer.Services.CustomerDiscovery;
 using DomainLayer.Common;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
@@ -28,7 +29,7 @@ namespace ApplicationLayer.Services.Orders
         private readonly IOrderRepository _orderRepo;
         private readonly IPromotionRepository _promotionRepo;
         private readonly IPromotionValidationService _validation;
-        private readonly IPayOSPayoutService _payouts;
+        //private readonly IPayOSPayoutService _payouts;
         private readonly IPayOSService _payos;
         private readonly IRealtimeNotificationPublisher _notificationPublisher;
         private readonly IFoodItemRepository _foodItemRepo;
@@ -38,11 +39,15 @@ namespace ApplicationLayer.Services.Orders
         private readonly IBoothRepository _boothRepo;
         private readonly IPromotionUsageRepository _promotionUsages;
         private readonly INotificationService? _notifications;
+        private readonly IReviewRepository? _reviews;
+        private readonly IComplaintRepository? _complaints;
+        private readonly IPayOSPayoutClientFactory _payoutClientFactory;
 
         public OrderService(IOrderRepository orderRepo,
                             IPromotionRepository promotionRepo,
                             IPromotionValidationService validation,
-                            IPayOSPayoutService payouts,
+                            //IPayOSPayoutService payouts,
+                            IPayOSPayoutClientFactory payoutClientFactory,
                              IRealtimeNotificationPublisher notificationPublisher,
                              IFoodItemRepository foodItemRepo,
                              ILogger<OrderService> logger,
@@ -51,12 +56,14 @@ namespace ApplicationLayer.Services.Orders
                              IPayOSOrderCodeGenerator orderCodeGenerator,
                              IBoothRepository boothRepo,
                              IPromotionUsageRepository promotionUsages,
-                             INotificationService? notifications = null)
+                             INotificationService? notifications = null,
+                             IReviewRepository? reviews = null,
+                             IComplaintRepository? complaints = null)
         {
             _orderRepo = orderRepo;
             _promotionRepo = promotionRepo;
             _validation = validation;
-            _payouts = payouts;
+            //_payouts = payouts;
             _notificationPublisher = notificationPublisher;
             _foodItemRepo = foodItemRepo;
             _config = config;
@@ -66,6 +73,9 @@ namespace ApplicationLayer.Services.Orders
             _boothRepo = boothRepo;
             _promotionUsages = promotionUsages;
             _notifications = notifications;
+            _reviews = reviews;
+            _complaints = complaints;
+            _payoutClientFactory = payoutClientFactory;
         }
 
         //DÃƒÂ nh cho customer lÃ¡ÂºÂ«n khÃƒÂ¡ch vang lai (Walk-in) Ã„â€˜Ã¡ÂºÂ·t mÃƒÂ³n, trÃ¡ÂºÂ£ vÃ¡Â»Â link thanh toÃƒÂ¡n nÃ¡ÂºÂ¿u chÃ¡Â»Ân online
@@ -79,18 +89,43 @@ namespace ApplicationLayer.Services.Orders
                 throw AppException.BadRequest("Order status is invalid.", "INVALID_ORDER_STATUS");
 
             var page = await _orderRepo.GetCustomerHistoryAsync(customerId, request.Status, request.Page, request.PageSize, cancellationToken);
-            var items = page.Items.Select(order => new CustomerOrderHistoryResponse
+            var orderIds = page.Items.Select(order => order.OrderId).ToList();
+            var reviewsByOrder = _reviews is null
+                ? new Dictionary<Guid, Review>()
+                : await _reviews.GetByOrderIdsAsync(orderIds, cancellationToken);
+            var editWindowDays = Math.Max(1, _config.GetValue("ReviewSettings:EditWindowDays", 7));
+            var now = DateTime.UtcNow;
+
+            var items = new List<CustomerOrderHistoryResponse>(page.Items.Count);
+            foreach (var order in page.Items)
             {
-                OrderId = order.OrderId,
-                OrderCode = order.OrderCode,
-                BoothId = order.BoothId,
-                BoothName = order.BoothName,
-                OrderStatus = order.OrderStatus,
-                PaymentStatus = order.PaymentStatus,
-                FinalAmount = order.FinalAmount,
-                CreatedAt = order.CreatedAt,
-                ItemCount = order.ItemCount
-            }).ToList();
+                reviewsByOrder.TryGetValue(order.OrderId, out var review);
+                Guid? activeComplaintId = null;
+                if (_complaints is not null)
+                    activeComplaintId = await _complaints.GetActiveComplaintIdAsync(customerId, order.BoothId, order.OrderId, cancellationToken);
+
+                var hasReview = review is not null;
+                var editDeadline = hasReview ? review!.CreatedAt.AddDays(editWindowDays) : (DateTime?)null;
+                items.Add(new CustomerOrderHistoryResponse
+                {
+                    OrderId = order.OrderId,
+                    OrderCode = order.OrderCode,
+                    BoothId = order.BoothId,
+                    BoothName = order.BoothName,
+                    OrderStatus = order.OrderStatus,
+                    PaymentStatus = order.PaymentStatus,
+                    FinalAmount = order.FinalAmount,
+                    CreatedAt = order.CreatedAt,
+                    ItemCount = order.ItemCount,
+                    HasReview = hasReview,
+                    ReviewId = review?.Id,
+                    CanReview = order.OrderStatus == OrderStatus.Completed && !hasReview,
+                    CanEditReview = hasReview && review!.IsVisible && now <= editDeadline,
+                    EditDeadline = editDeadline,
+                    CanComplain = activeComplaintId is null,
+                    ActiveComplaintId = activeComplaintId
+                });
+            }
 
             return ApiResponse<PaginationResp<CustomerOrderHistoryResponse>>.SuccessResponse(
                 PaginationResp<CustomerOrderHistoryResponse>.Create(items, page.TotalCount, request));
@@ -104,6 +139,15 @@ namespace ApplicationLayer.Services.Orders
             var order = await _orderRepo.GetCustomerDetailAsync(customerId, orderId, cancellationToken)
                 ?? throw AppException.NotFound("Order was not found.", "ORDER_NOT_FOUND");
 
+            var review = _reviews is null ? null : await _reviews.GetByOrderIdAsync(orderId, cancellationToken);
+            var activeComplaintId = _complaints is null
+                ? null
+                : await _complaints.GetActiveComplaintIdAsync(customerId, order.BoothId, orderId, cancellationToken);
+            var editWindowDays = Math.Max(1, _config.GetValue("ReviewSettings:EditWindowDays", 7));
+            var hasReview = review is not null;
+            var editDeadline = hasReview ? review!.CreatedAt.AddDays(editWindowDays) : (DateTime?)null;
+            var now = DateTime.UtcNow;
+
             return ApiResponse<CustomerOrderDetailResponse>.SuccessResponse(new CustomerOrderDetailResponse
             {
                 OrderId = order.OrderId,
@@ -111,6 +155,7 @@ namespace ApplicationLayer.Services.Orders
                 Booth = new CustomerOrderBoothResponse { BoothId = order.BoothId, BoothName = order.BoothName },
                 Items = order.Items.Select(item => new CustomerOrderItemResponse
                 {
+                    OrderDetailId = item.OrderDetailId,
                     FoodItemId = item.FoodItemId,
                     FoodName = item.FoodName,
                     Quantity = item.Quantity,
@@ -142,7 +187,14 @@ namespace ApplicationLayer.Services.Orders
                     CreatedAt = payment.CreatedAt
                 }).ToList(),
                 CreatedAt = order.CreatedAt,
-                UpdatedAt = order.UpdatedAt
+                UpdatedAt = order.UpdatedAt,
+                HasReview = hasReview,
+                ReviewId = review?.Id,
+                CanReview = order.OrderStatus == OrderStatus.Completed && !hasReview,
+                CanEditReview = hasReview && review!.IsVisible && now <= editDeadline,
+                EditDeadline = editDeadline,
+                CanComplain = activeComplaintId is null,
+                ActiveComplaintId = activeComplaintId
             });
         }
 
@@ -176,8 +228,9 @@ namespace ApplicationLayer.Services.Orders
                 throw AppException.BadRequest("All order items must belong to the selected booth.", "MULTIPLE_BOOTHS_NOT_ALLOWED");
 
             var booth = foods[0].Booth;
-            if (booth.BoothOwnerId != dto.BoothOwnerId)
-                throw AppException.BadRequest("The booth information is invalid.", "BOOTH_MISMATCH");
+            //if (booth.BoothOwnerId != dto.BoothOwnerId)
+            //    throw AppException.BadRequest("The booth information is invalid.", "BOOTH_MISMATCH");
+            dto.BoothOwnerId = booth.BoothOwnerId;
 
             foreach (var item in dto.Items)
             {
@@ -281,14 +334,12 @@ namespace ApplicationLayer.Services.Orders
 
             order.FinalAmount = order.TotalAmount - order.DiscountAmount;
             var isZeroPaymentOrder = order.FinalAmount == 0m;
-            if (isZeroPaymentOrder || dto.PaymentMethod == PaymentType.Cash)
+            if (isZeroPaymentOrder)
             {
                 // A fully discounted order is financially settled without an
                 // external provider. It follows the same operational state as
                 // a successfully paid PayOS order.
-                order.Status = isZeroPaymentOrder && string.IsNullOrWhiteSpace(dto.RequestHash)
-                    ? OrderStatus.Preparing
-                    : OrderStatus.Placed;
+                order.Status = OrderStatus.Preparing;
                 PromotionUsageLifecycle.ConsumeReserved(
                     order.PromotionUsages,
                     utcNow);
@@ -306,10 +357,7 @@ namespace ApplicationLayer.Services.Orders
                     : dto.PaymentMethod == PaymentType.PayOS
                         ? PaymentGateway.Payos
                         : PaymentGateway.None,
-                Status = isZeroPaymentOrder ? PaymentStatus.Paid
-                    : dto.PaymentMethod == PaymentType.Cash && !string.IsNullOrWhiteSpace(dto.RequestHash)
-                        ? PaymentStatus.Unpaid
-                        : PaymentStatus.Pending,
+                Status = isZeroPaymentOrder ? PaymentStatus.Paid : PaymentStatus.Pending,
                 PayOSOrderCode = dto.PaymentMethod == PaymentType.PayOS && !isZeroPaymentOrder
                     ? orderCode
                     : null,
@@ -381,6 +429,11 @@ namespace ApplicationLayer.Services.Orders
                 }
 
                 await _orderRepo.AddAsync(order);
+                var removedCartItemCount = await _orderRepo.ClearCheckedOutCartItemsAsync(order, utcNow);
+                if (dto.CheckoutCartItemIds.Count > 0 && removedCartItemCount != dto.CheckoutCartItemIds.Distinct().Count())
+                    throw AppException.Conflict(
+                        "The cart changed during checkout. Refresh it and try again.",
+                        "CART_CHANGED");
                 await _orderRepo.SaveChangesAsync();
                 await _orderRepo.CommitTransactionAsync();
             }
@@ -432,7 +485,8 @@ namespace ApplicationLayer.Services.Orders
             }
 
             if (dto.PaymentMethod == PaymentType.Cash || isZeroPaymentOrder)
-                await TryPublishOrderCreatedAsync(order, utcNow, isZeroPaymentOrder);
+                await TryPublishOrderPendingApprovalAsync(order, utcNow);
+            //await TryPublishOrderCreatedAsync(order, utcNow, isZeroPaymentOrder);
 
             return ApiResponse<OrderResponseDto>.SuccessResponse(new OrderResponseDto
             {
@@ -648,10 +702,13 @@ namespace ApplicationLayer.Services.Orders
                     return WebhookDispatchResult.OrderHandled;
                 }
 
-                if (order.Status == OrderStatus.Placed)
-                    await _orderRepo.UpdateOrderStatusIfPlacedAsync(order.OrderCode, OrderStatus.Preparing, now);
-                else
+                // Mutate the aggregate loaded under the row lock. Mixing a tracked
+                // Order with ExecuteUpdate left PendingPayment orders at Placed
+                // while Payment and PromotionUsage were already committed.
+                if (order.Status is OrderStatus.PendingPayment or OrderStatus.PaymentFailed)
                     order.MarkPaid(now);
+                if (order.Status == OrderStatus.Placed)
+                    order.StartPreparing(now);
                 var paidAttempt = targetPayment.Attempts.FirstOrDefault(item => item.ProviderOrderCode == verifiedData.OrderCode);
                 if (paidAttempt is not null)
                 {
@@ -1278,7 +1335,7 @@ namespace ApplicationLayer.Services.Orders
                 {
                     await _orderRepo.CommitTransactionAsync();
                     transactionOpen = false;
-                    return await DispatchOrReconcileRefundAsync(refundPayment, orderCode, request);
+                    return await DispatchOrReconcileRefundAsync(refundPayment, orderCode, request, order.BoothId);
                 }
 
                 if (order.Status == OrderStatus.Cancelled)
@@ -1352,7 +1409,7 @@ namespace ApplicationLayer.Services.Orders
             if (!needsPayout || refundPayment is null)
                 return ApiResponse<bool>.SuccessResponse(true, "Order was cancelled successfully.");
 
-            return await DispatchOrReconcileRefundAsync(refundPayment, orderCode, request);
+            return await DispatchOrReconcileRefundAsync(refundPayment, orderCode, request, order.BoothId);
 
             async Task<ApiResponse<bool>> RollbackFailureAsync(string message, string code)
             {
@@ -1378,13 +1435,14 @@ namespace ApplicationLayer.Services.Orders
             if (payment.Status == PaymentStatus.Refunded)
                 return ApiResponse<bool>.SuccessResponse(true, "Refund was already completed.");
 
-            return await DispatchOrReconcileRefundAsync(payment, orderCode, request: null);
+            return await DispatchOrReconcileRefundAsync(payment, orderCode, request: null, order.BoothId);
         }
 
         private async Task<ApiResponse<bool>> DispatchOrReconcileRefundAsync(
             Payment payment,
             long orderCode,
-            RefundQRRequest? request)
+            RefundQRRequest? request,
+            Guid boothId)
         {
             if (payment.RefundAmount is null || string.IsNullOrWhiteSpace(payment.RefundReference))
                 return ApiResponse<bool>.Failure(
@@ -1394,16 +1452,19 @@ namespace ApplicationLayer.Services.Orders
 
             try
             {
+                var payOsClient = await _payoutClientFactory.CreateClientAsync(boothId);
+                var payoutService = new PayOSPayoutService(payOsClient);
+
                 PayOSPayoutSnapshot? snapshot;
                 if (!string.IsNullOrWhiteSpace(payment.PayoutId))
                 {
-                    snapshot = await _payouts.GetAsync(payment.PayoutId);
+                    snapshot = await payoutService.GetAsync(payment.PayoutId);
                     return await ApplyPayoutSnapshotAsync(orderCode, payment.Id, snapshot, allowCompletion: true);
                 }
 
                 // Always query first. This closes the timeout gap where PayOS accepted
                 // the previous request but the application did not receive its response.
-                snapshot = await _payouts.FindByReferenceAsync(payment.RefundReference);
+                snapshot = await payoutService.FindByReferenceAsync(payment.RefundReference);
                 if (snapshot is not null)
                     return await ApplyPayoutSnapshotAsync(orderCode, payment.Id, snapshot, allowCompletion: true);
 
@@ -1426,7 +1487,7 @@ namespace ApplicationLayer.Services.Orders
                         "REFUND_ALREADY_PROCESSING",
                         false);
 
-                snapshot = await _payouts.CreateAsync(new PayOSPayoutCommand(
+                snapshot = await payoutService.CreateAsync(new PayOSPayoutCommand(
                     payment.RefundReference,
                     payment.Id.ToString("N"),
                     decimal.ToInt64(payment.RefundAmount.Value),
@@ -1859,6 +1920,63 @@ namespace ApplicationLayer.Services.Orders
             }
         }
 
+        private async Task TryPublishOrderPendingApprovalAsync(Order order, DateTime utcNow)
+        {
+            try
+            {
+                // For BoothOwnerId
+                await PublishPersistedNotificationAsync(
+                    order.BoothOwnerId,
+                    NotificationType.OrderCreated,
+                    "New cash order!",
+                    $"Order #{order.OrderCode} ({order.FinalAmount:N0} VND) is pending your approval.",
+                    order.Id);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogError(exception, "Order {OrderCode} created but owner notification failed.", order.OrderCode);
+            }
+        }
+
+        private async Task TryPublishOrderApprovedAsync(Order order, DateTime utcNow)
+        {
+            try
+            {
+                await PublishPersistedNotificationAsync(
+                    order.CustomerId, // Target: Customer
+                    NotificationType.OrderApproved,
+                    "The order has been approved!",
+                    $"Order #{order.OrderCode} has been approved by the booth. Please proceed to the booth to pay {order.FinalAmount:N0} VND in cash.",
+                    order.Id);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogError(
+                    exception,
+                    "Order {OrderCode} approved but customer notification failed.",
+                    order.OrderCode);
+            }
+        }
+
+        private async Task TryPublishOrderPreparingAsync(Order order, DateTime utcNow)
+        {
+            try
+            {
+                // CHỈ gửi cho Khách hàng (CustomerId) - Cắt hoàn toàn Notify cho Chủ quầy
+                await PublishPersistedNotificationAsync(
+                    order.CustomerId,
+                    NotificationType.OrderPreparing,
+                    "Preparing the food",
+                    $"Payment succeeded! The booth is starting to prepare order #{order.OrderCode}.",
+                    order.Id);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogError(exception, "Order {OrderCode} preparing notification failed.", order.OrderCode);
+            }
+        }
+
+
         public async Task<ApiResponse<PaginationResp<BoothOwnerOrderListItemResponse>>> GetBoothOwnerOrdersAsync(
             Guid boothOwnerId,
             BoothOwnerOrderQuery query,
@@ -1990,14 +2108,29 @@ namespace ApplicationLayer.Services.Orders
                 boothOwnerId, orderCode, cancellationToken)
                 ?? throw AppException.NotFound("Order not found.", "ORDER_NOT_FOUND");
 
-            if (request.Status is not OrderStatus.Preparing and not OrderStatus.ReadyForPickup and not OrderStatus.Completed)
-                throw AppException.BadRequest("Status must be PREPARING, READY_FOR_PICKUP or COMPLETED.", "ORDER_STATUS_INVALID");
+            if (request.Status is not OrderStatus.PendingPayment
+                and not OrderStatus.Preparing
+                and not OrderStatus.ReadyForPickup
+                and not OrderStatus.Completed)
+                throw AppException.BadRequest("Status must be PENDING_PAYMENT, PREPARING, READY_FOR_PICKUP or COMPLETED.", "ORDER_STATUS_INVALID");
             if (!IsValidTransition(order.Status, request.Status))
                 throw AppException.Conflict(
                     $"The order cannot move from {order.Status} to {request.Status}.",
                     "INVALID_ORDER_TRANSITION");
 
             var payment = LatestPayment(order);
+
+            if (request.Status == OrderStatus.Preparing && payment?.Type == PaymentType.Cash)
+            {
+                payment.Status = PaymentStatus.Paid;
+                payment.PaidAt = DateTime.UtcNow;
+
+                if (order.PromotionUsages.Any())
+                {
+                    PromotionUsageLifecycle.ConsumeReserved(order.PromotionUsages, DateTime.UtcNow);
+                }
+            }
+
             if (request.Status == OrderStatus.Preparing
                 && payment?.Type == PaymentType.PayOS
                 && payment.Status != PaymentStatus.Paid)
@@ -2015,6 +2148,17 @@ namespace ApplicationLayer.Services.Orders
                 throw AppException.Conflict(
                     "The order was updated by another request. Refresh and try again.",
                     "ORDER_STATUS_CONFLICT");
+
+            if (request.Status == OrderStatus.PendingPayment && payment?.Type == PaymentType.Cash)
+            {
+                // Booth owner clicks "Approve" -> Notify Customer that the order is approved and they can pay cash
+                _ = TryPublishOrderApprovedAsync(order, DateTime.UtcNow);
+            }
+            else if (request.Status == OrderStatus.Preparing && payment?.Type == PaymentType.Cash)
+            {
+                // Booth owner clicks "Start Preparing" -> Notify Customer that the booth is preparing the order
+                _ = TryPublishOrderPreparingAsync(order, DateTime.UtcNow);
+            }
 
             await PublishOrderStatusAsync(order, request.Status);
             return ApiResponse<bool>.SuccessResponse(true, "Order status updated successfully.");
@@ -2086,6 +2230,8 @@ namespace ApplicationLayer.Services.Orders
         private static bool IsValidTransition(OrderStatus current, OrderStatus next)
             => (current, next) switch
             {
+                (OrderStatus.Placed, OrderStatus.PendingPayment) => true,
+                (OrderStatus.PendingPayment, OrderStatus.Preparing) => true,
                 (OrderStatus.Placed, OrderStatus.Preparing) => true,
                 (OrderStatus.Placed, OrderStatus.Cancelled) => true,
                 (OrderStatus.Preparing, OrderStatus.ReadyForPickup) => true,

@@ -10,8 +10,6 @@ public partial class Booth
 {
     public Guid Id { get; set; }
 
-    public Guid? RegistrationId { get; set; }
-
     public Guid NightMarketId { get; set; }
 
     public Guid BoothOwnerId { get; set; }
@@ -72,8 +70,6 @@ public partial class Booth
 
     public virtual ICollection<BoothPaymentInfo> BoothPaymentInfos { get; set; } = new List<BoothPaymentInfo>();
 
-    public virtual BoothRegistration? Registration { get; set; }
-
     public virtual Zone? Zone { get; set; }
 
     public virtual ICollection<BoothSubscription> BoothSubscriptions { get; set; } = new List<BoothSubscription>();
@@ -83,6 +79,8 @@ public partial class Booth
     public virtual ICollection<Conversation> Conversations { get; set; } = new List<Conversation>();
 
     public virtual ICollection<FoodItem> FoodItems { get; set; } = new List<FoodItem>();
+
+    public virtual ICollection<AiMealPlanItem> AiMealPlanItems { get; set; } = new List<AiMealPlanItem>();
 
     public virtual ICollection<FoodCategory> FoodCategories { get; set; } = new List<FoodCategory>();
 

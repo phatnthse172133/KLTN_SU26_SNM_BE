@@ -16,7 +16,41 @@ namespace InfrastructureLayer.Data
         }
 
         // DbSets
+        public virtual DbSet<BoothPayOsCredential> BoothPayOsCredentials { get; set; }
         public virtual DbSet<AIRecommendationLog> AIRecommendationLogs { get; set; }
+
+        public virtual DbSet<Ingredient> Ingredients { get; set; }
+        public virtual DbSet<Allergen> Allergens { get; set; }
+        public virtual DbSet<DietaryAttribute> DietaryAttributes { get; set; }
+        public virtual DbSet<PreparationMethod> PreparationMethods { get; set; }
+        public virtual DbSet<TasteProfile> TasteProfiles { get; set; }
+        public virtual DbSet<FoodSearchFacet> FoodSearchFacets { get; set; }
+        public virtual DbSet<FoodItemIngredient> FoodItemIngredients { get; set; }
+        public virtual DbSet<FoodItemAllergen> FoodItemAllergens { get; set; }
+        public virtual DbSet<FoodItemDietaryAttribute> FoodItemDietaryAttributes { get; set; }
+        public virtual DbSet<FoodItemPreparationMethod> FoodItemPreparationMethods { get; set; }
+        public virtual DbSet<FoodItemTasteProfile> FoodItemTasteProfiles { get; set; }
+        public virtual DbSet<FoodItemSearchFacet> FoodItemSearchFacets { get; set; }
+        public virtual DbSet<FoodItemCourse> FoodItemCourses { get; set; }
+        public virtual DbSet<FoodItemDiningPurpose> FoodItemDiningPurposes { get; set; }
+        public virtual DbSet<CustomerFoodProfile> CustomerFoodProfiles { get; set; }
+        public virtual DbSet<CustomerPreferredIngredient> CustomerPreferredIngredients { get; set; }
+        public virtual DbSet<CustomerAvoidedIngredient> CustomerAvoidedIngredients { get; set; }
+        public virtual DbSet<CustomerDietaryRequirement> CustomerDietaryRequirements { get; set; }
+        public virtual DbSet<CustomerAllergenExclusion> CustomerAllergenExclusions { get; set; }
+        public virtual DbSet<CustomerPreferredPreparationMethod> CustomerPreferredPreparationMethods { get; set; }
+        public virtual DbSet<CustomerPreferredTasteProfile> CustomerPreferredTasteProfiles { get; set; }
+        public virtual DbSet<CustomerAvoidedTasteProfile> CustomerAvoidedTasteProfiles { get; set; }
+        public virtual DbSet<CustomerPreferredCourse> CustomerPreferredCourses { get; set; }
+        public virtual DbSet<CustomerPreferredDiningPurpose> CustomerPreferredDiningPurposes { get; set; }
+        public virtual DbSet<AiRecommendationSession> AiRecommendationSessions { get; set; }
+        public virtual DbSet<AiRecommendationFeedback> AiRecommendationFeedback { get; set; }
+        public virtual DbSet<AiRecommendationResult> AiRecommendationResults { get; set; }
+        public virtual DbSet<AiMealPlanSession> AiMealPlanSessions { get; set; }
+        public virtual DbSet<AiMealPlan> AiMealPlans { get; set; }
+        public virtual DbSet<AiMealPlanItem> AiMealPlanItems { get; set; }
+        public virtual DbSet<AiMealPlanCartOperation> AiMealPlanCartOperations { get; set; }
+        public virtual DbSet<FoodAiProfile> FoodAiProfiles { get; set; }
 
         public virtual DbSet<Booth> Booths { get; set; }
 
@@ -27,8 +61,6 @@ namespace InfrastructureLayer.Data
         public virtual DbSet<BoothLocation> BoothLocations { get; set; }
 
         public virtual DbSet<BoothPaymentInfo> BoothPaymentInfos { get; set; }
-
-        public virtual DbSet<BoothRegistration> BoothRegistrations { get; set; }
 
         public virtual DbSet<BoothSubscription> BoothSubscriptions { get; set; }
 
@@ -41,6 +73,8 @@ namespace InfrastructureLayer.Data
         public virtual DbSet<Complaint> Complaints { get; set; }
 
         public virtual DbSet<ComplaintImage> ComplaintImages { get; set; }
+
+        public virtual DbSet<ComplaintStatusHistory> ComplaintStatusHistories { get; set; }
 
         public virtual DbSet<Conversation> Conversations { get; set; }
 
@@ -63,6 +97,8 @@ namespace InfrastructureLayer.Data
         public virtual DbSet<LayoutBlock> LayoutBlocks { get; set; }
 
         public virtual DbSet<LayoutNode> LayoutNodes { get; set; }
+
+        public virtual DbSet<LayoutNavigationAnchor> LayoutNavigationAnchors { get; set; }
 
         public virtual DbSet<MarketLayout> MarketLayouts { get; set; }
 
@@ -99,6 +135,8 @@ namespace InfrastructureLayer.Data
         public virtual DbSet<Review> Reviews { get; set; }
 
         public virtual DbSet<ReviewReply> ReviewReplies { get; set; }
+
+        public virtual DbSet<FoodReview> FoodReviews { get; set; }
 
         public virtual DbSet<Role> Roles { get; set; }
 
@@ -155,6 +193,7 @@ namespace InfrastructureLayer.Data
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+            modelBuilder.ConfigureAiV2();
             // Apply all configurations from the current assembly
             modelBuilder.HasPostgresExtension("uuid-ossp");
 
@@ -281,13 +320,6 @@ namespace InfrastructureLayer.Data
                     .HasConstraintName("Booth_NightMarketId_fkey");
             });
 
-            modelBuilder.Entity<BoothRegistration>(entity =>
-            {
-                entity.HasIndex(e => e.OwnerId, "uq_pending_booth_registration_owner")
-                    .IsUnique()
-                    .HasFilter("\"Status\" = 1");
-            });
-
             modelBuilder.Entity<BoothDocument>(entity =>
             {
                 entity.HasKey(e => e.Id).HasName("BoothDocuments_pkey");
@@ -306,9 +338,8 @@ namespace InfrastructureLayer.Data
                     .HasMaxLength(20)
                     .HasDefaultValueSql("'Pending'::character varying");
 
-                entity.HasOne(d => d.Registration).WithMany(p => p.BoothDocuments)
-                    .HasForeignKey(d => d.RegistrationId)
-                    .HasConstraintName("BoothDocuments_BoothId_fkey");
+                entity.HasOne(d => d.Booth).WithMany(p => p.BoothDocuments)
+                    .HasForeignKey(d => d.BoothId);
             });
 
             modelBuilder.Entity<BoothImage>(entity =>
@@ -334,8 +365,8 @@ namespace InfrastructureLayer.Data
 
                 entity.ToTable(tb => tb.HasComment("VÃ¡Â»â€¹ trÃƒÂ­ cÃ¡Â»Â¥ thÃ¡Â»Æ’ (tÃ¡Â»Âa Ã„â€˜Ã¡Â»â„¢) cÃ¡Â»Â§a 1 gian hÃƒÂ ng trÃƒÂªn 1 sÃ†Â¡ Ã„â€˜Ã¡Â»â€œ mÃ¡ÂºÂ·t bÃ¡ÂºÂ±ng"));
 
-                entity.HasIndex(e => e.BoothId, "ux_boothlocation_active_booth").IsUnique().HasFilter("\"IsDeleted\" = false");
-                entity.HasIndex(e => e.LayoutNodeId, "ux_boothlocation_active_node").IsUnique().HasFilter("\"IsDeleted\" = false");
+                entity.HasIndex(e => new { e.LayoutId, e.BoothId }, "ux_boothlocation_active_layout_booth").IsUnique().HasFilter("\"IsDeleted\" = false");
+                entity.HasIndex(e => new { e.LayoutId, e.LayoutNodeId }, "ux_boothlocation_active_layout_node").IsUnique().HasFilter("\"IsDeleted\" = false");
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
@@ -389,7 +420,7 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.Status)
                     .HasConversion<string>()
                     .HasMaxLength(20)
-                    .HasDefaultValueSql("'Draft'::character varying");
+                    .HasDefaultValueSql("'Inactive'::character varying");
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
 
                 entity.HasOne(d => d.Booth).WithMany(p => p.BoothPaymentInfos)
@@ -479,17 +510,23 @@ namespace InfrastructureLayer.Data
                 entity.HasIndex(e => new { e.CustomerId, e.CreatedAt }, "idx_complaint_customer_created").IsDescending(false, true);
                 entity.HasIndex(e => new { e.CustomerId, e.OrderId, e.BoothId }, "uq_complaint_active_customer_order_booth")
                     .IsUnique()
-                    .HasFilter("\"Status\" = 'Pending'");
+                    .HasFilter("\"Status\" IN ('Pending', 'UnderReview', 'WaitingForCustomer')");
 
-                entity.ToTable(tb => tb.HasComment("Khiáº¿u náº¡i cá»§a khÃ¡ch hÃ ng vá» Ä‘Æ¡n hÃ ng/gian hÃ ng"));
+                entity.ToTable(tb => tb.HasComment("Khiếu nại của khách hàng về đơn hàng/gian hàng"));
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
                 entity.Property(e => e.Status)
                     .HasConversion<string>()
-                    .HasMaxLength(20)
+                    .HasMaxLength(30)
                     .HasDefaultValueSql("'Pending'::character varying")
-                    .HasComment("Pending | Resolved | Rejected");
+                    .HasComment("Pending | UnderReview | WaitingForCustomer | Resolved | Rejected | Closed | Withdrawn");
+                entity.Property(e => e.Category)
+                    .HasConversion<string>()
+                    .HasMaxLength(30)
+                    .HasDefaultValue(ComplaintCategory.Other)
+                    .HasSentinel((ComplaintCategory)(-1));
+                entity.Property(e => e.CustomerEvidenceRequestNote).HasMaxLength(2000);
                 entity.Property(e => e.ResolutionAction)
                     .HasConversion<string>()
                     .HasMaxLength(30)
@@ -518,7 +555,7 @@ namespace InfrastructureLayer.Data
             {
                 entity.HasKey(e => e.Id).HasName("ComplaintImages_pkey");
 
-                entity.ToTable(tb => tb.HasComment("Ã¡ÂºÂ¢nh minh chÃ¡Â»Â©ng Ã„â€˜ÃƒÂ­nh kÃƒÂ¨m theo khiÃ¡ÂºÂ¿u nÃ¡ÂºÂ¡i"));
+                entity.ToTable(tb => tb.HasComment("Ảnh minh chứng đính kèm theo khiếu nại"));
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
@@ -528,6 +565,29 @@ namespace InfrastructureLayer.Data
                 entity.HasOne(d => d.Complaint).WithMany(p => p.ComplaintImages)
                     .HasForeignKey(d => d.ComplaintId)
                     .HasConstraintName("ComplaintImages_ComplaintId_fkey");
+            });
+
+            modelBuilder.Entity<ComplaintStatusHistory>(entity =>
+            {
+                entity.HasKey(e => e.Id).HasName("ComplaintStatusHistories_pkey");
+
+                entity.HasIndex(e => new { e.ComplaintId, e.CreatedAt }, "idx_complaintstatushistory_complaint_created");
+
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+                entity.Property(e => e.FromStatus)
+                    .HasConversion<string>()
+                    .HasMaxLength(30);
+                entity.Property(e => e.ToStatus)
+                    .HasConversion<string>()
+                    .HasMaxLength(30)
+                    .IsRequired();
+                entity.Property(e => e.Note).HasMaxLength(2000);
+                entity.Property(e => e.ActorRole).HasMaxLength(50);
+
+                entity.HasOne(d => d.Complaint).WithMany(p => p.StatusHistories)
+                    .HasForeignKey(d => d.ComplaintId)
+                    .HasConstraintName("ComplaintStatusHistories_ComplaintId_fkey");
             });
 
             modelBuilder.Entity<Conversation>(entity =>
@@ -663,10 +723,27 @@ namespace InfrastructureLayer.Data
                     .HasComment("false khi mÃƒÂ³n hÃ¡ÂºÂ¿t nguyÃƒÂªn liÃ¡Â»â€¡u hoÃ¡ÂºÂ·c chÃ¡Â»Â§ quÃƒÂ¡n tÃ¡ÂºÂ¡m Ã¡ÂºÂ©n");
                 entity.Property(e => e.IsDeleted).HasDefaultValue(false);
                 entity.Property(e => e.IsFeatured).HasDefaultValue(false);
+                entity.Property(e => e.SpiceLevel)
+                    .HasConversion<string>()
+                    .HasMaxLength(20)
+                    .HasDefaultValue(DomainLayer.Enums.FoodSpiceLevel.UNKNOWN);
+                entity.Property(e => e.ServingTemperature)
+                    .HasConversion<string>()
+                    .HasMaxLength(20);
+                entity.Property(e => e.ServingSizeDescription).HasMaxLength(300);
+                entity.Property(e => e.SemanticProfileVersion).HasDefaultValue(0);
+                entity.ToTable("FoodItem", table => table.HasCheckConstraint(
+                    "ck_fooditem_estimated_serving_count",
+                    "\"EstimatedServingCount\" IS NULL OR \"EstimatedServingCount\" > 0"));
                 entity.Property(e => e.Name).HasMaxLength(200);
                 entity.Property(e => e.Price)
                     .HasPrecision(12, 2)
-                    .HasComment("GiÃƒÂ¡ mÃ¡ÂºÂ·c Ã„â€˜Ã¡Â»â€¹nh. NÃ¡ÂºÂ¿u cÃƒÂ³ FoodPrice theo ngÃƒÂ y hiÃ¡Â»â€¡n tÃ¡ÂºÂ¡i thÃƒÂ¬ giÃƒÂ¡ Ã„â€˜ÃƒÂ³ Ã„â€˜Ã†Â°Ã¡Â»Â£c Ã†Â°u tiÃƒÂªn (override)");
+                    .HasComment("Giá mặc định. Nếu có FoodPrice theo ngày hiện tại thì giá đó được ưu tiên (override)");
+                entity.Property(e => e.AverageRating)
+                    .HasPrecision(3, 2)
+                    .HasDefaultValueSql("0");
+                entity.Property(e => e.ReviewCount)
+                    .HasDefaultValue(0);
                 entity.Property(e => e.ThumbnailUrl).HasMaxLength(500);
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
 
@@ -765,6 +842,8 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.IsAccessible).HasDefaultValue(true);
                 entity.Property(e => e.IsDeleted).HasDefaultValue(false);
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+                entity.ToTable(table => table.HasCheckConstraint(
+                    "ck_layoutedge_distance_positive", "\"Distance\" > 0"));
 
                 entity.HasIndex(e => new { e.LayoutId, e.FromNodeId, e.ToNodeId }, "ux_layoutedge_active")
                     .IsUnique()
@@ -849,6 +928,48 @@ namespace InfrastructureLayer.Data
                     .HasConstraintName("LayoutNodes_LayoutBlockId_fkey");
             });
 
+            modelBuilder.Entity<LayoutNavigationAnchor>(entity =>
+            {
+                entity.HasKey(e => e.Id).HasName("LayoutNavigationAnchors_pkey");
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.AnchorType).HasConversion<string>().HasMaxLength(30);
+                entity.Property(e => e.AnchorCode).HasMaxLength(50);
+                entity.Property(e => e.DisplayName).HasMaxLength(150);
+                entity.Property(e => e.PublicTokenHash).HasMaxLength(64);
+                entity.Property(e => e.TokenVersion).HasDefaultValue(1);
+                entity.Property(e => e.IsQrEnabled).HasDefaultValue(false);
+                entity.Property(e => e.PublicTokenHash).HasMaxLength(64);
+                entity.Property(e => e.TokenVersion).HasDefaultValue(1);
+                entity.Property(e => e.IsQrEnabled).HasDefaultValue(false);
+                entity.Property(e => e.Latitude).HasPrecision(10, 7);
+                entity.Property(e => e.Longitude).HasPrecision(10, 7);
+                entity.Property(e => e.IsCustomerAccessible).HasDefaultValue(true);
+                entity.Property(e => e.IsActive).HasDefaultValue(true);
+                entity.Property(e => e.IsDeleted).HasDefaultValue(false);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+                entity.HasIndex(e => new { e.LayoutId, e.AnchorCode }, "ux_navigationanchor_layout_code")
+                    .IsUnique().HasFilter("\"IsDeleted\" = false");
+                entity.ToTable(table =>
+                {
+                    table.HasCheckConstraint("ck_navigationanchor_latitude", "\"Latitude\" >= -90 AND \"Latitude\" <= 90");
+                    table.HasCheckConstraint("ck_navigationanchor_longitude", "\"Longitude\" >= -180 AND \"Longitude\" <= 180");
+                    table.HasCheckConstraint("ck_navigationanchor_hours_pair", "(\"OpeningTime\" IS NULL) = (\"ClosingTime\" IS NULL)");
+                    table.HasCheckConstraint("ck_navigationanchor_token_version", "\"TokenVersion\" > 0");
+                    table.HasCheckConstraint("ck_navigationanchor_qr_hash", "\"IsQrEnabled\" = false OR \"PublicTokenHash\" IS NOT NULL");
+                    table.HasCheckConstraint("ck_navigationanchor_qr_validity", "\"QrValidFrom\" IS NULL OR \"QrValidUntil\" IS NULL OR \"QrValidFrom\" < \"QrValidUntil\"");
+                    table.HasCheckConstraint("ck_navigationanchor_token_version", "\"TokenVersion\" > 0");
+                    table.HasCheckConstraint("ck_navigationanchor_qr_hash", "\"IsQrEnabled\" = false OR \"PublicTokenHash\" IS NOT NULL");
+                    table.HasCheckConstraint("ck_navigationanchor_qr_validity", "\"QrValidFrom\" IS NULL OR \"QrValidUntil\" IS NULL OR \"QrValidFrom\" < \"QrValidUntil\"");
+                });
+                entity.HasOne(e => e.Layout).WithMany(e => e.NavigationAnchors)
+                    .HasForeignKey(e => e.LayoutId).OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("LayoutNavigationAnchors_LayoutId_fkey");
+                entity.HasOne(e => e.LayoutNode).WithMany(e => e.NavigationAnchors)
+                    .HasForeignKey(e => e.LayoutNodeId).OnDelete(DeleteBehavior.Restrict)
+                    .HasConstraintName("LayoutNavigationAnchors_LayoutNodeId_fkey");
+            });
+
             modelBuilder.Entity<MarketLayout>(entity =>
             {
                 entity.HasKey(e => e.Id).HasName("MarketLayouts_pkey");
@@ -863,12 +984,26 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.MarketLengthMeters).HasPrecision(10, 2);
                 entity.Property(e => e.PixelsPerMeter).HasPrecision(8, 2);
                 entity.Property(e => e.Version).HasDefaultValue(1);
+                entity.Property(e => e.GraphRevision).HasDefaultValue(1);
+                entity.Property(e => e.CoordinateUnit)
+                    .HasConversion<string>()
+                    .HasMaxLength(30)
+                    .HasDefaultValueSql("'LayoutUnit'::character varying");
+                entity.Property(e => e.MetersPerLayoutUnit).HasPrecision(12, 6);
+                entity.Property(e => e.DistanceCalibrationStatus)
+                    .HasConversion<string>()
+                    .HasMaxLength(30)
+                    .HasDefaultValueSql("'Uncalibrated'::character varying");
                 entity.Property(e => e.Status)
                     .HasConversion<string>()
                     .HasMaxLength(20)
-                    .HasDefaultValueSql("'Draft'::character varying");
+                    .HasDefaultValueSql("'Inactive'::character varying");
                 entity.Property(e => e.IsDeleted).HasDefaultValue(false);
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+                entity.ToTable(table => table.HasCheckConstraint(
+                    "ck_marketlayout_positive_scale", "\"MetersPerLayoutUnit\" IS NULL OR \"MetersPerLayoutUnit\" > 0"));
+                entity.ToTable(table => table.HasCheckConstraint(
+                    "ck_marketlayout_graph_revision_positive", "\"GraphRevision\" > 0"));
 
                 entity.HasIndex(e => new { e.NightMarketId, e.LayoutName }, "ux_marketlayout_market_name_active")
                     .IsUnique()
@@ -1483,6 +1618,51 @@ namespace InfrastructureLayer.Data
                 entity.HasOne(d => d.Review).WithOne(p => p.ReviewReply)
                     .HasForeignKey<ReviewReply>(d => d.ReviewId)
                     .HasConstraintName("ReviewReplies_ReviewId_fkey");
+            });
+
+            modelBuilder.Entity<FoodReview>(entity =>
+            {
+                entity.HasKey(e => e.Id).HasName("FoodReviews_pkey");
+
+                entity.HasIndex(e => e.OrderDetailId, "uq_foodreview_orderdetail").IsUnique();
+                entity.HasIndex(e => new { e.FoodItemId, e.IsVisible, e.CreatedAt }, "idx_foodreviews_fooditem_visible_created")
+                    .IsDescending(false, false, true);
+                entity.HasIndex(e => new { e.CustomerId, e.CreatedAt }, "idx_foodreviews_customer_created")
+                    .IsDescending(false, true);
+
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+                entity.Property(e => e.ImageUrl).HasMaxLength(500);
+                entity.Property(e => e.IsVisible).HasDefaultValue(true);
+                entity.Property(e => e.Content).HasMaxLength(2000);
+
+                entity.ToTable(table => table.HasCheckConstraint("ck_foodreviews_rating", "\"Rating\" BETWEEN 1 AND 5"));
+
+                entity.HasOne(d => d.OrderDetail).WithMany(p => p.FoodReviews)
+                    .HasForeignKey(d => d.OrderDetailId)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("FoodReviews_OrderDetailId_fkey");
+
+                entity.HasOne(d => d.Order).WithMany(p => p.FoodReviews)
+                    .HasForeignKey(d => d.OrderId)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("FoodReviews_OrderId_fkey");
+
+                entity.HasOne(d => d.FoodItem).WithMany(p => p.FoodReviews)
+                    .HasForeignKey(d => d.FoodItemId)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("FoodReviews_FoodItemId_fkey");
+
+                entity.HasOne(d => d.Customer).WithMany()
+                    .HasForeignKey(d => d.CustomerId)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("FoodReviews_CustomerId_fkey");
+
+                entity.HasOne(d => d.Booth).WithMany()
+                    .HasForeignKey(d => d.BoothId)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("FoodReviews_BoothId_fkey");
             });
 
             modelBuilder.Entity<Role>(entity =>

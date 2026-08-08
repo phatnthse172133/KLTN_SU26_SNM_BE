@@ -15,6 +15,16 @@ public sealed class CustomerCheckoutController : ControllerBase
     private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
     [HttpGet("preview")]
-    public async Task<IActionResult> Preview([FromQuery] Guid? promotionId, CancellationToken cancellationToken)
-        => Ok(await _checkout.GetPreviewAsync(CurrentUserId, promotionId, cancellationToken));
+    public async Task<IActionResult> Preview([FromQuery] Guid boothId, [FromQuery] Guid? promotionId, CancellationToken cancellationToken)
+    {
+        var result = await _checkout.GetPreviewAsync(CurrentUserId, boothId, promotionId, cancellationToken);
+        return Ok(new
+        {
+            Success = true,
+            Code = "SUCCESS",
+            Message = "Success",
+            Data = result
+        });
+    }
+        //=> Ok(await _checkout.GetPreviewAsync(CurrentUserId, promotionId, cancellationToken));
 }

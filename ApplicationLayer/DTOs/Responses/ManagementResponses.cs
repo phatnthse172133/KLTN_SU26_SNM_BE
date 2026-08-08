@@ -68,11 +68,3 @@ public class BoothDocumentResponse
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }
-
-public class RegistrationCountsResponse
-{
-    public int PendingReview { get; set; }
-    public int Approved { get; set; }
-    public int Rejected { get; set; }
-    public int Total { get; set; }
-}

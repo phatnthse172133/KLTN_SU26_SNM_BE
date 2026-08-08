@@ -119,10 +119,14 @@ public class AccountService : IAccountService
         {
             await _users.SaveChangesAsync();
         }
-        catch
+        catch (Exception exception)
         {
             await TryDeleteAvatarAsync(newAvatarUrl, userId, "newly uploaded");
-            throw;
+            _logger.LogError(exception, "Avatar database update failed for user {UserId}.", userId);
+            throw AppException.ServiceUnavailable(
+                "Avatar update is temporarily unavailable.",
+                "AVATAR_UPDATE_FAILED",
+                exception);
         }
 
         await TryDeleteAvatarAsync(oldAvatarUrl, userId, "replaced");
@@ -295,9 +299,6 @@ public class AccountService : IAccountService
             .OrderByDescending(subscription => subscription.EndDate)
             .FirstOrDefault();
         var documents = booth.BoothDocuments
-            .Concat(booth.Registration?.BoothDocuments ?? [])
-            .GroupBy(document => document.Id)
-            .Select(group => group.First())
             .OrderByDescending(document => document.CreatedAt)
             .Select(document => new BoothDocumentResponse
             {

@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 namespace PresentationLayer.Controllers
 {
     [ApiController]
-    [Route("api/webhooks/payos")]
+    [Route("api/Webhook/payos")]
     public class PayOSWebhookController : ControllerBase
     {
         private readonly IPayOSWebhookDispatcher _dispatcher;

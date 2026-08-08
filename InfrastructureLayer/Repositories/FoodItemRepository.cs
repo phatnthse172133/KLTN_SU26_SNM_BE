@@ -1,5 +1,6 @@
 using DomainLayer.Common;
 using DomainLayer.Entities;
+using DomainLayer.Enums;
 using DomainLayer.InterfaceRepository;
 using InfrastructureLayer.Data;
 using Microsoft.EntityFrameworkCore;
@@ -45,7 +46,8 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
         if (!string.IsNullOrWhiteSpace(search))
         {
             var keyword = search.Trim().ToLower();
-            query = query.Where(item => item.Name.ToLower().Contains(keyword));
+            query = query.Where(item => item.Name.ToLower().Contains(keyword)
+                || (item.AiProfile != null && item.AiProfile.SearchText.ToLower().Contains(keyword)));
         }
 
         if (availableOnly)
@@ -79,48 +81,17 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
         DateTime utcNow,
         CancellationToken cancellationToken = default)
     {
-        if (_context.Database.ProviderName == "Microsoft.EntityFrameworkCore.InMemory")
-        {
-            var food = await CustomerVisibleQuery()
-                .Include(item => item.Booth).ThenInclude(booth => booth.NightMarket)
-                .Include(item => item.Category)
-                .Include(item => item.FoodPrices)
-                .Include(item => item.FoodImages)
-                .Include(item => item.FoodItemTags).ThenInclude(itemTag => itemTag.FoodTag)
-                .FirstOrDefaultAsync(item => item.Id == foodItemId, cancellationToken);
-            if (food is null) return null;
-            return ToCustomerReadModel(food, utcNow, includeImages: true) with
-            {
-                Tags = food.FoodItemTags
-                    .Where(itemTag => itemTag.FoodTag.Status == FoodTagStatus.Active && !itemTag.FoodTag.IsDeleted)
-                    .OrderBy(itemTag => itemTag.FoodTag.DisplayOrder)
-                    .ThenBy(itemTag => itemTag.FoodTag.Name)
-                    .Select(itemTag => new CustomerFoodTagReadModel(
-                        itemTag.FoodTag.Id, itemTag.FoodTag.Code, itemTag.FoodTag.Name, itemTag.FoodTag.TagGroup))
-                    .ToList()
-            };
-        }
-
-        var result = await ProjectCustomer(
-                    FoodPriceResolver.WithCurrentPrice(
-                        CustomerVisibleQuery().Where(item => item.Id == foodItemId),
-                        utcNow),
-                    includeImages: true)
-                .FirstOrDefaultAsync(cancellationToken);
-        if (result is null) return null;
-
-        var tags = await _context.FoodItemTags
-            .AsNoTracking()
-            .Where(itemTag => itemTag.FoodItemId == foodItemId
-                              && itemTag.FoodTag.Status == FoodTagStatus.Active
-                              && !itemTag.FoodTag.IsDeleted)
-            .OrderBy(itemTag => itemTag.FoodTag.DisplayOrder)
-            .ThenBy(itemTag => itemTag.FoodTag.Name)
-            .Select(itemTag => new CustomerFoodTagReadModel(
-                itemTag.FoodTag.Id, itemTag.FoodTag.Code, itemTag.FoodTag.Name, itemTag.FoodTag.TagGroup))
-            .ToListAsync(cancellationToken);
-
-        return result with { Tags = tags };
+        var food = await CustomerVisibleQuery()
+            .Include(item => item.Booth).ThenInclude(booth => booth.NightMarket)
+            .Include(item => item.Category).Include(item => item.FoodPrices).Include(item => item.FoodImages)
+            .Include(item => item.Courses)
+            .Include(item => item.Ingredients).ThenInclude(x => x.Ingredient)
+            .Include(item => item.Allergens).ThenInclude(x => x.Allergen)
+            .Include(item => item.DietaryAttributes).ThenInclude(x => x.DietaryAttribute)
+            .Include(item => item.PreparationMethods).ThenInclude(x => x.PreparationMethod)
+            .Include(item => item.TasteProfiles).ThenInclude(x => x.TasteProfile)
+            .AsSplitQuery().FirstOrDefaultAsync(item => item.Id == foodItemId, cancellationToken);
+        return food is null ? null : ToCustomerReadModel(food, utcNow, includeImages: true);
     }
 
     public async Task<PagedResult<NightMarketFoodCustomerReadModel>> GetCustomerByNightMarketPagedAsync(
@@ -162,7 +133,7 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
                 item.Booth.CloseTime,
                 item.Booth.NightMarket.OpeningHours,
                 item.Booth.NightMarket.ClosingHours,
-                item.Booth.NightMarket.Status == NightMarketStatus.Open,
+                item.Booth.NightMarket.Status == NightMarketStatus.Active,
                 item.IsFeatured))
             .ToList();
 
@@ -178,6 +149,14 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
         var query = _dbSet
             .Include(item => item.Category)
             .Include(item => item.FoodItemTags)
+            .Include(item => item.Courses)
+            .Include(item => item.Ingredients).ThenInclude(item => item.Ingredient)
+            .Include(item => item.Allergens).ThenInclude(item => item.Allergen)
+            .Include(item => item.DietaryAttributes).ThenInclude(item => item.DietaryAttribute)
+            .Include(item => item.PreparationMethods).ThenInclude(item => item.PreparationMethod)
+            .Include(item => item.TasteProfiles).ThenInclude(item => item.TasteProfile)
+            .Include(item => item.AiProfile)
+            .AsSplitQuery()
             .Where(item => item.BoothId == boothId && !item.IsDeleted);
         var totalCount = await query.CountAsync(cancellationToken);
         var items = await query
@@ -195,6 +174,14 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
         => await _dbSet
             .Include(item => item.Category)
             .Include(item => item.FoodItemTags)
+            .Include(item => item.Courses)
+            .Include(item => item.Ingredients).ThenInclude(item => item.Ingredient)
+            .Include(item => item.Allergens).ThenInclude(item => item.Allergen)
+            .Include(item => item.DietaryAttributes).ThenInclude(item => item.DietaryAttribute)
+            .Include(item => item.PreparationMethods).ThenInclude(item => item.PreparationMethod)
+            .Include(item => item.TasteProfiles).ThenInclude(item => item.TasteProfile)
+            .Include(item => item.AiProfile)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(item => item.Id == foodItemId && item.BoothId == boothId && !item.IsDeleted);
 
     public Task<FoodItem?> GetForCartAsync(
@@ -246,9 +233,7 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
                 item.IsAvailable
                 && !item.Category.IsDeleted
                 && item.Booth.Status == BoothStatus.Active
-                && (item.Booth.NightMarket.Status == NightMarketStatus.Upcoming
-                    || item.Booth.NightMarket.Status == NightMarketStatus.Open
-                    || item.Booth.NightMarket.Status == NightMarketStatus.Closed)
+                && item.Booth.NightMarket.Status == NightMarketStatus.Active
                 && item.Booth.NightMarket.ModerationStatus == ModerationStatus.Active
                 && !item.Booth.NightMarket.IsDeleted);
 
@@ -317,6 +302,37 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
             .ToListAsync();
     }
 
+    public async Task<IReadOnlyCollection<FoodItem>> GetSemanticProfileBatchAsync(Guid? foodItemId, int batchSize, CancellationToken cancellationToken = default)
+    {
+        if (batchSize is < 1 or > 1000) throw new ArgumentOutOfRangeException(nameof(batchSize));
+        var query = SemanticProfileQuery();
+        if (foodItemId.HasValue) query = query.Where(x => x.Id == foodItemId.Value);
+        return await query.OrderBy(x => x.Id).Take(batchSize).ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyCollection<FoodItem>> GetAiProfileEnrichmentBatchAsync(int batchSize, bool includeFailed, CancellationToken cancellationToken = default)
+    {
+        if (batchSize is < 1 or > 50) throw new ArgumentOutOfRangeException(nameof(batchSize));
+        var statuses = includeFailed
+            ? new[] { FoodAiProfileStatus.PENDING, FoodAiProfileStatus.STALE, FoodAiProfileStatus.FAILED }
+            : new[] { FoodAiProfileStatus.PENDING, FoodAiProfileStatus.STALE };
+        return await SemanticProfileQuery()
+            .Where(x => x.AiProfile != null && statuses.Contains(x.AiProfile.Status))
+            .OrderBy(x => x.AiProfile!.LastAttemptAt == null ? 0 : 1)
+            .ThenBy(x => x.AiProfile!.LastAttemptAt)
+            .ThenBy(x => x.Id)
+            .Take(batchSize)
+            .ToListAsync(cancellationToken);
+    }
+
+    private IQueryable<FoodItem> SemanticProfileQuery()
+        => ActiveQuery().Include(x => x.Category).Include(x => x.Courses)
+            .Include(x => x.Ingredients).ThenInclude(x => x.Ingredient)
+            .Include(x => x.DietaryAttributes).ThenInclude(x => x.DietaryAttribute)
+            .Include(x => x.PreparationMethods).ThenInclude(x => x.PreparationMethod)
+            .Include(x => x.TasteProfiles).ThenInclude(x => x.TasteProfile)
+            .Include(x => x.AiProfile).AsSplitQuery();
+
     private IQueryable<FoodItem> CustomerVisibleQuery()
         => ActiveQuery().AsNoTracking().Where(item =>
             item.IsAvailable &&
@@ -324,14 +340,12 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
             item.Booth.Status == BoothStatus.Active &&
             !item.Booth.NightMarket.IsDeleted &&
             item.Booth.NightMarket.ModerationStatus == ModerationStatus.Active &&
-            (item.Booth.NightMarket.Status == NightMarketStatus.Upcoming ||
-             item.Booth.NightMarket.Status == NightMarketStatus.Open ||
-             item.Booth.NightMarket.Status == NightMarketStatus.Closed));
+            item.Booth.NightMarket.Status == NightMarketStatus.Active);
 
     private static Expression<Func<FoodItem, bool>> IsCustomerOrderableAt(TimeOnly localTime)
         => item =>
             item.IsAvailable &&
-            item.Booth.NightMarket.Status == NightMarketStatus.Open &&
+            item.Booth.NightMarket.Status == NightMarketStatus.Active &&
             item.Booth.NightMarket.OpeningHours.HasValue &&
             item.Booth.NightMarket.ClosingHours.HasValue &&
             item.Booth.NightMarket.OpeningHours.Value != item.Booth.NightMarket.ClosingHours.Value &&
@@ -369,10 +383,20 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
             priced.FoodItem.Booth.CloseTime,
             priced.FoodItem.Booth.NightMarket.OpeningHours,
             priced.FoodItem.Booth.NightMarket.ClosingHours,
-            priced.FoodItem.Booth.NightMarket.Status == NightMarketStatus.Open,
+            priced.FoodItem.Booth.NightMarket.Status == NightMarketStatus.Active,
             includeImages
                 ? priced.FoodItem.FoodImages.OrderBy(image => image.DisplayOrder).ThenBy(image => image.Id).Select(image => image.ImageUrl).ToList()
-                : new List<string>()));
+                : new List<string>())
+        {
+            PrimaryCourse = priced.FoodItem.Courses.Where(x => x.IsPrimary).Select(x => (FoodCourse?)x.Course).FirstOrDefault(),
+            SpiceLevel = priced.FoodItem.SpiceLevel,
+            ServingTemperature = priced.FoodItem.ServingTemperature,
+            EstimatedServingCount = priced.FoodItem.EstimatedServingCount,
+            ServingSizeDescription = priced.FoodItem.ServingSizeDescription,
+            IsShareable = priced.FoodItem.IsShareable,
+            AverageRating = priced.FoodItem.AverageRating,
+            ReviewCount = priced.FoodItem.ReviewCount
+        });
 
     private async Task<PagedResult<CustomerFoodReadModel>> GetCustomerPagedInMemoryAsync(
         Guid? marketId,
@@ -393,6 +417,8 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
             .Include(item => item.Booth).ThenInclude(booth => booth.NightMarket)
             .Include(item => item.Category)
             .Include(item => item.FoodPrices)
+            .Include(item => item.Courses)
+            .Include(item => item.AiProfile)
             .ToListAsync(cancellationToken);
 
         IEnumerable<CustomerFoodReadModel> query = entities
@@ -400,7 +426,8 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
             .Where(item => !boothId.HasValue || item.BoothId == boothId.Value)
             .Where(item => !categoryId.HasValue || item.CategoryId == categoryId.Value)
             .Where(item => string.IsNullOrWhiteSpace(search)
-                || item.Name.Contains(search.Trim(), StringComparison.OrdinalIgnoreCase))
+                || item.Name.Contains(search.Trim(), StringComparison.OrdinalIgnoreCase)
+                || (item.AiProfile?.SearchText.Contains(search.Trim(), StringComparison.OrdinalIgnoreCase) ?? false))
             .Select(item => ToCustomerReadModel(item, utcNow, includeImages: false))
             .Where(item => !minPrice.HasValue || item.EffectivePrice >= minPrice.Value)
             .Where(item => !maxPrice.HasValue || item.EffectivePrice <= maxPrice.Value)
@@ -446,8 +473,39 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
             item.Booth.CloseTime,
             item.Booth.NightMarket.OpeningHours,
             item.Booth.NightMarket.ClosingHours,
-            item.Booth.NightMarket.Status == NightMarketStatus.Open,
+            item.Booth.NightMarket.Status == NightMarketStatus.Active,
             includeImages
                 ? item.FoodImages.OrderBy(image => image.DisplayOrder).ThenBy(image => image.Id).Select(image => image.ImageUrl).ToList()
-                : new List<string>());
+                : new List<string>())
+        {
+            PrimaryCourse = item.Courses.SingleOrDefault(x => x.IsPrimary)?.Course,
+            SpiceLevel = item.SpiceLevel,
+            ServingTemperature = item.ServingTemperature,
+            EstimatedServingCount = item.EstimatedServingCount,
+            ServingSizeDescription = item.ServingSizeDescription,
+            IsShareable = item.IsShareable,
+            AverageRating = item.AverageRating,
+            ReviewCount = item.ReviewCount,
+            SemanticMetadata = new CustomerFoodSemanticReadModel
+            {
+                PrimaryCourse = item.Courses.SingleOrDefault(x => x.IsPrimary)?.Course,
+                SupportedCourses = item.Courses.OrderByDescending(x => x.IsPrimary).ThenBy(x => x.Course).Select(x => x.Course).ToArray(),
+                Ingredients = item.Ingredients.OrderBy(x => x.Ingredient.Code).Select(x => new CustomerSemanticCatalogReadModel(x.IngredientId, x.Ingredient.Code, x.Ingredient.Name)).ToArray(),
+                Allergens = item.Allergens.OrderBy(x => x.Allergen.Code).Select(x => new CustomerAllergenReadModel(x.AllergenId, x.Allergen.Code, x.Allergen.Name, x.DeclarationType, x.IsConfirmed, x.Source)).ToArray(),
+                Dietary = item.DietaryAttributes.OrderBy(x => x.DietaryAttribute.Code).Select(x => new CustomerDietaryReadModel(x.DietaryAttributeId, x.DietaryAttribute.Code, x.DietaryAttribute.Name, x.SuitabilityStatus, x.IsConfirmed, x.Source)).ToArray(),
+                Preparations = item.PreparationMethods.OrderBy(x => x.PreparationMethod.Code).Select(x => new CustomerSemanticCatalogReadModel(x.PreparationMethodId, x.PreparationMethod.Code, x.PreparationMethod.Name)).ToArray(),
+                Tastes = item.TasteProfiles.OrderBy(x => x.TasteProfile.Code).Select(x => new CustomerSemanticCatalogReadModel(x.TasteProfileId, x.TasteProfile.Code, x.TasteProfile.Name)).ToArray()
+            },
+            Tags = BuildDeprecatedTags(item)
+        };
+
+    private static IReadOnlyCollection<CustomerFoodTagReadModel> BuildDeprecatedTags(FoodItem item)
+    {
+        var tags = new List<CustomerFoodTagReadModel>();
+        tags.AddRange(item.Ingredients.Select(x => new CustomerFoodTagReadModel(x.IngredientId, x.Ingredient.Code, x.Ingredient.Name, FoodTagGroup.Ingredient)));
+        tags.AddRange(item.DietaryAttributes.Select(x => new CustomerFoodTagReadModel(x.DietaryAttributeId, x.DietaryAttribute.Code, x.DietaryAttribute.Name, FoodTagGroup.Dietary)));
+        tags.AddRange(item.PreparationMethods.Select(x => new CustomerFoodTagReadModel(x.PreparationMethodId, x.PreparationMethod.Code, x.PreparationMethod.Name, FoodTagGroup.CookingMethod)));
+        tags.AddRange(item.TasteProfiles.Select(x => new CustomerFoodTagReadModel(x.TasteProfileId, x.TasteProfile.Code, x.TasteProfile.Name, FoodTagGroup.Taste)));
+        return tags.OrderBy(x => x.Code, StringComparer.Ordinal).ToArray();
+    }
 }

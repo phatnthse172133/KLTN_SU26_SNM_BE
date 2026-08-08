@@ -25,7 +25,7 @@ public class ExceptionHandlingMiddleware
         }
         catch (AppException exception)
         {
-            await WriteErrorAsync(context, exception, exception.StatusCode, exception.ErrorCode, exception.Message);
+            await WriteErrorAsync(context, exception, exception.StatusCode, exception.ErrorCode, exception.Message, exception.Details, exception.FieldErrors);
         }
         catch (DbUpdateException exception)
         {
@@ -76,7 +76,9 @@ public class ExceptionHandlingMiddleware
         Exception exception,
         int statusCode,
         string errorCode,
-        string message)
+        string message,
+        object? details = null,
+        Dictionary<string, string[]>? fieldErrors = null)
     {
         var traceId = context.TraceIdentifier;
         if (statusCode >= StatusCodes.Status500InternalServerError)
@@ -116,7 +118,8 @@ public class ExceptionHandlingMiddleware
         {
             TraceId = traceId,
             ErrorCode = errorCode,
-            Details = null
+            Details = details,
+            FieldErrors = fieldErrors
         });
 
         await context.Response.WriteAsJsonAsync(response);

@@ -4,5 +4,6 @@ public class ErrorResponse
 {
     public string TraceId { get; set; } = string.Empty;
     public string ErrorCode { get; set; } = string.Empty;
-    public string? Details { get; set; }
+    public object? Details { get; set; }
+    public Dictionary<string, string[]>? FieldErrors { get; set; }
 }

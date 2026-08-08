@@ -6,6 +6,7 @@ using ApplicationLayer.Mappings;
 using AutoMapper;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
+using ApplicationLayer.Services.Subscriptions;
 
 namespace ApplicationLayer.Services.LayoutEdges;
 
@@ -14,42 +15,51 @@ public class LayoutEdgeService : ILayoutEdgeService
     private readonly ILayoutEdgeRepository _edges;
     private readonly ILayoutNodeRepository _nodes;
     private readonly IMarketLayoutRepository _layouts;
+    private readonly INightMarketRepository _nightMarkets;
     private readonly IMapper _mapper;
-    public LayoutEdgeService(ILayoutEdgeRepository edges, ILayoutNodeRepository nodes, IMarketLayoutRepository layouts, IMapper mapper)
-        => (_edges, _nodes, _layouts, _mapper) = (edges, nodes, layouts, mapper);
+    private readonly ISubscriptionEntitlementService _entitlements;
+    public LayoutEdgeService(ILayoutEdgeRepository edges, ILayoutNodeRepository nodes, IMarketLayoutRepository layouts, INightMarketRepository nightMarkets, IMapper mapper, ISubscriptionEntitlementService entitlements)
+        => (_edges, _nodes, _layouts, _nightMarkets, _mapper, _entitlements) = (edges, nodes, layouts, nightMarkets, mapper, entitlements);
 
-    public async Task<ApiResponse<PaginationResp<LayoutEdgeResponse>>> GetAllAsync(Guid layoutId, PaginationReq request, CancellationToken cancellationToken = default)
+    public async Task<ApiResponse<PaginationResp<LayoutEdgeResponse>>> GetAllAsync(Guid layoutId, PaginationReq request, CancellationToken cancellationToken = default, Guid? actorId = null)
     {
         await EnsureLayoutAsync(layoutId, cancellationToken);
+        await EnsureLayoutOwnershipOnlyAsync(layoutId, actorId, cancellationToken);
         var page = await _edges.GetPagedAsync(layoutId, request.Page, request.PageSize, cancellationToken);
         return ApiResponse<PaginationResp<LayoutEdgeResponse>>.SuccessResponse(
             _mapper.MapPage<LayoutEdge, LayoutEdgeResponse>(page, request));
     }
 
-    public async Task<ApiResponse<LayoutEdgeResponse>> GetAsync(Guid id, CancellationToken cancellationToken = default)
-        => ApiResponse<LayoutEdgeResponse>.SuccessResponse(_mapper.Map<LayoutEdgeResponse>(await GetEdgeAsync(id, cancellationToken)));
-
-    public async Task<ApiResponse<LayoutEdgeResponse>> CreateAsync(Guid layoutId, CreateLayoutEdgeRequest request, CancellationToken cancellationToken = default)
+    public async Task<ApiResponse<LayoutEdgeResponse>> GetAsync(Guid id, CancellationToken cancellationToken = default, Guid? actorId = null)
     {
-        var edge = await BuildAsync(layoutId, request, null, cancellationToken);
+        var edge = await GetEdgeAsync(id, cancellationToken);
+        await EnsureLayoutOwnershipOnlyAsync(edge.LayoutId, actorId, cancellationToken);
+        return ApiResponse<LayoutEdgeResponse>.SuccessResponse(_mapper.Map<LayoutEdgeResponse>(edge));
+    }
+
+    public async Task<ApiResponse<LayoutEdgeResponse>> CreateAsync(Guid layoutId, CreateLayoutEdgeRequest request, CancellationToken cancellationToken = default, Guid? actorId = null)
+    {
+        var edge = await BuildAsync(layoutId, request, null, cancellationToken, actorId);
         await _edges.AddAsync(edge); await _edges.SaveChangesAsync();
         return ApiResponse<LayoutEdgeResponse>.SuccessResponse(_mapper.Map<LayoutEdgeResponse>(edge), "Layout edge created successfully.");
     }
 
-    public async Task<ApiResponse<IReadOnlyCollection<LayoutEdgeResponse>>> CreateBatchAsync(Guid layoutId, IReadOnlyCollection<CreateLayoutEdgeRequest> requests, CancellationToken cancellationToken = default)
+    public async Task<ApiResponse<IReadOnlyCollection<LayoutEdgeResponse>>> CreateBatchAsync(Guid layoutId, IReadOnlyCollection<CreateLayoutEdgeRequest> requests, CancellationToken cancellationToken = default, Guid? actorId = null)
     {
         if (requests.Count == 0) throw AppException.BadRequest("At least one edge is required.");
         var edges = new List<LayoutEdge>();
-        foreach (var request in requests) edges.Add(await BuildAsync(layoutId, request, null, cancellationToken));
+        foreach (var request in requests) edges.Add(await BuildAsync(layoutId, request, null, cancellationToken, actorId));
         if (edges.GroupBy(x => new { A = x.FromNodeId, B = x.ToNodeId }).Any(x => x.Count() > 1))
             throw AppException.Conflict("The batch contains duplicate edges.");
         await _edges.AddRangeAsync(edges); await _edges.SaveChangesAsync();
         return ApiResponse<IReadOnlyCollection<LayoutEdgeResponse>>.SuccessResponse(_mapper.Map<List<LayoutEdgeResponse>>(edges), "Layout edges created successfully.");
     }
 
-    public async Task<ApiResponse<LayoutEdgeResponse>> UpdateAsync(Guid id, UpdateLayoutEdgeRequest request, CancellationToken cancellationToken = default)
+    public async Task<ApiResponse<LayoutEdgeResponse>> UpdateAsync(Guid id, UpdateLayoutEdgeRequest request, CancellationToken cancellationToken = default, Guid? actorId = null)
     {
         var edge = await GetEdgeAsync(id, cancellationToken);
+        await EnsureLayoutEditableAsync(edge.LayoutId, cancellationToken);
+        await EnsureLayoutOwnershipAsync(edge.LayoutId, actorId, cancellationToken);
         var replacement = await BuildAsync(edge.LayoutId, request, id, cancellationToken);
         edge.FromNodeId = replacement.FromNodeId; edge.ToNodeId = replacement.ToNodeId; edge.Distance = replacement.Distance;
         edge.IsBidirectional = request.IsBidirectional; edge.IsAccessible = request.IsAccessible; edge.UpdatedAt = DateTime.UtcNow;
@@ -57,25 +67,31 @@ public class LayoutEdgeService : ILayoutEdgeService
         return ApiResponse<LayoutEdgeResponse>.SuccessResponse(_mapper.Map<LayoutEdgeResponse>(edge), "Layout edge updated successfully.");
     }
 
-    public async Task<ApiResponse<LayoutEdgeResponse>> UpdateAccessibilityAsync(Guid id, UpdateAccessibilityRequest request, CancellationToken cancellationToken = default)
+    public async Task<ApiResponse<LayoutEdgeResponse>> UpdateAccessibilityAsync(Guid id, UpdateAccessibilityRequest request, CancellationToken cancellationToken = default, Guid? actorId = null)
     {
         var edge = await GetEdgeAsync(id, cancellationToken);
+        await EnsureLayoutEditableAsync(edge.LayoutId, cancellationToken);
+        await EnsureLayoutOwnershipAsync(edge.LayoutId, actorId, cancellationToken);
         edge.IsAccessible = request.IsAccessible; edge.UpdatedAt = DateTime.UtcNow;
         _edges.Update(edge); await _edges.SaveChangesAsync();
         return ApiResponse<LayoutEdgeResponse>.SuccessResponse(_mapper.Map<LayoutEdgeResponse>(edge), "Edge accessibility updated successfully.");
     }
 
-    public async Task<ApiResponse<object>> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<ApiResponse<object>> DeleteAsync(Guid id, CancellationToken cancellationToken = default, Guid? actorId = null)
     {
         var edge = await GetEdgeAsync(id, cancellationToken);
+        await EnsureLayoutEditableAsync(edge.LayoutId, cancellationToken);
+        await EnsureLayoutOwnershipAsync(edge.LayoutId, actorId, cancellationToken);
         edge.UpdatedAt = DateTime.UtcNow; _edges.Delete(edge); await _edges.SaveChangesAsync();
         return ApiResponse<object>.SuccessResponse(new { edge.Id }, "Layout edge deleted successfully.");
     }
 
-    private async Task<LayoutEdge> BuildAsync(Guid layoutId, CreateLayoutEdgeRequest request, Guid? excludeId, CancellationToken token)
+    private async Task<LayoutEdge> BuildAsync(Guid layoutId, CreateLayoutEdgeRequest request, Guid? excludeId, CancellationToken token, Guid? actorId = null)
     {
         await EnsureLayoutAsync(layoutId, token);
-        if (request.FromNodeId == request.ToNodeId) 
+        await EnsureLayoutEditableAsync(layoutId, token);
+        await EnsureLayoutOwnershipAsync(layoutId, actorId, token);
+        if (request.FromNodeId == request.ToNodeId)
             throw AppException.BadRequest("An edge cannot connect a node to itself.");
 
         var from = await _nodes.GetActiveByIdAsync(request.FromNodeId, token);
@@ -88,7 +104,7 @@ public class LayoutEdgeService : ILayoutEdgeService
             throw AppException.Conflict("This edge already exists.");
 
         var distance = request.Distance ?? (decimal)Math.Sqrt(Math.Pow((double)(from.Xcoordinate - to.Xcoordinate), 2) + Math.Pow((double)(from.Ycoordinate - to.Ycoordinate), 2));
-        if (distance <= 0) 
+        if (distance <= 0)
             throw AppException.BadRequest("Edge distance must be greater than zero.");
 
         var now = DateTime.UtcNow;
@@ -100,6 +116,37 @@ public class LayoutEdgeService : ILayoutEdgeService
     private async Task EnsureLayoutAsync(Guid id, CancellationToken token)
     {
         if (await _layouts.GetActiveByIdAsync(id, token) is null) throw AppException.NotFound("Market layout was not found.");
+    }
+    private async Task EnsureLayoutEditableAsync(Guid layoutId, CancellationToken token)
+    {
+        var layout = await _layouts.GetActiveByIdAsync(layoutId, token)
+            ?? throw AppException.NotFound("Market layout was not found.");
+        if (layout.Status == DomainLayer.Enums.GeneralEnum.MarketLayoutStatus.Active)
+            throw AppException.Conflict(
+                "Deactivate the active layout before editing its map.",
+                "LAYOUT_ACTIVE_EDIT_FORBIDDEN");
+    }
+    private async Task EnsureLayoutOwnershipOnlyAsync(Guid layoutId, Guid? actorId, CancellationToken token)
+    {
+        if (!actorId.HasValue) return;
+        var layout = await _layouts.GetActiveByIdAsync(layoutId, token);
+        if (layout is null) throw AppException.NotFound("Market layout was not found.");
+        var market = await _nightMarkets.GetActiveByIdAsync(layout.NightMarketId, token);
+        if (market is null || market.MarketOwnerId != actorId)
+            throw AppException.Forbidden("You do not have permission to view this night market's layouts.");
+    }
+    private async Task EnsureLayoutOwnershipAsync(Guid layoutId, Guid? actorId, CancellationToken token)
+    {
+        if (!actorId.HasValue) return;
+        var layout = await _layouts.GetActiveByIdAsync(layoutId, token);
+        if (layout is null) throw AppException.NotFound("Market layout was not found.");
+        var market = await _nightMarkets.GetActiveByIdAsync(layout.NightMarketId, token);
+        if (market is null || market.MarketOwnerId != actorId)
+            throw AppException.Forbidden("You do not have permission to manage this night market's layouts.");
+
+        var hasSubscription = await _entitlements.HasActiveMarketSubscriptionAsync(actorId.Value);
+        if (!hasSubscription)
+            throw AppException.Forbidden("An active Market subscription is required to perform this action.", "MARKET_SUBSCRIPTION_REQUIRED");
     }
     private async Task<LayoutEdge> GetEdgeAsync(Guid id, CancellationToken token)
         => await _edges.GetActiveByIdAsync(id, token) ?? throw AppException.NotFound("Layout edge was not found.");

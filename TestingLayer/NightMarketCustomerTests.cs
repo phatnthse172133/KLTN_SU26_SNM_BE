@@ -395,7 +395,6 @@ public sealed class NightMarketCustomerTests
         => new()
         {
             Id = Guid.NewGuid(),
-            RegistrationId = Guid.NewGuid(),
             NightMarketId = marketId,
             BoothOwnerId = Guid.NewGuid(),
             BoothName = $"{status} booth",

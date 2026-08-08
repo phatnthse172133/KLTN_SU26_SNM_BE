@@ -13,6 +13,7 @@ public interface IOrderRepository : IGenericRepository<Order>
     Task<Guid?> GetBoothIdForCustomerOrderAsync(Guid customerId, Guid orderId, CancellationToken cancellationToken = default);
     Task<PagedResult<CustomerOrderHistoryReadModel>> GetCustomerHistoryAsync(Guid customerId, OrderStatus? status, int page, int pageSize, CancellationToken cancellationToken = default);
     Task<CustomerOrderDetailReadModel?> GetCustomerDetailAsync(Guid customerId, Guid orderId, CancellationToken cancellationToken = default);
+    Task<OrderDetail?> GetCustomerOrderDetailLineAsync(Guid customerId, Guid orderDetailId, CancellationToken cancellationToken = default);
     Task<bool> ContainsBoothItemsAsync(Guid orderId, Guid boothId);
     Task<Order?> GetOrderByCodeAsync(long orderCode);
     Task<Order?> GetOrderByCodeForUpdateAsync(long orderCode);
@@ -36,7 +37,7 @@ public interface IOrderRepository : IGenericRepository<Order>
     Task<Payment?> GetPendingPayOSPaymentByOrderIdAsync(Guid orderId);
     Task AddPaymentAsync(Payment payment);
     Task AddPaymentAttemptAsync(PaymentAttempt attempt);
-    Task ClearCheckedOutCartItemsAsync(Order order, DateTime updatedAt, CancellationToken cancellationToken = default);
+    Task<int> ClearCheckedOutCartItemsAsync(Order order, DateTime updatedAt, CancellationToken cancellationToken = default);
     Task<Guid?> TryRecordWebhookEventAsync(PaymentWebhookEvent webhookEvent, CancellationToken cancellationToken = default);
     Task CompleteWebhookEventAsync(Guid eventId, WebhookProcessingStatus status, string? error, DateTime processedAt, CancellationToken cancellationToken = default);
     Task<PagedResult<Order>> GetByBoothOwnerPagedAsync(

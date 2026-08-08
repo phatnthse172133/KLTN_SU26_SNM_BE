@@ -16,15 +16,6 @@ namespace DomainLayer.Enums
             Banned = 3
         }
 
-        public enum BoothRegistrationStatus
-        {
-            Draft = 0,              // chưa submit
-            PendingReview = 1,      // chờ duyệt
-            Approved = 2,           // duyệt
-            Rejected = 3,           // từ chối
-            Cancelled = 4           // owner hủy đơn
-        }
-
         public enum BoothDocumentType
         {
             BusinessLicense = 0,          // Giấy phép kinh doanh
@@ -65,6 +56,41 @@ namespace DomainLayer.Enums
             Archived = 3
         }
 
+        public enum LayoutCoordinateUnit
+        {
+            LayoutUnit = 0
+        }
+
+        public enum DistanceCalibrationStatus
+        {
+            Uncalibrated = 0,
+            Calibrated = 1
+        }
+
+        public enum NavigationAnchorType
+        {
+            Entrance = 0,
+            Exit = 1,
+            Both = 2,
+            Landmark = 3,
+            InformationDesk = 4,
+            FutureCheckpoint = 5
+        }
+
+        public enum IndoorPositionSource
+        {
+            EntranceHandoff,
+            MapTap,
+            ManualStartingPoint
+        }
+
+        public enum IndoorPositionConfidence
+        {
+            Low,
+            Medium,
+            High
+        }
+
         public enum LayoutNodeType
         {
             Junction = 0,    // Điểm giao nhau hoặc điểm trung chuyển giữa các lối đi
@@ -77,10 +103,10 @@ namespace DomainLayer.Enums
 
         public enum NightMarketStatus
         {
+            Draft = 0,
             Active = 1,
             Inactive = 2,
             Open = Active,
-            Draft = 0,
             Upcoming = 3,
             Closed = 4,
             Cancelled = 5
@@ -151,7 +177,23 @@ namespace DomainLayer.Enums
         {
             Pending = 0,
             Resolved = 1,
-            Rejected = 2
+            Rejected = 2,
+            UnderReview = 3,
+            WaitingForCustomer = 4,
+            Closed = 5,
+            Withdrawn = 6
+        }
+
+        public enum ComplaintCategory
+        {
+            FoodQuality = 0,
+            WrongItem = 1,
+            MissingItem = 2,
+            OrderNotReceived = 3,
+            BoothService = 4,
+            PaymentIssue = 5,
+            PromotionIssue = 6,
+            Other = 7
         }
 
         public enum ComplaintResolutionAction
@@ -212,9 +254,6 @@ namespace DomainLayer.Enums
             OrderCancelled = 15,
             RefundPending = 16,
             RefundCompleted = 17,
-            RegistrationSubmitted = 18,
-            RegistrationApproved = 19,
-            RegistrationRejected = 20,
             NewReview = 21,
             ReviewReplied = 22,
             ComplaintSubmitted = 23,
@@ -231,7 +270,8 @@ namespace DomainLayer.Enums
             BoothSuspended = 34,
             AccountDeactivated = 35,
             AccountReactivated = 36,
-            SubscriptionRejected = 37
+            SubscriptionRejected = 37,
+            OrderApproved = 38,
         }
 
         public enum DevicePlatform

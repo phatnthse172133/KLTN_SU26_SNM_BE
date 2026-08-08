@@ -28,6 +28,7 @@ public interface IConversationRepository : IGenericRepository<Conversation>
 
     Task<PagedResult<Conversation>> GetPagedByUserAsync(
         Guid userId,
+        string? keyword,
         int page,
         int pageSize,
         CancellationToken cancellationToken = default);

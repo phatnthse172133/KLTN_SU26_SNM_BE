@@ -5,6 +5,7 @@ using ApplicationLayer.Services.CustomerDiscovery;
 using ApplicationLayer.Services.MapNavigation;
 using AutoMapper;
 using DomainLayer.InterfaceCore.JWT;
+using DomainLayer.Enums;
 using InfrastructureLayer.Cores.Helppers;
 using InfrastructureLayer.Data;
 using InfrastructureLayer.Data.Seeders;
@@ -13,6 +14,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Text.Json;
 using static DomainLayer.Enums.GeneralEnum;
 
 namespace TestingLayer;
@@ -68,6 +70,10 @@ public sealed class IntegrationDemoDataSeederTests
         Assert.True(courseCoverage["COURSE_MAIN_COURSE"] >= 2);
         Assert.True(courseCoverage["COURSE_DRINK"] >= 2);
         Assert.True(courseCoverage["COURSE_DESSERT"] >= 2);
+        Assert.Equal(20, await db.FoodItemCourses.Select(link => link.FoodItemId).Distinct().CountAsync());
+        Assert.True(await db.FoodItemCourses.AnyAsync(link => link.Course == FoodCourse.DRINK));
+        Assert.True(await db.FoodItemCourses.AnyAsync(link => link.Course == FoodCourse.DESSERT));
+        Assert.Equal(20, await db.FoodItemDiningPurposes.Select(link => link.FoodItemId).Distinct().CountAsync());
 
         var ratings = await db.Booths.Where(x => x.NightMarketId == market.Id)
             .OrderBy(x => x.BoothCode).Select(x => x.AverageRating).ToListAsync();
@@ -183,20 +189,40 @@ public sealed class IntegrationDemoDataSeederTests
             mapper);
 
         var map = await navigation.GetMapAsync(IntegrationDemoDataSeeder.MarketId);
+        Assert.Equal(IntegrationDemoDataSeeder.MarketId, map.Data!.MarketId);
+        Assert.Equal(IntegrationDemoDataSeeder.LayoutId, map.Data.Layout.Id);
+        Assert.Equal(1, map.Data.Layout.Version);
         Assert.Equal(5, map.Data!.Booths.Count);
         Assert.Equal(2, map.Data.StartingPoints.Count);
+        Assert.NotEmpty(map.Data.Nodes);
+        Assert.NotEmpty(map.Data.Edges);
+        Assert.All(map.Data.Nodes, node => Assert.Equal(map.Data.Layout.Id, node.LayoutId));
+        Assert.All(map.Data.Edges, edge => Assert.Equal(map.Data.Layout.Id, edge.LayoutId));
+        var publicNodeIds = map.Data.Nodes.Select(node => node.Id).ToHashSet();
+        Assert.All(map.Data.Edges, edge =>
+        {
+            Assert.Contains(edge.FromNodeId, publicNodeIds);
+            Assert.Contains(edge.ToNodeId, publicNodeIds);
+        });
+        Assert.All(map.Data.Booths, booth => Assert.Contains(booth.NodeId, publicNodeIds));
+
+        var mapJson = JsonSerializer.Serialize(map.Data, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.Contains("\"nodes\"", mapJson);
+        Assert.Contains("\"edges\"", mapJson);
+        Assert.DoesNotContain("isDeleted", mapJson, StringComparison.OrdinalIgnoreCase);
 
         var boothOneRoute = await navigation.FindRouteToBoothAsync(
             IntegrationDemoDataSeeder.LayoutId,
             IntegrationDemoDataSeeder.MainEntranceNodeId,
             IntegrationDemoDataSeeder.BoothId(1));
-        Assert.Equal(32m, boothOneRoute.Data!.TotalDistance);
+        Assert.Equal(24m, boothOneRoute.Data!.TotalDistanceMeters);
+        Assert.True(boothOneRoute.Data.IsDistanceCalibrated);
 
         var boothTwoRoute = await navigation.FindRouteToBoothAsync(
             IntegrationDemoDataSeeder.LayoutId,
             IntegrationDemoDataSeeder.MainEntranceNodeId,
             IntegrationDemoDataSeeder.BoothId(2));
-        Assert.Equal(54m, boothTwoRoute.Data!.TotalDistance);
+        Assert.Equal(44m, boothTwoRoute.Data!.TotalDistanceMeters);
         Assert.Equal(
             new[] { IntegrationDemoDataSeeder.NodeId(1), IntegrationDemoDataSeeder.NodeId(2), IntegrationDemoDataSeeder.NodeId(3), IntegrationDemoDataSeeder.NodeId(4) },
             boothTwoRoute.Data.Path.Select(x => x.NodeId));
@@ -314,12 +340,26 @@ public sealed class IntegrationDemoDataSeederTests
         {
             FoodItemId = normal.Id, FoodTagId = detailTag.Id, CreatedAt = DateTime.UtcNow
         });
+        var normalizedDietary = new DomainLayer.Entities.DietaryAttribute
+        {
+            Id = Guid.NewGuid(), Code = "DIET_DETAIL", Name = "Normalized detail diet",
+            IsSystem = true, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
+        };
+        db.DietaryAttributes.Add(normalizedDietary);
+        db.FoodItemDietaryAttributes.Add(new DomainLayer.Entities.FoodItemDietaryAttribute
+        {
+            FoodItemId = normal.Id, DietaryAttributeId = normalizedDietary.Id,
+            SuitabilityStatus = DomainLayer.Enums.DietarySuitabilityStatus.UNVERIFIED,
+            Source = DomainLayer.Enums.MetadataSource.OWNER_DECLARED,
+            CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
+        });
         await db.SaveChangesAsync();
 
         var normalDetail = (await discovery.GetFoodAsync(normal.Id)).Data!;
         Assert.Equal(normal.Id, normalDetail.Id);
         var returnedTag = Assert.Single(normalDetail.Tags);
-        Assert.Equal(detailTag.Id, returnedTag.Id);
+        Assert.Equal(normalizedDietary.Id, returnedTag.Id);
+        Assert.NotEqual(detailTag.Id, returnedTag.Id);
         Assert.Equal("Dietary", returnedTag.TagGroup);
         Assert.True((await discovery.GetFoodAsync(reduced.Id)).Data!.EffectivePrice < reduced.BasePrice);
         var nonOrderableDetail = (await discovery.GetFoodAsync(nonOrderable.Id)).Data!;

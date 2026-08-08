@@ -58,4 +58,11 @@ public interface IFoodItemRepository : IGenericRepository<FoodItem>
         CancellationToken cancellationToken = default);
 
     Task<List<FoodItem>> GetAllFoodItemsByIdsAsync(List<Guid> foodItemIds);
+    Task<IReadOnlyCollection<FoodItem>> GetSemanticProfileBatchAsync(Guid? foodItemId, int batchSize, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Foods whose AI profiles need OpenAI enrichment: PENDING, STALE, and optionally FAILED.
+    /// Never returns READY or DISABLED.
+    /// </summary>
+    Task<IReadOnlyCollection<FoodItem>> GetAiProfileEnrichmentBatchAsync(int batchSize, bool includeFailed, CancellationToken cancellationToken = default);
 }

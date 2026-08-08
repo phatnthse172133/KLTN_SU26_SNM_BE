@@ -3,6 +3,7 @@ using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
 using InfrastructureLayer.Data;
 using Microsoft.EntityFrameworkCore;
+using static DomainLayer.Enums.GeneralEnum;
 
 namespace InfrastructureLayer.Repositories;
 
@@ -24,12 +25,18 @@ public class BoothLocationRepository : GenericRepository<BoothLocation>, IBoothL
     public Task<BoothLocation?> GetCurrentByBoothAsync(Guid boothId, CancellationToken cancellationToken = default)
         => _dbSet.AsNoTracking().FirstOrDefaultAsync(x => x.BoothId == boothId && !x.IsDeleted, cancellationToken);
 
+    public Task<BoothLocation?> GetCurrentByLayoutAndBoothAsync(Guid layoutId, Guid boothId, CancellationToken cancellationToken = default)
+        => _dbSet.AsNoTracking().FirstOrDefaultAsync(
+            x => x.LayoutId == layoutId && x.BoothId == boothId && !x.IsDeleted,
+            cancellationToken);
+
     public Task<BoothLocation?> GetCurrentByNodeAsync(Guid nodeId, CancellationToken cancellationToken = default)
         => _dbSet.AsNoTracking().FirstOrDefaultAsync(x => x.LayoutNodeId == nodeId && !x.IsDeleted, cancellationToken);
 
-    public async Task<IReadOnlyCollection<BoothLocation>> GetCurrentByLayoutAsync(Guid layoutId, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyCollection<BoothLocation>> GetCurrentByLayoutAsync(Guid layoutId, bool activeBoothsOnly = false, CancellationToken cancellationToken = default)
         => await _dbSet.AsNoTracking().Include(x => x.Booth)
-            .Where(x => x.LayoutId == layoutId && !x.IsDeleted)
+            .Where(x => x.LayoutId == layoutId && !x.IsDeleted
+                && (!activeBoothsOnly || x.Booth.Status == BoothStatus.Active))
             .OrderBy(x => x.SlotNumber).ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyCollection<BoothLocation>> GetCustomerCurrentByLayoutAsync(
@@ -37,22 +44,25 @@ public class BoothLocationRepository : GenericRepository<BoothLocation>, IBoothL
         CancellationToken cancellationToken = default)
         => await _dbSet.AsNoTracking()
             .Include(location => location.Booth)
+                .ThenInclude(booth => booth.NightMarket)
             .Where(location =>
                 location.LayoutId == layoutId &&
                 !location.IsDeleted &&
-                location.Booth.NightMarketId == location.Layout.NightMarketId &&
-                location.Booth.Status == DomainLayer.Enums.GeneralEnum.BoothStatus.Active &&
+                location.Booth.Status == BoothStatus.Active &&
                 !location.Booth.NightMarket.IsDeleted &&
-                location.Booth.NightMarket.ModerationStatus == DomainLayer.Enums.GeneralEnum.ModerationStatus.Active &&
-                (location.Booth.NightMarket.Status == DomainLayer.Enums.GeneralEnum.NightMarketStatus.Upcoming ||
-                 location.Booth.NightMarket.Status == DomainLayer.Enums.GeneralEnum.NightMarketStatus.Open ||
-                 location.Booth.NightMarket.Status == DomainLayer.Enums.GeneralEnum.NightMarketStatus.Closed))
+                location.Booth.NightMarket.Status == NightMarketStatus.Active &&
+                location.Booth.NightMarket.ModerationStatus == ModerationStatus.Active)
             .OrderBy(location => location.SlotNumber)
             .ToListAsync(cancellationToken);
 
+    public Task<int> CountActiveByNightMarketAsync(Guid nightMarketId, CancellationToken cancellationToken = default)
+        => (from location in _dbSet
+            join layout in _context.MarketLayouts on location.LayoutId equals layout.Id
+            where !location.IsDeleted && layout.NightMarketId == nightMarketId
+            select location).CountAsync(cancellationToken);
+
     public async Task AssignOrMoveAsync(BoothLocation location, DateTime now, CancellationToken cancellationToken = default)
     {
-        await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
         var current = await _dbSet.FirstOrDefaultAsync(x => x.BoothId == location.BoothId && !x.IsDeleted, cancellationToken);
         if (current is not null)
         {
@@ -62,7 +72,6 @@ public class BoothLocationRepository : GenericRepository<BoothLocation>, IBoothL
         }
         await _dbSet.AddAsync(location, cancellationToken);
         await _context.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
     }
 
     public async Task ReleaseAsync(Guid boothId, DateTime now, CancellationToken cancellationToken = default)
@@ -73,5 +82,25 @@ public class BoothLocationRepository : GenericRepository<BoothLocation>, IBoothL
         current.ReleasedAt = now;
         current.UpdatedAt = now;
         await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task ReleaseAsync(Guid layoutId, Guid boothId, DateTime now, CancellationToken cancellationToken = default)
+    {
+        var current = await _dbSet.FirstOrDefaultAsync(
+            x => x.LayoutId == layoutId && x.BoothId == boothId && !x.IsDeleted,
+            cancellationToken);
+        if (current is null) return;
+        current.IsDeleted = true;
+        current.ReleasedAt = now;
+        current.UpdatedAt = now;
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task AcquireMarketAssignmentLockAsync(Guid nightMarketId, CancellationToken cancellationToken = default)
+    {
+        var marketIdString = nightMarketId.ToString();
+        await _context.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT pg_advisory_xact_lock(hashtext({marketIdString}))",
+            cancellationToken);
     }
 }

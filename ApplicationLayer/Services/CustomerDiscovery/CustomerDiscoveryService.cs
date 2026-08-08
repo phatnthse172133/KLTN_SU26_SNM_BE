@@ -93,6 +93,18 @@ public sealed class CustomerDiscoveryService : ICustomerDiscoveryService
             {
                 Id = tag.Id, Code = tag.Code, Name = tag.Name, TagGroup = tag.TagGroup.ToString()
             }).ToList(),
+            SemanticMetadata = new()
+            {
+                PrimaryCourse = food.SemanticMetadata.PrimaryCourse,
+                SupportedCourses = food.SemanticMetadata.SupportedCourses,
+                Ingredients = food.SemanticMetadata.Ingredients.Select(x => new SemanticCatalogResponse(x.Id, x.Code, x.Name)).ToArray(),
+                AllergenDeclarations = food.SemanticMetadata.Allergens.Select(x => new FoodAllergenDeclarationResponse(x.Id, x.Code, x.Name, x.DeclarationType, x.IsConfirmed, x.Source)).ToArray(),
+                DietaryAttributes = food.SemanticMetadata.Dietary.Select(x => new FoodDietaryAttributeResponse(x.Id, x.Code, x.Name, x.Status, x.IsConfirmed, x.Source)).ToArray(),
+                PreparationMethods = food.SemanticMetadata.Preparations.Select(x => new SemanticCatalogResponse(x.Id, x.Code, x.Name)).ToArray(),
+                TasteProfiles = food.SemanticMetadata.Tastes.Select(x => new SemanticCatalogResponse(x.Id, x.Code, x.Name)).ToArray(),
+                SpiceLevel = food.SpiceLevel, ServingTemperature = food.ServingTemperature, EstimatedServingCount = food.EstimatedServingCount,
+                ServingSizeDescription = food.ServingSizeDescription, IsShareable = food.IsShareable
+            },
             Booth = new() { Id = food.BoothId, Name = food.BoothName, ThumbnailUrl = food.BoothThumbnailUrl, IsOpenNow = CustomerAvailability.IsOpenNow(food, localTime) },
             Market = new() { Id = food.MarketId, Name = food.MarketName, Address = food.MarketAddress }
         });
@@ -124,7 +136,9 @@ public sealed class CustomerDiscoveryService : ICustomerDiscoveryService
         BasePrice = food.BasePrice, EffectivePrice = food.EffectivePrice,
         IsAvailable = food.IsAvailable, CanOrder = food.IsAvailable && CustomerAvailability.IsOpenNow(food, localTime),
         BoothId = food.BoothId, BoothName = food.BoothName,
-        MarketId = food.MarketId, MarketName = food.MarketName, IsFeatured = food.IsFeatured
+        MarketId = food.MarketId, MarketName = food.MarketName, IsFeatured = food.IsFeatured,
+        AverageRating = food.AverageRating, ReviewCount = food.ReviewCount,
+        PrimaryCourse = food.PrimaryCourse, EstimatedServingCount = food.EstimatedServingCount, IsShareable = food.IsShareable
     };
 
     private static string? NormalizeSearch(string? search) => string.IsNullOrWhiteSpace(search) ? null : search.Trim();

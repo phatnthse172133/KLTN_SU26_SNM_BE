@@ -39,8 +39,7 @@
                       ],
     "Booths":  [
                    "Id",
-                   "RegistrationId",
-                   "OwnerId",
+                   "BoothOwnerId",
                    "NightMarketId",
                    "BoothName",
                    "BoothCode",
@@ -93,7 +92,7 @@
              ],
     "BoothDocuments":  [
                            "Id",
-                           "RegistrationId",
+                           "BoothId",
                            "DocumentType",
                            "FileUrl",
                            "VerificationStatus",
@@ -253,20 +252,6 @@
                  "CreatedAt",
                  "UpdatedAt"
              ],
-    "BoothRegistration":  [
-                              "Id",
-                              "OwnerId",
-                              "RequestedNightMarketId",
-                              "PreferredZoneId",
-                              "PreferredLayoutNodeId",
-                              "BoothName",
-                              "Description",
-                              "Phone",
-                              "Status",
-                              "RejectReason",
-                              "CreatedAt",
-                              "UpdatedAt"
-                          ],
     "ReviewReplies":  [
                           "Id",
                           "ReviewId",

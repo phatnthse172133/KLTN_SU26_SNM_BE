@@ -33,12 +33,30 @@ public class MenuController : ControllerBase
         return response.Success ? Ok(response) : BadRequest(response);
     }
 
+    [HttpPost("v2")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> CreateFoodItemV2(Guid boothId, CreateFoodItemV2Request request, CancellationToken cancellationToken)
+        => Ok(await _service.CreateFoodItemV2Async(CurrentUserId, boothId, request, cancellationToken));
+
     [HttpPut("{foodItemId:guid}")]
     public async Task<IActionResult> UpdateFoodItem(Guid boothId, Guid foodItemId, UpdateFoodItemRequest request, CancellationToken cancellationToken)
     {
         var response = await _service.UpdateFoodItemAsync(CurrentUserId, boothId, foodItemId, request, cancellationToken);
         return response.Success ? Ok(response) : BadRequest(response);
     }
+
+    [HttpPut("v2/{foodItemId:guid}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateFoodItemV2(Guid boothId, Guid foodItemId, UpdateFoodItemV2Request request, CancellationToken cancellationToken)
+        => Ok(await _service.UpdateFoodItemV2Async(CurrentUserId, boothId, foodItemId, request, cancellationToken));
 
     [HttpPatch("{foodItemId:guid}/availability")]
     public async Task<IActionResult> UpdateAvailability(Guid boothId, Guid foodItemId, UpdateFoodAvailabilityRequest request, CancellationToken cancellationToken)

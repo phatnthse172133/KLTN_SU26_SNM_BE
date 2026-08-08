@@ -4,20 +4,32 @@ public class AppException : Exception
 {
     public int StatusCode { get; }
     public string ErrorCode { get; }
+    public object? Details { get; }
+    public Dictionary<string, string[]>? FieldErrors { get; }
 
     public AppException(
         string message,
         int statusCode = 400,
         string errorCode = "APP_ERROR",
-        Exception? innerException = null)
+        Exception? innerException = null,
+        object? details = null,
+        Dictionary<string, string[]>? fieldErrors = null)
         : base(message, innerException)
     {
         StatusCode = statusCode;
         ErrorCode = errorCode;
+        Details = details;
+        FieldErrors = fieldErrors;
     }
 
     public static AppException BadRequest(string message, string errorCode = "BAD_REQUEST")
         => new(message, 400, errorCode);
+
+    public static AppException Validation(
+        string message,
+        Dictionary<string, string[]> fieldErrors,
+        string errorCode = "VALIDATION_ERROR")
+        => new(message, 400, errorCode, fieldErrors: fieldErrors);
 
     public static AppException Unauthorized(string message, string errorCode = "UNAUTHORIZED")
         => new(message, 401, errorCode);
@@ -31,8 +43,14 @@ public class AppException : Exception
     public static AppException Conflict(string message, string errorCode = "CONFLICT")
         => new(message, 409, errorCode);
 
+    public static AppException Conflict(string message, string errorCode, object details)
+        => new(message, 409, errorCode, details: details);
+
     public static AppException UnprocessableEntity(string message, string errorCode = "BUSINESS_VALIDATION_FAILED")
         => new(message, 422, errorCode);
+
+    public static AppException UnprocessableEntity(string message, string errorCode, object details)
+        => new(message, 422, errorCode, details: details);
 
     public static AppException ServiceUnavailable(
         string message,

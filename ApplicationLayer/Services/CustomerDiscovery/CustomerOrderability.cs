@@ -19,13 +19,12 @@ public static class CustomerOrderability
 
         if (market is null
             || market.IsDeleted
-            || market.ModerationStatus != ModerationStatus.Active
-            || market.Status is NightMarketStatus.Draft or NightMarketStatus.Cancelled)
+            || market.ModerationStatus != ModerationStatus.Active)
         {
             return Blocked(MarketUnavailable);
         }
 
-        if (market.Status != NightMarketStatus.Open)
+        if (market.Status != NightMarketStatus.Active)
             return Blocked(MarketClosed);
 
         var localTime = TimeOnly.FromDateTime(NightMarketAvailability.GetVietnamLocalTime(utcNow));

@@ -14,6 +14,7 @@ using InfrastructureLayer.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Npgsql;
@@ -94,6 +95,8 @@ public sealed class PostgresCustomerHistoryReviewComplaintVerificationTests
                 var legacy = await SeedLegacySnapshotsAsync(testBuilder.ConnectionString);
                 await migrator.MigrateAsync(MigrationId);
                 await AssertLegacyBackfillAsync(testBuilder.ConnectionString, legacy);
+                await DeleteLegacyProbeAsync(testBuilder.ConnectionString, legacy);
+                await migrator.MigrateAsync();
             }
             var seed = await SeedAsync(testBuilder.ConnectionString);
 
@@ -174,7 +177,14 @@ public sealed class PostgresCustomerHistoryReviewComplaintVerificationTests
                 seed.Booth, It.IsAny<Func<BoothEntitlements, bool>>(), It.IsAny<string>(), It.IsAny<string>()))
             .Returns(Task.CompletedTask);
         var service = new ReviewService(reviews, new BoothRepository(context), new OrderRepository(context),
-            mapper.Object, notificationService, entitlements.Object);
+            mapper.Object, notificationService, entitlements.Object,
+            new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ReviewSettings:EditWindowDays"] = "7"
+            }).Build(),
+            new FoodReviewRepository(context),
+            new FoodItemRepository(context),
+            Mock.Of<ApplicationLayer.Services.Storage.IFileStorageService>());
 
         var request = new UpsertReviewReplyRequest { Content = "Thank you for your feedback." };
         await service.UpsertReplyAsync(seed.Owner, reviewAId, request);
@@ -229,7 +239,8 @@ public sealed class PostgresCustomerHistoryReviewComplaintVerificationTests
             .Returns((CreateComplaintRequest request) => new Complaint
             {
                 OrderId = request.OrderId, BoothId = request.BoothId,
-                Title = request.Title.Trim(), Description = request.Description.Trim()
+                Title = (request.Title ?? "Other").Trim(), Description = request.Description.Trim(),
+                Category = request.Category
             });
         mapper.Setup(value => value.Map<ComplaintResponse>(It.IsAny<Complaint>())).Returns(new ComplaintResponse());
         var markets = new Mock<INightMarketRepository>();
@@ -238,7 +249,8 @@ public sealed class PostgresCustomerHistoryReviewComplaintVerificationTests
         var service = new ComplaintService(
             new ComplaintRepository(context), new BoothRepository(context), new OrderRepository(context),
             markets.Object, Mock.Of<ISubscriptionRepository>(), Mock.Of<IModerationRepository>(), mapper.Object,
-            PersistentNotificationService(context));
+            PersistentNotificationService(context),
+            Mock.Of<ApplicationLayer.Services.Storage.IFileStorageService>());
 
         var created = await service.CreateAsync(seed.CustomerA, new CreateComplaintRequest
         {
@@ -343,7 +355,8 @@ public sealed class PostgresCustomerHistoryReviewComplaintVerificationTests
             .ReturnsAsync(Array.Empty<Guid>());
         return new NotificationService(
             new NotificationRepository(context), Mock.Of<IUserDeviceTokenRepository>(), users.Object,
-            Mock.Of<IPushNotificationService>(), realtime.Object, presence.Object, mapper.Object,
+            Mock.Of<IPushNotificationService>(), realtime.Object,
+            Mock.Of<ApplicationLayer.Services.Realtime.IRealtimeEventPublisher>(), presence.Object, mapper.Object,
             NullLogger<NotificationService>.Instance);
     }
 
@@ -357,6 +370,7 @@ public sealed class PostgresCustomerHistoryReviewComplaintVerificationTests
     {
         Id = Guid.NewGuid(), CustomerId = customerId, OrderId = orderId, BoothId = boothId,
         Title = "Concurrent complaint", Description = "Concurrent duplicate verification.",
+        Category = ComplaintCategory.Other,
         Status = ComplaintStatus.Pending, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
     };
 
@@ -401,10 +415,10 @@ public sealed class PostgresCustomerHistoryReviewComplaintVerificationTests
                 (@customerA, @role, 'verify-a', 'hash', 'Customer A', 'verify-a@test.local', 'Local', 'Active', now(), now()),
                 (@customerB, @role, 'verify-b', 'hash', 'Customer B', 'verify-b@test.local', 'Local', 'Active', now(), now());
             INSERT INTO "Booth"
-                ("Id", "RegistrationId", "NightMarketId", "BoothOwnerId", "BoothName", "Status", "CreatedAt", "UpdatedAt")
-            VALUES (@booth, @registration, @market, @owner, 'Verification booth', 'Active', now(), now());
-            INSERT INTO "FoodCategories" ("Id", "BoothId", "Name", "IsDeleted", "CreatedAt", "UpdatedAt")
-            VALUES (@category, @booth, 'Category', false, now(), now());
+                ("Id", "NightMarketId", "BoothOwnerId", "BoothName", "Status", "CreatedAt", "UpdatedAt")
+            VALUES (@booth, @market, @owner, 'Verification booth', 'Active', now(), now());
+            INSERT INTO "FoodCategories" ("Id", "BoothId", "Code", "Name", "IsActive", "IsSelectable", "IsDeleted", "CreatedAt", "UpdatedAt")
+            VALUES (@category, @booth, 'VERIFICATION_CATEGORY', 'Category', true, true, false, now(), now());
             INSERT INTO "FoodItem"
                 ("Id", "BoothId", "CategoryId", "Name", "Price", "IsAvailable", "IsFeatured", "IsDeleted", "CreatedAt", "UpdatedAt")
             VALUES (@food, @booth, @category, 'Current renamed food', 999000, true, false, false, now(), now());
@@ -416,7 +430,6 @@ public sealed class PostgresCustomerHistoryReviewComplaintVerificationTests
         command.Parameters.AddWithValue("customerB", seed.CustomerB);
         command.Parameters.AddWithValue("role", Guid.NewGuid());
         command.Parameters.AddWithValue("booth", seed.Booth);
-        command.Parameters.AddWithValue("registration", Guid.NewGuid());
         command.Parameters.AddWithValue("category", seed.Category);
         command.Parameters.AddWithValue("food", seed.Food);
         await command.ExecuteNonQueryAsync();
@@ -432,8 +445,8 @@ public sealed class PostgresCustomerHistoryReviewComplaintVerificationTests
             await using var order = new NpgsqlCommand(
                 """
                 INSERT INTO "Order"
-                    ("Id", "CustomerId", "BoothOwnerId", "OrderCode", "Status", "TotalAmount", "DiscountAmount", "FinalAmount", "CreatedAt", "UpdatedAt")
-                VALUES (@id, @customer, @owner, @code, 'Completed', 42000, 0, 42000, @created, @created);
+                    ("Id", "CustomerId", "BoothOwnerId", "BoothId", "OrderCode", "Status", "TotalAmount", "DiscountAmount", "FinalAmount", "CreatedAt", "UpdatedAt")
+                VALUES (@id, @customer, @owner, @booth, @code, 'Completed', 42000, 0, 42000, @created, @created);
                 INSERT INTO "OrderDetail"
                     ("Id", "OrderId", "FoodItemId", "FoodNameSnapshot", "Quantity", "UnitPrice", "TotalPrice", "CreatedAt", "UpdatedAt")
                 VALUES (@detail, @id, @food, 'Historical food', 1, 42000, 42000, @created, @created);
@@ -441,6 +454,7 @@ public sealed class PostgresCustomerHistoryReviewComplaintVerificationTests
             order.Parameters.AddWithValue("id", orderIds[index]);
             order.Parameters.AddWithValue("customer", customer);
             order.Parameters.AddWithValue("owner", seed.Owner);
+            order.Parameters.AddWithValue("booth", seed.Booth);
             order.Parameters.AddWithValue("code", 800_000_000_000_000L + index);
             order.Parameters.AddWithValue("detail", Guid.NewGuid());
             order.Parameters.AddWithValue("food", seed.Food);
@@ -523,6 +537,26 @@ public sealed class PostgresCustomerHistoryReviewComplaintVerificationTests
             Assert.Equal("LEGACY", reader.GetString(0));
             Assert.Equal("Legacy current promotion title", reader.GetString(1));
         }
+    }
+
+    private static async Task DeleteLegacyProbeAsync(string connectionString, LegacyIds ids)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand(
+            """
+            DELETE FROM "PromotionUsages" WHERE "Id" = @usage;
+            DELETE FROM "OrderDetail" WHERE "Id" = @detail;
+            DELETE FROM "Order" WHERE "Id" = @order;
+            DELETE FROM "Promotion" WHERE "Id" = @promotion;
+            DELETE FROM "FoodItem" WHERE "Id" = @food;
+            """, connection);
+        command.Parameters.AddWithValue("usage", ids.PromotionUsage);
+        command.Parameters.AddWithValue("detail", ids.OrderDetail);
+        command.Parameters.AddWithValue("order", ids.Order);
+        command.Parameters.AddWithValue("promotion", ids.Promotion);
+        command.Parameters.AddWithValue("food", ids.Food);
+        await command.ExecuteNonQueryAsync();
     }
 
     private static async Task<long> ScalarLongAsync(NpgsqlConnection connection, string sql, params (string Name, object Value)[] parameters)

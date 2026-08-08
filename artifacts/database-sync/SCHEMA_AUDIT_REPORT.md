@@ -53,29 +53,28 @@ separate designer file.
 
 ## Verification evidence
 
-- Fresh database migrated from empty to 74/74: passed.
-- Restored development clone migrated from 71 to 74: passed.
+- Fresh database migrated from empty to 78/78, including all four AI V2 migrations from `dev`: passed.
+- Restored development clone migrated from the reconciled 74-migration state to 78: passed.
 - Repeat migration on both databases: no migrations applied.
 - Clone users before/after: 126/126.
 - Business row-count changes (excluding migration history): 0.
 - Fresh versus migrated-clone semantic column differences: 0.
 - Fresh versus migrated-clone index differences: 0.
 - Fresh versus migrated-clone constraint differences: 0.
-- Backend build: 0 errors, 0 warnings.
-- Non-integration tests: 823/823 passed.
-- Integration tests passing by isolated class: avatar static files, cinema layout indexes,
-  notifications, packages, reviews, sequences, and slot assignment.
-- Two integration classes remain blocked by stale test builders that create an `Order` without its
-  now-required `BoothId`: `MarketOwnerDashboardRepositoryTests` and
-  `PayRemainingConcurrencyTests`. Production schema/FK is intentionally not weakened, and test files
-  were not edited for this database-sync task.
+- PresentationLayer build: 0 errors, 0 warnings.
+- AI V2 backfill tool build: 0 errors, 0 warnings.
+- EF model drift check: none.
+- The `dev` test project currently has two pre-existing compile errors because
+  `AdminNotificationServiceTests` and `PostgresCustomerHistoryReviewComplaintVerificationTests`
+  construct `NotificationService` without its newly required logger dependency. Test files were not
+  changed or committed in this database-sync task, as requested.
 
 ## Development apply gate
 
-The exact development clone passed the final migrations without data loss. The real development
-database was then migrated from 72 to 74 while the API was stopped. Post-apply checks confirmed:
+The exact development clone passed the combined chain without data loss. The real development
+database was then advanced to all 78 migrations while the API was stopped. Post-apply checks confirmed:
 
-- final migration count: 74;
+- final migration count: 78;
 - user count: 126 (unchanged);
 - business row-count differences: 0;
 - legacy NightMarket columns remaining: 0.

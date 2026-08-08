@@ -15,7 +15,7 @@ namespace InfrastructureLayer.Migrations
                 ALTER TABLE ""Notification"" ADD COLUMN IF NOT EXISTS ""CreatedByUserId"" uuid;
                 ALTER TABLE ""Notification"" ADD COLUMN IF NOT EXISTS ""Target"" integer;
                 ALTER TABLE ""Notification"" ADD COLUMN IF NOT EXISTS ""TargetRole"" character varying(50);
-                
+
                 CREATE INDEX IF NOT EXISTS idx_notification_batch_id ON ""Notification"" (""BatchId"");
                 CREATE INDEX IF NOT EXISTS idx_notification_created_by_created_at ON ""Notification"" (""CreatedByUserId"", ""CreatedAt"" DESC);
             ");

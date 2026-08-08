@@ -13,6 +13,13 @@ public sealed class CustomerOrderHistoryResponse
     public decimal FinalAmount { get; set; }
     public DateTime CreatedAt { get; set; }
     public int ItemCount { get; set; }
+    public bool CanReview { get; set; }
+    public bool HasReview { get; set; }
+    public Guid? ReviewId { get; set; }
+    public bool CanEditReview { get; set; }
+    public DateTime? EditDeadline { get; set; }
+    public bool CanComplain { get; set; }
+    public Guid? ActiveComplaintId { get; set; }
 }
 
 public sealed class CustomerOrderDetailResponse
@@ -29,6 +36,13 @@ public sealed class CustomerOrderDetailResponse
     public IReadOnlyCollection<CustomerOrderPaymentResponse> Payments { get; set; } = [];
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+    public bool CanReview { get; set; }
+    public bool HasReview { get; set; }
+    public Guid? ReviewId { get; set; }
+    public bool CanEditReview { get; set; }
+    public DateTime? EditDeadline { get; set; }
+    public bool CanComplain { get; set; }
+    public Guid? ActiveComplaintId { get; set; }
 }
 
 public sealed class CustomerOrderBoothResponse
@@ -39,6 +53,7 @@ public sealed class CustomerOrderBoothResponse
 
 public sealed class CustomerOrderItemResponse
 {
+    public Guid OrderDetailId { get; set; }
     public Guid FoodItemId { get; set; }
     public string FoodName { get; set; } = string.Empty;
     public int Quantity { get; set; }

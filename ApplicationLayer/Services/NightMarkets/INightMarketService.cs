@@ -19,6 +19,7 @@ public interface INightMarketService
     Task<ApiResponse<object>> GetDeletionImpactAsync(Guid id, Guid? currentUserId, string currentUserRole, CancellationToken cancellationToken = default);
     Task<ApiResponse<List<NightMarketOptionDto>>> GetOptionsAsync(bool isAdmin = false, CancellationToken cancellationToken = default);
     Task<ApiResponse<NightMarketResponse>> PatchStatusAsync(Guid id, PatchNightMarketStatusRequest request, Guid currentUserId, string currentUserRole, CancellationToken cancellationToken = default);
+    Task<ApiResponse<ActivationReadinessResponse>> GetActivationReadinessAsync(Guid id, Guid currentUserId, string currentUserRole, CancellationToken cancellationToken = default);
     Task<ApiResponse<List<NightMarketImageResponse>>> GetImagesAsync(Guid marketId, Guid? currentUserId, string currentUserRole, CancellationToken cancellationToken = default);
     Task<ApiResponse<List<NightMarketImageResponse>>> UploadImageAsync(Guid marketId, Stream stream, string fileName, string contentType, long length, Guid? currentUserId, string currentUserRole, CancellationToken cancellationToken = default);
     Task<ApiResponse<List<NightMarketImageResponse>>> DeleteImageAsync(Guid marketId, Guid imageId, Guid? currentUserId, string currentUserRole, CancellationToken cancellationToken = default);

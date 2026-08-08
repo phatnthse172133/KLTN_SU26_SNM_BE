@@ -124,8 +124,6 @@ public class BoothRepository : GenericRepository<Booth>, IBoothRepository
             .Include(booth => booth.NightMarket)
             .Include(booth => booth.Zone)
             .Include(booth => booth.BoothDocuments)
-            .Include(booth => booth.Registration)
-                .ThenInclude(registration => registration!.BoothDocuments)
             .Include(booth => booth.BoothLocations.Where(location =>
                 !location.IsDeleted && location.ReleasedAt == null))
                 .ThenInclude(location => location.Layout)

@@ -1,4 +1,4 @@
-﻿CREATE TABLE IF NOT EXISTS "__EFMigrationsHistory" (
+CREATE TABLE IF NOT EXISTS "__EFMigrationsHistory" (
     "MigrationId" character varying(150) NOT NULL,
     "ProductVersion" character varying(32) NOT NULL,
     CONSTRAINT "PK___EFMigrationsHistory" PRIMARY KEY ("MigrationId")
@@ -3176,10 +3176,10 @@ BEGIN
                     ALTER TABLE "Notification" ADD COLUMN IF NOT EXISTS "CreatedByUserId" uuid;
                     ALTER TABLE "Notification" ADD COLUMN IF NOT EXISTS "Target" integer;
                     ALTER TABLE "Notification" ADD COLUMN IF NOT EXISTS "TargetRole" character varying(50);
-                    
+
                     CREATE INDEX IF NOT EXISTS idx_notification_batch_id ON "Notification" ("BatchId");
                     CREATE INDEX IF NOT EXISTS idx_notification_created_by_created_at ON "Notification" ("CreatedByUserId", "CreatedAt" DESC);
-                
+
     END IF;
 END $EF$;
 
@@ -3221,7 +3221,7 @@ BEGIN
                     ALTER TABLE "Order"
                     ADD COLUMN IF NOT EXISTS "PayStatus"
                     integer NOT NULL DEFAULT 0;
-                
+
     END IF;
 END $EF$;
 
@@ -3247,7 +3247,7 @@ BEGIN
                     ALTER TABLE "Notification" ADD COLUMN IF NOT EXISTS "ReferenceId" uuid NULL;
                     ALTER TABLE "Notification" ADD COLUMN IF NOT EXISTS "DataJson" text NULL;
                     ALTER TABLE "Notification" ADD COLUMN IF NOT EXISTS "IsDeleted" boolean NOT NULL DEFAULT false;
-                
+
     END IF;
 END $EF$;
 
@@ -3272,7 +3272,7 @@ BEGIN
                     CREATE UNIQUE INDEX IF NOT EXISTS "UserDeviceToken_Token_key" ON "UserDeviceToken" ("Token");
                     CREATE INDEX IF NOT EXISTS "idx_device_token_user_active" ON "UserDeviceToken" ("UserId", "IsActive");
                     COMMENT ON TABLE "UserDeviceToken" IS 'FCM device tokens registered by users';
-                
+
     END IF;
 END $EF$;
 
@@ -3284,7 +3284,7 @@ BEGIN
                     ALTER TABLE "Package" ALTER COLUMN "CreatedAt" SET DEFAULT now();
                     ALTER TABLE "Package" ALTER COLUMN "UpdatedAt" SET DEFAULT now();
                     ALTER TABLE "Package" ALTER COLUMN "IsDeleted" SET DEFAULT false;
-                
+
     END IF;
 END $EF$;
 
@@ -3313,7 +3313,7 @@ BEGIN
                     ALTER TABLE "PackagePrice" ALTER COLUMN "UpdatedAt" SET DEFAULT now();
                     ALTER TABLE "PackagePrice" ALTER COLUMN "IsDeleted" SET DEFAULT false;
                     ALTER TABLE "PackagePrice" ALTER COLUMN "DurationDays" SET DEFAULT 30;
-                
+
     END IF;
 END $EF$;
 
@@ -3425,7 +3425,7 @@ BEGIN
 
                     ALTER TABLE "NightMarket"
                     ALTER COLUMN "ModerationStatus" SET DEFAULT 'Active'::character varying;
-                
+
     END IF;
 END $EF$;
 
@@ -3501,7 +3501,7 @@ BEGIN
                         MINVALUE 1
                         MAXVALUE 99999999999999
                         NO CYCLE;
-                
+
     END IF;
 END $EF$;
 
@@ -3538,7 +3538,7 @@ BEGIN
                             )
                         )
                     );
-                
+
     END IF;
 END $EF$;
 
@@ -4297,7 +4297,7 @@ BEGIN
                         ) AS Subquery
                     ), 0)
                     WHERE "Capacity" = 0;
-                
+
     END IF;
 END $EF$;
 
@@ -5679,6 +5679,1027 @@ START TRANSACTION;
 
 DO $EF$
 BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    ALTER TABLE "FoodItem" ADD "EstimatedServingCount" integer;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    ALTER TABLE "FoodItem" ADD "IsShareable" boolean;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    ALTER TABLE "FoodItem" ADD "SemanticProfileUpdatedAt" timestamp with time zone;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    ALTER TABLE "FoodItem" ADD "SemanticProfileVersion" integer NOT NULL DEFAULT 0;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    ALTER TABLE "FoodItem" ADD "ServingSizeDescription" character varying(300);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    ALTER TABLE "FoodItem" ADD "ServingTemperature" character varying(20);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    ALTER TABLE "FoodItem" ADD "SpiceLevel" character varying(20) NOT NULL DEFAULT 'UNKNOWN';
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE TABLE "AiMealPlanSession" (
+        "Id" uuid NOT NULL DEFAULT (uuid_generate_v4()),
+        "CustomerId" uuid,
+        "PartySize" integer NOT NULL,
+        "Budget" numeric(12,2) NOT NULL,
+        "DiningStyle" character varying(100) NOT NULL,
+        "OriginalRequest" character varying(4000),
+        "ParsedPreferenceJson" jsonb,
+        "Latitude" numeric(10,7),
+        "Longitude" numeric(10,7),
+        "MaxDistanceMeters" integer,
+        "Status" character varying(20) NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        "ExpiresAt" timestamp with time zone NOT NULL,
+        CONSTRAINT "PK_AiMealPlanSession" PRIMARY KEY ("Id"),
+        CONSTRAINT ck_aimealplansession_budget CHECK ("Budget" > 0),
+        CONSTRAINT ck_aimealplansession_party CHECK ("PartySize" > 0),
+        CONSTRAINT "FK_AiMealPlanSession_User_CustomerId" FOREIGN KEY ("CustomerId") REFERENCES "User" ("Id") ON DELETE SET NULL
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE TABLE "AiRecommendationSession" (
+        "Id" uuid NOT NULL DEFAULT (uuid_generate_v4()),
+        "CustomerId" uuid,
+        "OriginalQuery" character varying(4000) NOT NULL,
+        "ParsedPreferenceJson" jsonb,
+        "Latitude" numeric(10,7),
+        "Longitude" numeric(10,7),
+        "MaxDistanceMeters" integer,
+        "Status" character varying(20) NOT NULL,
+        "ProviderName" character varying(100),
+        "UsedFallback" boolean NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        "ExpiresAt" timestamp with time zone NOT NULL,
+        CONSTRAINT "PK_AiRecommendationSession" PRIMARY KEY ("Id"),
+        CONSTRAINT "FK_AiRecommendationSession_User_CustomerId" FOREIGN KEY ("CustomerId") REFERENCES "User" ("Id") ON DELETE SET NULL
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE TABLE "Allergen" (
+        "Id" uuid NOT NULL DEFAULT (uuid_generate_v4()),
+        "Code" character varying(100) NOT NULL,
+        "Name" character varying(200) NOT NULL,
+        "IsSystem" boolean NOT NULL DEFAULT FALSE,
+        "IsActive" boolean NOT NULL DEFAULT TRUE,
+        "DisplayOrder" integer NOT NULL DEFAULT 0,
+        "CreatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        "UpdatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        CONSTRAINT "Allergen_pkey" PRIMARY KEY ("Id"),
+        CONSTRAINT ck_allergen_code_normalized CHECK ("Code" = upper(btrim("Code")))
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE TABLE "CustomerFoodProfile" (
+        "CustomerId" uuid NOT NULL,
+        "PreferredSpiceLevel" character varying(20),
+        "PreferredPriceMin" numeric(12,2),
+        "PreferredPriceMax" numeric(12,2),
+        "DefaultMaxDistanceMeters" integer,
+        "CreatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        "UpdatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        CONSTRAINT "PK_CustomerFoodProfile" PRIMARY KEY ("CustomerId"),
+        CONSTRAINT ck_customerfoodprofile_distance CHECK ("DefaultMaxDistanceMeters" IS NULL OR "DefaultMaxDistanceMeters" > 0),
+        CONSTRAINT ck_customerfoodprofile_price_range CHECK ("PreferredPriceMin" IS NULL OR "PreferredPriceMax" IS NULL OR "PreferredPriceMin" <= "PreferredPriceMax"),
+        CONSTRAINT "FK_CustomerFoodProfile_User_CustomerId" FOREIGN KEY ("CustomerId") REFERENCES "User" ("Id") ON DELETE CASCADE
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE TABLE "DietaryAttribute" (
+        "Id" uuid NOT NULL DEFAULT (uuid_generate_v4()),
+        "Code" character varying(100) NOT NULL,
+        "Name" character varying(200) NOT NULL,
+        "IsSystem" boolean NOT NULL DEFAULT FALSE,
+        "IsActive" boolean NOT NULL DEFAULT TRUE,
+        "DisplayOrder" integer NOT NULL DEFAULT 0,
+        "CreatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        "UpdatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        CONSTRAINT "DietaryAttribute_pkey" PRIMARY KEY ("Id"),
+        CONSTRAINT ck_dietaryattribute_code_normalized CHECK ("Code" = upper(btrim("Code")))
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE TABLE "FoodAiProfile" (
+        "FoodItemId" uuid NOT NULL,
+        "SearchText" text NOT NULL,
+        "Embedding" real[],
+        "EmbeddingModel" character varying(100),
+        "ContentHash" character varying(64) NOT NULL,
+        "Status" character varying(20) NOT NULL,
+        "Version" integer NOT NULL,
+        "EmbeddedAt" timestamp with time zone,
+        "LastAttemptAt" timestamp with time zone,
+        "LastError" character varying(2000),
+        "CreatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        "UpdatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        CONSTRAINT "PK_FoodAiProfile" PRIMARY KEY ("FoodItemId"),
+        CONSTRAINT "FK_FoodAiProfile_FoodItem_FoodItemId" FOREIGN KEY ("FoodItemId") REFERENCES "FoodItem" ("Id") ON DELETE CASCADE
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE TABLE "FoodItemCourse" (
+        "FoodItemId" uuid NOT NULL,
+        "Course" character varying(30) NOT NULL,
+        "IsPrimary" boolean NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        CONSTRAINT "PK_FoodItemCourse" PRIMARY KEY ("FoodItemId", "Course"),
+        CONSTRAINT "FK_FoodItemCourse_FoodItem_FoodItemId" FOREIGN KEY ("FoodItemId") REFERENCES "FoodItem" ("Id") ON DELETE CASCADE
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE TABLE "FoodItemDiningPurpose" (
+        "FoodItemId" uuid NOT NULL,
+        "Purpose" character varying(30) NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        CONSTRAINT "PK_FoodItemDiningPurpose" PRIMARY KEY ("FoodItemId", "Purpose"),
+        CONSTRAINT "FK_FoodItemDiningPurpose_FoodItem_FoodItemId" FOREIGN KEY ("FoodItemId") REFERENCES "FoodItem" ("Id") ON DELETE CASCADE
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE TABLE "FoodSearchFacet" (
+        "Id" uuid NOT NULL DEFAULT (uuid_generate_v4()),
+        "Code" character varying(100) NOT NULL,
+        "Name" character varying(200) NOT NULL,
+        "IsSystem" boolean NOT NULL DEFAULT FALSE,
+        "IsActive" boolean NOT NULL DEFAULT TRUE,
+        "DisplayOrder" integer NOT NULL DEFAULT 0,
+        "CreatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        "UpdatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        CONSTRAINT "FoodSearchFacet_pkey" PRIMARY KEY ("Id"),
+        CONSTRAINT ck_foodsearchfacet_code_normalized CHECK ("Code" = upper(btrim("Code")))
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE TABLE "Ingredient" (
+        "Id" uuid NOT NULL DEFAULT (uuid_generate_v4()),
+        "NormalizedName" character varying(200) NOT NULL,
+        "Code" character varying(100) NOT NULL,
+        "Name" character varying(200) NOT NULL,
+        "IsSystem" boolean NOT NULL DEFAULT FALSE,
+        "IsActive" boolean NOT NULL DEFAULT TRUE,
+        "DisplayOrder" integer NOT NULL DEFAULT 0,
+        "CreatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        "UpdatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        CONSTRAINT "Ingredient_pkey" PRIMARY KEY ("Id"),
+        CONSTRAINT ck_ingredient_code_normalized CHECK ("Code" = upper(btrim("Code")))
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE TABLE "PreparationMethod" (
+        "Id" uuid NOT NULL DEFAULT (uuid_generate_v4()),
+        "Code" character varying(100) NOT NULL,
+        "Name" character varying(200) NOT NULL,
+        "IsSystem" boolean NOT NULL DEFAULT FALSE,
+        "IsActive" boolean NOT NULL DEFAULT TRUE,
+        "DisplayOrder" integer NOT NULL DEFAULT 0,
+        "CreatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        "UpdatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        CONSTRAINT "PreparationMethod_pkey" PRIMARY KEY ("Id"),
+        CONSTRAINT ck_preparationmethod_code_normalized CHECK ("Code" = upper(btrim("Code")))
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE TABLE "TasteProfile" (
+        "Id" uuid NOT NULL DEFAULT (uuid_generate_v4()),
+        "Code" character varying(100) NOT NULL,
+        "Name" character varying(200) NOT NULL,
+        "IsSystem" boolean NOT NULL DEFAULT FALSE,
+        "IsActive" boolean NOT NULL DEFAULT TRUE,
+        "DisplayOrder" integer NOT NULL DEFAULT 0,
+        "CreatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        "UpdatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        CONSTRAINT "TasteProfile_pkey" PRIMARY KEY ("Id"),
+        CONSTRAINT ck_tasteprofile_code_normalized CHECK ("Code" = upper(btrim("Code")))
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE TABLE "AiMealPlan" (
+        "Id" uuid NOT NULL DEFAULT (uuid_generate_v4()),
+        "SessionId" uuid NOT NULL,
+        "MarketId" uuid NOT NULL,
+        "PlanCode" character varying(50) NOT NULL,
+        "PlanTitle" character varying(200) NOT NULL,
+        "Strategy" character varying(100) NOT NULL,
+        "TotalPrice" numeric(12,2) NOT NULL,
+        "RemainingBudget" numeric(12,2) NOT NULL,
+        "DistanceMeters" integer,
+        "EstimatedTravelMinutes" integer,
+        "EstimatedServingCount" integer,
+        "CompatibilityScore" numeric(5,2) NOT NULL,
+        "IsComplete" boolean NOT NULL,
+        "Version" integer NOT NULL,
+        "Status" character varying(20) NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        "UpdatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        CONSTRAINT "PK_AiMealPlan" PRIMARY KEY ("Id"),
+        CONSTRAINT ck_aimealplan_prices CHECK ("TotalPrice" >= 0),
+        CONSTRAINT ck_aimealplan_score CHECK ("CompatibilityScore" BETWEEN 0 AND 100),
+        CONSTRAINT "FK_AiMealPlan_AiMealPlanSession_SessionId" FOREIGN KEY ("SessionId") REFERENCES "AiMealPlanSession" ("Id") ON DELETE CASCADE,
+        CONSTRAINT "FK_AiMealPlan_NightMarket_MarketId" FOREIGN KEY ("MarketId") REFERENCES "NightMarket" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE TABLE "AiRecommendationFeedback" (
+        "Id" uuid NOT NULL DEFAULT (uuid_generate_v4()),
+        "SessionId" uuid NOT NULL,
+        "FoodItemId" uuid,
+        "Action" character varying(30) NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        CONSTRAINT "PK_AiRecommendationFeedback" PRIMARY KEY ("Id"),
+        CONSTRAINT "FK_AiRecommendationFeedback_AiRecommendationSession_SessionId" FOREIGN KEY ("SessionId") REFERENCES "AiRecommendationSession" ("Id") ON DELETE CASCADE,
+        CONSTRAINT "FK_AiRecommendationFeedback_FoodItem_FoodItemId" FOREIGN KEY ("FoodItemId") REFERENCES "FoodItem" ("Id") ON DELETE SET NULL
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE TABLE "FoodItemAllergen" (
+        "FoodItemId" uuid NOT NULL,
+        "AllergenId" uuid NOT NULL,
+        "DeclarationType" character varying(20) NOT NULL,
+        "IsConfirmed" boolean NOT NULL,
+        "Source" character varying(30) NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        "UpdatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        CONSTRAINT "PK_FoodItemAllergen" PRIMARY KEY ("FoodItemId", "AllergenId"),
+        CONSTRAINT "FK_FoodItemAllergen_Allergen_AllergenId" FOREIGN KEY ("AllergenId") REFERENCES "Allergen" ("Id") ON DELETE RESTRICT,
+        CONSTRAINT "FK_FoodItemAllergen_FoodItem_FoodItemId" FOREIGN KEY ("FoodItemId") REFERENCES "FoodItem" ("Id") ON DELETE CASCADE
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE TABLE "CustomerAllergenExclusion" (
+        "CustomerId" uuid NOT NULL,
+        "AllergenId" uuid NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        CONSTRAINT "PK_CustomerAllergenExclusion" PRIMARY KEY ("CustomerId", "AllergenId"),
+        CONSTRAINT "FK_CustomerAllergenExclusion_Allergen_AllergenId" FOREIGN KEY ("AllergenId") REFERENCES "Allergen" ("Id") ON DELETE RESTRICT,
+        CONSTRAINT "FK_CustomerAllergenExclusion_CustomerFoodProfile_CustomerId" FOREIGN KEY ("CustomerId") REFERENCES "CustomerFoodProfile" ("CustomerId") ON DELETE CASCADE
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE TABLE "CustomerPreferredCourse" (
+        "CustomerId" uuid NOT NULL,
+        "Course" character varying(30) NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        CONSTRAINT "PK_CustomerPreferredCourse" PRIMARY KEY ("CustomerId", "Course"),
+        CONSTRAINT "FK_CustomerPreferredCourse_CustomerFoodProfile_CustomerId" FOREIGN KEY ("CustomerId") REFERENCES "CustomerFoodProfile" ("CustomerId") ON DELETE CASCADE
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE TABLE "CustomerPreferredDiningPurpose" (
+        "CustomerId" uuid NOT NULL,
+        "Purpose" character varying(30) NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        CONSTRAINT "PK_CustomerPreferredDiningPurpose" PRIMARY KEY ("CustomerId", "Purpose"),
+        CONSTRAINT "FK_CustomerPreferredDiningPurpose_CustomerFoodProfile_Customer~" FOREIGN KEY ("CustomerId") REFERENCES "CustomerFoodProfile" ("CustomerId") ON DELETE CASCADE
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE TABLE "CustomerDietaryRequirement" (
+        "CustomerId" uuid NOT NULL,
+        "DietaryAttributeId" uuid NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        CONSTRAINT "PK_CustomerDietaryRequirement" PRIMARY KEY ("CustomerId", "DietaryAttributeId"),
+        CONSTRAINT "FK_CustomerDietaryRequirement_CustomerFoodProfile_CustomerId" FOREIGN KEY ("CustomerId") REFERENCES "CustomerFoodProfile" ("CustomerId") ON DELETE CASCADE,
+        CONSTRAINT "FK_CustomerDietaryRequirement_DietaryAttribute_DietaryAttribut~" FOREIGN KEY ("DietaryAttributeId") REFERENCES "DietaryAttribute" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE TABLE "FoodItemDietaryAttribute" (
+        "FoodItemId" uuid NOT NULL,
+        "DietaryAttributeId" uuid NOT NULL,
+        "SuitabilityStatus" character varying(20) NOT NULL,
+        "IsConfirmed" boolean NOT NULL,
+        "Source" character varying(30) NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        "UpdatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        CONSTRAINT "PK_FoodItemDietaryAttribute" PRIMARY KEY ("FoodItemId", "DietaryAttributeId"),
+        CONSTRAINT "FK_FoodItemDietaryAttribute_DietaryAttribute_DietaryAttributeId" FOREIGN KEY ("DietaryAttributeId") REFERENCES "DietaryAttribute" ("Id") ON DELETE RESTRICT,
+        CONSTRAINT "FK_FoodItemDietaryAttribute_FoodItem_FoodItemId" FOREIGN KEY ("FoodItemId") REFERENCES "FoodItem" ("Id") ON DELETE CASCADE
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE TABLE "FoodItemSearchFacet" (
+        "FoodItemId" uuid NOT NULL,
+        "FoodSearchFacetId" uuid NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        CONSTRAINT "PK_FoodItemSearchFacet" PRIMARY KEY ("FoodItemId", "FoodSearchFacetId"),
+        CONSTRAINT "FK_FoodItemSearchFacet_FoodItem_FoodItemId" FOREIGN KEY ("FoodItemId") REFERENCES "FoodItem" ("Id") ON DELETE CASCADE,
+        CONSTRAINT "FK_FoodItemSearchFacet_FoodSearchFacet_FoodSearchFacetId" FOREIGN KEY ("FoodSearchFacetId") REFERENCES "FoodSearchFacet" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE TABLE "CustomerAvoidedIngredient" (
+        "CustomerId" uuid NOT NULL,
+        "IngredientId" uuid NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        CONSTRAINT "PK_CustomerAvoidedIngredient" PRIMARY KEY ("CustomerId", "IngredientId"),
+        CONSTRAINT "FK_CustomerAvoidedIngredient_CustomerFoodProfile_CustomerId" FOREIGN KEY ("CustomerId") REFERENCES "CustomerFoodProfile" ("CustomerId") ON DELETE CASCADE,
+        CONSTRAINT "FK_CustomerAvoidedIngredient_Ingredient_IngredientId" FOREIGN KEY ("IngredientId") REFERENCES "Ingredient" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE TABLE "CustomerPreferredIngredient" (
+        "CustomerId" uuid NOT NULL,
+        "IngredientId" uuid NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        CONSTRAINT "PK_CustomerPreferredIngredient" PRIMARY KEY ("CustomerId", "IngredientId"),
+        CONSTRAINT "FK_CustomerPreferredIngredient_CustomerFoodProfile_CustomerId" FOREIGN KEY ("CustomerId") REFERENCES "CustomerFoodProfile" ("CustomerId") ON DELETE CASCADE,
+        CONSTRAINT "FK_CustomerPreferredIngredient_Ingredient_IngredientId" FOREIGN KEY ("IngredientId") REFERENCES "Ingredient" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE TABLE "FoodItemIngredient" (
+        "FoodItemId" uuid NOT NULL,
+        "IngredientId" uuid NOT NULL,
+        "IsPrimary" boolean NOT NULL,
+        "IsOptional" boolean NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        CONSTRAINT "PK_FoodItemIngredient" PRIMARY KEY ("FoodItemId", "IngredientId"),
+        CONSTRAINT "FK_FoodItemIngredient_FoodItem_FoodItemId" FOREIGN KEY ("FoodItemId") REFERENCES "FoodItem" ("Id") ON DELETE CASCADE,
+        CONSTRAINT "FK_FoodItemIngredient_Ingredient_IngredientId" FOREIGN KEY ("IngredientId") REFERENCES "Ingredient" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE TABLE "CustomerPreferredPreparationMethod" (
+        "CustomerId" uuid NOT NULL,
+        "PreparationMethodId" uuid NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        CONSTRAINT "PK_CustomerPreferredPreparationMethod" PRIMARY KEY ("CustomerId", "PreparationMethodId"),
+        CONSTRAINT "FK_CustomerPreferredPreparationMethod_CustomerFoodProfile_Cust~" FOREIGN KEY ("CustomerId") REFERENCES "CustomerFoodProfile" ("CustomerId") ON DELETE CASCADE,
+        CONSTRAINT "FK_CustomerPreferredPreparationMethod_PreparationMethod_Prepar~" FOREIGN KEY ("PreparationMethodId") REFERENCES "PreparationMethod" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE TABLE "FoodItemPreparationMethod" (
+        "FoodItemId" uuid NOT NULL,
+        "PreparationMethodId" uuid NOT NULL,
+        "IsPrimary" boolean NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        CONSTRAINT "PK_FoodItemPreparationMethod" PRIMARY KEY ("FoodItemId", "PreparationMethodId"),
+        CONSTRAINT "FK_FoodItemPreparationMethod_FoodItem_FoodItemId" FOREIGN KEY ("FoodItemId") REFERENCES "FoodItem" ("Id") ON DELETE CASCADE,
+        CONSTRAINT "FK_FoodItemPreparationMethod_PreparationMethod_PreparationMeth~" FOREIGN KEY ("PreparationMethodId") REFERENCES "PreparationMethod" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE TABLE "CustomerAvoidedTasteProfile" (
+        "CustomerId" uuid NOT NULL,
+        "TasteProfileId" uuid NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        CONSTRAINT "PK_CustomerAvoidedTasteProfile" PRIMARY KEY ("CustomerId", "TasteProfileId"),
+        CONSTRAINT "FK_CustomerAvoidedTasteProfile_CustomerFoodProfile_CustomerId" FOREIGN KEY ("CustomerId") REFERENCES "CustomerFoodProfile" ("CustomerId") ON DELETE CASCADE,
+        CONSTRAINT "FK_CustomerAvoidedTasteProfile_TasteProfile_TasteProfileId" FOREIGN KEY ("TasteProfileId") REFERENCES "TasteProfile" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE TABLE "CustomerPreferredTasteProfile" (
+        "CustomerId" uuid NOT NULL,
+        "TasteProfileId" uuid NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        CONSTRAINT "PK_CustomerPreferredTasteProfile" PRIMARY KEY ("CustomerId", "TasteProfileId"),
+        CONSTRAINT "FK_CustomerPreferredTasteProfile_CustomerFoodProfile_CustomerId" FOREIGN KEY ("CustomerId") REFERENCES "CustomerFoodProfile" ("CustomerId") ON DELETE CASCADE,
+        CONSTRAINT "FK_CustomerPreferredTasteProfile_TasteProfile_TasteProfileId" FOREIGN KEY ("TasteProfileId") REFERENCES "TasteProfile" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE TABLE "FoodItemTasteProfile" (
+        "FoodItemId" uuid NOT NULL,
+        "TasteProfileId" uuid NOT NULL,
+        "Intensity" integer,
+        "CreatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        CONSTRAINT "PK_FoodItemTasteProfile" PRIMARY KEY ("FoodItemId", "TasteProfileId"),
+        CONSTRAINT ck_fooditemtaste_intensity CHECK ("Intensity" IS NULL OR ("Intensity" BETWEEN 1 AND 5)),
+        CONSTRAINT "FK_FoodItemTasteProfile_FoodItem_FoodItemId" FOREIGN KEY ("FoodItemId") REFERENCES "FoodItem" ("Id") ON DELETE CASCADE,
+        CONSTRAINT "FK_FoodItemTasteProfile_TasteProfile_TasteProfileId" FOREIGN KEY ("TasteProfileId") REFERENCES "TasteProfile" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE TABLE "AiMealPlanItem" (
+        "Id" uuid NOT NULL DEFAULT (uuid_generate_v4()),
+        "PlanId" uuid NOT NULL,
+        "FoodItemId" uuid,
+        "BoothId" uuid,
+        "FoodNameSnapshot" character varying(200) NOT NULL,
+        "BoothNameSnapshot" character varying(200) NOT NULL,
+        "Course" character varying(30) NOT NULL,
+        "Quantity" integer NOT NULL,
+        "UnitPriceSnapshot" numeric(12,2) NOT NULL,
+        "TotalPriceSnapshot" numeric(12,2) NOT NULL,
+        "ServingCountSnapshot" integer,
+        "CompatibilityScore" numeric(5,2) NOT NULL,
+        "Reason" character varying(1000) NOT NULL,
+        "SortOrder" integer NOT NULL,
+        "IsRemoved" boolean NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        "UpdatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        CONSTRAINT "PK_AiMealPlanItem" PRIMARY KEY ("Id"),
+        CONSTRAINT ck_aimealplanitem_prices CHECK ("UnitPriceSnapshot" >= 0 AND "TotalPriceSnapshot" >= 0),
+        CONSTRAINT ck_aimealplanitem_quantity CHECK ("Quantity" > 0),
+        CONSTRAINT ck_aimealplanitem_score CHECK ("CompatibilityScore" BETWEEN 0 AND 100),
+        CONSTRAINT "FK_AiMealPlanItem_AiMealPlan_PlanId" FOREIGN KEY ("PlanId") REFERENCES "AiMealPlan" ("Id") ON DELETE CASCADE,
+        CONSTRAINT "FK_AiMealPlanItem_Booth_BoothId" FOREIGN KEY ("BoothId") REFERENCES "Booth" ("Id") ON DELETE SET NULL,
+        CONSTRAINT "FK_AiMealPlanItem_FoodItem_FoodItemId" FOREIGN KEY ("FoodItemId") REFERENCES "FoodItem" ("Id") ON DELETE SET NULL
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    ALTER TABLE "FoodItem" ADD CONSTRAINT ck_fooditem_estimated_serving_count CHECK ("EstimatedServingCount" IS NULL OR "EstimatedServingCount" > 0);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE INDEX idx_aimealplan_market ON "AiMealPlan" ("MarketId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE UNIQUE INDEX ux_aimealplan_session_code ON "AiMealPlan" ("SessionId", "PlanCode");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE INDEX idx_aimealplanitem_plan ON "AiMealPlanItem" ("PlanId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE INDEX "IX_AiMealPlanItem_BoothId" ON "AiMealPlanItem" ("BoothId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE INDEX "IX_AiMealPlanItem_FoodItemId" ON "AiMealPlanItem" ("FoodItemId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE UNIQUE INDEX ux_aimealplanitem_active_food ON "AiMealPlanItem" ("PlanId", "FoodItemId") WHERE "IsRemoved" = false AND "FoodItemId" IS NOT NULL;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE INDEX idx_aimealplansession_customer_created ON "AiMealPlanSession" ("CustomerId", "CreatedAt");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE INDEX idx_airecommendationfeedback_session ON "AiRecommendationFeedback" ("SessionId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE INDEX "IX_AiRecommendationFeedback_FoodItemId" ON "AiRecommendationFeedback" ("FoodItemId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE INDEX idx_airecommendationsession_customer_created ON "AiRecommendationSession" ("CustomerId", "CreatedAt");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE UNIQUE INDEX ux_allergen_code ON "Allergen" ("Code");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE INDEX "IX_CustomerAllergenExclusion_AllergenId" ON "CustomerAllergenExclusion" ("AllergenId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE INDEX "IX_CustomerAvoidedIngredient_IngredientId" ON "CustomerAvoidedIngredient" ("IngredientId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE INDEX "IX_CustomerAvoidedTasteProfile_TasteProfileId" ON "CustomerAvoidedTasteProfile" ("TasteProfileId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE INDEX "IX_CustomerDietaryRequirement_DietaryAttributeId" ON "CustomerDietaryRequirement" ("DietaryAttributeId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE INDEX "IX_CustomerPreferredIngredient_IngredientId" ON "CustomerPreferredIngredient" ("IngredientId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE INDEX "IX_CustomerPreferredPreparationMethod_PreparationMethodId" ON "CustomerPreferredPreparationMethod" ("PreparationMethodId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE INDEX "IX_CustomerPreferredTasteProfile_TasteProfileId" ON "CustomerPreferredTasteProfile" ("TasteProfileId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE UNIQUE INDEX ux_dietaryattribute_code ON "DietaryAttribute" ("Code");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE INDEX idx_foodaiprofile_contenthash ON "FoodAiProfile" ("ContentHash");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE INDEX "IX_FoodItemAllergen_AllergenId" ON "FoodItemAllergen" ("AllergenId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE UNIQUE INDEX ux_fooditemcourse_primary ON "FoodItemCourse" ("FoodItemId") WHERE "IsPrimary" = true;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE INDEX "IX_FoodItemDietaryAttribute_DietaryAttributeId" ON "FoodItemDietaryAttribute" ("DietaryAttributeId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE INDEX "IX_FoodItemIngredient_IngredientId" ON "FoodItemIngredient" ("IngredientId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE INDEX "IX_FoodItemPreparationMethod_PreparationMethodId" ON "FoodItemPreparationMethod" ("PreparationMethodId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE UNIQUE INDEX ux_fooditempreparation_primary ON "FoodItemPreparationMethod" ("FoodItemId") WHERE "IsPrimary" = true;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE INDEX "IX_FoodItemSearchFacet_FoodSearchFacetId" ON "FoodItemSearchFacet" ("FoodSearchFacetId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE INDEX "IX_FoodItemTasteProfile_TasteProfileId" ON "FoodItemTasteProfile" ("TasteProfileId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE UNIQUE INDEX ux_foodsearchfacet_code ON "FoodSearchFacet" ("Code");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE INDEX idx_ingredient_normalized_name ON "Ingredient" ("NormalizedName");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE UNIQUE INDEX ux_ingredient_code ON "Ingredient" ("Code");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE UNIQUE INDEX ux_preparationmethod_code ON "PreparationMethod" ("Code");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    CREATE UNIQUE INDEX ux_tasteprofile_code ON "TasteProfile" ("Code");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802043950_AddAiV2NormalizedFoodAndPlanning') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20260802043950_AddAiV2NormalizedFoodAndPlanning', '8.0.28');
+    END IF;
+END $EF$;
+COMMIT;
+
+START TRANSACTION;
+
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802102651_AddAiV2RecommendationResults') THEN
+    ALTER TABLE "AiRecommendationSession" ADD "ProviderFailureCategory" character varying(50);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802102651_AddAiV2RecommendationResults') THEN
+    ALTER TABLE "AiRecommendationSession" ADD "ProviderModelName" character varying(100);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802102651_AddAiV2RecommendationResults') THEN
+    ALTER TABLE "AiRecommendationSession" ADD "ProviderRequestId" character varying(200);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802102651_AddAiV2RecommendationResults') THEN
+    CREATE TABLE "AiRecommendationResult" (
+        "SessionId" uuid NOT NULL,
+        "FoodItemId" uuid NOT NULL,
+        "Rank" integer NOT NULL,
+        "Score" numeric(5,2) NOT NULL,
+        "MatchTier" character varying(20) NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        CONSTRAINT "PK_AiRecommendationResult" PRIMARY KEY ("SessionId", "FoodItemId"),
+        CONSTRAINT ck_airecommendationresult_score CHECK ("Score" BETWEEN 0 AND 100),
+        CONSTRAINT "FK_AiRecommendationResult_AiRecommendationSession_SessionId" FOREIGN KEY ("SessionId") REFERENCES "AiRecommendationSession" ("Id") ON DELETE CASCADE,
+        CONSTRAINT "FK_AiRecommendationResult_FoodItem_FoodItemId" FOREIGN KEY ("FoodItemId") REFERENCES "FoodItem" ("Id") ON DELETE CASCADE
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802102651_AddAiV2RecommendationResults') THEN
+    CREATE UNIQUE INDEX ux_airecommendationfeedback_state ON "AiRecommendationFeedback" ("SessionId", "FoodItemId") WHERE "FoodItemId" IS NOT NULL AND "Action" IN ('LIKED', 'DISLIKED');
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802102651_AddAiV2RecommendationResults') THEN
+    CREATE INDEX "IX_AiRecommendationResult_FoodItemId" ON "AiRecommendationResult" ("FoodItemId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802102651_AddAiV2RecommendationResults') THEN
+    CREATE UNIQUE INDEX ux_airecommendationresult_session_rank ON "AiRecommendationResult" ("SessionId", "Rank");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802102651_AddAiV2RecommendationResults') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20260802102651_AddAiV2RecommendationResults', '8.0.28');
+    END IF;
+END $EF$;
+COMMIT;
+
+START TRANSACTION;
+
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802115639_AddAiV2MealPlanOperations') THEN
+    ALTER TABLE "AiMealPlanSession" ADD "IdempotencyKey" character varying(100);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802115639_AddAiV2MealPlanOperations') THEN
+    ALTER TABLE "AiMealPlanSession" ADD "RequestHash" character varying(64);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802115639_AddAiV2MealPlanOperations') THEN
+    ALTER TABLE "AiMealPlanSession" ADD "UsedProviderFallback" boolean NOT NULL DEFAULT FALSE;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802115639_AddAiV2MealPlanOperations') THEN
+    ALTER TABLE "AiMealPlanSession" ADD "WarningsJson" jsonb;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802115639_AddAiV2MealPlanOperations') THEN
+    ALTER TABLE "AiMealPlanItem" ADD "ImageUrlSnapshot" character varying(2000);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802115639_AddAiV2MealPlanOperations') THEN
+    ALTER TABLE "AiMealPlanItem" ADD "RatingSnapshot" numeric(3,2);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802115639_AddAiV2MealPlanOperations') THEN
+    ALTER TABLE "AiMealPlanItem" ADD "ReviewCountSnapshot" integer NOT NULL DEFAULT 0;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802115639_AddAiV2MealPlanOperations') THEN
+    ALTER TABLE "AiMealPlan" ADD "Summary" character varying(1000);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802115639_AddAiV2MealPlanOperations') THEN
+    ALTER TABLE "AiMealPlan" ADD "WarningsJson" jsonb;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802115639_AddAiV2MealPlanOperations') THEN
+    CREATE UNIQUE INDEX ux_aimealplansession_customer_idempotency ON "AiMealPlanSession" ("CustomerId", "IdempotencyKey") WHERE "CustomerId" IS NOT NULL AND "IdempotencyKey" IS NOT NULL;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802115639_AddAiV2MealPlanOperations') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20260802115639_AddAiV2MealPlanOperations', '8.0.28');
+    END IF;
+END $EF$;
+COMMIT;
+
+START TRANSACTION;
+
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802143214_AddAiMealPlanCartOperations') THEN
+    CREATE TABLE "AiMealPlanCartOperation" (
+        "Id" uuid NOT NULL DEFAULT (uuid_generate_v4()),
+        "CustomerId" uuid NOT NULL,
+        "PlanId" uuid NOT NULL,
+        "PlanVersion" integer NOT NULL,
+        "IdempotencyKey" character varying(100) NOT NULL,
+        "RequestHash" character varying(64) NOT NULL,
+        "ResponseJson" jsonb NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
+        CONSTRAINT "PK_AiMealPlanCartOperation" PRIMARY KEY ("Id"),
+        CONSTRAINT "FK_AiMealPlanCartOperation_AiMealPlan_PlanId" FOREIGN KEY ("PlanId") REFERENCES "AiMealPlan" ("Id") ON DELETE CASCADE,
+        CONSTRAINT "FK_AiMealPlanCartOperation_User_CustomerId" FOREIGN KEY ("CustomerId") REFERENCES "User" ("Id") ON DELETE CASCADE
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802143214_AddAiMealPlanCartOperations') THEN
+    CREATE INDEX idx_aimealplancart_plan ON "AiMealPlanCartOperation" ("PlanId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802143214_AddAiMealPlanCartOperations') THEN
+    CREATE UNIQUE INDEX ux_aimealplancart_customer_key ON "AiMealPlanCartOperation" ("CustomerId", "IdempotencyKey");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260802143214_AddAiMealPlanCartOperations') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20260802143214_AddAiMealPlanCartOperations', '8.0.28');
+    END IF;
+END $EF$;
+COMMIT;
+
+START TRANSACTION;
+
+
+DO $EF$
+BEGIN
     IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260803072406_ReconcileDevelopmentSchema') THEN
     INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
     VALUES ('20260803072406_ReconcileDevelopmentSchema', '8.0.28');
@@ -5811,4 +6832,3 @@ BEGIN
     END IF;
 END $EF$;
 COMMIT;
-

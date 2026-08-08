@@ -6,7 +6,7 @@ credentials, PayOS keys, AI secrets, or Cloudinary secrets.
 
 ## Canonical state
 
-- Canonical migration count: **74**
+- Canonical migration count: **78**
 - Canonical latest migration: `20260803073914_RemoveConfirmedLegacyNightMarketColumns`
 - EF model drift: **none** (`dotnet ef migrations has-pending-model-changes` exits successfully)
 - PostgreSQL fresh-database migration: **passed**
@@ -14,12 +14,12 @@ credentials, PayOS keys, AI secrets, or Cloudinary secrets.
 - Idempotency: a second update reports `No migrations were applied`
 - Fresh and migrated-clone catalogs match for columns, indexes, and constraints
 - Development-clone business row counts were unchanged; 126 users were preserved
-- Development database applied to 74 migrations; 126 users and all business row counts were preserved
+- Development database applied to 78 migrations; 126 users and all business row counts were preserved
 
 ## Files in this directory
 
 - `SmartNightMarket_schema_idempotent.sql`: canonical idempotent migration script.
-- `SmartNightMarket_schema_only.sql`: schema exported from a fresh database after all 74 migrations.
+- `SmartNightMarket_schema_only.sql`: schema exported from a fresh database after all 78 migrations.
 - `SmartNightMarket_migration_history.txt`: ordered migration IDs.
 - `SmartNightMarket_migration_hashes.sha256`: SHA-256 hashes of migration and snapshot source files.
 - `SmartNightMarket_columns.csv`: canonical public columns.
@@ -68,8 +68,9 @@ credentials, PayOS keys, AI secrets, or Cloudinary secrets.
 6. Run the same command again. The second execution must make no schema changes.
 7. Re-run the final-migration query above.
 
-The reference development database completed this exact process on 2026-08-03. Its migration count
-changed from 72 to 74, its user count remained 126, and its business row-count diff was zero.
+The reference development database completed this exact process on 2026-08-03. The canonical chain
+was first reconciled to 74 migrations, then merged with the four AI V2 migrations already published
+on `dev` and advanced to 78. Its user count remained 126 and its business row-count diff was zero.
 
 Do not use `EnsureCreated`, delete `__EFMigrationsHistory`, drop the database, or copy a developer's
 data dump to another machine as a schema synchronization method.

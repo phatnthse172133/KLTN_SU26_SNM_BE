@@ -8,6 +8,7 @@ public interface ICustomerCheckoutService
 {
     Task<CheckoutPreviewResponse> GetPreviewAsync(
         Guid customerId,
+        Guid boothId,
         Guid? promotionId = null,
         CancellationToken cancellationToken = default);
 

@@ -73,6 +73,7 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
                 Items = order.OrderDetails.OrderBy(detail => detail.CreatedAt)
                     .Select(detail => new CustomerOrderItemReadModel
                     {
+                        OrderDetailId = detail.Id,
                         FoodItemId = detail.FoodItemId,
                         FoodName = detail.FoodNameSnapshot,
                         Quantity = detail.Quantity,
@@ -104,6 +105,14 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
                     }).FirstOrDefault()
             }).FirstOrDefaultAsync(cancellationToken);
 
+    public Task<OrderDetail?> GetCustomerOrderDetailLineAsync(Guid customerId, Guid orderDetailId, CancellationToken cancellationToken = default)
+        => _context.OrderDetails
+            .Include(detail => detail.Order)
+            .Include(detail => detail.FoodItem)
+            .FirstOrDefaultAsync(
+                detail => detail.Id == orderDetailId && detail.Order.CustomerId == customerId,
+                cancellationToken);
+
     public async Task<bool> ContainsBoothItemsAsync(Guid orderId, Guid boothId)
         => await _context.OrderDetails
             .Include(detail => detail.FoodItem)
@@ -126,6 +135,12 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
             .SingleOrDefaultAsync();
         if (found == 0)
             return null;
+
+        // Callers may have read the aggregate before opening this transaction
+        // (for example refund reconciliation). Identity resolution would otherwise
+        // return that stale tracked graph even though the row lock was acquired
+        // after a competing transition committed.
+        _context.ChangeTracker.Clear();
 
         return await _dbSet
             .Include(order => order.Payments)
@@ -240,11 +255,12 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
                 .SetProperty(payment => payment.RefundRequestedAt, updatedAt)
                 .SetProperty(payment => payment.UpdatedAt, updatedAt));
 
-    public Task<int> TryClaimPayoutCreationAsync(
+    public async Task<int> TryClaimPayoutCreationAsync(
         Guid paymentId,
         DateTime claimedAt,
         DateTime staleBefore)
-        => _context.Payments
+    {
+        var affected = await _context.Payments
             .Where(payment => payment.Id == paymentId
                 && payment.Status == PaymentStatus.RefundProcessing
                 && payment.PayoutId == null
@@ -253,6 +269,20 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(payment => payment.PayoutCreateClaimedAt, claimedAt)
                 .SetProperty(payment => payment.UpdatedAt, claimedAt));
+
+        // ExecuteUpdate bypasses the change tracker. Refresh the aggregate's
+        // Payment so the later payout snapshot write uses the current row version
+        // instead of failing after the provider has already accepted the payout.
+        if (affected > 0)
+        {
+            var tracked = _context.ChangeTracker.Entries<Payment>()
+                .FirstOrDefault(entry => entry.Entity.Id == paymentId);
+            if (tracked is not null)
+                await tracked.ReloadAsync();
+        }
+
+        return affected;
+    }
 
     public async Task<int> UpdateOrderFromUnderpaidToPreparingAsync(long orderCode, DateTime updatedAt)
     {
@@ -388,13 +418,45 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
                 .SetProperty(order => order.UpdatedAt, updatedAt),
                 cancellationToken);
 
-    public async Task ClearCheckedOutCartItemsAsync(Order order, DateTime updatedAt, CancellationToken cancellationToken = default)
+    public async Task<int> ClearCheckedOutCartItemsAsync(Order order, DateTime updatedAt, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(order.CheckoutCartItemIds)) return;
+        if (string.IsNullOrWhiteSpace(order.CheckoutCartItemIds)) return 0;
         var ids = JsonSerializer.Deserialize<Guid[]>(order.CheckoutCartItemIds) ?? [];
-        if (ids.Length == 0) return;
-        await _context.CartItems
-            .Where(item => ids.Contains(item.Id) && item.Cart.CustomerId == order.CustomerId && !item.IsDeleted)
+        if (ids.Length == 0) return 0;
+
+        if (_context.Database.ProviderName == "Npgsql.EntityFrameworkCore.PostgreSQL")
+        {
+            foreach (var id in ids.Order())
+            {
+                await _context.Database
+                    .SqlQuery<Guid>($"SELECT \"Id\" AS \"Value\" FROM \"CartItem\" WHERE \"Id\" = {id} FOR UPDATE")
+                    .SingleOrDefaultAsync(cancellationToken);
+            }
+        }
+
+        var currentItems = await _context.CartItems
+            .Where(item => ids.Contains(item.Id)
+                && item.Cart.CustomerId == order.CustomerId
+                && item.FoodItem.BoothId == order.BoothId
+                && !item.IsDeleted)
+            .Select(item => new { item.Id, item.FoodItemId, item.Quantity })
+            .ToListAsync(cancellationToken);
+        var expectedLines = order.OrderDetails
+            .OrderBy(detail => detail.FoodItemId)
+            .Select(detail => (detail.FoodItemId, detail.Quantity))
+            .ToArray();
+        var currentLines = currentItems
+            .OrderBy(item => item.FoodItemId)
+            .Select(item => (item.FoodItemId, item.Quantity))
+            .ToArray();
+        if (currentItems.Count != ids.Distinct().Count() || !currentLines.SequenceEqual(expectedLines))
+            return 0;
+
+        return await _context.CartItems
+            .Where(item => ids.Contains(item.Id)
+                && item.Cart.CustomerId == order.CustomerId
+                && item.FoodItem.BoothId == order.BoothId
+                && !item.IsDeleted)
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(item => item.IsDeleted, true)
                 .SetProperty(item => item.UpdatedAt, updatedAt), cancellationToken);

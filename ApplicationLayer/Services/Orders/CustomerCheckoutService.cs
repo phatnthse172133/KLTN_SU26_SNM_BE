@@ -35,10 +35,10 @@ public sealed class CustomerCheckoutService : ICustomerCheckoutService
         => (_carts, _cartItems, _booths, _orders, _orderRepository, _promotions, _promotionValidation)
             = (carts, cartItems, booths, orders, orderRepository, null!, null!);
 
-    public async Task<CheckoutPreviewResponse> GetPreviewAsync(Guid customerId, Guid? promotionId = null,
+    public async Task<CheckoutPreviewResponse> GetPreviewAsync(Guid customerId, Guid boothId, Guid? promotionId = null,
         CancellationToken cancellationToken = default)
     {
-        var (cart, items) = await LoadOrderableCartAsync(customerId, cancellationToken);
+        var (cart, items) = await LoadOrderableCartAsync(customerId, boothId, cancellationToken);
         var now = DateTime.UtcNow;
         var groups = items.GroupBy(item => item.FoodItem.Booth).ToList();
         var subtotal = items.Sum(item => FoodPriceResolver.GetCurrentPrice(item.FoodItem, now) * item.Quantity);
@@ -94,6 +94,8 @@ public sealed class CustomerCheckoutService : ICustomerCheckoutService
         var key = string.IsNullOrWhiteSpace(headerIdempotencyKey) ? request.IdempotencyKey : headerIdempotencyKey;
         if (!Guid.TryParse(key, out var checkoutRequestId))
             throw AppException.BadRequest("A UUID idempotency key is required.", "IDEMPOTENCY_KEY_REQUIRED");
+        if (request.BoothId == Guid.Empty)
+            throw AppException.BadRequest("Booth id is required.", "BOOTH_ID_REQUIRED");
         if (request.PaymentMethod is not PaymentType.PayOS and not PaymentType.Cash)
             throw AppException.BadRequest("Payment method must be CASH or PAYOS.", "PAYMENT_METHOD_INVALID");
 
@@ -106,11 +108,8 @@ public sealed class CustomerCheckoutService : ICustomerCheckoutService
             return ExistingResult(existing);
         }
 
-        var (cart, items) = await LoadOrderableCartAsync(customerId, cancellationToken);
-        var boothIds = items.Select(item => item.FoodItem.BoothId).Distinct().ToArray();
-        if (boothIds.Length != 1)
-            throw AppException.UnprocessableEntity("Checkout must contain items from exactly one booth.", "MULTIPLE_BOOTHS_NOT_ALLOWED");
-        var booth = await _booths.GetByIdAsync(boothIds[0]) ?? throw AppException.NotFound("Booth was not found.", "BOOTH_NOT_FOUND");
+        var (cart, items) = await LoadOrderableCartAsync(customerId, request.BoothId, cancellationToken);
+        var booth = await _booths.GetByIdAsync(request.BoothId) ?? throw AppException.NotFound("Booth was not found.", "BOOTH_NOT_FOUND");
 
         Promotion? promotion = null;
         if (request.PromotionId.HasValue)
@@ -134,8 +133,6 @@ public sealed class CustomerCheckoutService : ICustomerCheckoutService
         };
 
         var response = await _orders.CreateOrderAsync(dto);
-        if (request.PaymentMethod == PaymentType.Cash || response.Data?.PaymentStatus == PaymentStatus.Paid)
-            await ClearItemsAsync(cart, items);
         return response;
     }
 
@@ -165,22 +162,25 @@ public sealed class CustomerCheckoutService : ICustomerCheckoutService
         var response = await _orders.CreateOrderAsync(new CreateOrderDto
         {
             CheckoutRequestId = request.CheckoutRequestId, CustomerId = customerId, BoothId = booth.Id,
+            IdempotencyKey = request.CheckoutRequestId.ToString("D"),
+            CheckoutCartItemIds = items.Select(item => item.Id).ToArray(),
             BoothOwnerId = booth.BoothOwnerId, PaymentMethod = request.PaymentMethod,
             PromotionCode = string.IsNullOrWhiteSpace(request.PromotionCode) ? null : request.PromotionCode.Trim(),
             Note = string.IsNullOrWhiteSpace(request.Note) ? null : request.Note.Trim(),
             Items = items.Select(item => new CartItemDto { FoodItemId = item.FoodItemId, Quantity = item.Quantity,
                 UnitPrice = FoodPriceResolver.GetCurrentPrice(item.FoodItem, now) }).ToList()
         });
-        await ClearItemsAsync(cart, items);
         return response;
     }
 
-    private async Task<(Cart Cart, IReadOnlyCollection<CartItem> Items)> LoadOrderableCartAsync(Guid customerId, CancellationToken cancellationToken)
+    private async Task<(Cart Cart, IReadOnlyCollection<CartItem> Items)> LoadOrderableCartAsync(Guid customerId, Guid boothId, CancellationToken cancellationToken)
     {
+        if (boothId == Guid.Empty)
+            throw AppException.BadRequest("Booth id is required.", "BOOTH_ID_REQUIRED");
         var cart = await _carts.GetActiveByCustomerAsync(customerId, cancellationToken)
             ?? throw AppException.UnprocessableEntity("Cart is empty.", "CART_EMPTY");
-        var items = await _cartItems.GetActiveByCartAsync(cart.Id, cancellationToken);
-        if (items.Count == 0) throw AppException.UnprocessableEntity("Cart is empty.", "CART_EMPTY");
+        var items = await _cartItems.GetActiveByCartAndBoothAsync(cart.Id, boothId, cancellationToken);
+        if (items.Count == 0) throw AppException.UnprocessableEntity("The cart does not contain items from this booth.", "CART_BOOTH_EMPTY");
         foreach (var item in items)
         {
             if (item.Quantity <= 0 || item.FoodItem is null) throw AppException.Conflict("Cart changed. Refresh it and try again.", "PRICE_CHANGED");
@@ -190,17 +190,9 @@ public sealed class CustomerCheckoutService : ICustomerCheckoutService
         return (cart, items);
     }
 
-    private async Task ClearItemsAsync(Cart cart, IEnumerable<CartItem> items)
-    {
-        var now = DateTime.UtcNow;
-        foreach (var item in items) { item.IsDeleted = true; item.UpdatedAt = now; }
-        cart.UpdatedAt = now;
-        await _cartItems.SaveChangesAsync();
-    }
-
     private static string ComputeRequestHash(CreateCustomerOrderRequest request)
     {
-        var canonical = $"{request.PaymentMethod}|{request.PromotionId?.ToString("D") ?? ""}|{request.Note?.Trim() ?? ""}";
+        var canonical = $"{request.BoothId:D}|{request.PaymentMethod}|{request.PromotionId?.ToString("D") ?? ""}|{request.Note?.Trim() ?? ""}";
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
     }
 

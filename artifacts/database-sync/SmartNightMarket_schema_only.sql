@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict gfGdITz0wZW72fpsWOUgA8HjSKCwxQn4qgi89N7veIRA1TMVbIvYNmkrtkoMUMD
+\restrict 7NrkzmYgjMmkZtIQSAIXdCpe63Z00RRhfXDdnwUnaT24ATmjdBr52VSbASkF3Vf
 
 -- Dumped from database version 18.1
 -- Dumped by pg_dump version 18.1
@@ -74,6 +74,177 @@ CREATE TABLE public."AIRecommendationLog" (
 --
 
 COMMENT ON TABLE public."AIRecommendationLog" IS 'Log tối giản cho các lần AI recommendation để debug/demo';
+
+
+--
+-- Name: AiMealPlan; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."AiMealPlan" (
+    "Id" uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    "SessionId" uuid NOT NULL,
+    "MarketId" uuid NOT NULL,
+    "PlanCode" character varying(50) NOT NULL,
+    "PlanTitle" character varying(200) NOT NULL,
+    "Strategy" character varying(100) NOT NULL,
+    "TotalPrice" numeric(12,2) NOT NULL,
+    "RemainingBudget" numeric(12,2) NOT NULL,
+    "DistanceMeters" integer,
+    "EstimatedTravelMinutes" integer,
+    "EstimatedServingCount" integer,
+    "CompatibilityScore" numeric(5,2) NOT NULL,
+    "IsComplete" boolean NOT NULL,
+    "Version" integer NOT NULL,
+    "Status" character varying(20) NOT NULL,
+    "CreatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "UpdatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "Summary" character varying(1000),
+    "WarningsJson" jsonb,
+    CONSTRAINT ck_aimealplan_prices CHECK (("TotalPrice" >= (0)::numeric)),
+    CONSTRAINT ck_aimealplan_score CHECK ((("CompatibilityScore" >= (0)::numeric) AND ("CompatibilityScore" <= (100)::numeric)))
+);
+
+
+--
+-- Name: AiMealPlanCartOperation; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."AiMealPlanCartOperation" (
+    "Id" uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    "CustomerId" uuid NOT NULL,
+    "PlanId" uuid NOT NULL,
+    "PlanVersion" integer NOT NULL,
+    "IdempotencyKey" character varying(100) NOT NULL,
+    "RequestHash" character varying(64) NOT NULL,
+    "ResponseJson" jsonb NOT NULL,
+    "CreatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: AiMealPlanItem; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."AiMealPlanItem" (
+    "Id" uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    "PlanId" uuid NOT NULL,
+    "FoodItemId" uuid,
+    "BoothId" uuid,
+    "FoodNameSnapshot" character varying(200) NOT NULL,
+    "BoothNameSnapshot" character varying(200) NOT NULL,
+    "Course" character varying(30) NOT NULL,
+    "Quantity" integer NOT NULL,
+    "UnitPriceSnapshot" numeric(12,2) NOT NULL,
+    "TotalPriceSnapshot" numeric(12,2) NOT NULL,
+    "ServingCountSnapshot" integer,
+    "CompatibilityScore" numeric(5,2) NOT NULL,
+    "Reason" character varying(1000) NOT NULL,
+    "SortOrder" integer NOT NULL,
+    "IsRemoved" boolean NOT NULL,
+    "CreatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "UpdatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "ImageUrlSnapshot" character varying(2000),
+    "RatingSnapshot" numeric(3,2),
+    "ReviewCountSnapshot" integer DEFAULT 0 NOT NULL,
+    CONSTRAINT ck_aimealplanitem_prices CHECK ((("UnitPriceSnapshot" >= (0)::numeric) AND ("TotalPriceSnapshot" >= (0)::numeric))),
+    CONSTRAINT ck_aimealplanitem_quantity CHECK (("Quantity" > 0)),
+    CONSTRAINT ck_aimealplanitem_score CHECK ((("CompatibilityScore" >= (0)::numeric) AND ("CompatibilityScore" <= (100)::numeric)))
+);
+
+
+--
+-- Name: AiMealPlanSession; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."AiMealPlanSession" (
+    "Id" uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    "CustomerId" uuid,
+    "PartySize" integer NOT NULL,
+    "Budget" numeric(12,2) NOT NULL,
+    "DiningStyle" character varying(100) NOT NULL,
+    "OriginalRequest" character varying(4000),
+    "ParsedPreferenceJson" jsonb,
+    "Latitude" numeric(10,7),
+    "Longitude" numeric(10,7),
+    "MaxDistanceMeters" integer,
+    "Status" character varying(20) NOT NULL,
+    "CreatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "ExpiresAt" timestamp with time zone NOT NULL,
+    "IdempotencyKey" character varying(100),
+    "RequestHash" character varying(64),
+    "UsedProviderFallback" boolean DEFAULT false NOT NULL,
+    "WarningsJson" jsonb,
+    CONSTRAINT ck_aimealplansession_budget CHECK (("Budget" > (0)::numeric)),
+    CONSTRAINT ck_aimealplansession_party CHECK (("PartySize" > 0))
+);
+
+
+--
+-- Name: AiRecommendationFeedback; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."AiRecommendationFeedback" (
+    "Id" uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    "SessionId" uuid NOT NULL,
+    "FoodItemId" uuid,
+    "Action" character varying(30) NOT NULL,
+    "CreatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: AiRecommendationResult; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."AiRecommendationResult" (
+    "SessionId" uuid NOT NULL,
+    "FoodItemId" uuid NOT NULL,
+    "Rank" integer NOT NULL,
+    "Score" numeric(5,2) NOT NULL,
+    "MatchTier" character varying(20) NOT NULL,
+    "CreatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_airecommendationresult_score CHECK ((("Score" >= (0)::numeric) AND ("Score" <= (100)::numeric)))
+);
+
+
+--
+-- Name: AiRecommendationSession; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."AiRecommendationSession" (
+    "Id" uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    "CustomerId" uuid,
+    "OriginalQuery" character varying(4000) NOT NULL,
+    "ParsedPreferenceJson" jsonb,
+    "Latitude" numeric(10,7),
+    "Longitude" numeric(10,7),
+    "MaxDistanceMeters" integer,
+    "Status" character varying(20) NOT NULL,
+    "ProviderName" character varying(100),
+    "UsedFallback" boolean NOT NULL,
+    "CreatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "ExpiresAt" timestamp with time zone NOT NULL,
+    "ProviderFailureCategory" character varying(50),
+    "ProviderModelName" character varying(100),
+    "ProviderRequestId" character varying(200)
+);
+
+
+--
+-- Name: Allergen; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."Allergen" (
+    "Id" uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    "Code" character varying(100) NOT NULL,
+    "Name" character varying(200) NOT NULL,
+    "IsSystem" boolean DEFAULT false NOT NULL,
+    "IsActive" boolean DEFAULT true NOT NULL,
+    "DisplayOrder" integer DEFAULT 0 NOT NULL,
+    "CreatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "UpdatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_allergen_code_normalized CHECK ((("Code")::text = upper(btrim(("Code")::text))))
+);
 
 
 --
@@ -434,6 +605,67 @@ COMMENT ON TABLE public."Conversations" IS 'Cuộc trò chuyện giữa 1 khách
 
 
 --
+-- Name: CustomerAllergenExclusion; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."CustomerAllergenExclusion" (
+    "CustomerId" uuid NOT NULL,
+    "AllergenId" uuid NOT NULL,
+    "CreatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: CustomerAvoidedIngredient; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."CustomerAvoidedIngredient" (
+    "CustomerId" uuid NOT NULL,
+    "IngredientId" uuid NOT NULL,
+    "CreatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: CustomerAvoidedTasteProfile; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."CustomerAvoidedTasteProfile" (
+    "CustomerId" uuid NOT NULL,
+    "TasteProfileId" uuid NOT NULL,
+    "CreatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: CustomerDietaryRequirement; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."CustomerDietaryRequirement" (
+    "CustomerId" uuid NOT NULL,
+    "DietaryAttributeId" uuid NOT NULL,
+    "CreatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: CustomerFoodProfile; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."CustomerFoodProfile" (
+    "CustomerId" uuid NOT NULL,
+    "PreferredSpiceLevel" character varying(20),
+    "PreferredPriceMin" numeric(12,2),
+    "PreferredPriceMax" numeric(12,2),
+    "DefaultMaxDistanceMeters" integer,
+    "CreatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "UpdatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_customerfoodprofile_distance CHECK ((("DefaultMaxDistanceMeters" IS NULL) OR ("DefaultMaxDistanceMeters" > 0))),
+    CONSTRAINT ck_customerfoodprofile_price_range CHECK ((("PreferredPriceMin" IS NULL) OR ("PreferredPriceMax" IS NULL) OR ("PreferredPriceMin" <= "PreferredPriceMax")))
+);
+
+
+--
 -- Name: CustomerPreference; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -456,6 +688,78 @@ COMMENT ON TABLE public."CustomerPreference" IS 'Sở thích rõ ràng của kh�
 
 
 --
+-- Name: CustomerPreferredCourse; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."CustomerPreferredCourse" (
+    "CustomerId" uuid NOT NULL,
+    "Course" character varying(30) NOT NULL,
+    "CreatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: CustomerPreferredDiningPurpose; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."CustomerPreferredDiningPurpose" (
+    "CustomerId" uuid NOT NULL,
+    "Purpose" character varying(30) NOT NULL,
+    "CreatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: CustomerPreferredIngredient; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."CustomerPreferredIngredient" (
+    "CustomerId" uuid NOT NULL,
+    "IngredientId" uuid NOT NULL,
+    "CreatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: CustomerPreferredPreparationMethod; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."CustomerPreferredPreparationMethod" (
+    "CustomerId" uuid NOT NULL,
+    "PreparationMethodId" uuid NOT NULL,
+    "CreatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: CustomerPreferredTasteProfile; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."CustomerPreferredTasteProfile" (
+    "CustomerId" uuid NOT NULL,
+    "TasteProfileId" uuid NOT NULL,
+    "CreatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: DietaryAttribute; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."DietaryAttribute" (
+    "Id" uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    "Code" character varying(100) NOT NULL,
+    "Name" character varying(200) NOT NULL,
+    "IsSystem" boolean DEFAULT false NOT NULL,
+    "IsActive" boolean DEFAULT true NOT NULL,
+    "DisplayOrder" integer DEFAULT 0 NOT NULL,
+    "CreatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "UpdatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_dietaryattribute_code_normalized CHECK ((("Code")::text = upper(btrim(("Code")::text))))
+);
+
+
+--
 -- Name: EmailOutbox; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -473,6 +777,26 @@ CREATE TABLE public."EmailOutbox" (
     "SentAt" timestamp with time zone,
     "CreatedAt" timestamp with time zone NOT NULL,
     "UpdatedAt" timestamp with time zone NOT NULL
+);
+
+
+--
+-- Name: FoodAiProfile; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."FoodAiProfile" (
+    "FoodItemId" uuid NOT NULL,
+    "SearchText" text NOT NULL,
+    "Embedding" real[],
+    "EmbeddingModel" character varying(100),
+    "ContentHash" character varying(64) NOT NULL,
+    "Status" character varying(20) NOT NULL,
+    "Version" integer NOT NULL,
+    "EmbeddedAt" timestamp with time zone,
+    "LastAttemptAt" timestamp with time zone,
+    "LastError" character varying(2000),
+    "CreatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "UpdatedAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -540,7 +864,15 @@ CREATE TABLE public."FoodItem" (
     "IsFeatured" boolean DEFAULT false NOT NULL,
     "IsDeleted" boolean DEFAULT false NOT NULL,
     "CreatedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "UpdatedAt" timestamp with time zone DEFAULT now() NOT NULL
+    "UpdatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "EstimatedServingCount" integer,
+    "IsShareable" boolean,
+    "SemanticProfileUpdatedAt" timestamp with time zone,
+    "SemanticProfileVersion" integer DEFAULT 0 NOT NULL,
+    "ServingSizeDescription" character varying(300),
+    "ServingTemperature" character varying(20),
+    "SpiceLevel" character varying(20) DEFAULT 'UNKNOWN'::character varying NOT NULL,
+    CONSTRAINT ck_fooditem_estimated_serving_count CHECK ((("EstimatedServingCount" IS NULL) OR ("EstimatedServingCount" > 0)))
 );
 
 
@@ -566,6 +898,95 @@ COMMENT ON COLUMN public."FoodItem"."IsAvailable" IS 'false khi món hết nguy�
 
 
 --
+-- Name: FoodItemAllergen; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."FoodItemAllergen" (
+    "FoodItemId" uuid NOT NULL,
+    "AllergenId" uuid NOT NULL,
+    "DeclarationType" character varying(20) NOT NULL,
+    "IsConfirmed" boolean NOT NULL,
+    "Source" character varying(30) NOT NULL,
+    "CreatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "UpdatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: FoodItemCourse; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."FoodItemCourse" (
+    "FoodItemId" uuid NOT NULL,
+    "Course" character varying(30) NOT NULL,
+    "IsPrimary" boolean NOT NULL,
+    "CreatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: FoodItemDietaryAttribute; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."FoodItemDietaryAttribute" (
+    "FoodItemId" uuid NOT NULL,
+    "DietaryAttributeId" uuid NOT NULL,
+    "SuitabilityStatus" character varying(20) NOT NULL,
+    "IsConfirmed" boolean NOT NULL,
+    "Source" character varying(30) NOT NULL,
+    "CreatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "UpdatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: FoodItemDiningPurpose; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."FoodItemDiningPurpose" (
+    "FoodItemId" uuid NOT NULL,
+    "Purpose" character varying(30) NOT NULL,
+    "CreatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: FoodItemIngredient; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."FoodItemIngredient" (
+    "FoodItemId" uuid NOT NULL,
+    "IngredientId" uuid NOT NULL,
+    "IsPrimary" boolean NOT NULL,
+    "IsOptional" boolean NOT NULL,
+    "CreatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: FoodItemPreparationMethod; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."FoodItemPreparationMethod" (
+    "FoodItemId" uuid NOT NULL,
+    "PreparationMethodId" uuid NOT NULL,
+    "IsPrimary" boolean NOT NULL,
+    "CreatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: FoodItemSearchFacet; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."FoodItemSearchFacet" (
+    "FoodItemId" uuid NOT NULL,
+    "FoodSearchFacetId" uuid NOT NULL,
+    "CreatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
 -- Name: FoodItemTag; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -581,6 +1002,19 @@ CREATE TABLE public."FoodItemTag" (
 --
 
 COMMENT ON TABLE public."FoodItemTag" IS 'Bảng nối gắn tag ngữ nghĩa vào món ăn';
+
+
+--
+-- Name: FoodItemTasteProfile; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."FoodItemTasteProfile" (
+    "FoodItemId" uuid NOT NULL,
+    "TasteProfileId" uuid NOT NULL,
+    "Intensity" integer,
+    "CreatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_fooditemtaste_intensity CHECK ((("Intensity" IS NULL) OR (("Intensity" >= 1) AND ("Intensity" <= 5))))
+);
 
 
 --
@@ -604,6 +1038,23 @@ CREATE TABLE public."FoodPrice" (
 --
 
 COMMENT ON TABLE public."FoodPrice" IS 'Bảng giá theo ngày trong tuần - override giá mặc định của FoodItem';
+
+
+--
+-- Name: FoodSearchFacet; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."FoodSearchFacet" (
+    "Id" uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    "Code" character varying(100) NOT NULL,
+    "Name" character varying(200) NOT NULL,
+    "IsSystem" boolean DEFAULT false NOT NULL,
+    "IsActive" boolean DEFAULT true NOT NULL,
+    "DisplayOrder" integer DEFAULT 0 NOT NULL,
+    "CreatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "UpdatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_foodsearchfacet_code_normalized CHECK ((("Code")::text = upper(btrim(("Code")::text))))
+);
 
 
 --
@@ -633,6 +1084,24 @@ CREATE TABLE public."FoodTag" (
 --
 
 COMMENT ON TABLE public."FoodTag" IS 'Danh sách tag chuẩn mô tả ngữ nghĩa món ăn cho AI/recommendation';
+
+
+--
+-- Name: Ingredient; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."Ingredient" (
+    "Id" uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    "NormalizedName" character varying(200) NOT NULL,
+    "Code" character varying(100) NOT NULL,
+    "Name" character varying(200) NOT NULL,
+    "IsSystem" boolean DEFAULT false NOT NULL,
+    "IsActive" boolean DEFAULT true NOT NULL,
+    "DisplayOrder" integer DEFAULT 0 NOT NULL,
+    "CreatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "UpdatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_ingredient_code_normalized CHECK ((("Code")::text = upper(btrim(("Code")::text))))
+);
 
 
 --
@@ -1262,6 +1731,23 @@ COMMENT ON COLUMN public."Payments"."PayOSOrderCode" IS 'PayOS order code for th
 
 
 --
+-- Name: PreparationMethod; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."PreparationMethod" (
+    "Id" uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    "Code" character varying(100) NOT NULL,
+    "Name" character varying(200) NOT NULL,
+    "IsSystem" boolean DEFAULT false NOT NULL,
+    "IsActive" boolean DEFAULT true NOT NULL,
+    "DisplayOrder" integer DEFAULT 0 NOT NULL,
+    "CreatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "UpdatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_preparationmethod_code_normalized CHECK ((("Code")::text = upper(btrim(("Code")::text))))
+);
+
+
+--
 -- Name: Promotion; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1511,6 +1997,23 @@ CREATE TABLE public."SystemSetting" (
 
 
 --
+-- Name: TasteProfile; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."TasteProfile" (
+    "Id" uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    "Code" character varying(100) NOT NULL,
+    "Name" character varying(200) NOT NULL,
+    "IsSystem" boolean DEFAULT false NOT NULL,
+    "IsActive" boolean DEFAULT true NOT NULL,
+    "DisplayOrder" integer DEFAULT 0 NOT NULL,
+    "CreatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "UpdatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_tasteprofile_code_normalized CHECK ((("Code")::text = upper(btrim(("Code")::text))))
+);
+
+
+--
 -- Name: User; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1661,6 +2164,14 @@ ALTER TABLE ONLY public."AIRecommendationLog"
 
 
 --
+-- Name: Allergen Allergen_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."Allergen"
+    ADD CONSTRAINT "Allergen_pkey" PRIMARY KEY ("Id");
+
+
+--
 -- Name: BoothDocuments BoothDocuments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1757,6 +2268,14 @@ ALTER TABLE ONLY public."CustomerPreference"
 
 
 --
+-- Name: DietaryAttribute DietaryAttribute_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."DietaryAttribute"
+    ADD CONSTRAINT "DietaryAttribute_pkey" PRIMARY KEY ("Id");
+
+
+--
 -- Name: FoodCategories FoodCategories_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1797,11 +2316,27 @@ ALTER TABLE ONLY public."FoodPrice"
 
 
 --
+-- Name: FoodSearchFacet FoodSearchFacet_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."FoodSearchFacet"
+    ADD CONSTRAINT "FoodSearchFacet_pkey" PRIMARY KEY ("Id");
+
+
+--
 -- Name: FoodTag FoodTag_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public."FoodTag"
     ADD CONSTRAINT "FoodTag_pkey" PRIMARY KEY ("Id");
+
+
+--
+-- Name: Ingredient Ingredient_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."Ingredient"
+    ADD CONSTRAINT "Ingredient_pkey" PRIMARY KEY ("Id");
 
 
 --
@@ -1901,6 +2436,62 @@ ALTER TABLE ONLY public."Order"
 
 
 --
+-- Name: AiMealPlan PK_AiMealPlan; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."AiMealPlan"
+    ADD CONSTRAINT "PK_AiMealPlan" PRIMARY KEY ("Id");
+
+
+--
+-- Name: AiMealPlanCartOperation PK_AiMealPlanCartOperation; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."AiMealPlanCartOperation"
+    ADD CONSTRAINT "PK_AiMealPlanCartOperation" PRIMARY KEY ("Id");
+
+
+--
+-- Name: AiMealPlanItem PK_AiMealPlanItem; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."AiMealPlanItem"
+    ADD CONSTRAINT "PK_AiMealPlanItem" PRIMARY KEY ("Id");
+
+
+--
+-- Name: AiMealPlanSession PK_AiMealPlanSession; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."AiMealPlanSession"
+    ADD CONSTRAINT "PK_AiMealPlanSession" PRIMARY KEY ("Id");
+
+
+--
+-- Name: AiRecommendationFeedback PK_AiRecommendationFeedback; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."AiRecommendationFeedback"
+    ADD CONSTRAINT "PK_AiRecommendationFeedback" PRIMARY KEY ("Id");
+
+
+--
+-- Name: AiRecommendationResult PK_AiRecommendationResult; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."AiRecommendationResult"
+    ADD CONSTRAINT "PK_AiRecommendationResult" PRIMARY KEY ("SessionId", "FoodItemId");
+
+
+--
+-- Name: AiRecommendationSession PK_AiRecommendationSession; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."AiRecommendationSession"
+    ADD CONSTRAINT "PK_AiRecommendationSession" PRIMARY KEY ("Id");
+
+
+--
 -- Name: BoothRegistrations PK_BoothRegistrations; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1909,11 +2500,163 @@ ALTER TABLE ONLY public."BoothRegistrations"
 
 
 --
+-- Name: CustomerAllergenExclusion PK_CustomerAllergenExclusion; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."CustomerAllergenExclusion"
+    ADD CONSTRAINT "PK_CustomerAllergenExclusion" PRIMARY KEY ("CustomerId", "AllergenId");
+
+
+--
+-- Name: CustomerAvoidedIngredient PK_CustomerAvoidedIngredient; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."CustomerAvoidedIngredient"
+    ADD CONSTRAINT "PK_CustomerAvoidedIngredient" PRIMARY KEY ("CustomerId", "IngredientId");
+
+
+--
+-- Name: CustomerAvoidedTasteProfile PK_CustomerAvoidedTasteProfile; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."CustomerAvoidedTasteProfile"
+    ADD CONSTRAINT "PK_CustomerAvoidedTasteProfile" PRIMARY KEY ("CustomerId", "TasteProfileId");
+
+
+--
+-- Name: CustomerDietaryRequirement PK_CustomerDietaryRequirement; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."CustomerDietaryRequirement"
+    ADD CONSTRAINT "PK_CustomerDietaryRequirement" PRIMARY KEY ("CustomerId", "DietaryAttributeId");
+
+
+--
+-- Name: CustomerFoodProfile PK_CustomerFoodProfile; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."CustomerFoodProfile"
+    ADD CONSTRAINT "PK_CustomerFoodProfile" PRIMARY KEY ("CustomerId");
+
+
+--
+-- Name: CustomerPreferredCourse PK_CustomerPreferredCourse; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."CustomerPreferredCourse"
+    ADD CONSTRAINT "PK_CustomerPreferredCourse" PRIMARY KEY ("CustomerId", "Course");
+
+
+--
+-- Name: CustomerPreferredDiningPurpose PK_CustomerPreferredDiningPurpose; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."CustomerPreferredDiningPurpose"
+    ADD CONSTRAINT "PK_CustomerPreferredDiningPurpose" PRIMARY KEY ("CustomerId", "Purpose");
+
+
+--
+-- Name: CustomerPreferredIngredient PK_CustomerPreferredIngredient; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."CustomerPreferredIngredient"
+    ADD CONSTRAINT "PK_CustomerPreferredIngredient" PRIMARY KEY ("CustomerId", "IngredientId");
+
+
+--
+-- Name: CustomerPreferredPreparationMethod PK_CustomerPreferredPreparationMethod; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."CustomerPreferredPreparationMethod"
+    ADD CONSTRAINT "PK_CustomerPreferredPreparationMethod" PRIMARY KEY ("CustomerId", "PreparationMethodId");
+
+
+--
+-- Name: CustomerPreferredTasteProfile PK_CustomerPreferredTasteProfile; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."CustomerPreferredTasteProfile"
+    ADD CONSTRAINT "PK_CustomerPreferredTasteProfile" PRIMARY KEY ("CustomerId", "TasteProfileId");
+
+
+--
 -- Name: EmailOutbox PK_EmailOutbox; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public."EmailOutbox"
     ADD CONSTRAINT "PK_EmailOutbox" PRIMARY KEY ("Id");
+
+
+--
+-- Name: FoodAiProfile PK_FoodAiProfile; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."FoodAiProfile"
+    ADD CONSTRAINT "PK_FoodAiProfile" PRIMARY KEY ("FoodItemId");
+
+
+--
+-- Name: FoodItemAllergen PK_FoodItemAllergen; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."FoodItemAllergen"
+    ADD CONSTRAINT "PK_FoodItemAllergen" PRIMARY KEY ("FoodItemId", "AllergenId");
+
+
+--
+-- Name: FoodItemCourse PK_FoodItemCourse; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."FoodItemCourse"
+    ADD CONSTRAINT "PK_FoodItemCourse" PRIMARY KEY ("FoodItemId", "Course");
+
+
+--
+-- Name: FoodItemDietaryAttribute PK_FoodItemDietaryAttribute; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."FoodItemDietaryAttribute"
+    ADD CONSTRAINT "PK_FoodItemDietaryAttribute" PRIMARY KEY ("FoodItemId", "DietaryAttributeId");
+
+
+--
+-- Name: FoodItemDiningPurpose PK_FoodItemDiningPurpose; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."FoodItemDiningPurpose"
+    ADD CONSTRAINT "PK_FoodItemDiningPurpose" PRIMARY KEY ("FoodItemId", "Purpose");
+
+
+--
+-- Name: FoodItemIngredient PK_FoodItemIngredient; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."FoodItemIngredient"
+    ADD CONSTRAINT "PK_FoodItemIngredient" PRIMARY KEY ("FoodItemId", "IngredientId");
+
+
+--
+-- Name: FoodItemPreparationMethod PK_FoodItemPreparationMethod; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."FoodItemPreparationMethod"
+    ADD CONSTRAINT "PK_FoodItemPreparationMethod" PRIMARY KEY ("FoodItemId", "PreparationMethodId");
+
+
+--
+-- Name: FoodItemSearchFacet PK_FoodItemSearchFacet; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."FoodItemSearchFacet"
+    ADD CONSTRAINT "PK_FoodItemSearchFacet" PRIMARY KEY ("FoodItemId", "FoodSearchFacetId");
+
+
+--
+-- Name: FoodItemTasteProfile PK_FoodItemTasteProfile; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."FoodItemTasteProfile"
+    ADD CONSTRAINT "PK_FoodItemTasteProfile" PRIMARY KEY ("FoodItemId", "TasteProfileId");
 
 
 --
@@ -2029,6 +2772,14 @@ ALTER TABLE ONLY public."Payments"
 
 
 --
+-- Name: PreparationMethod PreparationMethod_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."PreparationMethod"
+    ADD CONSTRAINT "PreparationMethod_pkey" PRIMARY KEY ("Id");
+
+
+--
 -- Name: PromotionCategory PromotionCategory_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2085,6 +2836,14 @@ ALTER TABLE ONLY public."Role"
 
 
 --
+-- Name: TasteProfile TasteProfile_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."TasteProfile"
+    ADD CONSTRAINT "TasteProfile_pkey" PRIMARY KEY ("Id");
+
+
+--
 -- Name: UserDeviceToken UserDeviceToken_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2113,6 +2872,34 @@ ALTER TABLE ONLY public."Zones"
 --
 
 CREATE UNIQUE INDEX "FoodCategories_BoothId_Name_key" ON public."FoodCategories" USING btree ("BoothId", "Name") WHERE ("IsDeleted" = false);
+
+
+--
+-- Name: IX_AiMealPlanItem_BoothId; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "IX_AiMealPlanItem_BoothId" ON public."AiMealPlanItem" USING btree ("BoothId");
+
+
+--
+-- Name: IX_AiMealPlanItem_FoodItemId; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "IX_AiMealPlanItem_FoodItemId" ON public."AiMealPlanItem" USING btree ("FoodItemId");
+
+
+--
+-- Name: IX_AiRecommendationFeedback_FoodItemId; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "IX_AiRecommendationFeedback_FoodItemId" ON public."AiRecommendationFeedback" USING btree ("FoodItemId");
+
+
+--
+-- Name: IX_AiRecommendationResult_FoodItemId; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "IX_AiRecommendationResult_FoodItemId" ON public."AiRecommendationResult" USING btree ("FoodItemId");
 
 
 --
@@ -2263,6 +3050,55 @@ CREATE INDEX "IX_Conversations_LastMessageId" ON public."Conversations" USING bt
 
 
 --
+-- Name: IX_CustomerAllergenExclusion_AllergenId; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "IX_CustomerAllergenExclusion_AllergenId" ON public."CustomerAllergenExclusion" USING btree ("AllergenId");
+
+
+--
+-- Name: IX_CustomerAvoidedIngredient_IngredientId; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "IX_CustomerAvoidedIngredient_IngredientId" ON public."CustomerAvoidedIngredient" USING btree ("IngredientId");
+
+
+--
+-- Name: IX_CustomerAvoidedTasteProfile_TasteProfileId; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "IX_CustomerAvoidedTasteProfile_TasteProfileId" ON public."CustomerAvoidedTasteProfile" USING btree ("TasteProfileId");
+
+
+--
+-- Name: IX_CustomerDietaryRequirement_DietaryAttributeId; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "IX_CustomerDietaryRequirement_DietaryAttributeId" ON public."CustomerDietaryRequirement" USING btree ("DietaryAttributeId");
+
+
+--
+-- Name: IX_CustomerPreferredIngredient_IngredientId; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "IX_CustomerPreferredIngredient_IngredientId" ON public."CustomerPreferredIngredient" USING btree ("IngredientId");
+
+
+--
+-- Name: IX_CustomerPreferredPreparationMethod_PreparationMethodId; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "IX_CustomerPreferredPreparationMethod_PreparationMethodId" ON public."CustomerPreferredPreparationMethod" USING btree ("PreparationMethodId");
+
+
+--
+-- Name: IX_CustomerPreferredTasteProfile_TasteProfileId; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "IX_CustomerPreferredTasteProfile_TasteProfileId" ON public."CustomerPreferredTasteProfile" USING btree ("TasteProfileId");
+
+
+--
 -- Name: IX_EmailOutbox_ReferenceId_EmailType; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2274,6 +3110,48 @@ CREATE UNIQUE INDEX "IX_EmailOutbox_ReferenceId_EmailType" ON public."EmailOutbo
 --
 
 CREATE INDEX "IX_FoodImages_FoodItemId" ON public."FoodImages" USING btree ("FoodItemId");
+
+
+--
+-- Name: IX_FoodItemAllergen_AllergenId; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "IX_FoodItemAllergen_AllergenId" ON public."FoodItemAllergen" USING btree ("AllergenId");
+
+
+--
+-- Name: IX_FoodItemDietaryAttribute_DietaryAttributeId; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "IX_FoodItemDietaryAttribute_DietaryAttributeId" ON public."FoodItemDietaryAttribute" USING btree ("DietaryAttributeId");
+
+
+--
+-- Name: IX_FoodItemIngredient_IngredientId; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "IX_FoodItemIngredient_IngredientId" ON public."FoodItemIngredient" USING btree ("IngredientId");
+
+
+--
+-- Name: IX_FoodItemPreparationMethod_PreparationMethodId; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "IX_FoodItemPreparationMethod_PreparationMethodId" ON public."FoodItemPreparationMethod" USING btree ("PreparationMethodId");
+
+
+--
+-- Name: IX_FoodItemSearchFacet_FoodSearchFacetId; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "IX_FoodItemSearchFacet_FoodSearchFacetId" ON public."FoodItemSearchFacet" USING btree ("FoodSearchFacetId");
+
+
+--
+-- Name: IX_FoodItemTasteProfile_TasteProfileId; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "IX_FoodItemTasteProfile_TasteProfileId" ON public."FoodItemTasteProfile" USING btree ("TasteProfileId");
 
 
 --
@@ -2627,6 +3505,41 @@ CREATE UNIQUE INDEX "User_UserName_key" ON public."User" USING btree ("UserName"
 
 
 --
+-- Name: idx_aimealplan_market; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_aimealplan_market ON public."AiMealPlan" USING btree ("MarketId");
+
+
+--
+-- Name: idx_aimealplancart_plan; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_aimealplancart_plan ON public."AiMealPlanCartOperation" USING btree ("PlanId");
+
+
+--
+-- Name: idx_aimealplanitem_plan; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_aimealplanitem_plan ON public."AiMealPlanItem" USING btree ("PlanId");
+
+
+--
+-- Name: idx_aimealplansession_customer_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_aimealplansession_customer_created ON public."AiMealPlanSession" USING btree ("CustomerId", "CreatedAt");
+
+
+--
+-- Name: idx_airecommendationfeedback_session; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_airecommendationfeedback_session ON public."AiRecommendationFeedback" USING btree ("SessionId");
+
+
+--
 -- Name: idx_airecommendationlog_customer; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2645,6 +3558,13 @@ CREATE INDEX idx_airecommendationlog_nightmarket ON public."AIRecommendationLog"
 --
 
 CREATE INDEX idx_airecommendationlog_type_created ON public."AIRecommendationLog" USING btree ("RecommendationType", "CreatedAt");
+
+
+--
+-- Name: idx_airecommendationsession_customer_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_airecommendationsession_customer_created ON public."AiRecommendationSession" USING btree ("CustomerId", "CreatedAt");
 
 
 --
@@ -2718,6 +3638,13 @@ CREATE INDEX idx_device_token_user_active ON public."UserDeviceToken" USING btre
 
 
 --
+-- Name: idx_foodaiprofile_contenthash; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_foodaiprofile_contenthash ON public."FoodAiProfile" USING btree ("ContentHash");
+
+
+--
 -- Name: idx_foodcategory_booth; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2743,6 +3670,13 @@ CREATE INDEX idx_fooditem_category ON public."FoodItem" USING btree ("CategoryId
 --
 
 CREATE INDEX idx_fooditemtag_foodtag ON public."FoodItemTag" USING btree ("FoodTagId");
+
+
+--
+-- Name: idx_ingredient_normalized_name; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_ingredient_normalized_name ON public."Ingredient" USING btree ("NormalizedName");
 
 
 --
@@ -2949,6 +3883,55 @@ CREATE UNIQUE INDEX uq_review_order ON public."Reviews" USING btree ("OrderId");
 
 
 --
+-- Name: ux_aimealplan_session_code; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_aimealplan_session_code ON public."AiMealPlan" USING btree ("SessionId", "PlanCode");
+
+
+--
+-- Name: ux_aimealplancart_customer_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_aimealplancart_customer_key ON public."AiMealPlanCartOperation" USING btree ("CustomerId", "IdempotencyKey");
+
+
+--
+-- Name: ux_aimealplanitem_active_food; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_aimealplanitem_active_food ON public."AiMealPlanItem" USING btree ("PlanId", "FoodItemId") WHERE (("IsRemoved" = false) AND ("FoodItemId" IS NOT NULL));
+
+
+--
+-- Name: ux_aimealplansession_customer_idempotency; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_aimealplansession_customer_idempotency ON public."AiMealPlanSession" USING btree ("CustomerId", "IdempotencyKey") WHERE (("CustomerId" IS NOT NULL) AND ("IdempotencyKey" IS NOT NULL));
+
+
+--
+-- Name: ux_airecommendationfeedback_state; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_airecommendationfeedback_state ON public."AiRecommendationFeedback" USING btree ("SessionId", "FoodItemId") WHERE (("FoodItemId" IS NOT NULL) AND (("Action")::text = ANY ((ARRAY['LIKED'::character varying, 'DISLIKED'::character varying])::text[])));
+
+
+--
+-- Name: ux_airecommendationresult_session_rank; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_airecommendationresult_session_rank ON public."AiRecommendationResult" USING btree ("SessionId", "Rank");
+
+
+--
+-- Name: ux_allergen_code; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_allergen_code ON public."Allergen" USING btree ("Code");
+
+
+--
 -- Name: ux_boothlocation_active_booth; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2984,10 +3967,38 @@ CREATE UNIQUE INDEX ux_customerpreference_tag_kind ON public."CustomerPreference
 
 
 --
+-- Name: ux_dietaryattribute_code; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_dietaryattribute_code ON public."DietaryAttribute" USING btree ("Code");
+
+
+--
 -- Name: ux_foodcategory_code_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX ux_foodcategory_code_active ON public."FoodCategories" USING btree ("Code") WHERE ("IsDeleted" = false);
+
+
+--
+-- Name: ux_fooditemcourse_primary; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_fooditemcourse_primary ON public."FoodItemCourse" USING btree ("FoodItemId") WHERE ("IsPrimary" = true);
+
+
+--
+-- Name: ux_fooditempreparation_primary; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_fooditempreparation_primary ON public."FoodItemPreparationMethod" USING btree ("FoodItemId") WHERE ("IsPrimary" = true);
+
+
+--
+-- Name: ux_foodsearchfacet_code; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_foodsearchfacet_code ON public."FoodSearchFacet" USING btree ("Code");
 
 
 --
@@ -3002,6 +4013,13 @@ CREATE UNIQUE INDEX ux_foodtag_code_active ON public."FoodTag" USING btree ("Cod
 --
 
 CREATE UNIQUE INDEX ux_foodtag_name_active ON public."FoodTag" USING btree ("Name") WHERE ("IsDeleted" = false);
+
+
+--
+-- Name: ux_ingredient_code; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_ingredient_code ON public."Ingredient" USING btree ("Code");
 
 
 --
@@ -3089,10 +4107,24 @@ CREATE UNIQUE INDEX ux_payments_refund_reference ON public."Payments" USING btre
 
 
 --
+-- Name: ux_preparationmethod_code; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_preparationmethod_code ON public."PreparationMethod" USING btree ("Code");
+
+
+--
 -- Name: ux_promotion_active_code; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX ux_promotion_active_code ON public."Promotion" USING btree ("BoothId", "PromotionCode") WHERE (("PromotionCode" IS NOT NULL) AND ("IsDeleted" = false));
+
+
+--
+-- Name: ux_tasteprofile_code; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_tasteprofile_code ON public."TasteProfile" USING btree ("Code");
 
 
 --
@@ -3332,6 +4364,110 @@ ALTER TABLE ONLY public."CustomerPreference"
 
 
 --
+-- Name: AiMealPlanCartOperation FK_AiMealPlanCartOperation_AiMealPlan_PlanId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."AiMealPlanCartOperation"
+    ADD CONSTRAINT "FK_AiMealPlanCartOperation_AiMealPlan_PlanId" FOREIGN KEY ("PlanId") REFERENCES public."AiMealPlan"("Id") ON DELETE CASCADE;
+
+
+--
+-- Name: AiMealPlanCartOperation FK_AiMealPlanCartOperation_User_CustomerId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."AiMealPlanCartOperation"
+    ADD CONSTRAINT "FK_AiMealPlanCartOperation_User_CustomerId" FOREIGN KEY ("CustomerId") REFERENCES public."User"("Id") ON DELETE CASCADE;
+
+
+--
+-- Name: AiMealPlanItem FK_AiMealPlanItem_AiMealPlan_PlanId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."AiMealPlanItem"
+    ADD CONSTRAINT "FK_AiMealPlanItem_AiMealPlan_PlanId" FOREIGN KEY ("PlanId") REFERENCES public."AiMealPlan"("Id") ON DELETE CASCADE;
+
+
+--
+-- Name: AiMealPlanItem FK_AiMealPlanItem_Booth_BoothId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."AiMealPlanItem"
+    ADD CONSTRAINT "FK_AiMealPlanItem_Booth_BoothId" FOREIGN KEY ("BoothId") REFERENCES public."Booth"("Id") ON DELETE SET NULL;
+
+
+--
+-- Name: AiMealPlanItem FK_AiMealPlanItem_FoodItem_FoodItemId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."AiMealPlanItem"
+    ADD CONSTRAINT "FK_AiMealPlanItem_FoodItem_FoodItemId" FOREIGN KEY ("FoodItemId") REFERENCES public."FoodItem"("Id") ON DELETE SET NULL;
+
+
+--
+-- Name: AiMealPlanSession FK_AiMealPlanSession_User_CustomerId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."AiMealPlanSession"
+    ADD CONSTRAINT "FK_AiMealPlanSession_User_CustomerId" FOREIGN KEY ("CustomerId") REFERENCES public."User"("Id") ON DELETE SET NULL;
+
+
+--
+-- Name: AiMealPlan FK_AiMealPlan_AiMealPlanSession_SessionId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."AiMealPlan"
+    ADD CONSTRAINT "FK_AiMealPlan_AiMealPlanSession_SessionId" FOREIGN KEY ("SessionId") REFERENCES public."AiMealPlanSession"("Id") ON DELETE CASCADE;
+
+
+--
+-- Name: AiMealPlan FK_AiMealPlan_NightMarket_MarketId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."AiMealPlan"
+    ADD CONSTRAINT "FK_AiMealPlan_NightMarket_MarketId" FOREIGN KEY ("MarketId") REFERENCES public."NightMarket"("Id") ON DELETE RESTRICT;
+
+
+--
+-- Name: AiRecommendationFeedback FK_AiRecommendationFeedback_AiRecommendationSession_SessionId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."AiRecommendationFeedback"
+    ADD CONSTRAINT "FK_AiRecommendationFeedback_AiRecommendationSession_SessionId" FOREIGN KEY ("SessionId") REFERENCES public."AiRecommendationSession"("Id") ON DELETE CASCADE;
+
+
+--
+-- Name: AiRecommendationFeedback FK_AiRecommendationFeedback_FoodItem_FoodItemId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."AiRecommendationFeedback"
+    ADD CONSTRAINT "FK_AiRecommendationFeedback_FoodItem_FoodItemId" FOREIGN KEY ("FoodItemId") REFERENCES public."FoodItem"("Id") ON DELETE SET NULL;
+
+
+--
+-- Name: AiRecommendationResult FK_AiRecommendationResult_AiRecommendationSession_SessionId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."AiRecommendationResult"
+    ADD CONSTRAINT "FK_AiRecommendationResult_AiRecommendationSession_SessionId" FOREIGN KEY ("SessionId") REFERENCES public."AiRecommendationSession"("Id") ON DELETE CASCADE;
+
+
+--
+-- Name: AiRecommendationResult FK_AiRecommendationResult_FoodItem_FoodItemId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."AiRecommendationResult"
+    ADD CONSTRAINT "FK_AiRecommendationResult_FoodItem_FoodItemId" FOREIGN KEY ("FoodItemId") REFERENCES public."FoodItem"("Id") ON DELETE CASCADE;
+
+
+--
+-- Name: AiRecommendationSession FK_AiRecommendationSession_User_CustomerId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."AiRecommendationSession"
+    ADD CONSTRAINT "FK_AiRecommendationSession_User_CustomerId" FOREIGN KEY ("CustomerId") REFERENCES public."User"("Id") ON DELETE SET NULL;
+
+
+--
 -- Name: BoothDocuments FK_BoothDocuments_Booth_BoothId; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3385,6 +4521,262 @@ ALTER TABLE ONLY public."BoothRegistrations"
 
 ALTER TABLE ONLY public."Booth"
     ADD CONSTRAINT "FK_Booth_Zones_ZoneId" FOREIGN KEY ("ZoneId") REFERENCES public."Zones"("Id");
+
+
+--
+-- Name: CustomerAllergenExclusion FK_CustomerAllergenExclusion_Allergen_AllergenId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."CustomerAllergenExclusion"
+    ADD CONSTRAINT "FK_CustomerAllergenExclusion_Allergen_AllergenId" FOREIGN KEY ("AllergenId") REFERENCES public."Allergen"("Id") ON DELETE RESTRICT;
+
+
+--
+-- Name: CustomerAllergenExclusion FK_CustomerAllergenExclusion_CustomerFoodProfile_CustomerId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."CustomerAllergenExclusion"
+    ADD CONSTRAINT "FK_CustomerAllergenExclusion_CustomerFoodProfile_CustomerId" FOREIGN KEY ("CustomerId") REFERENCES public."CustomerFoodProfile"("CustomerId") ON DELETE CASCADE;
+
+
+--
+-- Name: CustomerAvoidedIngredient FK_CustomerAvoidedIngredient_CustomerFoodProfile_CustomerId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."CustomerAvoidedIngredient"
+    ADD CONSTRAINT "FK_CustomerAvoidedIngredient_CustomerFoodProfile_CustomerId" FOREIGN KEY ("CustomerId") REFERENCES public."CustomerFoodProfile"("CustomerId") ON DELETE CASCADE;
+
+
+--
+-- Name: CustomerAvoidedIngredient FK_CustomerAvoidedIngredient_Ingredient_IngredientId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."CustomerAvoidedIngredient"
+    ADD CONSTRAINT "FK_CustomerAvoidedIngredient_Ingredient_IngredientId" FOREIGN KEY ("IngredientId") REFERENCES public."Ingredient"("Id") ON DELETE RESTRICT;
+
+
+--
+-- Name: CustomerAvoidedTasteProfile FK_CustomerAvoidedTasteProfile_CustomerFoodProfile_CustomerId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."CustomerAvoidedTasteProfile"
+    ADD CONSTRAINT "FK_CustomerAvoidedTasteProfile_CustomerFoodProfile_CustomerId" FOREIGN KEY ("CustomerId") REFERENCES public."CustomerFoodProfile"("CustomerId") ON DELETE CASCADE;
+
+
+--
+-- Name: CustomerAvoidedTasteProfile FK_CustomerAvoidedTasteProfile_TasteProfile_TasteProfileId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."CustomerAvoidedTasteProfile"
+    ADD CONSTRAINT "FK_CustomerAvoidedTasteProfile_TasteProfile_TasteProfileId" FOREIGN KEY ("TasteProfileId") REFERENCES public."TasteProfile"("Id") ON DELETE RESTRICT;
+
+
+--
+-- Name: CustomerDietaryRequirement FK_CustomerDietaryRequirement_CustomerFoodProfile_CustomerId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."CustomerDietaryRequirement"
+    ADD CONSTRAINT "FK_CustomerDietaryRequirement_CustomerFoodProfile_CustomerId" FOREIGN KEY ("CustomerId") REFERENCES public."CustomerFoodProfile"("CustomerId") ON DELETE CASCADE;
+
+
+--
+-- Name: CustomerDietaryRequirement FK_CustomerDietaryRequirement_DietaryAttribute_DietaryAttribut~; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."CustomerDietaryRequirement"
+    ADD CONSTRAINT "FK_CustomerDietaryRequirement_DietaryAttribute_DietaryAttribut~" FOREIGN KEY ("DietaryAttributeId") REFERENCES public."DietaryAttribute"("Id") ON DELETE RESTRICT;
+
+
+--
+-- Name: CustomerFoodProfile FK_CustomerFoodProfile_User_CustomerId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."CustomerFoodProfile"
+    ADD CONSTRAINT "FK_CustomerFoodProfile_User_CustomerId" FOREIGN KEY ("CustomerId") REFERENCES public."User"("Id") ON DELETE CASCADE;
+
+
+--
+-- Name: CustomerPreferredCourse FK_CustomerPreferredCourse_CustomerFoodProfile_CustomerId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."CustomerPreferredCourse"
+    ADD CONSTRAINT "FK_CustomerPreferredCourse_CustomerFoodProfile_CustomerId" FOREIGN KEY ("CustomerId") REFERENCES public."CustomerFoodProfile"("CustomerId") ON DELETE CASCADE;
+
+
+--
+-- Name: CustomerPreferredDiningPurpose FK_CustomerPreferredDiningPurpose_CustomerFoodProfile_Customer~; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."CustomerPreferredDiningPurpose"
+    ADD CONSTRAINT "FK_CustomerPreferredDiningPurpose_CustomerFoodProfile_Customer~" FOREIGN KEY ("CustomerId") REFERENCES public."CustomerFoodProfile"("CustomerId") ON DELETE CASCADE;
+
+
+--
+-- Name: CustomerPreferredIngredient FK_CustomerPreferredIngredient_CustomerFoodProfile_CustomerId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."CustomerPreferredIngredient"
+    ADD CONSTRAINT "FK_CustomerPreferredIngredient_CustomerFoodProfile_CustomerId" FOREIGN KEY ("CustomerId") REFERENCES public."CustomerFoodProfile"("CustomerId") ON DELETE CASCADE;
+
+
+--
+-- Name: CustomerPreferredIngredient FK_CustomerPreferredIngredient_Ingredient_IngredientId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."CustomerPreferredIngredient"
+    ADD CONSTRAINT "FK_CustomerPreferredIngredient_Ingredient_IngredientId" FOREIGN KEY ("IngredientId") REFERENCES public."Ingredient"("Id") ON DELETE RESTRICT;
+
+
+--
+-- Name: CustomerPreferredPreparationMethod FK_CustomerPreferredPreparationMethod_CustomerFoodProfile_Cust~; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."CustomerPreferredPreparationMethod"
+    ADD CONSTRAINT "FK_CustomerPreferredPreparationMethod_CustomerFoodProfile_Cust~" FOREIGN KEY ("CustomerId") REFERENCES public."CustomerFoodProfile"("CustomerId") ON DELETE CASCADE;
+
+
+--
+-- Name: CustomerPreferredPreparationMethod FK_CustomerPreferredPreparationMethod_PreparationMethod_Prepar~; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."CustomerPreferredPreparationMethod"
+    ADD CONSTRAINT "FK_CustomerPreferredPreparationMethod_PreparationMethod_Prepar~" FOREIGN KEY ("PreparationMethodId") REFERENCES public."PreparationMethod"("Id") ON DELETE RESTRICT;
+
+
+--
+-- Name: CustomerPreferredTasteProfile FK_CustomerPreferredTasteProfile_CustomerFoodProfile_CustomerId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."CustomerPreferredTasteProfile"
+    ADD CONSTRAINT "FK_CustomerPreferredTasteProfile_CustomerFoodProfile_CustomerId" FOREIGN KEY ("CustomerId") REFERENCES public."CustomerFoodProfile"("CustomerId") ON DELETE CASCADE;
+
+
+--
+-- Name: CustomerPreferredTasteProfile FK_CustomerPreferredTasteProfile_TasteProfile_TasteProfileId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."CustomerPreferredTasteProfile"
+    ADD CONSTRAINT "FK_CustomerPreferredTasteProfile_TasteProfile_TasteProfileId" FOREIGN KEY ("TasteProfileId") REFERENCES public."TasteProfile"("Id") ON DELETE RESTRICT;
+
+
+--
+-- Name: FoodAiProfile FK_FoodAiProfile_FoodItem_FoodItemId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."FoodAiProfile"
+    ADD CONSTRAINT "FK_FoodAiProfile_FoodItem_FoodItemId" FOREIGN KEY ("FoodItemId") REFERENCES public."FoodItem"("Id") ON DELETE CASCADE;
+
+
+--
+-- Name: FoodItemAllergen FK_FoodItemAllergen_Allergen_AllergenId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."FoodItemAllergen"
+    ADD CONSTRAINT "FK_FoodItemAllergen_Allergen_AllergenId" FOREIGN KEY ("AllergenId") REFERENCES public."Allergen"("Id") ON DELETE RESTRICT;
+
+
+--
+-- Name: FoodItemAllergen FK_FoodItemAllergen_FoodItem_FoodItemId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."FoodItemAllergen"
+    ADD CONSTRAINT "FK_FoodItemAllergen_FoodItem_FoodItemId" FOREIGN KEY ("FoodItemId") REFERENCES public."FoodItem"("Id") ON DELETE CASCADE;
+
+
+--
+-- Name: FoodItemCourse FK_FoodItemCourse_FoodItem_FoodItemId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."FoodItemCourse"
+    ADD CONSTRAINT "FK_FoodItemCourse_FoodItem_FoodItemId" FOREIGN KEY ("FoodItemId") REFERENCES public."FoodItem"("Id") ON DELETE CASCADE;
+
+
+--
+-- Name: FoodItemDietaryAttribute FK_FoodItemDietaryAttribute_DietaryAttribute_DietaryAttributeId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."FoodItemDietaryAttribute"
+    ADD CONSTRAINT "FK_FoodItemDietaryAttribute_DietaryAttribute_DietaryAttributeId" FOREIGN KEY ("DietaryAttributeId") REFERENCES public."DietaryAttribute"("Id") ON DELETE RESTRICT;
+
+
+--
+-- Name: FoodItemDietaryAttribute FK_FoodItemDietaryAttribute_FoodItem_FoodItemId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."FoodItemDietaryAttribute"
+    ADD CONSTRAINT "FK_FoodItemDietaryAttribute_FoodItem_FoodItemId" FOREIGN KEY ("FoodItemId") REFERENCES public."FoodItem"("Id") ON DELETE CASCADE;
+
+
+--
+-- Name: FoodItemDiningPurpose FK_FoodItemDiningPurpose_FoodItem_FoodItemId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."FoodItemDiningPurpose"
+    ADD CONSTRAINT "FK_FoodItemDiningPurpose_FoodItem_FoodItemId" FOREIGN KEY ("FoodItemId") REFERENCES public."FoodItem"("Id") ON DELETE CASCADE;
+
+
+--
+-- Name: FoodItemIngredient FK_FoodItemIngredient_FoodItem_FoodItemId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."FoodItemIngredient"
+    ADD CONSTRAINT "FK_FoodItemIngredient_FoodItem_FoodItemId" FOREIGN KEY ("FoodItemId") REFERENCES public."FoodItem"("Id") ON DELETE CASCADE;
+
+
+--
+-- Name: FoodItemIngredient FK_FoodItemIngredient_Ingredient_IngredientId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."FoodItemIngredient"
+    ADD CONSTRAINT "FK_FoodItemIngredient_Ingredient_IngredientId" FOREIGN KEY ("IngredientId") REFERENCES public."Ingredient"("Id") ON DELETE RESTRICT;
+
+
+--
+-- Name: FoodItemPreparationMethod FK_FoodItemPreparationMethod_FoodItem_FoodItemId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."FoodItemPreparationMethod"
+    ADD CONSTRAINT "FK_FoodItemPreparationMethod_FoodItem_FoodItemId" FOREIGN KEY ("FoodItemId") REFERENCES public."FoodItem"("Id") ON DELETE CASCADE;
+
+
+--
+-- Name: FoodItemPreparationMethod FK_FoodItemPreparationMethod_PreparationMethod_PreparationMeth~; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."FoodItemPreparationMethod"
+    ADD CONSTRAINT "FK_FoodItemPreparationMethod_PreparationMethod_PreparationMeth~" FOREIGN KEY ("PreparationMethodId") REFERENCES public."PreparationMethod"("Id") ON DELETE RESTRICT;
+
+
+--
+-- Name: FoodItemSearchFacet FK_FoodItemSearchFacet_FoodItem_FoodItemId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."FoodItemSearchFacet"
+    ADD CONSTRAINT "FK_FoodItemSearchFacet_FoodItem_FoodItemId" FOREIGN KEY ("FoodItemId") REFERENCES public."FoodItem"("Id") ON DELETE CASCADE;
+
+
+--
+-- Name: FoodItemSearchFacet FK_FoodItemSearchFacet_FoodSearchFacet_FoodSearchFacetId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."FoodItemSearchFacet"
+    ADD CONSTRAINT "FK_FoodItemSearchFacet_FoodSearchFacet_FoodSearchFacetId" FOREIGN KEY ("FoodSearchFacetId") REFERENCES public."FoodSearchFacet"("Id") ON DELETE RESTRICT;
+
+
+--
+-- Name: FoodItemTasteProfile FK_FoodItemTasteProfile_FoodItem_FoodItemId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."FoodItemTasteProfile"
+    ADD CONSTRAINT "FK_FoodItemTasteProfile_FoodItem_FoodItemId" FOREIGN KEY ("FoodItemId") REFERENCES public."FoodItem"("Id") ON DELETE CASCADE;
+
+
+--
+-- Name: FoodItemTasteProfile FK_FoodItemTasteProfile_TasteProfile_TasteProfileId; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."FoodItemTasteProfile"
+    ADD CONSTRAINT "FK_FoodItemTasteProfile_TasteProfile_TasteProfileId" FOREIGN KEY ("TasteProfileId") REFERENCES public."TasteProfile"("Id") ON DELETE RESTRICT;
 
 
 --
@@ -3895,5 +5287,4 @@ ALTER TABLE ONLY public."Zones"
 -- PostgreSQL database dump complete
 --
 
-\unrestrict gfGdITz0wZW72fpsWOUgA8HjSKCwxQn4qgi89N7veIRA1TMVbIvYNmkrtkoMUMD
-
+\unrestrict 7NrkzmYgjMmkZtIQSAIXdCpe63Z00RRhfXDdnwUnaT24ATmjdBr52VSbASkF3Vf

@@ -64,6 +64,12 @@ public partial class User
 
     public virtual ICollection<CustomerPreference> CustomerPreferences { get; set; } = new List<CustomerPreference>();
 
+    public virtual CustomerFoodProfile? CustomerFoodProfile { get; set; }
+
+    public virtual ICollection<AiRecommendationSession> AiRecommendationSessions { get; set; } = new List<AiRecommendationSession>();
+
+    public virtual ICollection<AiMealPlanSession> AiMealPlanSessions { get; set; } = new List<AiMealPlanSession>();
+
     public virtual ICollection<MarketSubscription> MarketSubscriptions { get; set; } = new List<MarketSubscription>();
 
     public virtual ICollection<AIRecommendationLog> AIRecommendationLogs { get; set; } = new List<AIRecommendationLog>();
@@ -89,8 +95,6 @@ public partial class User
     public virtual ICollection<Review> Reviews { get; set; } = new List<Review>();
 
     public virtual Role Role { get; set; } = null!;
-
-    public virtual ICollection<BoothRegistration> BoothRegistrations { get; set; } = new List<BoothRegistration>();
 
     public virtual ICollection<PaymentMethod> PaymentMethods { get; set; } = new List<PaymentMethod>();
 }

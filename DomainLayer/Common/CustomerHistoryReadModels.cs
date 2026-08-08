@@ -34,6 +34,7 @@ public sealed class CustomerOrderDetailReadModel
 
 public sealed class CustomerOrderItemReadModel
 {
+    public Guid OrderDetailId { get; set; }
     public Guid FoodItemId { get; set; }
     public string FoodName { get; set; } = string.Empty;
     public int Quantity { get; set; }

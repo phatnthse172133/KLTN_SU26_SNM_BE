@@ -78,14 +78,26 @@ namespace InfrastructureLayer.Backgrounds
 
                 // 1. Tìm tất cả đơn hàng Placed tạo trước mốc cutoffTime
                 await using var transaction = await dbContext.Database.BeginTransactionAsync(stoppingToken);
-                var expiredOrders = await dbContext.Orders
-                    .FromSqlInterpolated($@"
-                        SELECT * FROM ""Order""
-                        WHERE ""Status"" IN ('Placed', 'Underpaid')
-                          AND ""CreatedAt"" <= {cutoffTime}
-                        ORDER BY ""CreatedAt""
-                        FOR UPDATE SKIP LOCKED
+                // Claim Order rows first, then reload their graph in a new
+                // statement. PostgreSQL otherwise retains the pre-wait snapshot
+                // for Include data while a competing webhook owns the row lock.
+                var expiredOrderIds = await dbContext.Database
+                    .SqlQuery<Guid>($@"
+                        SELECT o.""Id"" AS ""Value""
+                        FROM ""Order"" AS o
+                        WHERE o.""Status"" IN ('Placed', 'PendingPayment', 'PaymentFailed', 'Underpaid')
+                          AND o.""CreatedAt"" <= {cutoffTime}
+                          AND NOT EXISTS (
+                              SELECT 1 FROM ""Payments"" AS p
+                              WHERE p.""OrderId"" = o.""Id""
+                                AND p.""Status"" = 'Paid')
+                        ORDER BY o.""CreatedAt""
+                        FOR UPDATE OF o SKIP LOCKED
                         LIMIT 100")
+                    .ToListAsync(stoppingToken);
+
+                var expiredOrders = await dbContext.Orders
+                    .Where(order => expiredOrderIds.Contains(order.Id))
                     .Include(o => o.Payments)
                     .Include(o => o.PromotionUsages)
                     .ToListAsync(stoppingToken);
@@ -97,6 +109,9 @@ namespace InfrastructureLayer.Backgrounds
                     var providerCodesToCancel = new List<long>();
                     foreach (var order in expiredOrders)
                     {
+                        if (order.Payments.Any(payment => payment.Status == PaymentStatus.Paid))
+                            continue;
+
                         // 2. Chuyển trạng thái đơn sang Cancelled
                         order.Status = OrderStatus.Cancelled;
                         order.UpdatedAt = DateTime.UtcNow;

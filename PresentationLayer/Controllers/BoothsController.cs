@@ -32,11 +32,19 @@ public class BoothsController : ControllerBase
         return response.Success ? Ok(response) : BadRequest(response);
     }
 
+    [Authorize(Roles = "BoothOwner")]
+    [HttpPatch("mine/toggle-pause")]
+    public async Task<IActionResult> TogglePause(CancellationToken cancellationToken)
+    {
+        var response = await _service.TogglePauseMyBoothAsync(CurrentUserId, cancellationToken);
+        return response.Success ? Ok(response) : BadRequest(response);
+    }
+
     [Authorize(Roles = "Admin")]
     [HttpGet]
-    public async Task<IActionResult> GetAll([FromQuery] PaginationReq pagination, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> GetAll([FromQuery] PaginationReq pagination, Guid? nightMarketId, CancellationToken cancellationToken = default)
     {
-        return Ok(await _service.GetAllAsync(pagination, cancellationToken));
+        return Ok(await _service.GetAllAsync(pagination, nightMarketId, cancellationToken));
     }
 
     [Authorize(Roles = "Admin")]
@@ -45,5 +53,12 @@ public class BoothsController : ControllerBase
     {
         var response = await _service.UpdateByAdminAsync(boothId, request, cancellationToken);
         return response.Success ? Ok(response) : BadRequest(response);
+    }
+
+    [AllowAnonymous]
+    [HttpGet("{boothId:guid}/navigation-info")]
+    public async Task<IActionResult> GetNavigationInfo(Guid boothId, CancellationToken cancellationToken)
+    {
+        return Ok(await _service.GetBoothNavigationInfoAsync(boothId, cancellationToken));
     }
 }

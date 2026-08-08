@@ -10,8 +10,10 @@ public class CreateComplaintRequest
     public Guid BoothId { get; set; }
     public Guid OrderId { get; set; }
 
-    [Required, StringLength(200, MinimumLength = 3)]
-    public string Title { get; set; } = string.Empty;
+    public ComplaintCategory Category { get; set; } = ComplaintCategory.Other;
+
+    [StringLength(200)]
+    public string? Title { get; set; }
 
     [Required, StringLength(2000, MinimumLength = 10)]
     public string Description { get; set; } = string.Empty;
@@ -22,16 +24,25 @@ public class CreateComplaintRequest
 
 public class ComplaintImageRequest
 {
-    [Required, Url, StringLength(500)]
+    [Required, StringLength(500)]
     public string ImageUrl { get; set; } = string.Empty;
+}
+
+public class AddComplaintEvidenceRequest
+{
+    [MaxLength(5)]
+    public List<ComplaintImageRequest> Images { get; set; } = new();
 }
 
 public class UpdateComplaintStatusRequest
 {
     public ComplaintStatus Status { get; set; }
 
-    [StringLength(2000, MinimumLength = 10)]
+    [StringLength(2000)]
     public string? AdminResponse { get; set; }
+
+    [StringLength(2000)]
+    public string? EvidenceRequestNote { get; set; }
 
     public ComplaintResolutionAction? ResolutionAction { get; set; }
 

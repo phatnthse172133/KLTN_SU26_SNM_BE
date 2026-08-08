@@ -16,6 +16,7 @@ namespace InfrastructureLayer.Data
         }
 
         // DbSets
+        public virtual DbSet<BoothPayOsCredential> BoothPayOsCredentials { get; set; }
         public virtual DbSet<AIRecommendationLog> AIRecommendationLogs { get; set; }
 
         public virtual DbSet<Ingredient> Ingredients { get; set; }

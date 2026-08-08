@@ -1,5 +1,8 @@
 using ApplicationLayer.Configuration;
 using ApplicationLayer.Exceptions;
+using ApplicationLayer.Services.EncryptionServices;
+using DomainLayer.InterfaceRepositories;
+using DomainLayer.InterfaceRepository;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -17,15 +20,24 @@ namespace ApplicationLayer.Services.PayOS
         private readonly IServiceProvider _services;
         private readonly PayOSSettings _settings;
         private readonly ILogger<PayOSService> _logger;
+        private readonly IOrderRepository _orderRepository;
+        private readonly IBoothPayOsCredentialRepository _payOSCredentialRepository;
+        private readonly IEncryptionService _encryptionService;
 
         public PayOSService(
             IServiceProvider services,
             IConfiguration configuration,
-            ILogger<PayOSService> logger)
+            ILogger<PayOSService> logger,
+            IOrderRepository orderRepository,
+            IBoothPayOsCredentialRepository payOsCredentialRepository,
+            IEncryptionService encryptionService)
         {
             _services = services;
             _settings = configuration.GetSection(PayOSSettings.SectionName).Get<PayOSSettings>() ?? new PayOSSettings();
             _logger = logger;
+            _orderRepository = orderRepository;
+            _payOSCredentialRepository = payOsCredentialRepository;
+            _encryptionService = encryptionService;
         }
 
         public async Task<PayOSPaymentResponse> CreatePaymentLinkAsync(PayOSPaymentRequest request)
@@ -49,7 +61,7 @@ namespace ApplicationLayer.Services.PayOS
             // payOS documents a 9-character limit for bank accounts that are not
             // directly linked through payOS. Staying within it works for both modes.
             var description = request.Description.Length > 9 ? request.Description[..9] : request.Description;
-            var client = GetClient();
+            var client = await GetClientByOrderCodeAsync(request.OrderCode);
 
             try
             {
@@ -139,7 +151,7 @@ namespace ApplicationLayer.Services.PayOS
 
         public async Task CancelPaymentLinkAsync(long orderCode)
         {
-            var client = GetClient();
+            var client = await GetClientByOrderCodeAsync(orderCode);
             try
             {
                 await client.PaymentRequests.CancelAsync(orderCode);
@@ -154,7 +166,7 @@ namespace ApplicationLayer.Services.PayOS
 
         public async Task<PayOSWebhookData?> VerifyWebhookAsync(Webhook webhook)
         {
-            var client = GetClient();
+            var client = await GetClientByOrderCodeAsync(webhook.Data.OrderCode);
             try
             {
                 var verifiedData = await client.Webhooks.VerifyAsync(webhook);
@@ -186,7 +198,7 @@ namespace ApplicationLayer.Services.PayOS
 
         public async Task<PayOSPaymentStatus?> GetPaymentStatusAsync(long orderCode)
         {
-            var client = GetClient();
+            var client = await GetClientByOrderCodeAsync(orderCode);
             try
             {
                 var paymentLink = await client.PaymentRequests.GetAsync(orderCode);
@@ -221,6 +233,35 @@ namespace ApplicationLayer.Services.PayOS
             }
 
             return _services.GetRequiredKeyedService<PayOSClient>("PayIn");
+        }
+
+        private async Task<PayOSClient> GetClientByOrderCodeAsync(long orderCode)
+        {
+            var order = await _orderRepository.GetOrderByCodeAsync(orderCode);
+            if (order == null)
+            {
+                throw AppException.NotFound(
+                    $"Order with code {orderCode} not found.",
+                    "ORDER_NOT_FOUND");
+            }
+
+            var boothId = order.BoothId;
+            var credential = await _payOSCredentialRepository.GetByBoothIdAsync(boothId);
+
+            if (string.IsNullOrWhiteSpace(credential?.EncryptedClientId)
+                || string.IsNullOrWhiteSpace(credential?.EncryptedApiKey)
+                || string.IsNullOrWhiteSpace(credential?.EncryptedChecksumKey))
+            {
+                throw AppException.ServiceUnavailable(
+                    $"PayOS credentials for booth {boothId} are not configured.",
+                    "PAYOS_CREDENTIALS_NOT_CONFIGURED");
+            }
+
+            var clientId = _encryptionService.Decrypt(credential.EncryptedClientId.Trim());
+            var apiKey = _encryptionService.Decrypt(credential.EncryptedApiKey.Trim());
+            var checksumKey = _encryptionService.Decrypt(credential.EncryptedChecksumKey.Trim());
+
+            return new PayOSClient(clientId, apiKey, checksumKey);
         }
     }
 }

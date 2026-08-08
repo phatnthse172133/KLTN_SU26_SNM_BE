@@ -3,6 +3,7 @@ using System;
 using InfrastructureLayer.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace InfrastructureLayer.Migrations
 {
     [DbContext(typeof(SNMDbContext))]
-    partial class SNMDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260808171442_AddBoothPayOsCredential")]
+    partial class AddBoothPayOsCredential
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -682,6 +685,9 @@ namespace InfrastructureLayer.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<Guid?>("RegistrationId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("SlotNumber")
                         .HasColumnType("text");
 
@@ -705,6 +711,9 @@ namespace InfrastructureLayer.Migrations
 
                     b.HasKey("Id")
                         .HasName("Booth_pkey");
+
+                    b.HasIndex("RegistrationId")
+                        .IsUnique();
 
                     b.HasIndex("ZoneId");
 
@@ -748,6 +757,9 @@ namespace InfrastructureLayer.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<Guid?>("RegistrationId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("UpdatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -764,6 +776,8 @@ namespace InfrastructureLayer.Migrations
                         .HasName("BoothDocuments_pkey");
 
                     b.HasIndex("BoothId");
+
+                    b.HasIndex("RegistrationId");
 
                     b.ToTable("BoothDocuments", t =>
                         {
@@ -990,6 +1004,61 @@ namespace InfrastructureLayer.Migrations
                         {
                             t.HasComment("ThÃƒÂ´ng tin tÃƒÂ i khoÃ¡ÂºÂ£n/QR nhÃ¡ÂºÂ­n thanh toÃƒÂ¡n cÃ¡Â»Â§a gian hÃƒÂ ng");
                         });
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.BoothRegistration", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BoothName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Phone")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("PreferredLayoutNodeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("PreferredZoneId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RejectReason")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("RequestedNightMarketId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PreferredLayoutNodeId");
+
+                    b.HasIndex("PreferredZoneId");
+
+                    b.HasIndex("RequestedNightMarketId");
+
+                    b.HasIndex(new[] { "OwnerId" }, "uq_pending_booth_registration_owner")
+                        .IsUnique()
+                        .HasFilter("\"Status\" = 1");
+
+                    b.ToTable("BoothRegistrations");
                 });
 
             modelBuilder.Entity("DomainLayer.Entities.BoothSubscription", b =>
@@ -5427,6 +5496,10 @@ namespace InfrastructureLayer.Migrations
                         .IsRequired()
                         .HasConstraintName("Booth_NightMarketId_fkey");
 
+                    b.HasOne("DomainLayer.Entities.BoothRegistration", "Registration")
+                        .WithOne("Booth")
+                        .HasForeignKey("DomainLayer.Entities.Booth", "RegistrationId");
+
                     b.HasOne("DomainLayer.Entities.Zone", "Zone")
                         .WithMany()
                         .HasForeignKey("ZoneId");
@@ -5434,6 +5507,8 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("BoothOwner");
 
                     b.Navigation("NightMarket");
+
+                    b.Navigation("Registration");
 
                     b.Navigation("Zone");
                 });
@@ -5444,7 +5519,14 @@ namespace InfrastructureLayer.Migrations
                         .WithMany("BoothDocuments")
                         .HasForeignKey("BoothId");
 
+                    b.HasOne("DomainLayer.Entities.BoothRegistration", "Registration")
+                        .WithMany("BoothDocuments")
+                        .HasForeignKey("RegistrationId")
+                        .HasConstraintName("BoothDocuments_BoothId_fkey");
+
                     b.Navigation("Booth");
+
+                    b.Navigation("Registration");
                 });
 
             modelBuilder.Entity("DomainLayer.Entities.BoothImage", b =>
@@ -5507,6 +5589,37 @@ namespace InfrastructureLayer.Migrations
                         .HasConstraintName("BoothPaymentInfos_BoothId_fkey");
 
                     b.Navigation("Booth");
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.BoothRegistration", b =>
+                {
+                    b.HasOne("DomainLayer.Entities.User", "Owner")
+                        .WithMany("BoothRegistrations")
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("DomainLayer.Entities.LayoutNode", "PreferredLayoutNode")
+                        .WithMany()
+                        .HasForeignKey("PreferredLayoutNodeId");
+
+                    b.HasOne("DomainLayer.Entities.Zone", "PreferredZone")
+                        .WithMany("BoothRegistrations")
+                        .HasForeignKey("PreferredZoneId");
+
+                    b.HasOne("DomainLayer.Entities.NightMarket", "RequestedNightMarket")
+                        .WithMany("BoothRegistrations")
+                        .HasForeignKey("RequestedNightMarketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Owner");
+
+                    b.Navigation("PreferredLayoutNode");
+
+                    b.Navigation("PreferredZone");
+
+                    b.Navigation("RequestedNightMarket");
                 });
 
             modelBuilder.Entity("DomainLayer.Entities.BoothSubscription", b =>
@@ -6726,6 +6839,13 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("Reviews");
                 });
 
+            modelBuilder.Entity("DomainLayer.Entities.BoothRegistration", b =>
+                {
+                    b.Navigation("Booth");
+
+                    b.Navigation("BoothDocuments");
+                });
+
             modelBuilder.Entity("DomainLayer.Entities.Cart", b =>
                 {
                     b.Navigation("CartItems");
@@ -6856,6 +6976,8 @@ namespace InfrastructureLayer.Migrations
 
                     b.Navigation("AiMealPlans");
 
+                    b.Navigation("BoothRegistrations");
+
                     b.Navigation("Booths");
 
                     b.Navigation("MarketLayouts");
@@ -6954,6 +7076,8 @@ namespace InfrastructureLayer.Migrations
 
                     b.Navigation("Booth");
 
+                    b.Navigation("BoothRegistrations");
+
                     b.Navigation("Carts");
 
                     b.Navigation("Complaints");
@@ -6988,6 +7112,8 @@ namespace InfrastructureLayer.Migrations
             modelBuilder.Entity("DomainLayer.Entities.Zone", b =>
                 {
                     b.Navigation("BoothLocations");
+
+                    b.Navigation("BoothRegistrations");
 
                     b.Navigation("LayoutNodes");
                 });

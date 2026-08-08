@@ -186,7 +186,23 @@ namespace DomainLayer.Enums
         {
             Pending = 0,
             Resolved = 1,
-            Rejected = 2
+            Rejected = 2,
+            UnderReview = 3,
+            WaitingForCustomer = 4,
+            Closed = 5,
+            Withdrawn = 6
+        }
+
+        public enum ComplaintCategory
+        {
+            FoodQuality = 0,
+            WrongItem = 1,
+            MissingItem = 2,
+            OrderNotReceived = 3,
+            BoothService = 4,
+            PaymentIssue = 5,
+            PromotionIssue = 6,
+            Other = 7
         }
 
         public enum ComplaintResolutionAction

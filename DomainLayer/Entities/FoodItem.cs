@@ -35,6 +35,11 @@ public partial class FoodItem : ISoftDelete
 
     public DateTime UpdatedAt { get; set; }
 
+    // Cached from visible FoodReviews (same pattern as Booth.AverageRating).
+    public decimal AverageRating { get; set; }
+
+    public int ReviewCount { get; set; }
+
     public FoodSpiceLevel SpiceLevel { get; set; }
 
     public ServingTemperature? ServingTemperature { get; set; }
@@ -89,6 +94,8 @@ public partial class FoodItem : ISoftDelete
     public virtual FoodAiProfile? AiProfile { get; set; }
 
     public virtual ICollection<OrderDetail> OrderDetails { get; set; } = new List<OrderDetail>();
+
+    public virtual ICollection<FoodReview> FoodReviews { get; set; } = new List<FoodReview>();
 
     public virtual ICollection<PromotionFoodItem> PromotionFoodItems { get; set; } = new List<PromotionFoodItem>();
 }

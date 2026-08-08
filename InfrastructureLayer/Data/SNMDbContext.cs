@@ -75,6 +75,8 @@ namespace InfrastructureLayer.Data
 
         public virtual DbSet<ComplaintImage> ComplaintImages { get; set; }
 
+        public virtual DbSet<ComplaintStatusHistory> ComplaintStatusHistories { get; set; }
+
         public virtual DbSet<Conversation> Conversations { get; set; }
 
         public virtual DbSet<CustomerPreference> CustomerPreferences { get; set; }
@@ -134,6 +136,8 @@ namespace InfrastructureLayer.Data
         public virtual DbSet<Review> Reviews { get; set; }
 
         public virtual DbSet<ReviewReply> ReviewReplies { get; set; }
+
+        public virtual DbSet<FoodReview> FoodReviews { get; set; }
 
         public virtual DbSet<Role> Roles { get; set; }
 
@@ -515,17 +519,23 @@ namespace InfrastructureLayer.Data
                 entity.HasIndex(e => new { e.CustomerId, e.CreatedAt }, "idx_complaint_customer_created").IsDescending(false, true);
                 entity.HasIndex(e => new { e.CustomerId, e.OrderId, e.BoothId }, "uq_complaint_active_customer_order_booth")
                     .IsUnique()
-                    .HasFilter("\"Status\" = 'Pending'");
+                    .HasFilter("\"Status\" IN ('Pending', 'UnderReview', 'WaitingForCustomer')");
 
-                entity.ToTable(tb => tb.HasComment("Khiáº¿u náº¡i cá»§a khÃ¡ch hÃ ng vá» Ä‘Æ¡n hÃ ng/gian hÃ ng"));
+                entity.ToTable(tb => tb.HasComment("Khiếu nại của khách hàng về đơn hàng/gian hàng"));
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
                 entity.Property(e => e.Status)
                     .HasConversion<string>()
-                    .HasMaxLength(20)
+                    .HasMaxLength(30)
                     .HasDefaultValueSql("'Pending'::character varying")
-                    .HasComment("Pending | Resolved | Rejected");
+                    .HasComment("Pending | UnderReview | WaitingForCustomer | Resolved | Rejected | Closed | Withdrawn");
+                entity.Property(e => e.Category)
+                    .HasConversion<string>()
+                    .HasMaxLength(30)
+                    .HasDefaultValue(ComplaintCategory.Other)
+                    .HasSentinel((ComplaintCategory)(-1));
+                entity.Property(e => e.CustomerEvidenceRequestNote).HasMaxLength(2000);
                 entity.Property(e => e.ResolutionAction)
                     .HasConversion<string>()
                     .HasMaxLength(30)
@@ -554,7 +564,7 @@ namespace InfrastructureLayer.Data
             {
                 entity.HasKey(e => e.Id).HasName("ComplaintImages_pkey");
 
-                entity.ToTable(tb => tb.HasComment("Ã¡ÂºÂ¢nh minh chÃ¡Â»Â©ng Ã„â€˜ÃƒÂ­nh kÃƒÂ¨m theo khiÃ¡ÂºÂ¿u nÃ¡ÂºÂ¡i"));
+                entity.ToTable(tb => tb.HasComment("Ảnh minh chứng đính kèm theo khiếu nại"));
 
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
@@ -564,6 +574,29 @@ namespace InfrastructureLayer.Data
                 entity.HasOne(d => d.Complaint).WithMany(p => p.ComplaintImages)
                     .HasForeignKey(d => d.ComplaintId)
                     .HasConstraintName("ComplaintImages_ComplaintId_fkey");
+            });
+
+            modelBuilder.Entity<ComplaintStatusHistory>(entity =>
+            {
+                entity.HasKey(e => e.Id).HasName("ComplaintStatusHistories_pkey");
+
+                entity.HasIndex(e => new { e.ComplaintId, e.CreatedAt }, "idx_complaintstatushistory_complaint_created");
+
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+                entity.Property(e => e.FromStatus)
+                    .HasConversion<string>()
+                    .HasMaxLength(30);
+                entity.Property(e => e.ToStatus)
+                    .HasConversion<string>()
+                    .HasMaxLength(30)
+                    .IsRequired();
+                entity.Property(e => e.Note).HasMaxLength(2000);
+                entity.Property(e => e.ActorRole).HasMaxLength(50);
+
+                entity.HasOne(d => d.Complaint).WithMany(p => p.StatusHistories)
+                    .HasForeignKey(d => d.ComplaintId)
+                    .HasConstraintName("ComplaintStatusHistories_ComplaintId_fkey");
             });
 
             modelBuilder.Entity<Conversation>(entity =>
@@ -714,7 +747,12 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.Name).HasMaxLength(200);
                 entity.Property(e => e.Price)
                     .HasPrecision(12, 2)
-                    .HasComment("GiÃƒÂ¡ mÃ¡ÂºÂ·c Ã„â€˜Ã¡Â»â€¹nh. NÃ¡ÂºÂ¿u cÃƒÂ³ FoodPrice theo ngÃƒÂ y hiÃ¡Â»â€¡n tÃ¡ÂºÂ¡i thÃƒÂ¬ giÃƒÂ¡ Ã„â€˜ÃƒÂ³ Ã„â€˜Ã†Â°Ã¡Â»Â£c Ã†Â°u tiÃƒÂªn (override)");
+                    .HasComment("Giá mặc định. Nếu có FoodPrice theo ngày hiện tại thì giá đó được ưu tiên (override)");
+                entity.Property(e => e.AverageRating)
+                    .HasPrecision(3, 2)
+                    .HasDefaultValueSql("0");
+                entity.Property(e => e.ReviewCount)
+                    .HasDefaultValue(0);
                 entity.Property(e => e.ThumbnailUrl).HasMaxLength(500);
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
 
@@ -1589,6 +1627,51 @@ namespace InfrastructureLayer.Data
                 entity.HasOne(d => d.Review).WithOne(p => p.ReviewReply)
                     .HasForeignKey<ReviewReply>(d => d.ReviewId)
                     .HasConstraintName("ReviewReplies_ReviewId_fkey");
+            });
+
+            modelBuilder.Entity<FoodReview>(entity =>
+            {
+                entity.HasKey(e => e.Id).HasName("FoodReviews_pkey");
+
+                entity.HasIndex(e => e.OrderDetailId, "uq_foodreview_orderdetail").IsUnique();
+                entity.HasIndex(e => new { e.FoodItemId, e.IsVisible, e.CreatedAt }, "idx_foodreviews_fooditem_visible_created")
+                    .IsDescending(false, false, true);
+                entity.HasIndex(e => new { e.CustomerId, e.CreatedAt }, "idx_foodreviews_customer_created")
+                    .IsDescending(false, true);
+
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+                entity.Property(e => e.ImageUrl).HasMaxLength(500);
+                entity.Property(e => e.IsVisible).HasDefaultValue(true);
+                entity.Property(e => e.Content).HasMaxLength(2000);
+
+                entity.ToTable(table => table.HasCheckConstraint("ck_foodreviews_rating", "\"Rating\" BETWEEN 1 AND 5"));
+
+                entity.HasOne(d => d.OrderDetail).WithMany(p => p.FoodReviews)
+                    .HasForeignKey(d => d.OrderDetailId)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("FoodReviews_OrderDetailId_fkey");
+
+                entity.HasOne(d => d.Order).WithMany(p => p.FoodReviews)
+                    .HasForeignKey(d => d.OrderId)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("FoodReviews_OrderId_fkey");
+
+                entity.HasOne(d => d.FoodItem).WithMany(p => p.FoodReviews)
+                    .HasForeignKey(d => d.FoodItemId)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("FoodReviews_FoodItemId_fkey");
+
+                entity.HasOne(d => d.Customer).WithMany()
+                    .HasForeignKey(d => d.CustomerId)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("FoodReviews_CustomerId_fkey");
+
+                entity.HasOne(d => d.Booth).WithMany()
+                    .HasForeignKey(d => d.BoothId)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("FoodReviews_BoothId_fkey");
             });
 
             modelBuilder.Entity<Role>(entity =>

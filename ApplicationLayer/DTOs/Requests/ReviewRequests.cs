@@ -14,7 +14,7 @@ public class CreateReviewRequest
     [StringLength(2000)]
     public string? Content { get; set; }
 
-    [Url, StringLength(500)]
+    [StringLength(500)]
     public string? ImageUrl { get; set; }
 }
 
@@ -26,7 +26,33 @@ public class UpdateReviewRequest
     [StringLength(2000)]
     public string? Content { get; set; }
 
-    [Url, StringLength(500)]
+    [StringLength(500)]
+    public string? ImageUrl { get; set; }
+}
+
+public class CreateFoodReviewRequest
+{
+    public Guid OrderDetailId { get; set; }
+
+    [Range(1, 5)]
+    public short Rating { get; set; }
+
+    [StringLength(2000)]
+    public string? Content { get; set; }
+
+    [StringLength(500)]
+    public string? ImageUrl { get; set; }
+}
+
+public class UpdateFoodReviewRequest
+{
+    [Range(1, 5)]
+    public short Rating { get; set; }
+
+    [StringLength(2000)]
+    public string? Content { get; set; }
+
+    [StringLength(500)]
     public string? ImageUrl { get; set; }
 }
 

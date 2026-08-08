@@ -84,6 +84,7 @@ namespace InfrastructureLayer
             services.AddScoped<IOrderRepository, OrderRepository>();
             services.AddScoped<IComplaintRepository, ComplaintRepository>();
             services.AddScoped<IReviewRepository, ReviewRepository>();
+            services.AddScoped<IFoodReviewRepository, FoodReviewRepository>();
             services.AddScoped<INightMarketRepository, NightMarketRepository>();
             services.AddScoped<INightMarketImageRepository, NightMarketImageRepository>();
             services.AddScoped<IZoneRepository, ZoneRepository>();
@@ -127,6 +128,7 @@ namespace InfrastructureLayer
             services.AddScoped<IMenuService, MenuService>();
             services.AddScoped<IFoodAiProfileGenerator, FoodAiProfileGenerator>();
             services.AddScoped<IFoodAiProfileRebuildService, FoodAiProfileRebuildService>();
+            services.AddScoped<IFoodAiProfileEnrichmentService, OpenAiFoodAiProfileEnricher>();
             services.AddScoped<IFoodMetadataCatalogService, FoodMetadataCatalogService>();
             services.AddScoped<ILegacyFoodTagMetadataAdapter, LegacyFoodTagMetadataAdapter>();
 
@@ -170,19 +172,22 @@ namespace InfrastructureLayer
             services.AddScoped<ILegacyCustomerPreferenceAdapter, LegacyCustomerPreferenceAdapter>();
             services.AddScoped<IAIRecommendationService, AIRecommendationService>();
             services.AddScoped<IAISettingsService, AISettingsService>();
+            // Legacy AIProviderV2 binds first; OpenAI section overlays for env migration.
+            services.Configure<AiProviderRuntimeOptions>(configuration.GetSection(AiProviderRuntimeOptions.LegacySectionName));
             services.Configure<AiProviderRuntimeOptions>(configuration.GetSection(AiProviderRuntimeOptions.SectionName));
-            services.Configure<GeminiV2SecretOptions>(configuration.GetSection(AiProviderRuntimeOptions.SectionName));
+            services.Configure<OpenAiSecretOptions>(configuration.GetSection(AiProviderRuntimeOptions.LegacySectionName));
+            services.Configure<OpenAiSecretOptions>(configuration.GetSection(AiProviderRuntimeOptions.SectionName));
             services.Configure<RecommendationV2Options>(configuration.GetSection(RecommendationV2Options.SectionName));
             services.Configure<MealPlanV2Options>(configuration.GetSection(MealPlanV2Options.SectionName));
             services.AddSingleton<IFoodRecommendationFallbackParser, DeterministicFoodIntentParser>();
             services.AddScoped<IFoodRecommendationIntentNormalizer, FoodRecommendationIntentNormalizer>();
             services.AddSingleton<IDeterministicRecommendationReasonBuilder, DeterministicRecommendationReasonBuilder>();
-            services.AddHttpClient<GeminiV2Client>()
+            services.AddHttpClient<OpenAiV2Client>()
                 .ConfigureHttpClient(client => client.Timeout = Timeout.InfiniteTimeSpan)
                 .RedactLoggedHeaders(_ => true)
                 .RemoveAllLoggers();
-            services.AddScoped<IAiIntentExtractor, GeminiIntentExtractor>();
-            services.AddScoped<IAiExplanationGenerator, GeminiExplanationGenerator>();
+            services.AddScoped<IAiIntentExtractor, OpenAiIntentExtractor>();
+            services.AddScoped<IAiExplanationGenerator, OpenAiExplanationGenerator>();
             services.AddScoped<IFoodRecommendationReadRepository, FoodRecommendationReadRepository>();
             services.AddScoped<IAiRecommendationSessionRepository, AiRecommendationSessionRepository>();
             services.AddSingleton<IFoodSemanticMatcher, DeterministicFoodSemanticMatcher>();
@@ -198,12 +203,7 @@ namespace InfrastructureLayer
             services.AddSingleton<IOnlinePresenceService, OnlinePresenceService>();
             services.Configure<AIProviderSettings>(
                 configuration.GetSection(AIProviderSettings.SectionName));
-            services.AddHttpClient<IAIProviderService, GeminiAIProviderService>()
-                .ConfigureHttpClient((serviceProvider, client) =>
-                {
-                    var settings = serviceProvider.GetRequiredService<IOptions<AIProviderSettings>>().Value;
-                    client.Timeout = TimeSpan.FromSeconds(Math.Clamp(settings.TimeoutSeconds, 1, 30));
-                });
+            services.AddScoped<IAIProviderService, LocalOnlyAIProviderService>();
             services.Configure<FirebaseSettings>(
                 configuration.GetSection(FirebaseSettings.SectionName));
             services.AddHttpClient<IPushNotificationService, FirebasePushNotificationService>();

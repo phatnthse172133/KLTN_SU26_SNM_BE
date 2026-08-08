@@ -38,6 +38,8 @@ namespace ApplicationLayer.Services.Orders
         private readonly IBoothRepository _boothRepo;
         private readonly IPromotionUsageRepository _promotionUsages;
         private readonly INotificationService? _notifications;
+        private readonly IReviewRepository? _reviews;
+        private readonly IComplaintRepository? _complaints;
 
         public OrderService(IOrderRepository orderRepo,
                             IPromotionRepository promotionRepo,
@@ -51,7 +53,9 @@ namespace ApplicationLayer.Services.Orders
                              IPayOSOrderCodeGenerator orderCodeGenerator,
                              IBoothRepository boothRepo,
                              IPromotionUsageRepository promotionUsages,
-                             INotificationService? notifications = null)
+                             INotificationService? notifications = null,
+                             IReviewRepository? reviews = null,
+                             IComplaintRepository? complaints = null)
         {
             _orderRepo = orderRepo;
             _promotionRepo = promotionRepo;
@@ -66,6 +70,8 @@ namespace ApplicationLayer.Services.Orders
             _boothRepo = boothRepo;
             _promotionUsages = promotionUsages;
             _notifications = notifications;
+            _reviews = reviews;
+            _complaints = complaints;
         }
 
         //DÃƒÂ nh cho customer lÃ¡ÂºÂ«n khÃƒÂ¡ch vang lai (Walk-in) Ã„â€˜Ã¡ÂºÂ·t mÃƒÂ³n, trÃ¡ÂºÂ£ vÃ¡Â»Â link thanh toÃƒÂ¡n nÃ¡ÂºÂ¿u chÃ¡Â»Ân online
@@ -79,18 +85,43 @@ namespace ApplicationLayer.Services.Orders
                 throw AppException.BadRequest("Order status is invalid.", "INVALID_ORDER_STATUS");
 
             var page = await _orderRepo.GetCustomerHistoryAsync(customerId, request.Status, request.Page, request.PageSize, cancellationToken);
-            var items = page.Items.Select(order => new CustomerOrderHistoryResponse
+            var orderIds = page.Items.Select(order => order.OrderId).ToList();
+            var reviewsByOrder = _reviews is null
+                ? new Dictionary<Guid, Review>()
+                : await _reviews.GetByOrderIdsAsync(orderIds, cancellationToken);
+            var editWindowDays = Math.Max(1, _config.GetValue("ReviewSettings:EditWindowDays", 7));
+            var now = DateTime.UtcNow;
+
+            var items = new List<CustomerOrderHistoryResponse>(page.Items.Count);
+            foreach (var order in page.Items)
             {
-                OrderId = order.OrderId,
-                OrderCode = order.OrderCode,
-                BoothId = order.BoothId,
-                BoothName = order.BoothName,
-                OrderStatus = order.OrderStatus,
-                PaymentStatus = order.PaymentStatus,
-                FinalAmount = order.FinalAmount,
-                CreatedAt = order.CreatedAt,
-                ItemCount = order.ItemCount
-            }).ToList();
+                reviewsByOrder.TryGetValue(order.OrderId, out var review);
+                Guid? activeComplaintId = null;
+                if (_complaints is not null)
+                    activeComplaintId = await _complaints.GetActiveComplaintIdAsync(customerId, order.BoothId, order.OrderId, cancellationToken);
+
+                var hasReview = review is not null;
+                var editDeadline = hasReview ? review!.CreatedAt.AddDays(editWindowDays) : (DateTime?)null;
+                items.Add(new CustomerOrderHistoryResponse
+                {
+                    OrderId = order.OrderId,
+                    OrderCode = order.OrderCode,
+                    BoothId = order.BoothId,
+                    BoothName = order.BoothName,
+                    OrderStatus = order.OrderStatus,
+                    PaymentStatus = order.PaymentStatus,
+                    FinalAmount = order.FinalAmount,
+                    CreatedAt = order.CreatedAt,
+                    ItemCount = order.ItemCount,
+                    HasReview = hasReview,
+                    ReviewId = review?.Id,
+                    CanReview = order.OrderStatus == OrderStatus.Completed && !hasReview,
+                    CanEditReview = hasReview && review!.IsVisible && now <= editDeadline,
+                    EditDeadline = editDeadline,
+                    CanComplain = activeComplaintId is null,
+                    ActiveComplaintId = activeComplaintId
+                });
+            }
 
             return ApiResponse<PaginationResp<CustomerOrderHistoryResponse>>.SuccessResponse(
                 PaginationResp<CustomerOrderHistoryResponse>.Create(items, page.TotalCount, request));
@@ -104,6 +135,15 @@ namespace ApplicationLayer.Services.Orders
             var order = await _orderRepo.GetCustomerDetailAsync(customerId, orderId, cancellationToken)
                 ?? throw AppException.NotFound("Order was not found.", "ORDER_NOT_FOUND");
 
+            var review = _reviews is null ? null : await _reviews.GetByOrderIdAsync(orderId, cancellationToken);
+            var activeComplaintId = _complaints is null
+                ? null
+                : await _complaints.GetActiveComplaintIdAsync(customerId, order.BoothId, orderId, cancellationToken);
+            var editWindowDays = Math.Max(1, _config.GetValue("ReviewSettings:EditWindowDays", 7));
+            var hasReview = review is not null;
+            var editDeadline = hasReview ? review!.CreatedAt.AddDays(editWindowDays) : (DateTime?)null;
+            var now = DateTime.UtcNow;
+
             return ApiResponse<CustomerOrderDetailResponse>.SuccessResponse(new CustomerOrderDetailResponse
             {
                 OrderId = order.OrderId,
@@ -111,6 +151,7 @@ namespace ApplicationLayer.Services.Orders
                 Booth = new CustomerOrderBoothResponse { BoothId = order.BoothId, BoothName = order.BoothName },
                 Items = order.Items.Select(item => new CustomerOrderItemResponse
                 {
+                    OrderDetailId = item.OrderDetailId,
                     FoodItemId = item.FoodItemId,
                     FoodName = item.FoodName,
                     Quantity = item.Quantity,
@@ -142,7 +183,14 @@ namespace ApplicationLayer.Services.Orders
                     CreatedAt = payment.CreatedAt
                 }).ToList(),
                 CreatedAt = order.CreatedAt,
-                UpdatedAt = order.UpdatedAt
+                UpdatedAt = order.UpdatedAt,
+                HasReview = hasReview,
+                ReviewId = review?.Id,
+                CanReview = order.OrderStatus == OrderStatus.Completed && !hasReview,
+                CanEditReview = hasReview && review!.IsVisible && now <= editDeadline,
+                EditDeadline = editDeadline,
+                CanComplain = activeComplaintId is null,
+                ActiveComplaintId = activeComplaintId
             });
         }
 

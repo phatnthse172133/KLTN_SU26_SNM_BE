@@ -336,10 +336,15 @@ internal static class AiV2ModelConfiguration
             entity.ToTable("FoodAiProfile");
             entity.HasKey(value => value.FoodItemId);
             entity.HasIndex(value => value.ContentHash, "idx_foodaiprofile_contenthash");
+            entity.HasIndex(value => value.Status, "idx_foodaiprofile_status");
             entity.Property(value => value.SearchText).HasColumnType("text");
             entity.Property(value => value.Embedding).HasColumnType("real[]");
             entity.Property(value => value.EmbeddingModel).HasMaxLength(100);
             entity.Property(value => value.ContentHash).HasMaxLength(64);
+            entity.Property(value => value.AiDescription).HasColumnType("text");
+            entity.Property(value => value.GeneratedByModel).HasMaxLength(100);
+            entity.Property(value => value.Confidence).HasPrecision(5, 4);
+            entity.Property(value => value.StructuredProfileJson).HasColumnType("text");
             EnumString(entity.Property(value => value.Status), 20);
             entity.Property(value => value.LastError).HasMaxLength(2000);
             entity.Property(value => value.CreatedAt).HasDefaultValueSql("now()");

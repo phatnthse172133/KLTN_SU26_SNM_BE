@@ -17,6 +17,22 @@ public class ReviewRepository : GenericRepository<Review>, IReviewRepository
         => await QueryWithReply()
             .FirstOrDefaultAsync(review => review.Id == reviewId);
 
+    public Task<Review?> GetByOrderIdAsync(Guid orderId, CancellationToken cancellationToken = default)
+        => _dbSet.AsNoTracking().FirstOrDefaultAsync(review => review.OrderId == orderId, cancellationToken);
+
+    public async Task<IReadOnlyDictionary<Guid, Review>> GetByOrderIdsAsync(IEnumerable<Guid> orderIds, CancellationToken cancellationToken = default)
+    {
+        var ids = orderIds.Distinct().ToList();
+        if (ids.Count == 0)
+            return new Dictionary<Guid, Review>();
+
+        var reviews = await _dbSet.AsNoTracking()
+            .Where(review => ids.Contains(review.OrderId))
+            .ToListAsync(cancellationToken);
+
+        return reviews.ToDictionary(review => review.OrderId);
+    }
+
     public async Task<ReviewReply> UpsertReplyAsync(Guid reviewId, Guid boothOwnerId, string content)
     {
         var now = DateTime.UtcNow;

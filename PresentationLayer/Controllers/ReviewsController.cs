@@ -35,6 +35,60 @@ public class ReviewsController : ControllerBase
         return response.Success ? Ok(response) : BadRequest(response);
     }
 
+    [Authorize(Roles = "Customer")]
+    [HttpPatch("{reviewId:guid}/hide")]
+    public async Task<IActionResult> Hide(Guid reviewId, CancellationToken cancellationToken)
+    {
+        var response = await _service.HideAsync(CurrentUserId, reviewId, cancellationToken);
+        return response.Success ? Ok(response) : BadRequest(response);
+    }
+
+    [Authorize(Roles = "Customer")]
+    [HttpPost("food")]
+    public async Task<IActionResult> CreateFood(CreateFoodReviewRequest request, CancellationToken cancellationToken)
+    {
+        var response = await _service.CreateFoodReviewAsync(CurrentUserId, request, cancellationToken);
+        return response.Success ? Ok(response) : BadRequest(response);
+    }
+
+    [Authorize(Roles = "Customer")]
+    [HttpPatch("food/{foodReviewId:guid}")]
+    public async Task<IActionResult> UpdateFood(Guid foodReviewId, UpdateFoodReviewRequest request, CancellationToken cancellationToken)
+    {
+        var response = await _service.UpdateFoodReviewAsync(CurrentUserId, foodReviewId, request, cancellationToken);
+        return response.Success ? Ok(response) : BadRequest(response);
+    }
+
+    [Authorize(Roles = "Customer")]
+    [HttpPatch("food/{foodReviewId:guid}/hide")]
+    public async Task<IActionResult> HideFood(Guid foodReviewId, CancellationToken cancellationToken)
+    {
+        var response = await _service.HideFoodReviewAsync(CurrentUserId, foodReviewId, cancellationToken);
+        return response.Success ? Ok(response) : BadRequest(response);
+    }
+
+    [AllowAnonymous]
+    [HttpGet("food-items/{foodItemId:guid}")]
+    public async Task<IActionResult> GetByFoodItem(Guid foodItemId, [FromQuery] PaginationReq pagination, CancellationToken cancellationToken)
+        => Ok(await _service.GetByFoodItemAsync(foodItemId, pagination, cancellationToken));
+
+    [Authorize(Roles = "Customer")]
+    [HttpGet("mine/food")]
+    public async Task<IActionResult> GetMineFood([FromQuery] PaginationReq pagination, CancellationToken cancellationToken)
+        => Ok(await _service.GetMineFoodAsync(CurrentUserId, pagination, cancellationToken));
+
+    [Authorize(Roles = "Customer")]
+    [HttpPost("images")]
+    public async Task<IActionResult> UploadImage(IFormFile file, CancellationToken cancellationToken)
+    {
+        if (file is null || file.Length == 0)
+            return BadRequest(new { message = "Image file is required." });
+
+        await using var stream = file.OpenReadStream();
+        var response = await _service.UploadImageAsync(stream, file.FileName, file.ContentType, file.Length, cancellationToken);
+        return response.Success ? Ok(response) : BadRequest(response);
+    }
+
     [AllowAnonymous]
     [HttpGet("booths/{boothId:guid}")]
     public async Task<IActionResult> GetByBooth(Guid boothId, [FromQuery] PaginationReq pagination, CancellationToken cancellationToken)

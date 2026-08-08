@@ -21,7 +21,7 @@ public sealed class AiV2ProviderTests
     {
         var handler = Handler(Ok(ValidIntent())); var result = await Extractor(handler).ExtractFoodRecommendationIntentAsync(Request("Món bò cay nhẹ dưới 100k."), default);
         Assert.True(result.IsSuccess); Assert.False(result.UsedFallback); Assert.Equal("ING_BEEF", Assert.Single(result.ParsedResult!.PreferredIngredientCodes));
-        Assert.True(result.RuntimeTrace.ProviderAttempted); Assert.Equal("GEMINI", result.RuntimeTrace.ProviderUsed);
+        Assert.True(result.RuntimeTrace.ProviderAttempted); Assert.Equal("OPENAI", result.RuntimeTrace.ProviderUsed);
         Assert.False(result.RuntimeTrace.FallbackUsed); Assert.True(result.RuntimeTrace.ApiKeyLoaded);
         Assert.All(result.ParsedResult.SignalEvidence, signal => Assert.Equal("LLM_INFERENCE", signal.Source));
     }
@@ -168,7 +168,7 @@ public sealed class AiV2ProviderTests
 
     [Fact] public async Task Api_key_uses_header_and_never_url_payload_or_result()
     {
-        const string secret = "TOP_SECRET_GEMINI_KEY"; var handler = Handler(new HttpResponseMessage(HttpStatusCode.InternalServerError));
+        const string secret = "TOP_SECRET_OPENAI_KEY"; var handler = Handler(new HttpResponseMessage(HttpStatusCode.InternalServerError));
         var result = await Extractor(handler, apiKey: secret).ExtractFoodRecommendationIntentAsync(Request("Món bò."), default);
         Assert.Equal(secret, handler.LastApiKey); Assert.DoesNotContain(secret, handler.LastUri!); Assert.DoesNotContain(secret, handler.LastBody);
         Assert.DoesNotContain(secret, JsonSerializer.Serialize(result));
@@ -176,8 +176,8 @@ public sealed class AiV2ProviderTests
 
     [Fact] public async Task Api_key_never_appears_in_transport_exception_or_logs()
     {
-        const string secret = "EXCEPTION_SECRET_GEMINI_KEY";
-        var logger = new CapturingLogger<GeminiV2Client>();
+        const string secret = "EXCEPTION_SECRET_OPENAI_KEY";
+        var logger = new CapturingLogger<OpenAiV2Client>();
         var handler = new RecordingHandler((_, _) => throw new HttpRequestException($"transport failed with {secret}"));
         var result = await Extractor(handler, apiKey: secret, logger: logger).ExtractFoodRecommendationIntentAsync(Request("Món bò."), default);
         Assert.DoesNotContain(secret, JsonSerializer.Serialize(result));
@@ -197,7 +197,7 @@ public sealed class AiV2ProviderTests
 
     [Fact] public async Task Non_official_host_is_rejected_without_http_call()
     {
-        var handler = Handler(Ok(ValidIntent())); var result = await Extractor(handler, baseUrl: "https://example.com/v1beta").ExtractFoodRecommendationIntentAsync(Request("Món bò."), default);
+        var handler = Handler(Ok(ValidIntent())); var result = await Extractor(handler, baseUrl: "https://example.com/v1").ExtractFoodRecommendationIntentAsync(Request("Món bò."), default);
         Assert.Equal(0, handler.Calls); Assert.Equal(AiProviderFailureCategory.PERMANENT_ERROR, result.FailureCategory);
     }
 
@@ -416,18 +416,18 @@ public sealed class AiV2ProviderTests
         Assert.Empty(result.Intent!.PreferredIngredientCodes); Assert.Equal("ING_BEEF", Assert.Single(result.Intent.ExcludedIngredientCodes));
     }
 
-    private static GeminiIntentExtractor Extractor(RecordingHandler handler, bool enabled = true, int timeoutSeconds = 2,
-        string apiKey = "test-key", string baseUrl = "https://generativelanguage.googleapis.com/v1beta", ILogger<GeminiV2Client>? logger = null)
+    private static OpenAiIntentExtractor Extractor(RecordingHandler handler, bool enabled = true, int timeoutSeconds = 2,
+        string apiKey = "test-key", string baseUrl = "https://api.openai.com/v1", ILogger<OpenAiV2Client>? logger = null)
     {
-        var runtime = Options.Create(new AiProviderRuntimeOptions { Enabled = enabled, BaseUrl = baseUrl, Model = "gemini-test", RetryCount = 1, TimeoutSeconds = timeoutSeconds });
-        var client = new GeminiV2Client(new HttpClient(handler), runtime, Options.Create(new GeminiV2SecretOptions { ApiKey = apiKey }), logger ?? NullLogger<GeminiV2Client>.Instance);
+        var runtime = Options.Create(new AiProviderRuntimeOptions { Enabled = enabled, Provider = "OpenAI", BaseUrl = baseUrl, Model = "gpt-4o-mini", RetryCount = 1, TimeoutSeconds = timeoutSeconds });
+        var client = new OpenAiV2Client(new HttpClient(handler), runtime, Options.Create(new OpenAiSecretOptions { ApiKey = apiKey }), logger ?? NullLogger<OpenAiV2Client>.Instance);
         return new(client, new DeterministicFoodIntentParser(), runtime);
     }
 
-    private static GeminiExplanationGenerator Explanation(RecordingHandler handler)
+    private static OpenAiExplanationGenerator Explanation(RecordingHandler handler)
     {
-        var runtime = Options.Create(new AiProviderRuntimeOptions { Enabled = true, Model = "gemini-test", RetryCount = 1 });
-        var client = new GeminiV2Client(new HttpClient(handler), runtime, Options.Create(new GeminiV2SecretOptions { ApiKey = "test-key" }), NullLogger<GeminiV2Client>.Instance);
+        var runtime = Options.Create(new AiProviderRuntimeOptions { Enabled = true, Provider = "OpenAI", BaseUrl = "https://api.openai.com/v1", Model = "gpt-4o-mini", RetryCount = 1 });
+        var client = new OpenAiV2Client(new HttpClient(handler), runtime, Options.Create(new OpenAiSecretOptions { ApiKey = "test-key" }), NullLogger<OpenAiV2Client>.Instance);
         return new(client, runtime);
     }
 
@@ -447,7 +447,7 @@ public sealed class AiV2ProviderTests
     private static RecordingHandler Handler(HttpResponseMessage response) => new((_, _) => Task.FromResult(Clone(response)));
     private static HttpResponseMessage Ok(string providerJson) => new(HttpStatusCode.OK)
     {
-        Content = new StringContent(JsonSerializer.Serialize(new { candidates = new[] { new { content = new { parts = new[] { new { text = providerJson } } } } } }), Encoding.UTF8, "application/json")
+        Content = new StringContent(JsonSerializer.Serialize(new { choices = new[] { new { message = new { content = providerJson } } } }), Encoding.UTF8, "application/json")
     };
     private static HttpResponseMessage Clone(HttpResponseMessage response) => new(response.StatusCode)
     { Content = response.Content is null ? null : new StringContent(response.Content.ReadAsStringAsync().GetAwaiter().GetResult(), Encoding.UTF8, "application/json") };
@@ -462,7 +462,9 @@ public sealed class AiV2ProviderTests
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Calls++; LastUri = request.RequestUri?.ToString(); LastBody = request.Content is null ? string.Empty : await request.Content.ReadAsStringAsync(cancellationToken);
-            LastApiKey = request.Headers.TryGetValues("x-goog-api-key", out var values) ? values.Single() : null;
+            LastApiKey = request.Headers.Authorization?.Scheme.Equals("Bearer", StringComparison.OrdinalIgnoreCase) == true
+                ? request.Headers.Authorization.Parameter
+                : null;
             return await callback(request, cancellationToken);
         }
     }

@@ -19,6 +19,12 @@ public partial class MarketLayout : ISoftDelete
 
     public string? LayoutImageUrl { get; set; }
 
+    public double? MarketWidthMeters { get; set; }
+
+    public double? MarketLengthMeters { get; set; }
+
+    public double? PixelsPerMeter { get; set; }
+
     public int Width { get; set; }
 
     public int Height { get; set; }

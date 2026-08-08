@@ -3,24 +3,30 @@ using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
 using ApplicationLayer.Mappings;
+using ApplicationLayer.Services.Notifications;
+using ApplicationLayer.Services.Storage;
+using ApplicationLayer.Services.Subscriptions;
 using AutoMapper;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
-using static DomainLayer.Enums.GeneralEnum;
-using ApplicationLayer.Services.Notifications;
-using ApplicationLayer.Services.Subscriptions;
+using Microsoft.Extensions.Configuration;
 using System.Text.Json;
+using static DomainLayer.Enums.GeneralEnum;
 
 namespace ApplicationLayer.Services.Reviews;
 
 public class ReviewService : IReviewService
 {
     private readonly IReviewRepository _reviews;
+    private readonly IFoodReviewRepository _foodReviews;
     private readonly IBoothRepository _booths;
     private readonly IOrderRepository _orders;
+    private readonly IFoodItemRepository _foodItems;
     private readonly IMapper _mapper;
     private readonly INotificationService _notifications;
     private readonly ISubscriptionEntitlementService _entitlements;
+    private readonly IConfiguration _configuration;
+    private readonly IFileStorageService _fileStorage;
 
     public ReviewService(
         IReviewRepository reviews,
@@ -28,7 +34,11 @@ public class ReviewService : IReviewService
         IOrderRepository orders,
         IMapper mapper,
         INotificationService notifications,
-        ISubscriptionEntitlementService entitlements)
+        ISubscriptionEntitlementService entitlements,
+        IConfiguration configuration,
+        IFoodReviewRepository foodReviews,
+        IFoodItemRepository foodItems,
+        IFileStorageService fileStorage)
     {
         _reviews = reviews;
         _booths = booths;
@@ -36,6 +46,10 @@ public class ReviewService : IReviewService
         _mapper = mapper;
         _notifications = notifications;
         _entitlements = entitlements;
+        _configuration = configuration;
+        _foodReviews = foodReviews;
+        _foodItems = foodItems;
+        _fileStorage = fileStorage;
     }
 
     public async Task<ApiResponse<CustomerReviewHistoryResponse>> CreateAsync(Guid customerId, CreateReviewRequest request, CancellationToken cancellationToken = default)
@@ -92,6 +106,8 @@ public class ReviewService : IReviewService
         if (review is null || review.CustomerId != customerId)
             throw AppException.NotFound("Review was not found.", "REVIEW_NOT_FOUND");
 
+        EnsureWithinEditWindow(review.CreatedAt);
+
         review.Rating = request.Rating;
         review.Content = TextHelper.NormalizeOptionalText(request.Content);
         review.ImageUrl = TextHelper.NormalizeOptionalText(request.ImageUrl);
@@ -102,6 +118,25 @@ public class ReviewService : IReviewService
 
         var updated = await _reviews.GetWithReplyByIdAsync(review.Id);
         return ApiResponse<CustomerReviewHistoryResponse>.SuccessResponse(ToCustomerResponse(updated!), "Review updated successfully.");
+    }
+
+    public async Task<ApiResponse<CustomerReviewHistoryResponse>> HideAsync(Guid customerId, Guid reviewId, CancellationToken cancellationToken = default)
+    {
+        var review = await _reviews.GetWithReplyByIdAsync(reviewId);
+        if (review is null || review.CustomerId != customerId)
+            throw AppException.NotFound("Review was not found.", "REVIEW_NOT_FOUND");
+
+        if (!review.IsVisible)
+            return ApiResponse<CustomerReviewHistoryResponse>.SuccessResponse(ToCustomerResponse(review), "Review is already hidden.");
+
+        review.IsVisible = false;
+        review.UpdatedAt = DateTime.UtcNow;
+        _reviews.Update(review);
+        await _reviews.SaveChangesAsync();
+        await _reviews.RefreshBoothAverageRatingAsync(review.BoothId);
+
+        var updated = await _reviews.GetWithReplyByIdAsync(review.Id);
+        return ApiResponse<CustomerReviewHistoryResponse>.SuccessResponse(ToCustomerResponse(updated!), "Review hidden successfully.");
     }
 
     public async Task<ApiResponse<PaginationResp<CustomerReviewResponse>>> GetByBoothAsync(Guid boothId, PaginationReq pagination, CancellationToken cancellationToken = default)
@@ -217,6 +252,131 @@ public class ReviewService : IReviewService
         return ApiResponse<ReviewResponse>.SuccessResponse(ToResponse(response!), "Review reply saved successfully.");
     }
 
+    public async Task<ApiResponse<CustomerFoodReviewHistoryResponse>> CreateFoodReviewAsync(Guid customerId, CreateFoodReviewRequest request, CancellationToken cancellationToken = default)
+    {
+        ValidateRating(request.Rating);
+        NormalizeAndValidateFoodContent(request.Content, request.ImageUrl);
+        request.Content = TextHelper.NormalizeOptionalText(request.Content);
+        request.ImageUrl = TextHelper.NormalizeOptionalText(request.ImageUrl);
+
+        var orderDetail = await _orders.GetCustomerOrderDetailLineAsync(customerId, request.OrderDetailId, cancellationToken)
+            ?? throw AppException.NotFound("Order detail was not found.", "ORDER_DETAIL_NOT_FOUND");
+
+        if (orderDetail.Order.Status != OrderStatus.Completed)
+            throw AppException.BadRequest("Only completed orders can be reviewed.");
+
+        if (await _foodReviews.ExistsByOrderDetailAsync(request.OrderDetailId, cancellationToken))
+            throw AppException.Conflict("This order item has already been reviewed.", "FOOD_REVIEW_ALREADY_EXISTS");
+
+        var now = DateTime.UtcNow;
+        var foodReview = new FoodReview
+        {
+            Id = Guid.NewGuid(),
+            OrderDetailId = orderDetail.Id,
+            OrderId = orderDetail.OrderId,
+            FoodItemId = orderDetail.FoodItemId,
+            CustomerId = customerId,
+            BoothId = orderDetail.FoodItem.BoothId,
+            Rating = request.Rating,
+            Content = request.Content,
+            ImageUrl = request.ImageUrl,
+            IsVisible = true,
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+
+        await _foodReviews.AddAsync(foodReview);
+        if (!await _foodReviews.TrySaveNewFoodReviewAsync(cancellationToken))
+            throw AppException.Conflict("This order item has already been reviewed.", "FOOD_REVIEW_ALREADY_EXISTS");
+
+        await _foodReviews.RefreshFoodItemAverageRatingAsync(foodReview.FoodItemId, cancellationToken);
+
+        var created = await _foodReviews.GetByIdWithNavAsync(foodReview.Id, cancellationToken) ?? foodReview;
+        return ApiResponse<CustomerFoodReviewHistoryResponse>.SuccessResponse(ToFoodCustomerResponse(created), "Food review created successfully.");
+    }
+
+    public async Task<ApiResponse<CustomerFoodReviewHistoryResponse>> UpdateFoodReviewAsync(Guid customerId, Guid foodReviewId, UpdateFoodReviewRequest request, CancellationToken cancellationToken = default)
+    {
+        ValidateRating(request.Rating);
+        NormalizeAndValidateFoodContent(request.Content, request.ImageUrl);
+        var foodReview = await _foodReviews.GetByIdWithNavAsync(foodReviewId, cancellationToken);
+        if (foodReview is null || foodReview.CustomerId != customerId)
+            throw AppException.NotFound("Food review was not found.", "FOOD_REVIEW_NOT_FOUND");
+
+        EnsureWithinEditWindow(foodReview.CreatedAt);
+
+        foodReview.Rating = request.Rating;
+        foodReview.Content = TextHelper.NormalizeOptionalText(request.Content);
+        foodReview.ImageUrl = TextHelper.NormalizeOptionalText(request.ImageUrl);
+        foodReview.UpdatedAt = DateTime.UtcNow;
+        _foodReviews.Update(foodReview);
+        await _foodReviews.SaveChangesAsync();
+        await _foodReviews.RefreshFoodItemAverageRatingAsync(foodReview.FoodItemId, cancellationToken);
+
+        var updated = await _foodReviews.GetByIdWithNavAsync(foodReview.Id, cancellationToken);
+        return ApiResponse<CustomerFoodReviewHistoryResponse>.SuccessResponse(ToFoodCustomerResponse(updated!), "Food review updated successfully.");
+    }
+
+    public async Task<ApiResponse<CustomerFoodReviewHistoryResponse>> HideFoodReviewAsync(Guid customerId, Guid foodReviewId, CancellationToken cancellationToken = default)
+    {
+        var foodReview = await _foodReviews.GetByIdWithNavAsync(foodReviewId, cancellationToken);
+        if (foodReview is null || foodReview.CustomerId != customerId)
+            throw AppException.NotFound("Food review was not found.", "FOOD_REVIEW_NOT_FOUND");
+
+        if (!foodReview.IsVisible)
+            return ApiResponse<CustomerFoodReviewHistoryResponse>.SuccessResponse(ToFoodCustomerResponse(foodReview), "Food review is already hidden.");
+
+        foodReview.IsVisible = false;
+        foodReview.UpdatedAt = DateTime.UtcNow;
+        _foodReviews.Update(foodReview);
+        await _foodReviews.SaveChangesAsync();
+        await _foodReviews.RefreshFoodItemAverageRatingAsync(foodReview.FoodItemId, cancellationToken);
+
+        var updated = await _foodReviews.GetByIdWithNavAsync(foodReview.Id, cancellationToken);
+        return ApiResponse<CustomerFoodReviewHistoryResponse>.SuccessResponse(ToFoodCustomerResponse(updated!), "Food review hidden successfully.");
+    }
+
+    public async Task<ApiResponse<PaginationResp<FoodReviewResponse>>> GetByFoodItemAsync(Guid foodItemId, PaginationReq pagination, CancellationToken cancellationToken = default)
+    {
+        var foodItem = await _foodItems.GetByIdAsync(foodItemId);
+        if (foodItem is null || foodItem.IsDeleted)
+            throw AppException.NotFound("Food item was not found.", "FOOD_ITEM_NOT_FOUND");
+
+        var page = await _foodReviews.GetPagedVisibleByFoodItemAsync(foodItemId, pagination.Page, pagination.PageSize, cancellationToken);
+        var items = page.Items.Select(ToFoodPublicResponse).ToList();
+        return ApiResponse<PaginationResp<FoodReviewResponse>>.SuccessResponse(
+            PaginationResp<FoodReviewResponse>.Create(items, page.TotalCount, pagination));
+    }
+
+    public async Task<ApiResponse<PaginationResp<CustomerFoodReviewHistoryResponse>>> GetMineFoodAsync(Guid customerId, PaginationReq pagination, CancellationToken cancellationToken = default)
+    {
+        var page = await _foodReviews.GetPagedByCustomerAsync(customerId, pagination.Page, pagination.PageSize, cancellationToken);
+        return ApiResponse<PaginationResp<CustomerFoodReviewHistoryResponse>>.SuccessResponse(
+            PaginationResp<CustomerFoodReviewHistoryResponse>.Create(
+                page.Items.Select(ToFoodCustomerResponse).ToList(), page.TotalCount, pagination));
+    }
+
+    public async Task<ApiResponse<ReviewImageUploadResponse>> UploadImageAsync(Stream stream, string fileName, string contentType, long length, CancellationToken cancellationToken = default)
+    {
+        var imageUrl = await _fileStorage.SaveImageAsync("reviews", stream, fileName, contentType, length, cancellationToken);
+        return ApiResponse<ReviewImageUploadResponse>.SuccessResponse(new ReviewImageUploadResponse { ImageUrl = imageUrl }, "Review image uploaded successfully.");
+    }
+
+    private int EditWindowDays => Math.Max(1, _configuration.GetValue("ReviewSettings:EditWindowDays", 7));
+
+    private void EnsureWithinEditWindow(DateTime createdAt)
+    {
+        var deadline = createdAt.AddDays(EditWindowDays);
+        if (DateTime.UtcNow > deadline)
+            throw AppException.BadRequest("The review edit window has expired.", "REVIEW_EDIT_WINDOW_EXPIRED");
+    }
+
+    private (bool CanEdit, DateTime EditDeadline) GetEditState(DateTime createdAt, bool isVisible)
+    {
+        var deadline = createdAt.AddDays(EditWindowDays);
+        return (isVisible && DateTime.UtcNow <= deadline, deadline);
+    }
+
     private async Task TryNotifyAsync(NotificationMessage message, CancellationToken cancellationToken)
     {
         try
@@ -245,8 +405,10 @@ public class ReviewService : IReviewService
     private ReviewResponse ToResponse(Review review)
         => _mapper.Map<ReviewResponse>(review);
 
-    private static CustomerReviewHistoryResponse ToCustomerResponse(Review review)
-        => new()
+    private CustomerReviewHistoryResponse ToCustomerResponse(Review review)
+    {
+        var edit = GetEditState(review.CreatedAt, review.IsVisible);
+        return new()
         {
             ReviewId = review.Id,
             OrderId = review.OrderId,
@@ -263,6 +425,53 @@ public class ReviewService : IReviewService
                 Content = review.ReviewReply.Content,
                 CreatedAt = review.ReviewReply.CreatedAt
             },
+            CanEdit = edit.CanEdit,
+            EditDeadline = edit.EditDeadline,
+            CreatedAt = review.CreatedAt,
+            UpdatedAt = review.UpdatedAt
+        };
+    }
+
+    private CustomerFoodReviewHistoryResponse ToFoodCustomerResponse(FoodReview review)
+    {
+        var edit = GetEditState(review.CreatedAt, review.IsVisible);
+        return new()
+        {
+            FoodReviewId = review.Id,
+            OrderDetailId = review.OrderDetailId,
+            OrderId = review.OrderId,
+            OrderCode = review.Order?.OrderCode.ToString(),
+            FoodItemId = review.FoodItemId,
+            FoodItemName = review.FoodItem?.Name,
+            BoothId = review.BoothId,
+            BoothName = review.Booth?.BoothName,
+            Rating = review.Rating,
+            Content = review.Content,
+            ImageUrl = review.ImageUrl,
+            IsVisible = review.IsVisible,
+            CanEdit = edit.CanEdit,
+            EditDeadline = edit.EditDeadline,
+            CreatedAt = review.CreatedAt,
+            UpdatedAt = review.UpdatedAt
+        };
+    }
+
+    private static FoodReviewResponse ToFoodPublicResponse(FoodReview review)
+        => new()
+        {
+            Id = review.Id,
+            OrderDetailId = review.OrderDetailId,
+            OrderId = review.OrderId,
+            FoodItemId = review.FoodItemId,
+            FoodItemName = review.FoodItem?.Name,
+            BoothId = review.BoothId,
+            BoothName = review.Booth?.BoothName,
+            CustomerId = review.CustomerId,
+            CustomerName = review.Customer?.FullName,
+            Rating = review.Rating,
+            Content = review.Content,
+            ImageUrl = review.ImageUrl,
+            IsVisible = review.IsVisible,
             CreatedAt = review.CreatedAt,
             UpdatedAt = review.UpdatedAt
         };
@@ -286,6 +495,9 @@ public class ReviewService : IReviewService
         request.ImageUrl = TextHelper.NormalizeOptionalText(request.ImageUrl);
         ValidateTextLengths(request.Content, request.ImageUrl);
     }
+
+    private static void NormalizeAndValidateFoodContent(string? content, string? imageUrl)
+        => ValidateTextLengths(TextHelper.NormalizeOptionalText(content), TextHelper.NormalizeOptionalText(imageUrl));
 
     private static void ValidateTextLengths(string? content, string? imageUrl)
     {

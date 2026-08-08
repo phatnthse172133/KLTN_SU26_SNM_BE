@@ -74,6 +74,8 @@ public partial class Order
 
     public virtual Review? Review { get; set; }
 
+    public virtual ICollection<FoodReview> FoodReviews { get; set; } = new List<FoodReview>();
+
     public void MarkPaymentPending(DateTime now)
     {
         Ensure(Status is OrderStatus.Placed or OrderStatus.PaymentFailed, "Order cannot enter pending payment from its current state.");

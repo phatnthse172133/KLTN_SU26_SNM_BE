@@ -17,12 +17,52 @@ public class ComplaintRepository : GenericRepository<Complaint>, IComplaintRepos
     public async Task AddImagesAsync(IEnumerable<ComplaintImage> images)
         => await _context.ComplaintImages.AddRangeAsync(images);
 
+    public async Task AddStatusHistoryAsync(ComplaintStatusHistory history, CancellationToken cancellationToken = default)
+        => await _context.Set<ComplaintStatusHistory>().AddAsync(history, cancellationToken);
+
     public async Task<bool> HasActiveComplaintAsync(Guid customerId, Guid boothId, Guid orderId)
         => await _dbSet.AnyAsync(complaint =>
             complaint.CustomerId == customerId &&
             complaint.BoothId == boothId &&
             complaint.OrderId == orderId &&
-            complaint.Status == DomainLayer.Enums.GeneralEnum.ComplaintStatus.Pending);
+            (complaint.Status == ComplaintStatus.Pending
+             || complaint.Status == ComplaintStatus.UnderReview
+             || complaint.Status == ComplaintStatus.WaitingForCustomer));
+
+    public Task<Guid?> GetActiveComplaintIdAsync(Guid customerId, Guid boothId, Guid orderId, CancellationToken cancellationToken = default)
+        => _dbSet.AsNoTracking()
+            .Where(complaint =>
+                complaint.CustomerId == customerId &&
+                complaint.BoothId == boothId &&
+                complaint.OrderId == orderId &&
+                (complaint.Status == ComplaintStatus.Pending
+                 || complaint.Status == ComplaintStatus.UnderReview
+                 || complaint.Status == ComplaintStatus.WaitingForCustomer))
+            .Select(complaint => (Guid?)complaint.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    public async Task<IReadOnlyDictionary<Guid, Guid>> GetActiveComplaintIdsByOrderIdsAsync(
+        Guid customerId, Guid boothId, IEnumerable<Guid> orderIds, CancellationToken cancellationToken = default)
+    {
+        var ids = orderIds.Distinct().ToList();
+        if (ids.Count == 0)
+            return new Dictionary<Guid, Guid>();
+
+        var items = await _dbSet.AsNoTracking()
+            .Where(complaint =>
+                complaint.CustomerId == customerId &&
+                complaint.BoothId == boothId &&
+                ids.Contains(complaint.OrderId) &&
+                (complaint.Status == ComplaintStatus.Pending
+                 || complaint.Status == ComplaintStatus.UnderReview
+                 || complaint.Status == ComplaintStatus.WaitingForCustomer))
+            .Select(complaint => new { complaint.OrderId, complaint.Id })
+            .ToListAsync(cancellationToken);
+
+        return items
+            .GroupBy(item => item.OrderId)
+            .ToDictionary(group => group.Key, group => group.First().Id);
+    }
 
     public async Task<Complaint?> GetWithImagesByIdAsync(Guid complaintId)
         => await QueryWithImages()
@@ -73,7 +113,15 @@ public class ComplaintRepository : GenericRepository<Complaint>, IComplaintRepos
         return await ToPagedAsync(query, page, pageSize, cancellationToken);
     }
 
-    public async Task<int> UpdateStatusWithConcurrencyAsync(Guid complaintId, ComplaintStatus expectedPreviousStatus, ComplaintStatus newStatus, string? adminResponse, ComplaintResolutionAction? resolutionAction, string? policyViolation, DateTime updatedAt)
+    public async Task<int> UpdateStatusWithConcurrencyAsync(
+        Guid complaintId,
+        ComplaintStatus expectedPreviousStatus,
+        ComplaintStatus newStatus,
+        string? adminResponse,
+        ComplaintResolutionAction? resolutionAction,
+        string? policyViolation,
+        DateTime updatedAt,
+        string? customerEvidenceRequestNote = null)
     {
         var query = _dbSet.Where(c => c.Id == complaintId && c.Status == expectedPreviousStatus);
         return await query.ExecuteUpdateAsync(s => s
@@ -81,6 +129,7 @@ public class ComplaintRepository : GenericRepository<Complaint>, IComplaintRepos
             .SetProperty(c => c.AdminResponse, adminResponse)
             .SetProperty(c => c.ResolutionAction, resolutionAction)
             .SetProperty(c => c.PolicyViolation, policyViolation)
+            .SetProperty(c => c.CustomerEvidenceRequestNote, customerEvidenceRequestNote)
             .SetProperty(c => c.UpdatedAt, updatedAt));
     }
 
@@ -172,6 +221,7 @@ public class ComplaintRepository : GenericRepository<Complaint>, IComplaintRepos
     private IQueryable<Complaint> QueryWithImages()
         => _dbSet
             .Include(complaint => complaint.ComplaintImages)
+            .Include(complaint => complaint.StatusHistories)
             .AsSplitQuery();
 
     private static async Task<PagedResult<Complaint>> ToPagedAsync(

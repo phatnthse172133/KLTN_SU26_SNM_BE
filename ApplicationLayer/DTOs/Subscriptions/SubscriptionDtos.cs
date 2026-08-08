@@ -22,6 +22,7 @@ namespace ApplicationLayer.DTOs.Subscriptions
     public class CurrentSubscriptionResponse
     {
         public Guid SubscriptionId { get; set; }
+        public Guid? PackageId { get; set; }
         public string? PackageCode { get; set; }
         public string PackageName { get; set; } = string.Empty;
         public string? PackageImageUrl { get; set; }

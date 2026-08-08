@@ -218,11 +218,18 @@ namespace ApplicationLayer.Services.Subscriptions
         public async Task<ApiResponse<CurrentSubscriptionResponse>> GetMarketCurrentAsync(Guid ownerId, CancellationToken ct = default)
         {
             var sub = await _repo.GetActiveMarketSubscriptionAsync(ownerId, ct);
+            var pending = await _repo.GetPendingMarketSubscriptionAsync(ownerId, ct);
+
+            // A pending purchase is still the user's current subscription state even
+            // when there is no active plan yet. Returning None here made the FE lose
+            // the package/order and caused repeated 404/409 attempts on retry.
+            if (sub == null && pending != null)
+                return ApiResponse<CurrentSubscriptionResponse>.SuccessResponse(MapMarketCurrent(pending, hasPending: true));
+
             if (sub == null)
                 return ApiResponse<CurrentSubscriptionResponse>.SuccessResponse(new CurrentSubscriptionResponse { Status = "None" });
 
-            var hasPending = await _repo.HasPendingMarketSubscriptionAsync(ownerId, ct);
-            return ApiResponse<CurrentSubscriptionResponse>.SuccessResponse(MapMarketCurrent(sub, hasPending));
+            return ApiResponse<CurrentSubscriptionResponse>.SuccessResponse(MapMarketCurrent(sub, pending != null));
         }
 
         public async Task<ApiResponse<List<SubscriptionHistoryItem>>> GetMarketHistoryAsync(Guid ownerId, CancellationToken ct = default)
@@ -233,20 +240,32 @@ namespace ApplicationLayer.Services.Subscriptions
 
         public async Task<ApiResponse<PayOSPaymentResponseDto>> PurchaseMarketAsync(Guid ownerId, PurchaseSubscriptionRequest request, CancellationToken ct = default)
         {
+            // Resume an existing pending payment before resolving a newly selected
+            // package. A stopped/updated package must not turn a valid pending QR
+            // into a misleading 404, and a different package must be rejected
+            // explicitly as a pending-payment conflict.
+            var pending = await _repo.GetPendingMarketSubscriptionAsync(ownerId, ct);
+            if (pending != null)
+            {
+                if (pending.PackageId != request.PackageId)
+                    throw AppException.Conflict(
+                        $"You already have a pending payment for {pending.Package?.PackageName ?? "another package"}. Complete or cancel it before choosing a different plan.",
+                        "PENDING_PAYMENT_EXISTS");
+
+                var pendingPackage = pending.Package
+                    ?? throw AppException.NotFound(
+                        "The package for your pending payment is no longer available. Please contact Support.",
+                        "PACKAGE_NOT_FOUND");
+                var pendingDuration = request.DurationDays ?? pendingPackage.DurationDays;
+                var resumed = await HandlePendingMarketPaymentAsync(pending, pendingPackage, pendingDuration, ct);
+                if (resumed != null)
+                    return resumed;
+            }
+
             var (pkg, policy, price, durationDays, amount) = await ResolvePackageAndPriceAsync(request.PackageId, request.DurationDays, PackageType.Market, ct);
 
             if (amount <= 0)
                 throw AppException.BadRequest("Market package price must be greater than 0.", "INVALID_PACKAGE_PRICE");
-
-            // Check pending payment BEFORE policy validation so a policy version change
-            // doesn't block resuming an already-accepted pending payment.
-            var pending = await _repo.GetPendingMarketSubscriptionAsync(ownerId, ct);
-            if (pending != null)
-            {
-                var pendingResult = await HandlePendingMarketPaymentAsync(pending, pkg, durationDays, ct);
-                if (pendingResult != null)
-                    return pendingResult;
-            }
 
             // Now validate policy for new purchase
             var policyAcceptance = ValidateAndSnapshotPolicy(policy, request.AcceptedPolicy, request.AcceptedPolicyVersion);
@@ -463,7 +482,7 @@ namespace ApplicationLayer.Services.Subscriptions
         private async Task<(Package pkg, PackagePolicy? policy, PackagePrice? price, int durationDays, decimal amount)> ResolvePackageAndPriceAsync(Guid packageId, int? durationDays, PackageType expectedType, CancellationToken ct)
         {
             var pkg = await _repo.GetPackageByIdAsync(packageId, ct)
-                ?? throw AppException.NotFound("Package not found.");
+                ?? throw AppException.NotFound("The selected package is no longer available. Please refresh the available plans and choose an active package.", "PACKAGE_NOT_FOUND");
 
             if (pkg.IsDeleted || pkg.Status != PackageStatus.Active)
                 throw AppException.BadRequest("Package is no longer available.", "PACKAGE_NOT_AVAILABLE");
@@ -907,6 +926,7 @@ namespace ApplicationLayer.Services.Subscriptions
             return new CurrentSubscriptionResponse
             {
                 SubscriptionId = sub.Id,
+                PackageId = sub.PackageId,
                 PackageCode = sub.Package?.Code,
                 PackageName = sub.Package?.PackageName ?? "",
                 PackageImageUrl = sub.Package?.ImageUrl,
@@ -929,6 +949,7 @@ namespace ApplicationLayer.Services.Subscriptions
             return new CurrentSubscriptionResponse
             {
                 SubscriptionId = sub.Id,
+                PackageId = sub.PackageId,
                 PackageCode = sub.Package?.Code,
                 PackageName = sub.Package?.PackageName ?? "",
                 PackageImageUrl = sub.Package?.ImageUrl,

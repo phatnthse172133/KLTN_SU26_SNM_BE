@@ -3,6 +3,7 @@ using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Services.Chats;
 using ApplicationLayer.Services.Notifications;
+using ApplicationLayer.Services.Realtime;
 using AutoMapper;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
@@ -19,6 +20,7 @@ public class ChatServiceTests
     private readonly Mock<IBoothRepository> _booths = new();
     private readonly Mock<IMapper> _mapper = new();
     private readonly Mock<IRealtimeChatPublisher> _realtime = new();
+    private readonly Mock<IRealtimeEventPublisher> _events = new();
     private readonly Mock<INotificationService> _notifications = new();
     private readonly ChatService _service;
 
@@ -30,6 +32,7 @@ public class ChatServiceTests
             _booths.Object,
             _mapper.Object,
             _realtime.Object,
+            _events.Object,
             _notifications.Object,
             Mock.Of<ILogger<ChatService>>());
     }

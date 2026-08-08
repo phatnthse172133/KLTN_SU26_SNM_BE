@@ -25,7 +25,6 @@ public class AccountController : ControllerBase
 
     private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-    [Authorize(Roles = "Customer")]
     [HttpGet]
     public async Task<IActionResult> GetMyAccount(CancellationToken cancellationToken)
     {
@@ -33,7 +32,6 @@ public class AccountController : ControllerBase
         return response.Success ? Ok(response) : NotFound(response);
     }
 
-    [Authorize(Roles = "Customer")]
     [HttpPut]
     public async Task<IActionResult> UpdateMyAccount(UpdateProfileRequest request, CancellationToken cancellationToken)
     {
@@ -41,7 +39,6 @@ public class AccountController : ControllerBase
         return response.Success ? Ok(response) : NotFound(response);
     }
 
-    [Authorize(Roles = "Customer")]
     [HttpPost("avatar")]
     [EnableRateLimiting("AvatarUploadPolicy")]
     [Consumes("multipart/form-data")]
@@ -65,7 +62,6 @@ public class AccountController : ControllerBase
         return response.Success ? Ok(response) : NotFound(response);
     }
 
-    [Authorize(Roles = "Customer")]
     [HttpDelete("avatar")]
     public async Task<IActionResult> RemoveAvatar(CancellationToken cancellationToken)
     {

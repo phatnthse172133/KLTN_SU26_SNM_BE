@@ -76,3 +76,9 @@ public class AdminReviewQueryRequest
     public Guid? BoothId { get; set; }
     public string? Keyword { get; set; }
 }
+
+public class MarketOwnerReviewQueryRequest : ApplicationLayer.Helppers.PaginationReq
+{
+    public short? Rating { get; set; }
+    public Guid? MarketId { get; set; }
+}

@@ -487,6 +487,65 @@ public class NightMarketService : INightMarketService
             $"Night market status changed to {request.Status} successfully.");
     }
 
+    public async Task<ApiResponse<ActivationReadinessResponse>> GetActivationReadinessAsync(
+        Guid id,
+        Guid currentUserId,
+        string currentUserRole,
+        CancellationToken cancellationToken = default)
+    {
+        var market = await _markets.GetByIdAsync(id);
+        if (market is null || market.IsDeleted)
+            throw AppException.NotFound("This night market no longer exists.", "MARKET_NOT_FOUND");
+
+        EnsureOwnership(market, currentUserId, currentUserRole);
+
+        var hasSubscription = market.MarketOwnerId.HasValue
+            && await _entitlements.HasActiveMarketSubscriptionAsync(market.MarketOwnerId.Value);
+        var hasActiveLayout = await _layouts.CountAsync(layout =>
+            layout.NightMarketId == id
+            && layout.Status == MarketLayoutStatus.Active
+            && !layout.IsDeleted) > 0;
+        var isNotSuspended = market.ModerationStatus != ModerationStatus.Suspended;
+
+        var checks = new List<ActivationReadinessCheckResponse>
+        {
+            new()
+            {
+                Code = "MARKET_SUBSCRIPTION_REQUIRED",
+                Passed = hasSubscription,
+                Message = hasSubscription
+                    ? "Your Market subscription is active."
+                    : "Choose and complete payment for a Market plan before activating this night market.",
+                CtaLabel = hasSubscription ? null : "View plans",
+                CtaAction = hasSubscription ? null : "navigate:/marketowner/subscriptions"
+            },
+            new()
+            {
+                Code = "LAYOUT_REQUIRED",
+                Passed = hasActiveLayout,
+                Message = hasActiveLayout
+                    ? "An active layout is ready."
+                    : "Create, validate, and activate a layout before activating this night market.",
+                CtaLabel = hasActiveLayout ? null : "Open layouts",
+                CtaAction = hasActiveLayout ? null : "navigate:/marketowner/layouts"
+            },
+            new()
+            {
+                Code = "MARKET_SUSPENDED",
+                Passed = isNotSuspended,
+                Message = isNotSuspended
+                    ? "This night market is not suspended."
+                    : "This night market was suspended by an administrator. Contact Support if you need assistance."
+            }
+        };
+
+        return ApiResponse<ActivationReadinessResponse>.SuccessResponse(new ActivationReadinessResponse
+        {
+            CanActivate = checks.All(check => check.Passed),
+            Checks = checks
+        });
+    }
+
     private async Task<List<NightMarketImage>> GetActiveImagesAsync(Guid marketId)
     {
         var images = await _marketImages.FindAsync(i => i.NightMarketId == marketId && !i.IsDeleted);

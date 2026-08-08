@@ -41,11 +41,33 @@ public class BoothRegistrationsController : ControllerBase
         return Ok(await _service.GetPendingAsync(pagination, cancellationToken));
     }
 
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "MarketOwner")]
+    [HttpGet("market-owner")]
+    public async Task<IActionResult> GetByMarketOwner(
+        [FromQuery] Guid? marketId,
+        [FromQuery] string? status,
+        [FromQuery] string? keyword,
+        [FromQuery] PaginationReq pagination,
+        CancellationToken cancellationToken = default)
+    {
+        return Ok(await _service.GetByMarketOwnerAsync(UserId, marketId, status, keyword, pagination, cancellationToken));
+    }
+
+    [Authorize(Roles = "MarketOwner")]
+    [HttpGet("market-owner/counts")]
+    public async Task<IActionResult> GetCountsByMarketOwner(
+        [FromQuery] Guid? marketId,
+        CancellationToken cancellationToken = default)
+    {
+        return Ok(await _service.GetCountsByMarketOwnerAsync(UserId, marketId, cancellationToken));
+    }
+
+    [Authorize(Roles = "MarketOwner,Admin")]
     [HttpPut("{registrationId:guid}/review")]
     public async Task<IActionResult> Review(Guid registrationId, ReviewBoothRegistrationRequest request, CancellationToken cancellationToken)
     {
-        var response = await _service.ReviewAsync(registrationId, request, cancellationToken);
+        var actorId = User.IsInRole("MarketOwner") ? UserId : (Guid?)null;
+        var response = await _service.ReviewAsync(registrationId, request, cancellationToken, actorId);
         return response.Success ? Ok(response) : BadRequest(response);
     }
 }

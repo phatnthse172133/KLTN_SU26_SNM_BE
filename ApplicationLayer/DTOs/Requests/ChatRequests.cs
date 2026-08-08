@@ -6,6 +6,8 @@ namespace ApplicationLayer.DTOs.Requests;
 
 public class ChatListRequest : PaginationReq
 {
+    [MaxLength(100)]
+    public string? Keyword { get; set; }
 }
 
 public class MessageListRequest : PaginationReq

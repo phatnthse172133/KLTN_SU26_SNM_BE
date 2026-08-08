@@ -13,6 +13,7 @@ public class NightMarketMapResponse
     public MapNightMarketResponse NightMarket { get; set; } = new();
     public MapLayoutResponse Layout { get; set; } = new();
     public IReadOnlyCollection<ZoneResponse> Zones { get; set; } = [];
+    public IReadOnlyCollection<MapLayoutBlockResponse> Blocks { get; set; } = [];
     public IReadOnlyCollection<LayoutNodeResponse> Nodes { get; set; } = [];
     public IReadOnlyCollection<LayoutEdgeResponse> Edges { get; set; } = [];
     public IReadOnlyCollection<LayoutNodeResponse> StartingPoints { get; set; } = [];
@@ -36,6 +37,20 @@ public class MapLayoutResponse
     public decimal? MetersPerLayoutUnit { get; set; }
     public string DistanceCalibrationStatus { get; set; } = string.Empty;
     public int GraphRevision { get; set; }
+}
+
+public class MapLayoutBlockResponse
+{
+    public Guid Id { get; set; }
+    public Guid? ZoneId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Type { get; set; } = string.Empty;
+    public string? Color { get; set; }
+    public double X { get; set; }
+    public double Y { get; set; }
+    public double Width { get; set; }
+    public double Height { get; set; }
+    public double Rotation { get; set; }
 }
 
 public class MapBoothResponse

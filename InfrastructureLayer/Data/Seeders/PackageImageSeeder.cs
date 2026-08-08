@@ -67,11 +67,12 @@ public static class PackageImageSeeder
 
         var webRoot = env.WebRootPath ?? Path.Combine(env.ContentRootPath, "wwwroot");
         var configuredPath = configuration["UploadStorage:RootPath"];
+        // LocalFileStorageService exposes /uploads from wwwroot/uploads when no
+        // external storage root is configured. Keep seed files on that exact
+        // contract as well; using wwwroot directly makes /uploads/images/... 404.
         var storageRoot = string.IsNullOrWhiteSpace(configuredPath)
-            ? webRoot
+            ? Path.Combine(webRoot, "uploads")
             : Path.GetFullPath(configuredPath);
-        if (string.Equals(Path.GetFullPath(storageRoot), Path.GetFullPath(webRoot), StringComparison.OrdinalIgnoreCase))
-            return;
 
         foreach (var url in SeedImageUrls.Values)
         {
@@ -80,7 +81,13 @@ public static class PackageImageSeeder
             var target = Path.Combine(storageRoot, relativePath);
             try
             {
-                if (!File.Exists(source) || File.Exists(target))
+                if (!File.Exists(source))
+                {
+                    logger?.LogWarning("Package seed image source is missing: {Source}.", source);
+                    continue;
+                }
+
+                if (File.Exists(target))
                     continue;
 
                 Directory.CreateDirectory(Path.GetDirectoryName(target)!);

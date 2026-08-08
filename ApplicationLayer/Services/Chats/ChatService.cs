@@ -3,7 +3,9 @@ using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
 using ApplicationLayer.Mappings;
+using ApplicationLayer.Services.Chats;
 using ApplicationLayer.Services.Notifications;
+using ApplicationLayer.Services.Realtime;
 using AutoMapper;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
@@ -20,6 +22,7 @@ public class ChatService : IChatService
     private readonly IBoothRepository _booths;
     private readonly IMapper _mapper;
     private readonly IRealtimeChatPublisher _realtime;
+    private readonly IRealtimeEventPublisher _eventPublisher;
     private readonly INotificationService _notifications;
     private readonly ILogger<ChatService> _logger;
 
@@ -29,6 +32,7 @@ public class ChatService : IChatService
         IBoothRepository booths,
         IMapper mapper,
         IRealtimeChatPublisher realtime,
+        IRealtimeEventPublisher eventPublisher,
         INotificationService notifications,
         ILogger<ChatService> logger)
     {
@@ -37,6 +41,7 @@ public class ChatService : IChatService
         _booths = booths;
         _mapper = mapper;
         _realtime = realtime;
+        _eventPublisher = eventPublisher;
         _notifications = notifications;
         _logger = logger;
     }
@@ -78,6 +83,7 @@ public class ChatService : IChatService
     {
         var page = await _conversations.GetPagedByUserAsync(
             userId,
+            request.Keyword?.Trim(),
             request.Page,
             request.PageSize,
             cancellationToken);
@@ -216,6 +222,15 @@ public class ChatService : IChatService
                 CancellationToken.None),
             "realtime message delivery",
             message.Id);
+        await RunPostCommitSafelyAsync(
+            () => _eventPublisher.PublishAsync(new RealtimeEvent
+            {
+                EventType = "MessageCreated",
+                GroupName = RealtimeGroups.Conversation(conversationId),
+                Payload = response
+            }),
+            "unified message event delivery",
+            message.Id);
 
         var receiverId = conversation.CustomerId == userId
             ? conversation.Booth.BoothOwnerId
@@ -276,6 +291,15 @@ public class ChatService : IChatService
                 CancellationToken.None),
             "read receipt delivery",
             conversationId);
+        await RunPostCommitSafelyAsync(
+            () => _eventPublisher.PublishAsync(new RealtimeEvent
+            {
+                EventType = "ConversationRead",
+                GroupName = RealtimeGroups.Conversation(conversationId),
+                Payload = new { conversationId, readerId = userId, readAt = now }
+            }),
+            "unified conversation read event",
+            conversationId);
 
         return ApiResponse<object>.SuccessResponse(
             new { UpdatedCount = updatedCount },
@@ -324,6 +348,15 @@ public class ChatService : IChatService
                 now,
                 CancellationToken.None),
             "message deletion delivery",
+            message.Id);
+        await RunPostCommitSafelyAsync(
+            () => _eventPublisher.PublishAsync(new RealtimeEvent
+            {
+                EventType = "MessageDeleted",
+                GroupName = RealtimeGroups.Conversation(message.ConversationId),
+                Payload = new { conversationId = message.ConversationId, messageId = message.Id, deletedByUserId = userId, deletedAt = now }
+            }),
+            "unified message deletion event",
             message.Id);
     }
 

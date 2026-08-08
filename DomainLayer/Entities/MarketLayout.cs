@@ -19,15 +19,17 @@ public partial class MarketLayout : ISoftDelete
 
     public string? LayoutImageUrl { get; set; }
 
+    public int Width { get; set; }
+
+    public int Height { get; set; }
+
+    // Optional physical dimensions used by the auto-layout generator.  Existing
+    // pixel-based layouts remain valid while these values are null.
     public double? MarketWidthMeters { get; set; }
 
     public double? MarketLengthMeters { get; set; }
 
     public double? PixelsPerMeter { get; set; }
-
-    public int Width { get; set; }
-
-    public int Height { get; set; }
 
     public LayoutCoordinateUnit CoordinateUnit { get; set; }
 

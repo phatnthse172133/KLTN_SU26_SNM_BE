@@ -1,7 +1,5 @@
 using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
-using ApplicationLayer.Services.MapNavigation;
-using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
 using static DomainLayer.Enums.GeneralEnum;
 
@@ -13,132 +11,112 @@ public class LayoutGraphValidationService : ILayoutGraphValidationService
     private readonly ILayoutNodeRepository _nodes;
     private readonly ILayoutEdgeRepository _edges;
     private readonly IBoothLocationRepository _locations;
-    private readonly ILayoutNavigationAnchorRepository? _anchors;
     public LayoutGraphValidationService(IMarketLayoutRepository layouts, ILayoutNodeRepository nodes,
-        ILayoutEdgeRepository edges, IBoothLocationRepository locations, ILayoutNavigationAnchorRepository? anchors = null)
-        => (_layouts, _nodes, _edges, _locations, _anchors) = (layouts, nodes, edges, locations, anchors);
+        ILayoutEdgeRepository edges, IBoothLocationRepository locations)
+        => (_layouts, _nodes, _edges, _locations) = (layouts, nodes, edges, locations);
 
     public async Task<MarketLayoutValidationResponse> ValidateAsync(Guid layoutId, CancellationToken cancellationToken = default)
     {
         var layout = await _layouts.GetActiveByIdAsync(layoutId, cancellationToken)
             ?? throw AppException.NotFound("Market layout was not found.");
         var nodes = await _nodes.GetByLayoutAsync(layoutId, cancellationToken: cancellationToken);
-
         var edges = await _edges.GetByLayoutAsync(layoutId, cancellationToken: cancellationToken);
+        var blocks = await _layouts.GetBlocksByLayoutIdAsync(layoutId, cancellationToken);
 
-        var locations = await _locations.GetCurrentByLayoutAsync(layoutId, cancellationToken);
-        var anchors = _anchors is null ? [] : await _anchors.GetByLayoutAsync(layoutId, cancellationToken);
+        var locations = await _locations.GetCurrentByLayoutAsync(layoutId, cancellationToken: cancellationToken);
 
         var errors = new List<string>();
         var warnings = new List<string>();
 
-        if (string.IsNullOrWhiteSpace(layout.LayoutImageUrl)) 
-            errors.Add("Layout image is required.");
+        // Layout image is optional — canvas-based editors may not need a background image
+        if (string.IsNullOrWhiteSpace(layout.LayoutImageUrl))
+            warnings.Add("Layout has no background image. Canvas-based layouts can still be activated without one.");
 
-        if (layout.Width <= 0 || layout.Height <= 0) 
+        if (layout.Width <= 0 || layout.Height <= 0)
             errors.Add("Layout width and height must be greater than zero.");
 
-        if (layout.DistanceCalibrationStatus == DistanceCalibrationStatus.Calibrated &&
-            (!layout.MetersPerLayoutUnit.HasValue || layout.MetersPerLayoutUnit.Value <= 0))
-            errors.Add("A calibrated layout must have a positive metres-per-layout-unit scale.");
+        if (!nodes.Any(x => x.NodeType == LayoutNodeType.Entrance))
+            errors.Add("Layout must have at least one entrance.");
 
-        if (layout.DistanceCalibrationStatus == DistanceCalibrationStatus.Uncalibrated)
-            warnings.Add("Layout distance is uncalibrated; live ETA and tracking must remain disabled.");
+        // BoothSlot support: require at least one Junction when booth slots exist.
+        // Junctions are auto-generated per Zone by the layout generator; if the market owner
+        // manually placed BoothSlots without the generator they must add a Junction manually.
+        var boothSlots = nodes.Where(x => x.NodeType == LayoutNodeType.BoothSlot).ToList();
+        if (boothSlots.Count > 0 && !nodes.Any(x => x.NodeType == LayoutNodeType.Junction))
+            errors.Add("Layout must have at least one path point (junction). Use the Generate Layout feature or add one manually.");
 
-        if (!nodes.Any(x => x.NodeType == LayoutNodeType.Entrance && x.IsAccessible))
-            errors.Add("Layout must have at least one accessible entrance.");
-
-        if (!nodes.Any(x => x.NodeType == LayoutNodeType.BoothAccess)) 
-            errors.Add("Layout must have at least one booth access node.");
-
-        if (!nodes.Any(x => x.IsStartingPoint && x.IsAccessible))
-            errors.Add("Layout must have at least one accessible starting point.");
-
-        if (nodes.Any(x => x.NodeType == LayoutNodeType.Entrance && !x.IsAccessible))
-            errors.Add("All entrance nodes must be accessible.");
-
-        if (nodes.Any(x => x.IsStartingPoint && !x.IsAccessible))
-            errors.Add("All starting-point nodes must be accessible.");
+        // Legacy BoothAccess nodes are not required for new layouts but are still validated if present
 
         if (nodes.Any(x => x.Xcoordinate < 0 || x.Xcoordinate > layout.Width || x.Ycoordinate < 0 || x.Ycoordinate > layout.Height))
             errors.Add("All nodes must be inside the layout dimensions.");
 
-        if (edges.Any(x => x.FromNodeId == x.ToNodeId)) 
+        if (blocks.Any(b => b.X < 0 || b.Y < 0 || b.X + b.Width > layout.Width || b.Y + b.Height > layout.Height))
+            errors.Add("All blocks must be inside the layout dimensions.");
+
+        if (edges.Any(x => x.FromNodeId == x.ToNodeId))
             errors.Add("Edges cannot connect a node to itself.");
 
-        if (edges.Any(x => x.Distance <= 0))
-            errors.Add("All edge distances must be positive physical metres.");
-
-        if (HasDuplicateDirectedArcs(edges))
-            errors.Add("Layout contains duplicate directed paths, including reversed bidirectional edges.");
+        if (edges.GroupBy(x => x.FromNodeId.CompareTo(x.ToNodeId) < 0
+                ? (x.FromNodeId, x.ToNodeId)
+                : (x.ToNodeId, x.FromNodeId))
+            .Any(x => x.Count() > 1))
+            errors.Add("Layout contains duplicate edges.");
 
         var nodeIds = nodes.Select(x => x.Id).ToHashSet();
 
-        if (edges.Any(x => x.LayoutId != layoutId || !nodeIds.Contains(x.FromNodeId) || !nodeIds.Contains(x.ToNodeId)))
+        if (edges.Any(x => !nodeIds.Contains(x.FromNodeId) || !nodeIds.Contains(x.ToNodeId)))
             errors.Add("All edge endpoints must belong to this layout.");
 
-        var usableNodes = nodes.Where(x => IndoorGraphPolicy.CanUseNode(x, new IndoorRoutePolicy())).ToList();
-        var usableNodeIds = usableNodes.Select(x => x.Id).ToHashSet();
-        var usableEdges = edges.Where(x => IndoorGraphPolicy.CanUseEdge(x, new IndoorRoutePolicy()) &&
-                                            usableNodeIds.Contains(x.FromNodeId) && usableNodeIds.Contains(x.ToNodeId)).ToList();
-        var connectedIds = usableEdges.SelectMany(x => new[] { x.FromNodeId, x.ToNodeId }).ToHashSet();
+        var connectedIds = edges.SelectMany(x => new[] { x.FromNodeId, x.ToNodeId }).ToHashSet();
 
-        if (nodes.Any(x => (x.NodeType is LayoutNodeType.Entrance or LayoutNodeType.BoothAccess || x.IsStartingPoint) &&
-                           (!x.IsAccessible || !connectedIds.Contains(x.Id))))
-            errors.Add("Accessible entrances, starting points and booth access nodes cannot be isolated.");
+        // Entrance, BoothSlot and legacy BoothAccess nodes cannot be isolated
+        if (nodes.Any(x => x.NodeType is LayoutNodeType.Entrance or LayoutNodeType.BoothSlot or LayoutNodeType.BoothAccess && !connectedIds.Contains(x.Id)))
+            errors.Add("Required entrance, booth slot, and booth access nodes cannot be isolated.");
 
-        var reachable = ReachableFromEntrances(
-            usableNodes.Where(x => x.NodeType == LayoutNodeType.Entrance).Select(x => x.Id), usableEdges, usableNodeIds);
+        var reachable = ReachableFromEntrances(nodes.Where(x => x.NodeType == LayoutNodeType.Entrance).Select(x => x.Id), edges);
 
-        if (nodes.Any(x => x.NodeType == LayoutNodeType.BoothAccess && (!x.IsAccessible || !reachable.Contains(x.Id))))
+        // Every BoothSlot must be reachable from an entrance
+        if (boothSlots.Any(bs => !reachable.Contains(bs.Id)))
+            errors.Add("Every booth slot must be reachable from an entrance.");
+
+        // Legacy: BoothAccess nodes should also be reachable if present
+        if (nodes.Any(x => x.NodeType == LayoutNodeType.BoothAccess && !reachable.Contains(x.Id)))
             errors.Add("Every booth access node must be reachable from an entrance.");
 
-        if (locations.Any(x => x.LayoutId != layoutId || !nodeIds.Contains(x.LayoutNodeId)))
-            errors.Add("A booth location references a node outside this layout.");
+        // SlotCode validation for BoothSlots
+        var slotsWithEmptyCode = boothSlots.Where(x => string.IsNullOrWhiteSpace(x.SlotCode)).ToList();
+        if (slotsWithEmptyCode.Count > 0)
+            errors.Add("Every booth slot must have a slot code.");
 
-        var nodesById = nodes.ToDictionary(x => x.Id);
-        if (locations.Any(x => nodesById.TryGetValue(x.LayoutNodeId, out var node) &&
-                               (node.NodeType != LayoutNodeType.BoothAccess || !node.IsAccessible)))
-            errors.Add("Every booth location must use an accessible BoothAccess node.");
+        var duplicateCodes = boothSlots
+            .Where(x => !string.IsNullOrWhiteSpace(x.SlotCode))
+            .GroupBy(x => x.SlotCode!, StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.Key)
+            .ToList();
+        if (duplicateCodes.Count > 0)
+            errors.Add($"Duplicate slot codes: {string.Join(", ", duplicateCodes)}.");
 
-        if (anchors.Count == 0)
-            warnings.Add("Layout has no geolocated navigation entrance; customers must select an indoor starting point manually.");
-        if (anchors.Any(x => x.LayoutId != layoutId || !nodesById.ContainsKey(x.LayoutNodeId)))
-            errors.Add("A navigation anchor references a node outside this layout.");
-        if (anchors.Any(x => x.Latitude is < -90 or > 90 || x.Longitude is < -180 or > 180))
-            errors.Add("Navigation anchor coordinates must be valid latitude and longitude values.");
-        if (anchors.Any(x => x.AnchorType is NavigationAnchorType.Entrance or NavigationAnchorType.Both &&
-                             nodesById.TryGetValue(x.LayoutNodeId, out var node) &&
-                             (node.NodeType != LayoutNodeType.Entrance || !node.IsAccessible)))
-            errors.Add("Customer entrance anchors must use accessible Entrance nodes.");
+        if (locations.Any(x => !nodeIds.Contains(x.LayoutNodeId)))
+            errors.Add("A booth location references an invalid node.");
 
-        if (nodes.Count == 0) 
+        if (nodes.Count == 0)
             errors.Add("Layout must have at least one node.");
 
-        if (edges.Count == 0) 
+        if (edges.Count == 0)
             warnings.Add("Layout has no paths.");
+
+        if (boothSlots.Count == 0)
+            warnings.Add("Layout has no booth slots. Customers will not be able to find booths.");
 
         return new() { Errors = errors.Distinct().ToList(), Warnings = warnings };
     }
 
-    private static bool HasDuplicateDirectedArcs(IEnumerable<LayoutEdge> edges)
-    {
-        var arcs = new HashSet<(Guid From, Guid To)>();
-        foreach (var edge in edges)
-        {
-            if (!arcs.Add((edge.FromNodeId, edge.ToNodeId))) return true;
-            if (edge.IsBidirectional && !arcs.Add((edge.ToNodeId, edge.FromNodeId))) return true;
-        }
-        return false;
-    }
-
-    private static HashSet<Guid> ReachableFromEntrances(
-        IEnumerable<Guid> starts, IEnumerable<LayoutEdge> edges, IReadOnlySet<Guid> usableNodeIds)
+    private static HashSet<Guid> ReachableFromEntrances(IEnumerable<Guid> starts, IEnumerable<DomainLayer.Entities.LayoutEdge> edges)
     {
         var graph = new Dictionary<Guid, List<Guid>>();
-        foreach (var edge in edges.Where(x => IndoorGraphPolicy.CanUseEdge(x, new IndoorRoutePolicy())))
+        foreach (var edge in edges.Where(x => x.IsAccessible))
         {
-            if (!usableNodeIds.Contains(edge.FromNodeId) || !usableNodeIds.Contains(edge.ToNodeId)) continue;
             graph.TryAdd(edge.FromNodeId, []); graph[edge.FromNodeId].Add(edge.ToNodeId);
             if (edge.IsBidirectional) { graph.TryAdd(edge.ToNodeId, []); graph[edge.ToNodeId].Add(edge.FromNodeId); }
         }

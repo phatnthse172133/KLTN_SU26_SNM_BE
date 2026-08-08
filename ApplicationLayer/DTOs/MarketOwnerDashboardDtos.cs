@@ -8,7 +8,8 @@ public enum DashboardPeriod
 {
     Week = 0,
     Month = 1,
-    Year = 2
+    Year = 2,
+    Today = 3
 }
 
 public class MarketOwnerDashboardResponse

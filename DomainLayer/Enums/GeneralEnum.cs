@@ -112,10 +112,10 @@ namespace DomainLayer.Enums
 
         public enum NightMarketStatus
         {
+            Draft = 0,
             Active = 1,
             Inactive = 2,
             Open = Active,
-            Draft = 0,
             Upcoming = 3,
             Closed = 4,
             Cancelled = 5

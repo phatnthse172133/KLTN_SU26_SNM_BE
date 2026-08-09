@@ -6,6 +6,7 @@ using ApplicationLayer.Services.Notifications;
 using ApplicationLayer.Services.PayOS;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -26,7 +27,7 @@ namespace ApplicationLayer.Services.Subscriptions
         private readonly IBoothRepository _boothRepo;
         private readonly IPayOSOrderCodeGenerator _orderCodeGenerator;
 
-        public OwnerSubscriptionService(ISubscriptionRepository repo, IPayOSService payos, INotificationService notifications, IBoothRepository boothRepo, IPayOSOrderCodeGenerator orderCodeGenerator)
+        public OwnerSubscriptionService(ISubscriptionRepository repo, [FromKeyedServices("SubscriptionPayOS")] IPayOSService payos, INotificationService notifications, IBoothRepository boothRepo, IPayOSOrderCodeGenerator orderCodeGenerator)
         {
             _repo = repo;
             _payos = payos;

@@ -17,6 +17,18 @@ public partial class User
     // Máº­t kháº©u Ä‘Ã£ Ä‘Æ°á»£c mÃ£ hÃ³a (hash), tuyá»‡t Ä‘á»‘i khÃ´ng lÆ°u plaintext
     public string PasswordHash { get; set; } = null!;
 
+    /// <summary>
+    /// Indicates that the account is using a system-generated temporary password.
+    /// The user must set a personal password before using the account normally.
+    /// </summary>
+    public bool MustChangePassword { get; set; }
+
+    /// <summary>
+    /// Market Owner who created this Booth Owner account through the invitation flow.
+    /// Null for accounts created through public registration or other legacy flows.
+    /// </summary>
+    public Guid? CreatedByMarketOwnerId { get; set; }
+
     public string FullName { get; set; } = null!;
 
     public string Email { get; set; } = null!;
@@ -95,6 +107,10 @@ public partial class User
     public virtual ICollection<Review> Reviews { get; set; } = new List<Review>();
 
     public virtual Role Role { get; set; } = null!;
+
+    public virtual User? CreatedByMarketOwner { get; set; }
+
+    public virtual ICollection<User> CreatedBoothOwnerAccounts { get; set; } = new List<User>();
 
     public virtual ICollection<PaymentMethod> PaymentMethods { get; set; } = new List<PaymentMethod>();
 }

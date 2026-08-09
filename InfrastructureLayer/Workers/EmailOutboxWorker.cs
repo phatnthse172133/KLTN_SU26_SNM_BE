@@ -93,6 +93,12 @@ public class EmailOutboxWorker : BackgroundService
                 email.Status = "Sent";
                 email.SentAt = DateTime.UtcNow;
                 email.UpdatedAt = DateTime.UtcNow;
+                if (string.Equals(email.EmailType, "BoothOwnerInvitation", StringComparison.Ordinal))
+                {
+                    // Invitation bodies contain a one-time temporary password while queued.
+                    // Remove that sensitive content as soon as delivery succeeds.
+                    email.HtmlBody = "Booth Owner invitation delivered. Temporary credentials were removed after delivery.";
+                }
                 _logger.LogInformation("Successfully sent email (Type: {Type}) to {Email}", email.EmailType, email.RecipientEmail);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

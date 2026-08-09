@@ -3,6 +3,7 @@ using System;
 using InfrastructureLayer.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace InfrastructureLayer.Migrations
 {
     [DbContext(typeof(SNMDbContext))]
-    partial class SNMDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260809021324_AddMustChangePassword")]
+    partial class AddMustChangePassword
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -4985,9 +4988,6 @@ namespace InfrastructureLayer.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("now()");
 
-                    b.Property<Guid?>("CreatedByMarketOwnerId")
-                        .HasColumnType("uuid");
-
                     b.Property<DateOnly?>("DoB")
                         .HasColumnType("date");
 
@@ -5069,8 +5069,6 @@ namespace InfrastructureLayer.Migrations
 
                     b.HasKey("Id")
                         .HasName("User_pkey");
-
-                    b.HasIndex("CreatedByMarketOwnerId");
 
                     b.HasIndex("GoogleId")
                         .IsUnique()
@@ -6633,18 +6631,11 @@ namespace InfrastructureLayer.Migrations
 
             modelBuilder.Entity("DomainLayer.Entities.User", b =>
                 {
-                    b.HasOne("DomainLayer.Entities.User", "CreatedByMarketOwner")
-                        .WithMany("CreatedBoothOwnerAccounts")
-                        .HasForeignKey("CreatedByMarketOwnerId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("DomainLayer.Entities.Role", "Role")
                         .WithMany("Users")
                         .HasForeignKey("RoleId")
                         .IsRequired()
                         .HasConstraintName("User_RoleId_fkey");
-
-                    b.Navigation("CreatedByMarketOwner");
 
                     b.Navigation("Role");
                 });
@@ -6976,8 +6967,6 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("Complaints");
 
                     b.Navigation("Conversations");
-
-                    b.Navigation("CreatedBoothOwnerAccounts");
 
                     b.Navigation("CustomerFoodProfile");
 

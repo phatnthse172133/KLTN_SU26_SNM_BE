@@ -1688,6 +1688,8 @@ namespace InfrastructureLayer.Data
 
                 entity.HasIndex(e => e.UserName, "User_UserName_key").IsUnique();
 
+                entity.HasIndex(e => e.CreatedByMarketOwnerId);
+
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.Address).HasMaxLength(255);
                 entity.Property(e => e.AvatarUrl).HasMaxLength(500);
@@ -1703,6 +1705,8 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.PasswordHash)
                     .HasMaxLength(255)
                     .HasComment("MÃ¡ÂºÂ­t khÃ¡ÂºÂ©u Ã„â€˜ÃƒÂ£ Ã„â€˜Ã†Â°Ã¡Â»Â£c mÃƒÂ£ hÃƒÂ³a (hash), tuyÃ¡Â»â€¡t Ã„â€˜Ã¡Â»â€˜i khÃƒÂ´ng lÃ†Â°u plaintext");
+                entity.Property(e => e.MustChangePassword)
+                    .HasDefaultValue(false);
                 entity.Property(e => e.PasswordResetOtpHash).HasMaxLength(64);
                 entity.Property(e => e.PasswordResetTokenHash).HasMaxLength(64);
                 entity.Property(e => e.Phone).HasMaxLength(20);
@@ -1721,6 +1725,11 @@ namespace InfrastructureLayer.Data
                 entity.HasIndex(e => e.RefreshTokenHash)
                     .IsUnique()
                     .HasFilter("\"RefreshTokenHash\" IS NOT NULL");
+
+                entity.HasOne(e => e.CreatedByMarketOwner)
+                    .WithMany(e => e.CreatedBoothOwnerAccounts)
+                    .HasForeignKey(e => e.CreatedByMarketOwnerId)
+                    .OnDelete(DeleteBehavior.Restrict);
 
                 entity.HasOne(d => d.Role).WithMany(p => p.Users)
                     .HasForeignKey(d => d.RoleId)

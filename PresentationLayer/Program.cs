@@ -560,6 +560,8 @@ if (!string.IsNullOrWhiteSpace(uploadRoot))
 
 app.UseAuthentication();
 
+app.UseMiddleware<TemporaryPasswordGuardMiddleware>();
+
 app.UseAuthorization();
 
 // Thêm Middleware

@@ -22,4 +22,7 @@ public interface IAccountService
     Task<ApiResponse<BoothOwnerAccountDetailResponse>> GetBoothOwnerDetailsAsync(Guid userId, CancellationToken cancellationToken = default);
     Task<ApiResponse<ManagedUserResponse>> ChangeUserStatusAsync(Guid adminId, Guid userId, ChangeUserStatusRequest request, CancellationToken cancellationToken = default);
     Task<ApiResponse<PaginationResp<UserStatusHistoryResponse>>> GetUserStatusHistoryAsync(Guid userId, PaginationReq pagination, CancellationToken cancellationToken = default);
+    Task<ApiResponse<BoothOwnerAccountInvitationResponse>> CreateBoothOwnerAccountAsync(Guid marketOwnerId, CreateBoothOwnerAccountRequest request, CancellationToken cancellationToken = default);
+    Task<ApiResponse<IReadOnlyCollection<BoothOwnerAccountInvitationResponse>>> GetCreatedBoothOwnerAccountsAsync(Guid marketOwnerId, CancellationToken cancellationToken = default);
+    Task<ApiResponse<BoothOwnerAccountInvitationResponse>> ResendBoothOwnerInvitationAsync(Guid marketOwnerId, Guid boothOwnerId, CancellationToken cancellationToken = default);
 }

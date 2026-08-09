@@ -133,6 +133,11 @@ namespace InfrastructureLayer
             services.AddScoped<IEncryptionService, AesEncryptionService>();
             services.AddScoped<IPayOSPayoutClientFactory, PayOSPayoutClientFactory>();
 
+            services.AddScoped<IPayOSService, PayOSService>(sp =>
+                ActivatorUtilities.CreateInstance<PayOSService>(sp, false));
+            services.AddKeyedScoped<IPayOSService, PayOSService>("SubscriptionPayOS", (sp, key) =>
+                ActivatorUtilities.CreateInstance<PayOSService>(sp, true));
+
             services.AddScoped<IOrderService, OrderService>();
             services.AddScoped<ICustomerCheckoutService, CustomerCheckoutService>();
 

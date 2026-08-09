@@ -23,6 +23,7 @@ namespace ApplicationLayer.Services.PayOS
         private readonly IOrderRepository _orderRepository;
         private readonly IBoothPayOsCredentialRepository _payOSCredentialRepository;
         private readonly IEncryptionService _encryptionService;
+        private readonly bool _isSubscription;
 
         public PayOSService(
             IServiceProvider services,
@@ -30,7 +31,8 @@ namespace ApplicationLayer.Services.PayOS
             ILogger<PayOSService> logger,
             IOrderRepository orderRepository,
             IBoothPayOsCredentialRepository payOsCredentialRepository,
-            IEncryptionService encryptionService)
+            IEncryptionService encryptionService,
+            bool isSubscription)
         {
             _services = services;
             _settings = configuration.GetSection(PayOSSettings.SectionName).Get<PayOSSettings>() ?? new PayOSSettings();
@@ -38,6 +40,7 @@ namespace ApplicationLayer.Services.PayOS
             _orderRepository = orderRepository;
             _payOSCredentialRepository = payOsCredentialRepository;
             _encryptionService = encryptionService;
+            _isSubscription = isSubscription;
         }
 
         public async Task<PayOSPaymentResponse> CreatePaymentLinkAsync(PayOSPaymentRequest request)
@@ -237,6 +240,11 @@ namespace ApplicationLayer.Services.PayOS
 
         private async Task<PayOSClient> GetClientByOrderCodeAsync(long orderCode)
         {
+            if (_isSubscription)
+            {
+                return GetClient();
+            }
+
             var order = await _orderRepository.GetOrderByCodeAsync(orderCode);
             if (order == null)
             {

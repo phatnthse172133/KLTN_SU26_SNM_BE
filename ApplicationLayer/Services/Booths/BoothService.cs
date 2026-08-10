@@ -288,8 +288,6 @@ public class BoothService : IBoothService
             fieldErrors["phoneNumber"] = new[] { "Invalid phone number format." };
         if (openTime.HasValue != closeTime.HasValue)
             fieldErrors["openTime"] = new[] { "Opening hours and closing hours must be provided together." };
-        else if (openTime.HasValue && closeTime.HasValue && openTime.Value >= closeTime.Value)
-            fieldErrors["openTime"] = new[] { "Opening time must be earlier than closing time." };
 
         if (fieldErrors.Count > 0)
             throw AppException.Validation("Please correct the highlighted fields.", fieldErrors, "VALIDATION_ERROR");
@@ -369,8 +367,6 @@ public class BoothService : IBoothService
 
         if (request.OpenTime.HasValue != request.CloseTime.HasValue)
             fieldErrors["openTime"] = new[] { "Opening hours and closing hours must be provided together." };
-        else if (request.OpenTime.HasValue && request.CloseTime.HasValue && request.OpenTime.Value >= request.CloseTime.Value)
-            fieldErrors["openTime"] = new[] { "Opening time must be earlier than closing time." };
 
         if (fieldErrors.Count > 0)
             throw AppException.Validation("Please correct the highlighted fields.", fieldErrors, "VALIDATION_ERROR");
@@ -465,8 +461,6 @@ public class BoothService : IBoothService
 
         if (request.OpenTime.HasValue != request.CloseTime.HasValue)
             fieldErrors["openTime"] = new[] { "Opening hours and closing hours must be provided together." };
-        else if (request.OpenTime.HasValue && request.CloseTime.HasValue && request.OpenTime.Value >= request.CloseTime.Value)
-            fieldErrors["openTime"] = new[] { "Opening time must be earlier than closing time." };
 
         if (fieldErrors.Count > 0)
             throw AppException.Validation("Please correct the highlighted fields.", fieldErrors, "VALIDATION_ERROR");
@@ -573,9 +567,6 @@ public class BoothService : IBoothService
             if ((request.OpenTime.HasValue && !request.CloseTime.HasValue) ||
                 (!request.OpenTime.HasValue && request.CloseTime.HasValue))
                 fieldErrors["openTime"] = new[] { "Opening hours and closing hours must be provided together." };
-            else if (request.OpenTime.HasValue && request.CloseTime.HasValue &&
-                     request.OpenTime.Value >= request.CloseTime.Value)
-                fieldErrors["openTime"] = new[] { "Opening time must be earlier than closing time." };
 
             if (fieldErrors.Count > 0)
                 throw AppException.Validation("Please correct the highlighted fields.", fieldErrors, "VALIDATION_ERROR");

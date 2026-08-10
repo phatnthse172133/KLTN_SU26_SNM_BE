@@ -83,8 +83,8 @@ namespace ApplicationLayer.Services.Subscriptions
             await EnsureBoothOwnershipAsync(ownerId, boothId, ct);
             var (pkg, policy, price, durationDays, amount) = await ResolvePackageAndPriceAsync(request.PackageId, request.DurationDays, PackageType.Booth, ct);
 
-            if (await _repo.HasPendingBoothSubscriptionAsync(boothId, ct))
-                throw AppException.Conflict("This booth already has a pending payment or a scheduled plan change. Complete or cancel it before starting another change.", "PENDING_SUBSCRIPTION_EXISTS");
+            // Auto-cancel stale pending payment for a different package before proceeding
+            await AutoCancelStalePendingBoothPaymentAsync(boothId, pkg.Id, ct);
 
             var active = await _repo.GetActiveBoothSubscriptionAsync(boothId, ct);
             if (IsBoothFreePackage(pkg))
@@ -168,8 +168,8 @@ namespace ApplicationLayer.Services.Subscriptions
             if (amount <= 0)
                 throw AppException.BadRequest("Package price must be greater than zero.", "INVALID_PACKAGE_PRICE");
 
-            if (await _repo.HasPendingBoothSubscriptionAsync(boothId, ct))
-                throw AppException.Conflict("This booth already has a pending payment or a scheduled plan change. Complete or cancel it before starting another change.", "PENDING_SUBSCRIPTION_EXISTS");
+            // Auto-cancel stale pending payment before proceeding with renewal
+            await AutoCancelStalePendingBoothPaymentAsync(boothId, pkg.Id, ct);
 
             var now = DateTime.UtcNow;
             var subscription = new BoothSubscription
@@ -225,12 +225,12 @@ namespace ApplicationLayer.Services.Subscriptions
             // when there is no active plan yet. Returning None here made the FE lose
             // the package/order and caused repeated 404/409 attempts on retry.
             if (sub == null && pending != null)
-                return ApiResponse<CurrentSubscriptionResponse>.SuccessResponse(MapMarketCurrent(pending, hasPending: true));
+                return ApiResponse<CurrentSubscriptionResponse>.SuccessResponse(MapMarketCurrent(pending, hasPending: true, pendingInfo: pending));
 
             if (sub == null)
                 return ApiResponse<CurrentSubscriptionResponse>.SuccessResponse(new CurrentSubscriptionResponse { Status = "None" });
 
-            return ApiResponse<CurrentSubscriptionResponse>.SuccessResponse(MapMarketCurrent(sub, pending != null));
+            return ApiResponse<CurrentSubscriptionResponse>.SuccessResponse(MapMarketCurrent(sub, pending != null, pendingInfo: pending));
         }
 
         public async Task<ApiResponse<List<SubscriptionHistoryItem>>> GetMarketHistoryAsync(Guid ownerId, CancellationToken ct = default)
@@ -248,19 +248,22 @@ namespace ApplicationLayer.Services.Subscriptions
             var pending = await _repo.GetPendingMarketSubscriptionAsync(ownerId, ct);
             if (pending != null)
             {
-                if (pending.PackageId != request.PackageId)
-                    throw AppException.Conflict(
-                        $"You already have a pending payment for {pending.Package?.PackageName ?? "another package"}. Complete or cancel it before choosing a different plan.",
-                        "PENDING_PAYMENT_EXISTS");
-
-                var pendingPackage = pending.Package
-                    ?? throw AppException.NotFound(
-                        "The package for your pending payment is no longer available. Please contact Support.",
-                        "PACKAGE_NOT_FOUND");
-                var pendingDuration = request.DurationDays ?? pendingPackage.DurationDays;
-                var resumed = await HandlePendingMarketPaymentAsync(pending, pendingPackage, pendingDuration, ct);
-                if (resumed != null)
-                    return resumed;
+                if (pending.PackageId == request.PackageId)
+                {
+                    var pendingPackage = pending.Package
+                        ?? throw AppException.NotFound(
+                            "The package for your pending payment is no longer available. Please contact Support.",
+                            "PACKAGE_NOT_FOUND");
+                    var pendingDuration = request.DurationDays ?? pendingPackage.DurationDays;
+                    var resumed = await HandlePendingMarketPaymentAsync(pending, pendingPackage, pendingDuration, ct);
+                    if (resumed != null)
+                        return resumed;
+                }
+                else
+                {
+                    // Different package - auto-cancel stale pending and proceed with new purchase
+                    await AutoCancelStalePendingMarketPaymentAsync(ownerId, request.PackageId, ct);
+                }
             }
 
             var (pkg, policy, price, durationDays, amount) = await ResolvePackageAndPriceAsync(request.PackageId, request.DurationDays, PackageType.Market, ct);
@@ -339,9 +342,18 @@ namespace ApplicationLayer.Services.Subscriptions
             var pending = await _repo.GetPendingMarketSubscriptionAsync(ownerId, ct);
             if (pending != null)
             {
-                var pendingResult = await HandlePendingMarketPaymentAsync(pending, pkg, resolvedDuration, ct);
-                if (pendingResult != null)
-                    return pendingResult;
+                // Same package - try to resume pending payment
+                if (pending.PackageId == pkg.Id)
+                {
+                    var pendingResult = await HandlePendingMarketPaymentAsync(pending, pkg, resolvedDuration, ct);
+                    if (pendingResult != null)
+                        return pendingResult;
+                }
+                else
+                {
+                    // Different package - auto-cancel stale pending and proceed
+                    await AutoCancelStalePendingMarketPaymentAsync(ownerId, pkg.Id, ct);
+                }
             }
 
             // Now validate policy for new renewal
@@ -695,6 +707,56 @@ namespace ApplicationLayer.Services.Subscriptions
             return (policy.Version, acceptedAt, snapshotJson);
         }
 
+        private async Task AutoCancelStalePendingBoothPaymentAsync(Guid boothId, Guid targetPackageId, CancellationToken ct)
+        {
+            var pending = await _repo.GetPendingBoothSubscriptionAsync(boothId, ct);
+            if (pending == null)
+                return;
+
+            // Same package and not expired - let caller handle resume logic
+            if (pending.PackageId == targetPackageId)
+            {
+                var isExpired = pending.PaymentExpiresAt.HasValue && pending.PaymentExpiresAt.Value <= DateTime.UtcNow;
+                if (!isExpired)
+                    throw AppException.Conflict("This booth already has a pending payment for the same package. Complete or cancel it before starting another change.", "PENDING_SUBSCRIPTION_EXISTS");
+            }
+
+            // Cancel PayOS link if exists
+            if (pending.PayOSOrderCode.HasValue && pending.PayOSOrderCode.Value > 0)
+            {
+                try { await _payos.CancelPaymentLinkAsync(pending.PayOSOrderCode.Value); }
+                catch { /* Ignore PayOS errors when cancelling stale pending */ }
+            }
+
+            await _repo.CancelBoothSubscriptionAsync(pending.Id, ct);
+            await _repo.SaveChangesAsync(ct);
+        }
+
+        private async Task AutoCancelStalePendingMarketPaymentAsync(Guid ownerId, Guid targetPackageId, CancellationToken ct)
+        {
+            var pending = await _repo.GetPendingMarketSubscriptionAsync(ownerId, ct);
+            if (pending == null)
+                return;
+
+            // Same package and not expired - let caller handle resume logic
+            if (pending.PackageId == targetPackageId)
+            {
+                var isExpired = pending.PaymentExpiresAt.HasValue && pending.PaymentExpiresAt.Value <= DateTime.UtcNow;
+                if (!isExpired)
+                    return; // Let HandlePendingMarketPaymentAsync handle it
+            }
+
+            // Cancel PayOS link if exists
+            if (pending.PayOSOrderCode.HasValue && pending.PayOSOrderCode.Value > 0)
+            {
+                try { await _payos.CancelPaymentLinkAsync(pending.PayOSOrderCode.Value); }
+                catch { /* Ignore PayOS errors when cancelling stale pending */ }
+            }
+
+            await _repo.CancelMarketSubscriptionAsync(pending.Id, ct);
+            await _repo.SaveChangesAsync(ct);
+        }
+
         private static string DetermineChangeType(Package? activePackage, Package targetPackage)
         {
             if (activePackage is null)
@@ -944,7 +1006,7 @@ namespace ApplicationLayer.Services.Subscriptions
             };
         }
 
-        private static CurrentSubscriptionResponse MapMarketCurrent(MarketSubscription sub, bool hasPending)
+        private static CurrentSubscriptionResponse MapMarketCurrent(MarketSubscription sub, bool hasPending, MarketSubscription? pendingInfo = null)
         {
             var daysRemaining = CalculateDaysRemaining(sub.EndDate, sub.Status);
             return new CurrentSubscriptionResponse
@@ -962,6 +1024,9 @@ namespace ApplicationLayer.Services.Subscriptions
                 PaidAmount = sub.PaidAmount,
                 HasPendingRequest = hasPending,
                 PayOSOrderCode = sub.PayOSOrderCode,
+                PendingSubscriptionId = pendingInfo?.Id,
+                PendingPackageName = pendingInfo?.Package?.PackageName,
+                PendingPaymentExpiresAt = pendingInfo?.PaymentExpiresAt,
             };
         }
 

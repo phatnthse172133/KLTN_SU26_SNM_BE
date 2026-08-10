@@ -39,10 +39,21 @@ namespace ApplicationLayer.Services.Dashboard
         public DateTime CreatedAt { get; set; }
     }
 
+    public class DashboardRecentRegistrationDto
+    {
+        public Guid Id { get; set; }
+        public string BoothName { get; set; } = string.Empty;
+        public string OwnerName { get; set; } = string.Empty;
+        public string MarketName { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; }
+        public string Status { get; set; } = string.Empty;
+    }
+
     public interface IDashboardService
     {
         Task<DashboardStatsDto> GetAdminStatsAsync(DateTime startDate, DateTime endDate);
         Task<List<RevenueChartDto>> GetRevenueChartAsync(DateTime startDate, DateTime endDate, string granularity);
         Task<List<DashboardPendingComplaintDto>> GetPendingComplaintsAsync(int limit = 5);
+        Task<List<DashboardRecentRegistrationDto>> GetRecentBoothRegistrationsAsync(int limit = 5);
     }
 }

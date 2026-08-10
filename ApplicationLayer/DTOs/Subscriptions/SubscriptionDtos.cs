@@ -34,6 +34,9 @@ namespace ApplicationLayer.DTOs.Subscriptions
         public decimal PaidAmount { get; set; }
         public bool HasPendingRequest { get; set; }
         public long? PayOSOrderCode { get; set; }
+        public Guid? PendingSubscriptionId { get; set; }
+        public string? PendingPackageName { get; set; }
+        public DateTime? PendingPaymentExpiresAt { get; set; }
     }
 
     public class SubscriptionHistoryItem

@@ -594,11 +594,16 @@ public class BoothService : IBoothService
                 "PLAN_LIMIT_REACHED");
             if (node.ZoneId.HasValue)
             {
-                await _entitlements.RequireMarketFeatureAsync(
-                    marketOwnerId,
-                    entitlement => entitlement.ZoneManagement,
-                    "Zone management is available with the Pro Market package.",
-                    "ZONE_MANAGEMENT_NOT_INCLUDED");
+                var nodeZone = await _zones.GetByIdAsync(node.ZoneId.Value);
+                var isGeneralArea = string.Equals(nodeZone?.ZoneCode, "G", StringComparison.OrdinalIgnoreCase);
+                if (!isGeneralArea)
+                {
+                    await _entitlements.RequireMarketFeatureAsync(
+                        marketOwnerId,
+                        entitlement => entitlement.ZoneManagement,
+                        "Zone management is available with the Pro Market package.",
+                        "ZONE_MANAGEMENT_NOT_INCLUDED");
+                }
             }
 
             var boothOwner = await _users.GetByIdAsync(request.BoothOwnerId);
@@ -726,11 +731,16 @@ public class BoothService : IBoothService
             }
             if (node.ZoneId.HasValue)
             {
-                await _entitlements.RequireMarketFeatureAsync(
-                    marketOwnerId,
-                    entitlement => entitlement.ZoneManagement,
-                    "Zone management is available with the Pro Market package.",
-                    "ZONE_MANAGEMENT_NOT_INCLUDED");
+                var nodeZone = await _zones.GetByIdAsync(node.ZoneId.Value);
+                var isGeneralArea = string.Equals(nodeZone?.ZoneCode, "G", StringComparison.OrdinalIgnoreCase);
+                if (!isGeneralArea)
+                {
+                    await _entitlements.RequireMarketFeatureAsync(
+                        marketOwnerId,
+                        entitlement => entitlement.ZoneManagement,
+                        "Zone management is available with the Pro Market package.",
+                        "ZONE_MANAGEMENT_NOT_INCLUDED");
+                }
             }
 
             var now = DateTime.UtcNow;

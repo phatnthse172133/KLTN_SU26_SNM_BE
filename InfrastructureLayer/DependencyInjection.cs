@@ -235,7 +235,6 @@ namespace InfrastructureLayer
 
             // PayOS configuration and service (uses PayOSClient singleton registered in Program.cs)
             services.Configure<PayOSSettings>(configuration.GetSection(PayOSSettings.SectionName));
-            services.AddScoped<IPayOSService, PayOSService>();
             services.AddScoped<IPayOSPayoutService, PayOSPayoutService>();
             services.AddScoped<DomainLayer.InterfaceRepository.ISequenceRepository, SequenceRepository>();
             services.AddScoped<IPayOSOrderCodeGenerator, PayOSOrderCodeGenerator>();

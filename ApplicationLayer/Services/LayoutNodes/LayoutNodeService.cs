@@ -340,9 +340,9 @@ public class LayoutNodeService : ILayoutNodeService
     }
 
     private async Task<LayoutNode> GetNodeAsync(Guid id, CancellationToken token)
-        => await _nodes.GetActiveByIdAsync(id, token) ?? throw AppException.NotFound("Layout node was not found.");
+        => await _nodes.GetActiveByIdAsync(id, token) ?? throw AppException.NotFound("Layout node was not found.", "LAYOUT_NODE_NOT_FOUND");
     private async Task<MarketLayout> GetLayoutAsync(Guid id, CancellationToken token)
-        => await _layouts.GetActiveByIdAsync(id, token) ?? throw AppException.NotFound("Market layout was not found.");
+        => await _layouts.GetActiveByIdAsync(id, token) ?? throw AppException.NotFound("Market layout was not found.", "LAYOUT_NOT_FOUND");
     private static void EnsureLayoutEditable(MarketLayout layout)
     {
         if (layout.Status == DomainLayer.Enums.GeneralEnum.MarketLayoutStatus.Active)
@@ -354,7 +354,7 @@ public class LayoutNodeService : ILayoutNodeService
     {
         var market = await _nightMarkets.GetActiveByIdAsync(layout.NightMarketId, cancellationToken);
         if (market is null)
-            throw AppException.NotFound("Night market was not found.");
+            throw AppException.NotFound("Night market was not found.", "MARKET_NOT_FOUND");
         if (actorId.HasValue && market.MarketOwnerId != actorId)
             throw AppException.Forbidden("You do not have permission to manage this night market's layouts.");
 

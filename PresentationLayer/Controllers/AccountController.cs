@@ -84,6 +84,26 @@ public class AccountController : ControllerBase
     }
 
     [Authorize(Roles = "Admin")]
+    [HttpPost("market-owner-accounts")]
+    [EnableRateLimiting("AuthAbusePolicy")]
+    public async Task<IActionResult> CreateMarketOwnerAccount(
+        CreateMarketOwnerAccountRequest request,
+        CancellationToken cancellationToken)
+    {
+        return Ok(await _service.CreateMarketOwnerAccountAsync(CurrentUserId, request, cancellationToken));
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpPost("market-owner-accounts/{marketOwnerId:guid}/resend-invitation")]
+    [EnableRateLimiting("AuthAbusePolicy")]
+    public async Task<IActionResult> ResendMarketOwnerInvitation(
+        Guid marketOwnerId,
+        CancellationToken cancellationToken)
+    {
+        return Ok(await _service.ResendMarketOwnerInvitationAsync(CurrentUserId, marketOwnerId, cancellationToken));
+    }
+
+    [Authorize(Roles = "Admin")]
     [HttpGet("users/{userId:guid}")]
     public async Task<IActionResult> GetUser(Guid userId, CancellationToken cancellationToken)
     {

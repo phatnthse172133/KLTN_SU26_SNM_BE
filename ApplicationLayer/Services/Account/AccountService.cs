@@ -20,6 +20,7 @@ namespace ApplicationLayer.Services.Account;
 public class AccountService : IAccountService
 {
     private const string BoothOwnerInvitationType = "BoothOwnerInvitation";
+    private const string MarketOwnerInvitationType = "MarketOwnerInvitation";
     private readonly IUserRepository _users;
     private readonly IGenericRepository<Role> _roles;
     private readonly IMapper _mapper;
@@ -57,7 +58,7 @@ public class AccountService : IAccountService
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var email = NormalizeEmail(request.Email);
+        var email = NormalizeInvitationEmail(request.Email, "Booth Owner", "BOOTH_OWNER");
         // Email addresses are normalized on new writes, but compare case-insensitively
         // as well so legacy records such as Owner@Example.com cannot be duplicated.
         var existing = await _users.FirstOrDefaultAsync(user => user.Email.ToLower() == email);
@@ -80,7 +81,7 @@ public class AccountService : IAccountService
         {
             Id = Guid.NewGuid(),
             RoleId = role.Id,
-            UserName = BuildInvitationUserName(userId: null, email, Guid.NewGuid()),
+            UserName = BuildInvitationUserName("booth", Guid.NewGuid()),
             FullName = BuildDisplayName(email),
             Email = email,
             PasswordHash = HashTemporaryPassword(temporaryPassword),
@@ -96,7 +97,7 @@ public class AccountService : IAccountService
         try
         {
             await _users.AddAsync(user);
-            await _outbox.AddAsync(BuildInvitationEmail(user, temporaryPassword, now));
+            await _outbox.AddAsync(BuildInvitationEmail(user, temporaryPassword, now, "Booth Owner", BoothOwnerInvitationType));
             await _users.SaveChangesAsync();
             await _users.CommitTransactionAsync();
         }
@@ -114,6 +115,68 @@ public class AccountService : IAccountService
         return ApiResponse<BoothOwnerAccountInvitationResponse>.SuccessResponse(
             ToInvitationResponse(user, invitationStatus: "Pending"),
             "Booth Owner account created. The invitation email is queued for delivery.");
+    }
+
+    public async Task<ApiResponse<MarketOwnerAccountInvitationResponse>> CreateMarketOwnerAccountAsync(
+        Guid adminId,
+        CreateMarketOwnerAccountRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var email = NormalizeInvitationEmail(request.Email, "Market Owner", "MARKET_OWNER");
+        var existing = await _users.FirstOrDefaultAsync(user => user.Email.ToLower() == email);
+        if (existing is not null)
+        {
+            throw AppException.Conflict(
+                existing.MustChangePassword && existing.Status == UserStatus.Active
+                    ? "A Market Owner invitation is already pending for this email. Use Resend invitation instead."
+                    : "This email is already registered to an account.",
+                "MARKET_OWNER_EMAIL_ALREADY_REGISTERED");
+        }
+
+        var role = await _roles.FirstOrDefaultAsync(item => item.RoleName == "MarketOwner");
+        if (role is null)
+            throw AppException.ServiceUnavailable("Market Owner role is not configured yet. Please contact Support.", "MARKET_OWNER_ROLE_UNAVAILABLE");
+
+        var temporaryPassword = GenerateTemporaryPassword();
+        var now = DateTime.UtcNow;
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            RoleId = role.Id,
+            UserName = BuildInvitationUserName("market", Guid.NewGuid()),
+            FullName = BuildDisplayName(email, "Market Owner"),
+            Email = email,
+            PasswordHash = HashTemporaryPassword(temporaryPassword),
+            MustChangePassword = true,
+            AuthProvider = AuthProvider.Local,
+            Status = UserStatus.Active,
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+
+        await _users.BeginTransactionAsync();
+        try
+        {
+            await _users.AddAsync(user);
+            await _outbox.AddAsync(BuildInvitationEmail(user, temporaryPassword, now, "Market Owner", MarketOwnerInvitationType));
+            await _users.SaveChangesAsync();
+            await _users.CommitTransactionAsync();
+        }
+        catch
+        {
+            await _users.RollbackTransactionAsync();
+            throw;
+        }
+
+        _logger.LogInformation(
+            "Admin {AdminId} created Market Owner account {MarketOwnerId} and queued its invitation email.",
+            adminId,
+            user.Id);
+
+        return ApiResponse<MarketOwnerAccountInvitationResponse>.SuccessResponse(
+            ToMarketOwnerInvitationResponse(user, "Pending"),
+            "Market Owner account created. The invitation email is queued for delivery.");
     }
 
     public async Task<ApiResponse<IReadOnlyCollection<BoothOwnerAccountInvitationResponse>>> GetCreatedBoothOwnerAccountsAsync(
@@ -175,12 +238,12 @@ public class AccountService : IAccountService
             item.ReferenceId == user.Id && item.EmailType == BoothOwnerInvitationType);
         if (invitation is null)
         {
-            invitation = BuildInvitationEmail(user, temporaryPassword, now);
+            invitation = BuildInvitationEmail(user, temporaryPassword, now, "Booth Owner", BoothOwnerInvitationType);
             await _outbox.AddAsync(invitation);
         }
         else
         {
-            var replacement = BuildInvitationEmail(user, temporaryPassword, now);
+            var replacement = BuildInvitationEmail(user, temporaryPassword, now, "Booth Owner", BoothOwnerInvitationType);
             invitation.RecipientEmail = replacement.RecipientEmail;
             invitation.Subject = replacement.Subject;
             invitation.HtmlBody = replacement.HtmlBody;
@@ -215,23 +278,90 @@ public class AccountService : IAccountService
             "A new invitation email is queued for delivery.");
     }
 
-    private static string NormalizeEmail(string? value)
+    public async Task<ApiResponse<MarketOwnerAccountInvitationResponse>> ResendMarketOwnerInvitationAsync(
+        Guid adminId,
+        Guid marketOwnerId,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var user = await _users.GetByIdAsync(marketOwnerId)
+            ?? throw AppException.NotFound("The Market Owner account could not be found.", "MARKET_OWNER_ACCOUNT_NOT_FOUND");
+        var role = await _roles.GetByIdAsync(user.RoleId);
+        if (!string.Equals(role?.RoleName, "MarketOwner", StringComparison.Ordinal))
+            throw AppException.BadRequest("The selected account is not a Market Owner account.", "MARKET_OWNER_ROLE_REQUIRED");
+        if (user.Status != UserStatus.Active)
+            throw AppException.BadRequest("Only active Market Owner accounts can receive an invitation.", "MARKET_OWNER_ACCOUNT_INACTIVE");
+        if (!user.MustChangePassword)
+            throw AppException.Conflict(
+                "This Market Owner has already completed the first sign-in. Use the password reset flow instead.",
+                "MARKET_OWNER_INVITATION_ALREADY_ACCEPTED");
+
+        var temporaryPassword = GenerateTemporaryPassword();
+        var now = DateTime.UtcNow;
+        user.PasswordHash = HashTemporaryPassword(temporaryPassword);
+        user.UpdatedAt = now;
+
+        var invitation = await _outbox.FirstOrDefaultAsync(item =>
+            item.ReferenceId == user.Id && item.EmailType == MarketOwnerInvitationType);
+        var replacement = BuildInvitationEmail(user, temporaryPassword, now, "Market Owner", MarketOwnerInvitationType);
+        if (invitation is null)
+        {
+            invitation = replacement;
+            await _outbox.AddAsync(invitation);
+        }
+        else
+        {
+            invitation.RecipientEmail = replacement.RecipientEmail;
+            invitation.Subject = replacement.Subject;
+            invitation.HtmlBody = replacement.HtmlBody;
+            invitation.Status = "Pending";
+            invitation.RetryCount = 0;
+            invitation.LastError = null;
+            invitation.NextRetryAt = null;
+            invitation.SentAt = null;
+            invitation.UpdatedAt = now;
+        }
+
+        _users.Update(user);
+        await _users.BeginTransactionAsync();
+        try
+        {
+            await _users.SaveChangesAsync();
+            await _users.CommitTransactionAsync();
+        }
+        catch
+        {
+            await _users.RollbackTransactionAsync();
+            throw;
+        }
+
+        _logger.LogInformation(
+            "Admin {AdminId} requeued a Market Owner invitation for account {MarketOwnerId}.",
+            adminId,
+            user.Id);
+
+        return ApiResponse<MarketOwnerAccountInvitationResponse>.SuccessResponse(
+            ToMarketOwnerInvitationResponse(user, invitation.Status, invitation.SentAt),
+            "A new Market Owner invitation email is queued for delivery.");
+    }
+
+    private static string NormalizeInvitationEmail(string? value, string roleLabel, string errorPrefix)
     {
         var email = value?.Trim().ToLowerInvariant();
         if (string.IsNullOrWhiteSpace(email))
-            throw AppException.BadRequest("Booth Owner email is required.", "BOOTH_OWNER_EMAIL_REQUIRED");
+            throw AppException.BadRequest($"{roleLabel} email is required.", $"{errorPrefix}_EMAIL_REQUIRED");
         return email;
     }
 
-    private static string BuildDisplayName(string email)
+    private static string BuildDisplayName(string email, string fallback = "Booth Owner")
     {
         var localPart = email.Split('@')[0];
         var name = localPart.Replace('.', ' ').Replace('_', ' ').Replace('-', ' ').Trim();
-        return string.IsNullOrWhiteSpace(name) ? "Booth Owner" : name;
+        return string.IsNullOrWhiteSpace(name) ? fallback : name;
     }
 
-    private static string BuildInvitationUserName(Guid? userId, string email, Guid nonce)
-        => $"booth_{(userId ?? nonce):N}"[..19];
+    private static string BuildInvitationUserName(string prefix, Guid nonce)
+        => $"{prefix}_{nonce:N}"[..Math.Min(19, prefix.Length + 33)];
 
     private static string GenerateTemporaryPassword()
     {
@@ -257,7 +387,12 @@ public class AccountService : IAccountService
     private string HashTemporaryPassword(string password)
         => (_passwordHasher ?? throw new InvalidOperationException("Password hashing service is not configured.")).HashPassword(password);
 
-    private static EmailOutbox BuildInvitationEmail(User user, string temporaryPassword, DateTime now)
+    private static EmailOutbox BuildInvitationEmail(
+        User user,
+        string temporaryPassword,
+        DateTime now,
+        string roleLabel,
+        string emailType)
     {
         var name = WebUtility.HtmlEncode(user.FullName);
         var email = WebUtility.HtmlEncode(user.Email);
@@ -267,15 +402,33 @@ public class AccountService : IAccountService
         {
             Id = Guid.NewGuid(),
             RecipientEmail = user.Email,
-            Subject = "Your Smart Night Market Booth Owner account",
-            EmailType = BoothOwnerInvitationType,
+            Subject = $"Your Smart Night Market {roleLabel} account",
+            EmailType = emailType,
             ReferenceId = user.Id,
-            HtmlBody = $"<div style='font-family:Arial,sans-serif;line-height:1.6'><h2>Welcome to Smart Night Market</h2><p>Hello {name},</p><p>A Booth Owner account has been created for you.</p><p><strong>Username:</strong> {username}<br/><strong>Email:</strong> {email}</p><p style='background:#fff3cd;padding:12px;border-left:4px solid #f0ad4e'><strong>Temporary password: {password}</strong></p><p style='color:#b42318'><strong>For your security, sign in and change this temporary password immediately.</strong></p><p>After changing your password, you can complete your Booth Owner profile and manage your booth.</p><p>Smart Night Market</p></div>",
+            HtmlBody = $"<div style='font-family:Arial,sans-serif;line-height:1.6'><h2>Welcome to Smart Night Market</h2><p>Hello {name},</p><p>A {roleLabel} account has been created for you by Smart Night Market administration.</p><p><strong>Username:</strong> {username}<br/><strong>Email:</strong> {email}</p><p style='background:#fff3cd;padding:12px;border-left:4px solid #f0ad4e'><strong>Temporary password: {password}</strong></p><p style='color:#b42318'><strong>For your security, sign in and change this temporary password immediately.</strong></p><p>After changing your password, you can complete your profile and access your {roleLabel} workspace.</p><p>Smart Night Market</p></div>",
             Status = "Pending",
             CreatedAt = now,
             UpdatedAt = now
         };
     }
+
+    private static MarketOwnerAccountInvitationResponse ToMarketOwnerInvitationResponse(
+        User user,
+        string invitationStatus,
+        DateTime? invitationSentAt = null)
+        => new()
+        {
+            UserId = user.Id,
+            UserName = user.UserName,
+            FullName = user.FullName,
+            Email = user.Email,
+            Status = user.Status.ToString(),
+            MustChangePassword = user.MustChangePassword,
+            InvitationQueued = invitationStatus is "Pending" or "Processing" or "Failed",
+            InvitationStatus = invitationStatus,
+            InvitationSentAt = invitationSentAt,
+            CreatedAt = user.CreatedAt
+        };
 
     private static BoothOwnerAccountInvitationResponse ToInvitationResponse(
         User user,

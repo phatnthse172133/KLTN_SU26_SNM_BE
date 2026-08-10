@@ -39,7 +39,10 @@ public class AccountController : ControllerBase
         return response.Success ? Ok(response) : NotFound(response);
     }
 
+    // Keep the legacy alias while clients with an older cached bundle are
+    // still in use. New clients use /api/account/avatar.
     [HttpPost("avatar")]
+    [HttpPost("avatar/upload")]
     [EnableRateLimiting("AvatarUploadPolicy")]
     [Consumes("multipart/form-data")]
     // Allow multipart framing overhead; the storage service enforces a 5 MB file cap.

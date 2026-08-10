@@ -1,5 +1,6 @@
 using ApplicationLayer.DTOs;
 using ApplicationLayer.DTOs.Subscriptions;
+using ApplicationLayer.Configuration;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
 using ApplicationLayer.Services.Notifications;
@@ -7,6 +8,7 @@ using ApplicationLayer.Services.PayOS;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -26,14 +28,22 @@ namespace ApplicationLayer.Services.Subscriptions
         private readonly INotificationService _notifications;
         private readonly IBoothRepository _boothRepo;
         private readonly IPayOSOrderCodeGenerator _orderCodeGenerator;
+        private readonly PayOSSettings _payOSSettings;
 
-        public OwnerSubscriptionService(ISubscriptionRepository repo, [FromKeyedServices("SubscriptionPayOS")] IPayOSService payos, INotificationService notifications, IBoothRepository boothRepo, IPayOSOrderCodeGenerator orderCodeGenerator)
+        public OwnerSubscriptionService(
+            ISubscriptionRepository repo,
+            [FromKeyedServices("SubscriptionPayOS")] IPayOSService payos,
+            INotificationService notifications,
+            IBoothRepository boothRepo,
+            IPayOSOrderCodeGenerator orderCodeGenerator,
+            IOptions<PayOSSettings> payOSOptions)
         {
             _repo = repo;
             _payos = payos;
             _notifications = notifications;
             _boothRepo = boothRepo;
             _orderCodeGenerator = orderCodeGenerator;
+            _payOSSettings = payOSOptions.Value;
         }
 
         private async Task EnsureBoothOwnershipAsync(Guid ownerId, Guid boothId, CancellationToken ct)
@@ -128,12 +138,8 @@ namespace ApplicationLayer.Services.Subscriptions
             var orderCode = await _orderCodeGenerator.GenerateAsync(PayOSOrderSource.BoothSubscription);
             try
             {
-                var payosResp = await _payos.CreatePaymentLinkAsync(new PayOSPaymentRequest
-                {
-                    OrderCode = orderCode,
-                    Amount = amountDue,
-                    Description = $"SNM {orderCode}",
-                });
+                var payosResp = await _payos.CreatePaymentLinkAsync(
+                    BuildSubscriptionPaymentRequest(orderCode, amountDue, subscription.Id, "booth"));
 
                 subscription.PayOSOrderCode = orderCode;
                 subscription.PayOSPaymentLinkId = payosResp.PaymentLinkId;
@@ -192,12 +198,8 @@ namespace ApplicationLayer.Services.Subscriptions
             var orderCode = await _orderCodeGenerator.GenerateAsync(PayOSOrderSource.BoothSubscription);
             try
             {
-                var payosResp = await _payos.CreatePaymentLinkAsync(new PayOSPaymentRequest
-                {
-                    OrderCode = orderCode,
-                    Amount = amount,
-                    Description = $"SNM {orderCode}",
-                });
+                var payosResp = await _payos.CreatePaymentLinkAsync(
+                    BuildSubscriptionPaymentRequest(orderCode, amount, subscription.Id, "booth"));
 
                 subscription.PayOSOrderCode = orderCode;
                 subscription.PayOSPaymentLinkId = payosResp.PaymentLinkId;
@@ -306,12 +308,8 @@ namespace ApplicationLayer.Services.Subscriptions
             var newOrderCode = await _orderCodeGenerator.GenerateAsync(PayOSOrderSource.MarketSubscription);
             try
             {
-                var payosResp = await _payos.CreatePaymentLinkAsync(new PayOSPaymentRequest
-                {
-                    OrderCode = newOrderCode,
-                    Amount = amountDue,
-                    Description = $"SNM {newOrderCode}",
-                });
+                var payosResp = await _payos.CreatePaymentLinkAsync(
+                    BuildSubscriptionPaymentRequest(newOrderCode, amountDue, subscription.Id, "market"));
 
                 subscription.PayOSOrderCode = newOrderCode;
                 subscription.PayOSPaymentLinkId = payosResp.PaymentLinkId;
@@ -380,12 +378,8 @@ namespace ApplicationLayer.Services.Subscriptions
             var orderCode = await _orderCodeGenerator.GenerateAsync(PayOSOrderSource.MarketSubscription);
             try
             {
-                var payosResp = await _payos.CreatePaymentLinkAsync(new PayOSPaymentRequest
-                {
-                    OrderCode = orderCode,
-                    Amount = amount,
-                    Description = $"SNM {orderCode}",
-                });
+                var payosResp = await _payos.CreatePaymentLinkAsync(
+                    BuildSubscriptionPaymentRequest(orderCode, amount, subscription.Id, "market"));
 
                 subscription.PayOSOrderCode = orderCode;
                 subscription.PayOSPaymentLinkId = payosResp.PaymentLinkId;
@@ -892,12 +886,8 @@ namespace ApplicationLayer.Services.Subscriptions
             }
 
             var orderCode = await _orderCodeGenerator.GenerateAsync(PayOSOrderSource.MarketSubscription);
-            var payosResp = await _payos.CreatePaymentLinkAsync(new PayOSPaymentRequest
-            {
-                OrderCode = orderCode,
-                Amount = pending.PaidAmount,
-                Description = $"SNM {orderCode}",
-            });
+            var payosResp = await _payos.CreatePaymentLinkAsync(
+                BuildSubscriptionPaymentRequest(orderCode, pending.PaidAmount, pending.Id, "market"));
 
             pending.PayOSOrderCode = orderCode;
             pending.PayOSPaymentLinkId = payosResp.PaymentLinkId;
@@ -912,6 +902,31 @@ namespace ApplicationLayer.Services.Subscriptions
         private static DateTime? ParsePayOSExpiry(DateTimeOffset? expiresAt)
         {
             return expiresAt?.UtcDateTime;
+        }
+
+        private PayOSPaymentRequest BuildSubscriptionPaymentRequest(long orderCode, decimal amount, Guid subscriptionId, string flow)
+        {
+            return new PayOSPaymentRequest
+            {
+                OrderCode = orderCode,
+                Amount = amount,
+                Description = $"SNM {orderCode}",
+                ReturnUrl = AppendCallbackContext(_payOSSettings.ReturnUrl, flow, subscriptionId),
+                CancelUrl = AppendCallbackContext(_payOSSettings.CancelUrl, flow, subscriptionId),
+            };
+        }
+
+        private static string AppendCallbackContext(string configuredUrl, string flow, Guid subscriptionId)
+        {
+            if (!Uri.TryCreate(configuredUrl, UriKind.Absolute, out var callbackUri)
+                || (callbackUri.Scheme != Uri.UriSchemeHttp && callbackUri.Scheme != Uri.UriSchemeHttps))
+            {
+                // Preserve existing non-web callback behaviour (for example mobile deep links).
+                return string.Empty;
+            }
+
+            var separator = string.IsNullOrEmpty(callbackUri.Query) ? "?" : "&";
+            return $"{configuredUrl}{separator}flow={Uri.EscapeDataString(flow)}&subscriptionId={subscriptionId:D}";
         }
 
         private static PayOSPaymentResponseDto MapPayOSResponse(Guid subscriptionId, string packageName, int durationDays, decimal amount, PayOSPaymentResponse resp, string status = "PendingPayment")

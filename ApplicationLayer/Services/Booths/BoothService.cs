@@ -408,29 +408,23 @@ public class BoothService : IBoothService
         {
             await _booths.AddAsync(booth);
 
-            var freePackage = await _subscriptions.GetPackageByCodeAsync("BOOTH_FREE", cancellationToken)
-                ?? throw AppException.ServiceUnavailable(
-                    "The default booth plan is not available. Please contact the system administrator.",
-                    "DEFAULT_BOOTH_PACKAGE_UNAVAILABLE");
-
-            if (freePackage.Type != PackageType.Booth || freePackage.Price != 0 || freePackage.Status != PackageStatus.Active)
-                throw AppException.ServiceUnavailable(
-                    "The default booth plan is not configured correctly. Please contact the system administrator.",
-                    "DEFAULT_BOOTH_PACKAGE_INVALID");
-
-            await _subscriptions.AddBoothSubscriptionAsync(new BoothSubscription
+            var freePackage = await _subscriptions.GetPackageByCodeAsync("BOOTH_FREE", cancellationToken);
+            if (IsValidFreeBoothPackage(freePackage))
             {
-                Id = Guid.NewGuid(),
-                BoothId = booth.Id,
-                PackageId = freePackage.Id,
-                StartDate = now,
-                EndDate = DateTime.MaxValue,
-                Status = SubscriptionStatus.Active,
-                PaidAmount = 0,
-                ChangeType = "FreeDefault",
-                CreatedAt = now,
-                UpdatedAt = now
-            }, cancellationToken);
+                await _subscriptions.AddBoothSubscriptionAsync(new BoothSubscription
+                {
+                    Id = Guid.NewGuid(),
+                    BoothId = booth.Id,
+                    PackageId = freePackage!.Id,
+                    StartDate = now,
+                    EndDate = DateTime.MaxValue,
+                    Status = SubscriptionStatus.Active,
+                    PaidAmount = 0,
+                    ChangeType = "FreeDefault",
+                    CreatedAt = now,
+                    UpdatedAt = now
+                }, cancellationToken);
+            }
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
             await _unitOfWork.CommitTransactionAsync(cancellationToken);
@@ -616,13 +610,6 @@ public class BoothService : IBoothService
                 throw AppException.Conflict("This Booth Owner already has a booth.", "OWNER_ALREADY_HAS_BOOTH");
 
             var freePackage = await _subscriptions.GetPackageByCodeAsync("BOOTH_FREE", cancellationToken);
-            if (freePackage is null
-                || freePackage.Type != PackageType.Booth
-                || freePackage.Price != 0
-                || freePackage.Status != PackageStatus.Active)
-                throw AppException.ServiceUnavailable(
-                    "The default booth plan is not configured correctly. Please contact the system administrator.",
-                    "DEFAULT_BOOTH_PACKAGE_INVALID");
 
             var now = DateTime.UtcNow;
             var booth = new Booth
@@ -654,23 +641,24 @@ public class BoothService : IBoothService
                 CreatedAt = now,
                 UpdatedAt = now
             };
-            var subscription = new BoothSubscription
-            {
-                Id = Guid.NewGuid(),
-                BoothId = booth.Id,
-                PackageId = freePackage.Id,
-                StartDate = now,
-                EndDate = DateTime.MaxValue,
-                Status = DomainLayer.Enums.GeneralEnum.SubscriptionStatus.Active,
-                PaidAmount = 0,
-                ChangeType = "FreeDefault",
-                CreatedAt = now,
-                UpdatedAt = now
-            };
-
             await _booths.AddAsync(booth);
             await _locations.AddAsync(boothLocation);
-            await _subscriptions.AddBoothSubscriptionAsync(subscription, cancellationToken);
+            if (IsValidFreeBoothPackage(freePackage))
+            {
+                await _subscriptions.AddBoothSubscriptionAsync(new BoothSubscription
+                {
+                    Id = Guid.NewGuid(),
+                    BoothId = booth.Id,
+                    PackageId = freePackage!.Id,
+                    StartDate = now,
+                    EndDate = DateTime.MaxValue,
+                    Status = DomainLayer.Enums.GeneralEnum.SubscriptionStatus.Active,
+                    PaidAmount = 0,
+                    ChangeType = "FreeDefault",
+                    CreatedAt = now,
+                    UpdatedAt = now
+                }, cancellationToken);
+            }
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
             await _unitOfWork.CommitTransactionAsync(cancellationToken);
@@ -794,25 +782,25 @@ public class BoothService : IBoothService
         if (activeSubscription is not null)
             return;
 
-        var freePackage = await _subscriptions.GetPackageByCodeAsync("BOOTH_FREE", cancellationToken)
-            ?? throw AppException.ServiceUnavailable(
-                "The free Booth plan is temporarily unavailable. Please contact support.",
-                "DEFAULT_BOOTH_PACKAGE_UNAVAILABLE");
+        var freePackage = await _subscriptions.GetPackageByCodeAsync("BOOTH_FREE", cancellationToken);
 
-        if (freePackage.Type != PackageType.Booth
-            || freePackage.Price != 0
-            || freePackage.Status != PackageStatus.Active)
+        // Booth Basic is the built-in entitlement for every booth. A damaged or
+        // temporarily incomplete package catalogue must never prevent a Market
+        // Owner from assigning an otherwise valid booth to a slot. The
+        // entitlement service already falls back to Booth Basic when there is
+        // no active subscription record. When the canonical package is valid,
+        // we still persist the explicit free subscription for a complete audit
+        // history.
+        if (!IsValidFreeBoothPackage(freePackage))
         {
-            throw AppException.ServiceUnavailable(
-                "The free Booth plan is temporarily unavailable. Please contact support.",
-                "DEFAULT_BOOTH_PACKAGE_INVALID");
+            return;
         }
 
         await _subscriptions.AddBoothSubscriptionAsync(new BoothSubscription
         {
             Id = Guid.NewGuid(),
             BoothId = boothId,
-            PackageId = freePackage.Id,
+            PackageId = freePackage!.Id,
             StartDate = now,
             EndDate = DateTime.MaxValue,
             Status = SubscriptionStatus.Active,
@@ -822,6 +810,12 @@ public class BoothService : IBoothService
             UpdatedAt = now
         }, cancellationToken);
     }
+
+    private static bool IsValidFreeBoothPackage(Package? package)
+        => package is not null
+           && package.Type == PackageType.Booth
+           && package.Price == 0
+           && package.Status == PackageStatus.Active;
 
     public async Task<ApiResponse<MarketOwnerBoothResponse>> ReleaseSlotBoothAsync(
         Guid marketOwnerId, Guid marketId, Guid layoutId, Guid nodeId, CancellationToken cancellationToken = default)

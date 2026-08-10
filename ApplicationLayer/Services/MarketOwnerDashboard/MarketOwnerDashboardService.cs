@@ -17,7 +17,9 @@ public class MarketOwnerDashboardService : IMarketOwnerDashboardService
     private readonly IMarketOwnerDashboardRepository _repo;
     private readonly ISubscriptionEntitlementService _entitlements;
 
-    private static readonly TimeZoneInfo VnZone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh");
+    // Windows uses a different registry identifier than Linux for Vietnam time.
+    // Resolve both once so dashboard date ranges work in local, Linux and Windows deployments.
+    private static readonly TimeZoneInfo VnZone = ResolveVietnamTimeZone();
 
     public MarketOwnerDashboardService(
         IMarketOwnerDashboardRepository repo,
@@ -230,6 +232,23 @@ public class MarketOwnerDashboardService : IMarketOwnerDashboardService
     {
         return TimeZoneInfo.ConvertTimeToUtc(
             DateTime.SpecifyKind(vnTime, DateTimeKind.Unspecified), VnZone);
+    }
+
+    private static TimeZoneInfo ResolveVietnamTimeZone()
+    {
+        foreach (var timeZoneId in new[] { "Asia/Ho_Chi_Minh", "SE Asia Standard Time" })
+        {
+            try
+            {
+                return TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
+            }
+            catch (TimeZoneNotFoundException)
+            {
+                // Try the platform-specific identifier next.
+            }
+        }
+
+        throw new InvalidOperationException("The Vietnam time zone is not available on this server.");
     }
 
     private static List<OrderTrendBucket> BuildTrendBuckets(

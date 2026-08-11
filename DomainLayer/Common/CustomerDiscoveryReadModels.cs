@@ -61,6 +61,8 @@ public sealed record CustomerFoodReadModel(
     public int? EstimatedServingCount { get; init; }
     public string? ServingSizeDescription { get; init; }
     public bool? IsShareable { get; init; }
+    public decimal AverageRating { get; init; }
+    public int ReviewCount { get; init; }
     public CustomerFoodSemanticReadModel SemanticMetadata { get; init; } = new();
     public IReadOnlyCollection<CustomerFoodTagReadModel> Tags { get; init; } = [];
 }

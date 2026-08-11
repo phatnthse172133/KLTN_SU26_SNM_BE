@@ -30,4 +30,6 @@ public partial class OrderDetail
     public virtual FoodItem FoodItem { get; set; } = null!;
 
     public virtual Order Order { get; set; } = null!;
+
+    public virtual ICollection<FoodReview> FoodReviews { get; set; } = new List<FoodReview>();
 }

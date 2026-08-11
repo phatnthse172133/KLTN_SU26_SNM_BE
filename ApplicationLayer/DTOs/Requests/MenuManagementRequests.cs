@@ -15,7 +15,7 @@ public class CreateFoodItemRequest
     [Range(0.01, 999999999)]
     public decimal Price { get; set; }
 
-    [Url, StringLength(500)]
+    [StringLength(500)]
     public string? ThumbnailUrl { get; set; }
 
     public bool IsAvailable { get; set; } = true;

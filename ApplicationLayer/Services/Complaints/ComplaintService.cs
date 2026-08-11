@@ -1,20 +1,35 @@
-using ApplicationLayer.DTOs;
 using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
 using ApplicationLayer.Mappings;
+using ApplicationLayer.Services.Notifications;
+using ApplicationLayer.Services.Storage;
 using AutoMapper;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
-using static DomainLayer.Enums.GeneralEnum;
-using ApplicationLayer.Services.Notifications;
 using System.Text.Json;
+using static DomainLayer.Enums.GeneralEnum;
 
 namespace ApplicationLayer.Services.Complaints;
 
 public class ComplaintService : IComplaintService
 {
+    private static readonly HashSet<ComplaintStatus> ActiveStatuses =
+    [
+        ComplaintStatus.Pending,
+        ComplaintStatus.UnderReview,
+        ComplaintStatus.WaitingForCustomer
+    ];
+
+    private static readonly HashSet<ComplaintStatus> TerminalStatuses =
+    [
+        ComplaintStatus.Resolved,
+        ComplaintStatus.Rejected,
+        ComplaintStatus.Closed,
+        ComplaintStatus.Withdrawn
+    ];
+
     private readonly IComplaintRepository _complaints;
     private readonly IBoothRepository _booths;
     private readonly IOrderRepository _orders;
@@ -23,6 +38,7 @@ public class ComplaintService : IComplaintService
     private readonly IModerationRepository _moderation;
     private readonly IMapper _mapper;
     private readonly INotificationService _notifications;
+    private readonly IFileStorageService _fileStorage;
 
     public ComplaintService(
         IComplaintRepository complaints,
@@ -32,7 +48,8 @@ public class ComplaintService : IComplaintService
         ISubscriptionRepository subscriptions,
         IModerationRepository moderation,
         IMapper mapper,
-        INotificationService notifications)
+        INotificationService notifications,
+        IFileStorageService fileStorage)
     {
         _complaints = complaints;
         _booths = booths;
@@ -42,13 +59,17 @@ public class ComplaintService : IComplaintService
         _moderation = moderation;
         _mapper = mapper;
         _notifications = notifications;
+        _fileStorage = fileStorage;
     }
 
     public async Task<ApiResponse<ComplaintResponse>> CreateAsync(Guid customerId, CreateComplaintRequest request, CancellationToken cancellationToken = default)
     {
-        var title = TextHelper.NormalizeOptionalText(request.Title);
+        if (!Enum.IsDefined(request.Category))
+            throw AppException.BadRequest("Complaint category is invalid.", "COMPLAINT_CATEGORY_INVALID");
+
+        var title = TextHelper.NormalizeOptionalText(request.Title) ?? GetCategoryTitle(request.Category);
         var description = TextHelper.NormalizeOptionalText(request.Description);
-        if (title is null || title.Length < 3)
+        if (title.Length < 3)
             throw AppException.BadRequest("Complaint title must contain at least 3 characters.", "COMPLAINT_TITLE_INVALID");
         if (title.Length > 200)
             throw AppException.BadRequest("Complaint title cannot exceed 200 characters.", "COMPLAINT_TITLE_INVALID");
@@ -72,6 +93,7 @@ public class ComplaintService : IComplaintService
         complaint.Id = Guid.NewGuid();
         complaint.CustomerId = customerId;
         complaint.BoothId = boothId;
+        complaint.Category = request.Category;
         complaint.Title = title;
         complaint.Description = description;
         complaint.Status = ComplaintStatus.Pending;
@@ -79,6 +101,7 @@ public class ComplaintService : IComplaintService
         complaint.UpdatedAt = now;
 
         await _complaints.AddAsync(complaint);
+        await AddHistoryAsync(complaint.Id, null, ComplaintStatus.Pending, "Complaint submitted", customerId, "Customer", now, cancellationToken);
 
         var images = requestedImages
             .Where(i => !string.IsNullOrWhiteSpace(i.ImageUrl))
@@ -93,12 +116,11 @@ public class ComplaintService : IComplaintService
             .ToList();
 
         if (images.Count > 0)
-        {
             await _complaints.AddImagesAsync(images);
-        }
 
         if (!await _complaints.TrySaveNewComplaintAsync(cancellationToken))
             throw AppException.Conflict("There is already an active complaint for this order and booth.", "ACTIVE_COMPLAINT_EXISTS");
+
         var booth = await _booths.GetByIdAsync(complaint.BoothId);
         if (booth is not null)
         {
@@ -154,9 +176,8 @@ public class ComplaintService : IComplaintService
             }
         }
 
-        var response = _mapper.Map<ComplaintResponse>(complaint);
-        response.ImageUrls = images.Select(i => i.ImageUrl).ToList();
-        return ApiResponse<ComplaintResponse>.SuccessResponse(response, "Complaint submitted successfully.");
+        var created = await _complaints.GetWithImagesByIdAsync(complaint.Id) ?? complaint;
+        return ApiResponse<ComplaintResponse>.SuccessResponse(ToResponse(created), "Complaint submitted successfully.");
     }
 
     public async Task<ApiResponse<PaginationResp<ComplaintResponse>>> GetMineAsync(Guid customerId, PaginationReq pagination, CancellationToken cancellationToken = default)
@@ -164,7 +185,7 @@ public class ComplaintService : IComplaintService
         var page = await _complaints.GetPagedByCustomerWithImagesAsync(
             customerId, pagination.Page, pagination.PageSize, cancellationToken);
         return ApiResponse<PaginationResp<ComplaintResponse>>.SuccessResponse(
-            _mapper.MapPage<Complaint, ComplaintResponse>(page, pagination));
+            PaginationResp<ComplaintResponse>.Create(page.Items.Select(ToResponse).ToList(), page.TotalCount, pagination));
     }
 
     public async Task<ApiResponse<ComplaintResponse>> GetMineDetailAsync(Guid customerId, Guid complaintId, CancellationToken cancellationToken = default)
@@ -176,12 +197,136 @@ public class ComplaintService : IComplaintService
         return ApiResponse<ComplaintResponse>.SuccessResponse(ToResponse(complaint));
     }
 
+    public async Task<ApiResponse<ComplaintResponse>> WithdrawAsync(Guid customerId, Guid complaintId, CancellationToken cancellationToken = default)
+    {
+        var complaint = await _complaints.GetCustomerWithImagesByIdAsync(customerId, complaintId, cancellationToken);
+        if (complaint is null)
+            throw AppException.NotFound("Complaint was not found.", "COMPLAINT_NOT_FOUND");
+
+        if (!CanWithdraw(complaint.Status))
+            throw AppException.BadRequest("This complaint can no longer be withdrawn.", "COMPLAINT_CANNOT_WITHDRAW");
+
+        var previous = complaint.Status;
+        var now = DateTime.UtcNow;
+        await _complaints.BeginTransactionAsync();
+        try
+        {
+            var rows = await _complaints.UpdateStatusWithConcurrencyAsync(
+                complaintId, previous, ComplaintStatus.Withdrawn,
+                complaint.AdminResponse, complaint.ResolutionAction, complaint.PolicyViolation, now, complaint.CustomerEvidenceRequestNote);
+            if (rows == 0)
+                throw AppException.Conflict("Complaint has already been processed.", "COMPLAINT_ALREADY_PROCESSED");
+
+            await AddHistoryAsync(complaintId, previous, ComplaintStatus.Withdrawn, "Withdrawn by customer", customerId, "Customer", now, cancellationToken);
+            await _complaints.SaveChangesAsync();
+            await _complaints.CommitTransactionAsync();
+        }
+        catch (AppException)
+        {
+            await _complaints.RollbackTransactionAsync();
+            throw;
+        }
+        catch
+        {
+            await _complaints.RollbackTransactionAsync();
+            throw;
+        }
+
+        var updated = await _complaints.GetWithImagesByIdAsync(complaintId);
+        await TryNotifyRoleAsync(new RoleNotificationMessage(
+            "Admin",
+            NotificationType.Complaint,
+            "Complaint withdrawn",
+            $"Complaint \"{updated?.Title}\" was withdrawn by the customer.",
+            updated?.BoothId,
+            "Complaint",
+            complaintId,
+            JsonSerializer.Serialize(new { complaintId, status = ComplaintStatus.Withdrawn.ToString() })), cancellationToken);
+
+        return ApiResponse<ComplaintResponse>.SuccessResponse(ToResponse(updated!), "Complaint withdrawn successfully.");
+    }
+
+    public async Task<ApiResponse<ComplaintResponse>> AddEvidenceAsync(Guid customerId, Guid complaintId, AddComplaintEvidenceRequest request, CancellationToken cancellationToken = default)
+    {
+        var complaint = await _complaints.GetCustomerWithImagesByIdAsync(customerId, complaintId, cancellationToken);
+        if (complaint is null)
+            throw AppException.NotFound("Complaint was not found.", "COMPLAINT_NOT_FOUND");
+
+        if (complaint.Status != ComplaintStatus.WaitingForCustomer)
+            throw AppException.BadRequest("Evidence can only be added while waiting for customer response.", "COMPLAINT_EVIDENCE_NOT_ALLOWED");
+
+        var requestedImages = request.Images ?? [];
+        var existingCount = complaint.ComplaintImages?.Count ?? 0;
+        if (existingCount + requestedImages.Count > 5)
+            throw AppException.BadRequest("A complaint can contain at most 5 images.", "COMPLAINT_IMAGE_LIMIT");
+
+        var now = DateTime.UtcNow;
+        var previous = complaint.Status;
+        await _complaints.BeginTransactionAsync();
+        try
+        {
+            var rows = await _complaints.UpdateStatusWithConcurrencyAsync(
+                complaintId, previous, ComplaintStatus.UnderReview,
+                complaint.AdminResponse, complaint.ResolutionAction, complaint.PolicyViolation, now, complaint.CustomerEvidenceRequestNote);
+            if (rows == 0)
+                throw AppException.Conflict("Complaint has already been processed.", "COMPLAINT_ALREADY_PROCESSED");
+
+            var images = requestedImages
+                .Where(i => !string.IsNullOrWhiteSpace(i.ImageUrl))
+                .Select(i => new ComplaintImage
+                {
+                    Id = Guid.NewGuid(),
+                    ComplaintId = complaintId,
+                    ImageUrl = i.ImageUrl.Trim(),
+                    CreatedAt = now,
+                    UpdatedAt = now
+                })
+                .ToList();
+
+            if (images.Count > 0)
+                await _complaints.AddImagesAsync(images);
+
+            await AddHistoryAsync(complaintId, previous, ComplaintStatus.UnderReview, "Customer submitted additional evidence", customerId, "Customer", now, cancellationToken);
+            await _complaints.SaveChangesAsync();
+            await _complaints.CommitTransactionAsync();
+        }
+        catch (AppException)
+        {
+            await _complaints.RollbackTransactionAsync();
+            throw;
+        }
+        catch
+        {
+            await _complaints.RollbackTransactionAsync();
+            throw;
+        }
+
+        var updated = await _complaints.GetWithImagesByIdAsync(complaintId);
+        await TryNotifyRoleAsync(new RoleNotificationMessage(
+            "Admin",
+            NotificationType.ComplaintInReview,
+            "Complaint evidence received",
+            $"Customer submitted evidence for complaint \"{updated?.Title}\".",
+            updated?.BoothId,
+            "Complaint",
+            complaintId,
+            JsonSerializer.Serialize(new { complaintId, status = ComplaintStatus.UnderReview.ToString() })), cancellationToken);
+
+        return ApiResponse<ComplaintResponse>.SuccessResponse(ToResponse(updated!), "Evidence submitted successfully.");
+    }
+
+    public async Task<ApiResponse<ComplaintImageUploadResponse>> UploadImageAsync(Stream stream, string fileName, string contentType, long length, CancellationToken cancellationToken = default)
+    {
+        var imageUrl = await _fileStorage.SaveImageAsync("complaints", stream, fileName, contentType, length, cancellationToken);
+        return ApiResponse<ComplaintImageUploadResponse>.SuccessResponse(new ComplaintImageUploadResponse { ImageUrl = imageUrl }, "Complaint image uploaded successfully.");
+    }
+
     public async Task<ApiResponse<PaginationResp<ComplaintResponse>>> GetAllAsync(PaginationReq pagination, ComplaintStatus? status = null, CancellationToken cancellationToken = default)
     {
         var page = await _complaints.GetPagedWithImagesAsync(
             pagination.Page, pagination.PageSize, status, cancellationToken);
         return ApiResponse<PaginationResp<ComplaintResponse>>.SuccessResponse(
-            _mapper.MapPage<Complaint, ComplaintResponse>(page, pagination));
+            PaginationResp<ComplaintResponse>.Create(page.Items.Select(ToResponse).ToList(), page.TotalCount, pagination));
     }
 
     public async Task<ApiResponse<PaginationResp<ComplaintResponse>>> GetAllFilteredAsync(AdminComplaintQueryRequest query, CancellationToken cancellationToken = default)
@@ -189,7 +334,10 @@ public class ComplaintService : IComplaintService
         var page = await _complaints.GetPagedWithImagesFilteredAsync(
             query.Page, query.PageSize, query.Status, query.Keyword, query.BoothId, cancellationToken);
         return ApiResponse<PaginationResp<ComplaintResponse>>.SuccessResponse(
-            _mapper.MapPage<Complaint, ComplaintResponse>(page, new PaginationReq { Page = query.Page, PageSize = query.PageSize }));
+            PaginationResp<ComplaintResponse>.Create(
+                page.Items.Select(ToResponse).ToList(),
+                page.TotalCount,
+                new PaginationReq { Page = query.Page, PageSize = query.PageSize }));
     }
 
     public async Task<ApiResponse<PaginationResp<ComplaintResponse>>> GetByBoothAsync(Guid ownerId, Guid boothId, PaginationReq pagination, CancellationToken cancellationToken = default)
@@ -204,7 +352,7 @@ public class ComplaintService : IComplaintService
         var page = await _complaints.GetPagedByBoothWithImagesAsync(
             boothId, pagination.Page, pagination.PageSize, cancellationToken);
         return ApiResponse<PaginationResp<ComplaintResponse>>.SuccessResponse(
-            _mapper.MapPage<Complaint, ComplaintResponse>(page, pagination));
+            PaginationResp<ComplaintResponse>.Create(page.Items.Select(ToResponse).ToList(), page.TotalCount, pagination));
     }
 
     public async Task<ApiResponse<PaginationResp<ComplaintResponse>>> GetByMarketOwnerAsync(
@@ -218,7 +366,7 @@ public class ComplaintService : IComplaintService
             marketOwnerId, query.Status, query.MarketId, query.FromDate, query.ToDate,
             query.Page, query.PageSize, cancellationToken);
         return ApiResponse<PaginationResp<ComplaintResponse>>.SuccessResponse(
-            _mapper.MapPage<Complaint, ComplaintResponse>(page, query));
+            PaginationResp<ComplaintResponse>.Create(page.Items.Select(ToResponse).ToList(), page.TotalCount, query));
     }
 
     public async Task<ApiResponse<ComplaintResponse>> GetDetailForMarketOwnerAsync(
@@ -236,9 +384,7 @@ public class ComplaintService : IComplaintService
         if (market is null || market.MarketOwnerId != marketOwnerId)
             throw AppException.Forbidden("You can only view complaints for booths in your own markets.", "MARKET_OWNERSHIP_REQUIRED");
 
-        var response = _mapper.Map<ComplaintResponse>(complaint);
-        response.ImageUrls = complaint.ComplaintImages?.Select(i => i.ImageUrl).ToList() ?? new List<string>();
-        return ApiResponse<ComplaintResponse>.SuccessResponse(response);
+        return ApiResponse<ComplaintResponse>.SuccessResponse(ToResponse(complaint));
     }
 
     public async Task<ApiResponse<ComplaintCountsResponse>> GetCountsByMarketOwnerAsync(
@@ -253,11 +399,16 @@ public class ComplaintService : IComplaintService
             Pending = pending,
             Resolved = resolved,
             Rejected = rejected,
-            Total = pending + resolved + rejected
+            Total = counts.Values.Sum()
         });
     }
 
-    public async Task<ApiResponse<ComplaintResponse>> UpdateStatusAsync(Guid complaintId, UpdateComplaintStatusRequest request, CancellationToken cancellationToken = default, Guid? actorId = null)
+    public async Task<ApiResponse<ComplaintResponse>> UpdateStatusAsync(
+        Guid complaintId,
+        UpdateComplaintStatusRequest request,
+        CancellationToken cancellationToken = default,
+        Guid? actorId = null,
+        string? actorRole = null)
     {
         var complaint = await _complaints.GetByIdAsync(complaintId);
         if (complaint is null)
@@ -282,15 +433,18 @@ public class ComplaintService : IComplaintService
                 throw AppException.Forbidden("Only Admin can suspend a booth.", "ADMIN_SANCTION_REQUIRED");
         }
 
-        if (complaint.Status != ComplaintStatus.Pending)
+        if (TerminalStatuses.Contains(complaint.Status) &&
+            !(complaint.Status == ComplaintStatus.Resolved && request.Status == ComplaintStatus.Closed))
             throw AppException.Conflict("Complaint has already been processed.", "COMPLAINT_ALREADY_PROCESSED");
 
         ValidateStatusTransition(complaint.Status, request.Status);
         ValidateResolutionRequest(request);
 
         var adminResponse = TextHelper.NormalizeOptionalText(request.AdminResponse);
+        var evidenceNote = TextHelper.NormalizeOptionalText(request.EvidenceRequestNote) ?? adminResponse;
         var policyViolation = TextHelper.NormalizeOptionalText(request.PolicyViolation);
         var now = DateTime.UtcNow;
+        var previousStatus = complaint.Status;
 
         await _complaints.BeginTransactionAsync();
         try
@@ -301,25 +455,46 @@ public class ComplaintService : IComplaintService
             var policyViolationValue = request.Status == ComplaintStatus.Resolved
                 ? policyViolation
                 : null;
+            var evidenceRequestNoteValue = request.Status == ComplaintStatus.WaitingForCustomer
+                ? evidenceNote
+                : complaint.CustomerEvidenceRequestNote;
+            var persistedAdminResponse = request.Status == ComplaintStatus.WaitingForCustomer
+                ? (adminResponse ?? complaint.AdminResponse)
+                : adminResponse;
 
             var rowsAffected = await _complaints.UpdateStatusWithConcurrencyAsync(
                 complaintId,
-                ComplaintStatus.Pending,
+                previousStatus,
                 request.Status,
-                adminResponse,
+                persistedAdminResponse,
                 resolutionAction,
                 policyViolationValue,
-                now);
+                now,
+                evidenceRequestNoteValue);
 
             if (rowsAffected == 0)
                 throw AppException.Conflict("Complaint has already been processed by another administrator.", "COMPLAINT_ALREADY_PROCESSED");
 
-            // Sync tracked entity with ExecuteUpdateAsync results so re-fetch returns fresh data
             complaint.Status = request.Status;
-            complaint.AdminResponse = adminResponse;
+            complaint.AdminResponse = persistedAdminResponse;
             complaint.ResolutionAction = resolutionAction;
             complaint.PolicyViolation = policyViolationValue;
+            complaint.CustomerEvidenceRequestNote = evidenceRequestNoteValue;
             complaint.UpdatedAt = now;
+
+            var historyNote = request.Status == ComplaintStatus.WaitingForCustomer
+                ? evidenceRequestNoteValue
+                : adminResponse;
+            await AddHistoryAsync(
+                complaintId,
+                previousStatus,
+                request.Status,
+                historyNote,
+                actorId,
+                actorRole ?? (actorId.HasValue ? "MarketOwner" : "Admin"),
+                now,
+                cancellationToken);
+            await _complaints.SaveChangesAsync();
 
             if (request.Status == ComplaintStatus.Resolved && request.ResolutionAction == ComplaintResolutionAction.SuspendBooth)
             {
@@ -365,25 +540,59 @@ public class ComplaintService : IComplaintService
 
         var updated = await _complaints.GetWithImagesByIdAsync(complaintId);
 
-        var notificationType = request.Status switch
+        if (request.Status == ComplaintStatus.UnderReview)
         {
-            ComplaintStatus.Resolved => NotificationType.ComplaintResolved,
-            ComplaintStatus.Rejected => NotificationType.ComplaintRejected,
-            _ => NotificationType.Complaint
-        };
-
-        var actionLabel = request.Status == ComplaintStatus.Resolved
-            ? updated?.ResolutionAction?.ToString() ?? "NoViolation"
-            : "Rejected";
-        var customerContent = $"Your complaint \"{updated?.Title}\" has been {request.Status}.\n\nAdmin response:\n{adminResponse}";
-        if (request.Status == ComplaintStatus.Resolved && updated?.ResolutionAction != ComplaintResolutionAction.NoViolation)
-            customerContent += $"\n\nAction taken: {updated?.ResolutionAction}";
-        if (!string.IsNullOrEmpty(policyViolation))
-            customerContent += $"\n\nPolicy violation: {policyViolation}";
-
-        try
+            await TryNotifyAsync(new NotificationMessage(
+                complaint.CustomerId,
+                NotificationType.ComplaintInReview,
+                "Complaint under review",
+                $"Your complaint \"{updated?.Title}\" is now under review.",
+                complaint.BoothId,
+                "Complaint",
+                complaint.Id,
+                JsonSerializer.Serialize(new
+                {
+                    complaintId = complaint.Id,
+                    boothId = complaint.BoothId,
+                    status = request.Status.ToString()
+                })), cancellationToken);
+        }
+        else if (request.Status == ComplaintStatus.WaitingForCustomer)
         {
-            await _notifications.NotifyAsync(new NotificationMessage(
+            await TryNotifyAsync(new NotificationMessage(
+                complaint.CustomerId,
+                NotificationType.Complaint,
+                "Additional evidence requested",
+                evidenceNote ?? "Please provide additional evidence for your complaint.",
+                complaint.BoothId,
+                "Complaint",
+                complaint.Id,
+                JsonSerializer.Serialize(new
+                {
+                    complaintId = complaint.Id,
+                    boothId = complaint.BoothId,
+                    status = request.Status.ToString()
+                })), cancellationToken);
+        }
+        else if (request.Status is ComplaintStatus.Resolved or ComplaintStatus.Rejected or ComplaintStatus.Closed)
+        {
+            var notificationType = request.Status switch
+            {
+                ComplaintStatus.Resolved => NotificationType.ComplaintResolved,
+                ComplaintStatus.Rejected => NotificationType.ComplaintRejected,
+                _ => NotificationType.Complaint
+            };
+
+            var actionLabel = request.Status == ComplaintStatus.Resolved
+                ? updated?.ResolutionAction?.ToString() ?? "NoViolation"
+                : request.Status.ToString();
+            var customerContent = $"Your complaint \"{updated?.Title}\" has been {request.Status}.\n\nAdmin response:\n{adminResponse}";
+            if (request.Status == ComplaintStatus.Resolved && updated?.ResolutionAction != ComplaintResolutionAction.NoViolation)
+                customerContent += $"\n\nAction taken: {updated?.ResolutionAction}";
+            if (!string.IsNullOrEmpty(policyViolation))
+                customerContent += $"\n\nPolicy violation: {policyViolation}";
+
+            await TryNotifyAsync(new NotificationMessage(
                 complaint.CustomerId,
                 notificationType,
                 $"Complaint {request.Status}",
@@ -398,67 +607,101 @@ public class ComplaintService : IComplaintService
                     status = request.Status.ToString(),
                     resolutionAction = actionLabel
                 })), cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"Failed to notify customer: {ex.Message}");
-        }
 
-        var boothEntity = await _booths.GetByIdAsync(complaint.BoothId);
-        if (boothEntity is not null)
-        {
-            try
+            var boothEntity = await _booths.GetByIdAsync(complaint.BoothId);
+            if (boothEntity is not null && request.Status is ComplaintStatus.Resolved or ComplaintStatus.Rejected)
             {
-                if (request.Status == ComplaintStatus.Rejected)
+                try
                 {
-                    await _notifications.NotifyAsync(new NotificationMessage(
-                        boothEntity.BoothOwnerId,
-                        NotificationType.ComplaintRejected,
-                        "Complaint rejected",
-                        $"A complaint against your booth \"{boothEntity.BoothName}\" was rejected. No action was required.",
-                        boothEntity.Id,
-                        "Complaint",
-                        complaint.Id,
-                        JsonSerializer.Serialize(new { complaintId = complaint.Id, boothId = boothEntity.Id })), cancellationToken);
-                }
-                else if (request.Status == ComplaintStatus.Resolved)
-                {
-                    var (boothTitle, boothContent) = request.ResolutionAction switch
+                    if (request.Status == ComplaintStatus.Rejected)
                     {
-                        ComplaintResolutionAction.NoViolation => (
-                            "Complaint resolved",
-                            $"A complaint against your booth \"{boothEntity.BoothName}\" was resolved without penalty."),
-                        ComplaintResolutionAction.Warning => (
-                            "Booth warning issued",
-                            $"Your booth \"{boothEntity.BoothName}\" received a warning.\n\nReason: {policyViolation}"),
-                        ComplaintResolutionAction.SuspendBooth => (
-                            "Booth suspended",
-                            $"Your booth \"{boothEntity.BoothName}\" has been suspended following a complaint.\n\nViolation: {policyViolation}"),
-                        _ => ("Complaint resolved", "Your complaint has been resolved.")
-                    };
+                        await _notifications.NotifyAsync(new NotificationMessage(
+                            boothEntity.BoothOwnerId,
+                            NotificationType.ComplaintRejected,
+                            "Complaint rejected",
+                            $"A complaint against your booth \"{boothEntity.BoothName}\" was rejected. No action was required.",
+                            boothEntity.Id,
+                            "Complaint",
+                            complaint.Id,
+                            JsonSerializer.Serialize(new { complaintId = complaint.Id, boothId = boothEntity.Id })), cancellationToken);
+                    }
+                    else
+                    {
+                        var (boothTitle, boothContent) = request.ResolutionAction switch
+                        {
+                            ComplaintResolutionAction.NoViolation => (
+                                "Complaint resolved",
+                                $"A complaint against your booth \"{boothEntity.BoothName}\" was resolved without penalty."),
+                            ComplaintResolutionAction.Warning => (
+                                "Booth warning issued",
+                                $"Your booth \"{boothEntity.BoothName}\" received a warning.\n\nReason: {policyViolation}"),
+                            ComplaintResolutionAction.SuspendBooth => (
+                                "Booth suspended",
+                                $"Your booth \"{boothEntity.BoothName}\" has been suspended following a complaint.\n\nViolation: {policyViolation}"),
+                            _ => ("Complaint resolved", "Your complaint has been resolved.")
+                        };
 
-                    var boothNotifType = request.ResolutionAction == ComplaintResolutionAction.SuspendBooth
-                        ? NotificationType.BoothSuspended
-                        : NotificationType.ComplaintResolved;
+                        var boothNotifType = request.ResolutionAction == ComplaintResolutionAction.SuspendBooth
+                            ? NotificationType.BoothSuspended
+                            : NotificationType.ComplaintResolved;
 
-                    await _notifications.NotifyAsync(new NotificationMessage(
-                        boothEntity.BoothOwnerId,
-                        boothNotifType,
-                        boothTitle,
-                        boothContent,
-                        boothEntity.Id,
-                        "Booth",
-                        boothEntity.Id,
-                        JsonSerializer.Serialize(new { complaintId = complaint.Id, boothId = boothEntity.Id })), cancellationToken);
+                        await _notifications.NotifyAsync(new NotificationMessage(
+                            boothEntity.BoothOwnerId,
+                            boothNotifType,
+                            boothTitle,
+                            boothContent,
+                            boothEntity.Id,
+                            "Booth",
+                            boothEntity.Id,
+                            JsonSerializer.Serialize(new { complaintId = complaint.Id, boothId = boothEntity.Id })), cancellationToken);
+                    }
                 }
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"Failed to notify booth owner: {ex.Message}");
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"Failed to notify booth owner: {ex.Message}");
+                }
             }
         }
 
         return ApiResponse<ComplaintResponse>.SuccessResponse(ToResponse(updated!), "Complaint status updated successfully.");
+    }
+
+    public async Task<ApiResponse<ComplaintCountsResponse>> GetCountsAsync(CancellationToken cancellationToken = default)
+    {
+        var counts = await _complaints.CountByStatusAsync(cancellationToken);
+
+        var response = new ComplaintCountsResponse
+        {
+            Pending = counts.GetValueOrDefault(ComplaintStatus.Pending),
+            Resolved = counts.GetValueOrDefault(ComplaintStatus.Resolved),
+            Rejected = counts.GetValueOrDefault(ComplaintStatus.Rejected),
+            Total = counts.Values.Sum()
+        };
+
+        return ApiResponse<ComplaintCountsResponse>.SuccessResponse(response);
+    }
+
+    private async Task AddHistoryAsync(
+        Guid complaintId,
+        ComplaintStatus? fromStatus,
+        ComplaintStatus toStatus,
+        string? note,
+        Guid? actorUserId,
+        string? actorRole,
+        DateTime createdAt,
+        CancellationToken cancellationToken)
+    {
+        await _complaints.AddStatusHistoryAsync(new ComplaintStatusHistory
+        {
+            Id = Guid.NewGuid(),
+            ComplaintId = complaintId,
+            FromStatus = fromStatus,
+            ToStatus = toStatus,
+            Note = note,
+            ActorUserId = actorUserId,
+            ActorRole = actorRole,
+            CreatedAt = createdAt
+        }, cancellationToken);
     }
 
     private async Task<Guid> GetAuthoritativeBoothIdAsync(Guid customerId, Guid orderId, CancellationToken cancellationToken)
@@ -471,6 +714,9 @@ public class ComplaintService : IComplaintService
             ?? throw AppException.BadRequest("Order has no booth items.", "ORDER_HAS_NO_ITEMS");
     }
 
+    private static bool CanWithdraw(ComplaintStatus status)
+        => ActiveStatuses.Contains(status);
+
     private static void ValidateStatusTransition(ComplaintStatus currentStatus, ComplaintStatus nextStatus)
     {
         if (currentStatus == nextStatus)
@@ -478,9 +724,16 @@ public class ComplaintService : IComplaintService
 
         var allowed = currentStatus switch
         {
-            ComplaintStatus.Pending => nextStatus is ComplaintStatus.Resolved or ComplaintStatus.Rejected,
-            ComplaintStatus.Resolved => false,
+            ComplaintStatus.Pending => nextStatus is ComplaintStatus.UnderReview or ComplaintStatus.WaitingForCustomer
+                or ComplaintStatus.Resolved or ComplaintStatus.Rejected or ComplaintStatus.Closed,
+            ComplaintStatus.UnderReview => nextStatus is ComplaintStatus.WaitingForCustomer or ComplaintStatus.Resolved
+                or ComplaintStatus.Rejected or ComplaintStatus.Closed,
+            ComplaintStatus.WaitingForCustomer => nextStatus is ComplaintStatus.UnderReview or ComplaintStatus.Resolved
+                or ComplaintStatus.Rejected or ComplaintStatus.Closed,
+            ComplaintStatus.Resolved => nextStatus is ComplaintStatus.Closed,
             ComplaintStatus.Rejected => false,
+            ComplaintStatus.Closed => false,
+            ComplaintStatus.Withdrawn => false,
             _ => false
         };
 
@@ -491,12 +744,17 @@ public class ComplaintService : IComplaintService
     private static void ValidateResolutionRequest(UpdateComplaintStatusRequest request)
     {
         var adminResponse = TextHelper.NormalizeOptionalText(request.AdminResponse);
+        var evidenceNote = TextHelper.NormalizeOptionalText(request.EvidenceRequestNote);
         var policyViolation = TextHelper.NormalizeOptionalText(request.PolicyViolation);
 
         if (request.Status is ComplaintStatus.Resolved or ComplaintStatus.Rejected && adminResponse is null)
             throw AppException.BadRequest("Admin response is required when resolving or rejecting a complaint.");
 
-        if (adminResponse is not null && adminResponse.Length < 10)
+        if (request.Status == ComplaintStatus.WaitingForCustomer && adminResponse is null && evidenceNote is null)
+            throw AppException.BadRequest("Evidence request note or admin response is required when waiting for customer.");
+
+        if (adminResponse is not null && adminResponse.Length < 10 &&
+            request.Status is ComplaintStatus.Resolved or ComplaintStatus.Rejected)
             throw AppException.BadRequest("Admin response must be at least 10 characters.");
 
         if (request.Status == ComplaintStatus.Resolved)
@@ -515,8 +773,41 @@ public class ComplaintService : IComplaintService
             throw AppException.BadRequest("Rejected complaints cannot apply a booth penalty or policy violation.");
     }
 
+    private static string GetCategoryTitle(ComplaintCategory category)
+        => category switch
+        {
+            ComplaintCategory.FoodQuality => "Food quality / Chất lượng món ăn",
+            ComplaintCategory.WrongItem => "Wrong item / Sai món",
+            ComplaintCategory.MissingItem => "Missing item / Thiếu món",
+            ComplaintCategory.OrderNotReceived => "Order not received / Không nhận được đơn",
+            ComplaintCategory.BoothService => "Booth service / Dịch vụ gian hàng",
+            ComplaintCategory.PaymentIssue => "Payment issue / Vấn đề thanh toán",
+            ComplaintCategory.PromotionIssue => "Promotion issue / Vấn đề khuyến mãi",
+            _ => "Other / Khác"
+        };
+
     private ComplaintResponse ToResponse(Complaint complaint)
-        => _mapper.Map<ComplaintResponse>(complaint);
+    {
+        var response = _mapper.Map<ComplaintResponse>(complaint);
+        response.ImageUrls = complaint.ComplaintImages?.Select(i => i.ImageUrl).ToList() ?? [];
+        response.EvidenceRequestNote = complaint.CustomerEvidenceRequestNote;
+        response.CanWithdraw = CanWithdraw(complaint.Status);
+        response.StatusHistory = (complaint.StatusHistories ?? [])
+            .OrderBy(h => h.CreatedAt)
+            .ThenBy(h => h.Id)
+            .Select(h => new ComplaintStatusHistoryResponse
+            {
+                Id = h.Id,
+                FromStatus = h.FromStatus?.ToString(),
+                ToStatus = h.ToStatus.ToString(),
+                Note = h.Note,
+                ActorUserId = h.ActorUserId,
+                ActorRole = h.ActorRole,
+                CreatedAt = h.CreatedAt
+            })
+            .ToList();
+        return response;
+    }
 
     private async Task TryNotifyAsync(NotificationMessage message, CancellationToken cancellationToken)
     {
@@ -540,20 +831,5 @@ public class ComplaintService : IComplaintService
         {
             Console.Error.WriteLine($"Complaint was persisted but role notification delivery failed: {exception.Message}");
         }
-    }
-
-    public async Task<ApiResponse<ComplaintCountsResponse>> GetCountsAsync(CancellationToken cancellationToken = default)
-    {
-        var counts = await _complaints.CountByStatusAsync(cancellationToken);
-
-        var response = new ComplaintCountsResponse
-        {
-            Pending = counts.GetValueOrDefault(ComplaintStatus.Pending),
-            Resolved = counts.GetValueOrDefault(ComplaintStatus.Resolved),
-            Rejected = counts.GetValueOrDefault(ComplaintStatus.Rejected),
-            Total = counts.Values.Sum()
-        };
-
-        return ApiResponse<ComplaintCountsResponse>.SuccessResponse(response);
     }
 }

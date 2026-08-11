@@ -115,8 +115,8 @@ public sealed class PostgresAiV2RecommendationTests
             ('22222222-2222-2222-2222-222222222102','22222222-2222-2222-2222-222222222002','owner','hash','Owner','owner@recommendation.local','Local','Active',now(),now());
             INSERT INTO "NightMarket" ("Id","Name","Address","OpeningHours","ClosingHours","Status","ModerationStatus","IsDeleted","TotalBooth","CreatedAt","UpdatedAt") VALUES
             ('33333333-3333-3333-3333-333333333101','Recommendation market','Address','00:00','23:59','Active','Active',false,1,now(),now());
-            INSERT INTO "Booth" ("Id","RegistrationId","NightMarketId","BoothOwnerId","BoothName","OpenTime","CloseTime","Status","CreatedAt","UpdatedAt") VALUES
-            ('44444444-4444-4444-4444-444444444101','44444444-4444-4444-4444-444444444199','33333333-3333-3333-3333-333333333101','22222222-2222-2222-2222-222222222102','Recommendation booth','00:00','23:59','Active',now(),now());
+            INSERT INTO "Booth" ("Id","NightMarketId","BoothOwnerId","BoothName","OpenTime","CloseTime","Status","CreatedAt","UpdatedAt") VALUES
+            ('44444444-4444-4444-4444-444444444101','33333333-3333-3333-3333-333333333101','22222222-2222-2222-2222-222222222102','Recommendation booth','00:00','23:59','Active',now(),now());
             INSERT INTO "FoodCategories" ("Id","BoothId","Code","Name","IsSystem","IsActive","DisplayOrder","IsSelectable","IsDeleted","CreatedAt","UpdatedAt") VALUES
             ('88888888-8888-8888-8888-888888888101','44444444-4444-4444-4444-444444444101','MAIN_REC','Main',true,true,0,true,false,now(),now());
             INSERT INTO "FoodItem" ("Id","BoothId","CategoryId","Name","Price","IsAvailable","IsFeatured","IsDeleted","SpiceLevel","CreatedAt","UpdatedAt") VALUES

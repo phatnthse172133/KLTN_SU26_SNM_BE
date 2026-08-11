@@ -43,7 +43,10 @@ public class NightMarketsController : ControllerBase
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> Get(Guid id, CancellationToken cancellationToken)
     {
-        if (!IsAdmin)
+        var canReadOwnedOrModeratedMarket = User.Identity?.IsAuthenticated == true
+            && (User.IsInRole("Admin") || User.IsInRole("MarketOwner"));
+
+        if (!canReadOwnedOrModeratedMarket)
             return Ok(await _service.GetCustomerAsync(id, cancellationToken));
 
         var response = await _service.GetAsync(id, OptionalUserId, CurrentUserRole, cancellationToken);
@@ -99,6 +102,14 @@ public class NightMarketsController : ControllerBase
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
         return Ok(await _service.DeleteAsync(id, CurrentUserId, CurrentUserRole, cancellationToken));
+    }
+
+    [Authorize(Roles = "MarketOwner")]
+    [HttpGet("{id:guid}/activation-readiness")]
+    public async Task<IActionResult> GetActivationReadiness(Guid id, CancellationToken cancellationToken)
+    {
+        return Ok(await _service.GetActivationReadinessAsync(
+            id, CurrentUserId, CurrentUserRole, cancellationToken));
     }
 
     [Authorize(Roles = "MarketOwner")]

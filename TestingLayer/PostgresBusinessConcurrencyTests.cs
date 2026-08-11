@@ -555,8 +555,8 @@ public sealed class PostgresBusinessConcurrencyTests
                 (@customerA, @role, 'customer-a-concurrency', 'hash', 'Customer A', 'customer-a-concurrency@test.local', 'Local', 'Active', now(), now()),
                 (@customerB, @role, 'customer-b-concurrency', 'hash', 'Customer B', 'customer-b-concurrency@test.local', 'Local', 'Active', now(), now());
             INSERT INTO "Booth"
-                ("Id", "RegistrationId", "NightMarketId", "BoothOwnerId", "BoothName", "Status", "CreatedAt", "UpdatedAt")
-            VALUES (@booth, @registration, @market, @owner, 'Concurrency booth', 'Active', now(), now());
+                ("Id", "NightMarketId", "BoothOwnerId", "BoothName", "Status", "CreatedAt", "UpdatedAt")
+            VALUES (@booth, @market, @owner, 'Concurrency booth', 'Active', now(), now());
             INSERT INTO "FoodCategories"
                 ("Id", "BoothId", "Code", "Name", "IsActive", "IsSelectable", "IsDeleted", "CreatedAt", "UpdatedAt")
             VALUES (@category, @booth, 'CONCURRENCY_CATEGORY', 'Category', true, true, false, now(), now());
@@ -575,7 +575,6 @@ public sealed class PostgresBusinessConcurrencyTests
         command.Parameters.AddWithValue("customerB", ids.CustomerB);
         command.Parameters.AddWithValue("role", Guid.NewGuid());
         command.Parameters.AddWithValue("booth", ids.Booth);
-        command.Parameters.AddWithValue("registration", Guid.NewGuid());
         command.Parameters.AddWithValue("category", ids.Category);
         command.Parameters.AddWithValue("food", ids.Food);
         command.Parameters.AddWithValue("promotion", ids.Promotion);

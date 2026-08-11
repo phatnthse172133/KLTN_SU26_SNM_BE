@@ -1,61 +1,68 @@
-using InfrastructureLayer.Data;
-using Microsoft.Extensions.Options;
-using InfrastructureLayer.Cores.Emails;
-using InfrastructureLayer.Cores.External;
-using InfrastructureLayer.Cores.Helppers;
-using InfrastructureLayer.Cores.JWTs;
-using InfrastructureLayer.Repositories;
-using InfrastructureLayer.Workers;
-using ApplicationLayer.Services.Auth;
-using ApplicationLayer.Services.Account;
-using ApplicationLayer.Services.BoothRegistrations;
-using ApplicationLayer.Services.Booths;
-using ApplicationLayer.Services.FoodCategories;
-using ApplicationLayer.Services.Menus;
-using ApplicationLayer.Services.NightMarkets;
-using ApplicationLayer.Services.CustomerDiscovery;
-using ApplicationLayer.Services.Complaints;
-using ApplicationLayer.Services.Reviews;
-using ApplicationLayer.Services.Zones;
-using ApplicationLayer.Services.MarketLayouts;
-using ApplicationLayer.Services.LayoutNodes;
-using ApplicationLayer.Services.LayoutEdges;
-using ApplicationLayer.Services.BoothLocations;
-using ApplicationLayer.Services.MapNavigation;
-using ApplicationLayer.Services.NavigationAnchors;
-using ApplicationLayer.Services.IndoorPositioning;
-using ApplicationLayer.Services.Packages;
-using ApplicationLayer.Services.Prices;
-using ApplicationLayer.Services.Carts;
-using ApplicationLayer.Services.Promotions;
-using ApplicationLayer.Services.Notifications;
-using ApplicationLayer.Services.Chats;
-using ApplicationLayer.Services.Subscriptions;
-using ApplicationLayer.Services.PayOS;
+using ApplicationLayer.AI;
+using ApplicationLayer.AI.Services;
+using ApplicationLayer.AI.V2.Configuration;
+using ApplicationLayer.AI.V2.Services;
 using ApplicationLayer.Configuration;
-using ApplicationLayer.Services.Dashboard;
-using ApplicationLayer.Services.MarketOwnerDashboard;
+using ApplicationLayer.Mappings;
+using ApplicationLayer.Services.Account;
 using ApplicationLayer.Services.AdminAILog;
 using ApplicationLayer.Services.AdminModeration;
-using ApplicationLayer.Mappings;
-using ApplicationLayer.AI;
+using ApplicationLayer.Services.Auth;
+using ApplicationLayer.Services.BoothDashboard;
+using ApplicationLayer.Services.BoothLocations;
+using ApplicationLayer.Services.BoothMedia;
+using ApplicationLayer.Services.BoothPayOsCredentials;
+//using ApplicationLayer.Services.BoothRegistrations;
+using ApplicationLayer.Services.Booths;
+using ApplicationLayer.Services.Carts;
+using ApplicationLayer.Services.Chats;
+using ApplicationLayer.Services.Complaints;
+using ApplicationLayer.Services.CustomerDiscovery;
+using ApplicationLayer.Services.Dashboard;
+using ApplicationLayer.Services.EncryptionServices;
+using ApplicationLayer.Services.FoodCategories;
+using ApplicationLayer.Services.IndoorPositioning;
+using ApplicationLayer.Services.LayoutEdges;
+using ApplicationLayer.Services.LayoutNodes;
+using ApplicationLayer.Services.MapNavigation;
+using ApplicationLayer.Services.MarketLayouts;
+using ApplicationLayer.Services.MarketOwnerDashboard;
+using ApplicationLayer.Services.Menus;
+using ApplicationLayer.Services.NavigationAnchors;
+using ApplicationLayer.Services.NightMarkets;
+using ApplicationLayer.Services.Notifications;
+using ApplicationLayer.Services.Orders;
+using ApplicationLayer.Services.Packages;
+using ApplicationLayer.Services.PaymentMethods;
+using ApplicationLayer.Services.PayOS;
+using ApplicationLayer.Services.PayOutClients;
+using ApplicationLayer.Services.Prices;
+using ApplicationLayer.Services.Promotions;
+using ApplicationLayer.Services.Reviews;
+using ApplicationLayer.Services.Storage;
+using ApplicationLayer.Services.Subscriptions;
+using ApplicationLayer.Services.Support;
+using ApplicationLayer.Services.Zones;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceCore.Email;
 using DomainLayer.InterfaceCore.External;
 using DomainLayer.InterfaceCore.JWT;
+using DomainLayer.InterfaceRepositories;
 using DomainLayer.InterfaceRepository;
+using InfrastructureLayer.Backgrounds;
+using InfrastructureLayer.Cores.AI;
+using InfrastructureLayer.Cores.Emails;
+using InfrastructureLayer.Cores.External;
+using InfrastructureLayer.Cores.Helppers;
+using InfrastructureLayer.Cores.JWTs;
+using InfrastructureLayer.Cores.Notifications;
+using InfrastructureLayer.Data;
+using InfrastructureLayer.Repositories;
+using InfrastructureLayer.Workers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using InfrastructureLayer.Cores.Notifications;
-using DomainLayer.InterfaceRepositories;
-using ApplicationLayer.Services.PaymentMethods;
-using ApplicationLayer.Services.Orders;
-using InfrastructureLayer.Cores.AI;
-using InfrastructureLayer.Backgrounds;
-using ApplicationLayer.AI.Services;
-using ApplicationLayer.AI.V2.Configuration;
-using ApplicationLayer.AI.V2.Services;
+using Microsoft.Extensions.Options;
 
 namespace InfrastructureLayer
 {
@@ -75,7 +82,6 @@ namespace InfrastructureLayer
             services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
             services.AddScoped<IUnitOfWork, UnitOfWork>();
             services.AddScoped<IBoothRepository, BoothRepository>();
-            services.AddScoped<IBoothRegistrationRepository, BoothRegistrationRepository>();
             services.AddScoped<IFoodCategoryRepository, FoodCategoryRepository>();
             services.AddScoped<IFoodItemRepository, FoodItemRepository>();
             services.AddScoped<IFoodSemanticMetadataRepository, FoodSemanticMetadataRepository>();
@@ -84,8 +90,10 @@ namespace InfrastructureLayer
             services.AddScoped<IOrderRepository, OrderRepository>();
             services.AddScoped<IComplaintRepository, ComplaintRepository>();
             services.AddScoped<IReviewRepository, ReviewRepository>();
+            services.AddScoped<IFoodReviewRepository, FoodReviewRepository>();
             services.AddScoped<INightMarketRepository, NightMarketRepository>();
             services.AddScoped<INightMarketImageRepository, NightMarketImageRepository>();
+            services.AddScoped<IBoothImageRepository, BoothImageRepository>();
             services.AddScoped<IZoneRepository, ZoneRepository>();
             services.AddScoped<IMarketLayoutRepository, MarketLayoutRepository>();
             services.AddScoped<ILayoutNodeRepository, LayoutNodeRepository>();
@@ -100,6 +108,7 @@ namespace InfrastructureLayer
             services.AddScoped<IPromotionUsageRepository, PromotionUsageRepository>();
             services.AddScoped<INotificationRepository, NotificationRepository>();
             services.AddScoped<IConversationRepository, ConversationRepository>();
+            services.AddScoped<ISupportTicketRepository, SupportTicketRepository>();
             services.AddScoped<IMessageRepository, MessageRepository>();
             services.AddScoped<IMarketOwnerDashboardRepository, MarketOwnerDashboardRepository>();
             services.AddScoped<IUserDeviceTokenRepository, UserDeviceTokenRepository>();
@@ -117,8 +126,17 @@ namespace InfrastructureLayer
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<IAccountService, AccountService>();
 
-            services.AddScoped<IBoothRegistrationService, BoothRegistrationService>();
             services.AddScoped<IBoothService, BoothService>();
+
+            services.AddScoped<IBoothPayOsCredentialRepository, BoothPayOsCredentialRepository>();
+            services.AddScoped<IBoothPayOsCredentialService, BoothPayOsCredentialService>();
+            services.AddScoped<IEncryptionService, AesEncryptionService>();
+            services.AddScoped<IPayOSPayoutClientFactory, PayOSPayoutClientFactory>();
+
+            services.AddScoped<IPayOSService, PayOSService>(sp =>
+                ActivatorUtilities.CreateInstance<PayOSService>(sp, false));
+            services.AddKeyedScoped<IPayOSService, PayOSService>("SubscriptionPayOS", (sp, key) =>
+                ActivatorUtilities.CreateInstance<PayOSService>(sp, true));
 
             services.AddScoped<IOrderService, OrderService>();
             services.AddScoped<ICustomerCheckoutService, CustomerCheckoutService>();
@@ -127,6 +145,7 @@ namespace InfrastructureLayer
             services.AddScoped<IMenuService, MenuService>();
             services.AddScoped<IFoodAiProfileGenerator, FoodAiProfileGenerator>();
             services.AddScoped<IFoodAiProfileRebuildService, FoodAiProfileRebuildService>();
+            services.AddScoped<IFoodAiProfileEnrichmentService, OpenAiFoodAiProfileEnricher>();
             services.AddScoped<IFoodMetadataCatalogService, FoodMetadataCatalogService>();
             services.AddScoped<ILegacyFoodTagMetadataAdapter, LegacyFoodTagMetadataAdapter>();
 
@@ -137,6 +156,7 @@ namespace InfrastructureLayer
             services.AddScoped<IReviewService, ReviewService>();
             services.AddScoped<IZoneService, ZoneService>();
             services.AddScoped<IMarketLayoutService, MarketLayoutService>();
+            services.AddScoped<ILayoutGeneratorService, LayoutGeneratorService>();
             services.AddScoped<ILayoutGraphValidationService, LayoutGraphValidationService>();
             services.AddScoped<ILayoutNodeService, LayoutNodeService>();
             services.AddScoped<ILayoutEdgeService, LayoutEdgeService>();
@@ -156,6 +176,11 @@ namespace InfrastructureLayer
             services.AddScoped<ISubscriptionEntitlementService, SubscriptionEntitlementService>();
             services.AddScoped<IDashboardService, DashboardService>();
             services.AddScoped<IMarketOwnerDashboardService, MarketOwnerDashboardService>();
+            services.AddScoped<IBoothDashboardService, BoothDashboardService>();
+            services.AddScoped<IBoothAnalyticsService, BoothAnalyticsService>();
+            services.AddScoped<IBoothDashboardRepository, BoothDashboardRepository>();
+            services.AddScoped<IBoothMediaService, BoothMediaService>();
+            services.AddScoped<IImageUploadService, ImageUploadService>();
             services.AddScoped<IAdminAILogService, AdminAILogService>();
             services.AddScoped<IPriceService, PriceService>();
             services.AddScoped<ICartService, CartService>();
@@ -163,6 +188,7 @@ namespace InfrastructureLayer
             services.AddScoped<IPromotionValidationService, PromotionValidationService>();
             services.AddScoped<INotificationService, NotificationService>();
             services.AddScoped<IChatService, ChatService>();
+            services.AddScoped<ISupportTicketService, SupportTicketService>();
             services.AddScoped<IDeviceTokenService, DeviceTokenService>();
             services.AddScoped<IFoodTagService, FoodTagService>();
             services.AddScoped<ICustomerPreferenceService, CustomerPreferenceService>();
@@ -170,19 +196,22 @@ namespace InfrastructureLayer
             services.AddScoped<ILegacyCustomerPreferenceAdapter, LegacyCustomerPreferenceAdapter>();
             services.AddScoped<IAIRecommendationService, AIRecommendationService>();
             services.AddScoped<IAISettingsService, AISettingsService>();
+            // Legacy AIProviderV2 binds first; OpenAI section overlays for env migration.
+            services.Configure<AiProviderRuntimeOptions>(configuration.GetSection(AiProviderRuntimeOptions.LegacySectionName));
             services.Configure<AiProviderRuntimeOptions>(configuration.GetSection(AiProviderRuntimeOptions.SectionName));
-            services.Configure<GeminiV2SecretOptions>(configuration.GetSection(AiProviderRuntimeOptions.SectionName));
+            services.Configure<OpenAiSecretOptions>(configuration.GetSection(AiProviderRuntimeOptions.LegacySectionName));
+            services.Configure<OpenAiSecretOptions>(configuration.GetSection(AiProviderRuntimeOptions.SectionName));
             services.Configure<RecommendationV2Options>(configuration.GetSection(RecommendationV2Options.SectionName));
             services.Configure<MealPlanV2Options>(configuration.GetSection(MealPlanV2Options.SectionName));
             services.AddSingleton<IFoodRecommendationFallbackParser, DeterministicFoodIntentParser>();
             services.AddScoped<IFoodRecommendationIntentNormalizer, FoodRecommendationIntentNormalizer>();
             services.AddSingleton<IDeterministicRecommendationReasonBuilder, DeterministicRecommendationReasonBuilder>();
-            services.AddHttpClient<GeminiV2Client>()
+            services.AddHttpClient<OpenAiV2Client>()
                 .ConfigureHttpClient(client => client.Timeout = Timeout.InfiniteTimeSpan)
                 .RedactLoggedHeaders(_ => true)
                 .RemoveAllLoggers();
-            services.AddScoped<IAiIntentExtractor, GeminiIntentExtractor>();
-            services.AddScoped<IAiExplanationGenerator, GeminiExplanationGenerator>();
+            services.AddScoped<IAiIntentExtractor, OpenAiIntentExtractor>();
+            services.AddScoped<IAiExplanationGenerator, OpenAiExplanationGenerator>();
             services.AddScoped<IFoodRecommendationReadRepository, FoodRecommendationReadRepository>();
             services.AddScoped<IAiRecommendationSessionRepository, AiRecommendationSessionRepository>();
             services.AddSingleton<IFoodSemanticMatcher, DeterministicFoodSemanticMatcher>();
@@ -198,12 +227,7 @@ namespace InfrastructureLayer
             services.AddSingleton<IOnlinePresenceService, OnlinePresenceService>();
             services.Configure<AIProviderSettings>(
                 configuration.GetSection(AIProviderSettings.SectionName));
-            services.AddHttpClient<IAIProviderService, GeminiAIProviderService>()
-                .ConfigureHttpClient((serviceProvider, client) =>
-                {
-                    var settings = serviceProvider.GetRequiredService<IOptions<AIProviderSettings>>().Value;
-                    client.Timeout = TimeSpan.FromSeconds(Math.Clamp(settings.TimeoutSeconds, 1, 30));
-                });
+            services.AddScoped<IAIProviderService, LocalOnlyAIProviderService>();
             services.Configure<FirebaseSettings>(
                 configuration.GetSection(FirebaseSettings.SectionName));
             services.AddHttpClient<IPushNotificationService, FirebasePushNotificationService>();
@@ -211,7 +235,6 @@ namespace InfrastructureLayer
 
             // PayOS configuration and service (uses PayOSClient singleton registered in Program.cs)
             services.Configure<PayOSSettings>(configuration.GetSection(PayOSSettings.SectionName));
-            services.AddScoped<IPayOSService, PayOSService>();
             services.AddScoped<IPayOSPayoutService, PayOSPayoutService>();
             services.AddScoped<DomainLayer.InterfaceRepository.ISequenceRepository, SequenceRepository>();
             services.AddScoped<IPayOSOrderCodeGenerator, PayOSOrderCodeGenerator>();

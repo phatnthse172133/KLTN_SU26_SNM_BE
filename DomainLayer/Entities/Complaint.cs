@@ -20,7 +20,11 @@ public partial class Complaint
 
     public string Description { get; set; } = null!;
 
+    public ComplaintCategory Category { get; set; }
+
     public string? AdminResponse { get; set; }
+
+    public string? CustomerEvidenceRequestNote { get; set; }
 
     public ComplaintStatus Status { get; set; }
 
@@ -35,6 +39,8 @@ public partial class Complaint
     public virtual Booth Booth { get; set; } = null!;
 
     public virtual ICollection<ComplaintImage> ComplaintImages { get; set; } = new List<ComplaintImage>();
+
+    public virtual ICollection<ComplaintStatusHistory> StatusHistories { get; set; } = new List<ComplaintStatusHistory>();
 
     public virtual User Customer { get; set; } = null!;
 

@@ -29,6 +29,21 @@ public class CreateZoneRequest
     [StringLength(50)]
     public string? Color { get; set; }
 
+    [StringLength(20)]
+    public string? ZoneCode { get; set; }
+
+    [Range(0, 10000)]
+    public int Capacity { get; set; } = 0;
+
+    [Range(10, 500)]
+    public double DefaultBoothWidth { get; set; } = 80;
+
+    [Range(10, 500)]
+    public double DefaultBoothHeight { get; set; } = 60;
+
+    [Range(5, 200)]
+    public double DefaultGap { get; set; } = 20;
+
     public ZoneStatus Status { get; set; } = ZoneStatus.Active;
 }
 

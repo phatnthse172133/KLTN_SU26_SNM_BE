@@ -46,7 +46,8 @@ namespace TestingLayer
                 _mockSubscriptions.Object,
                 _mockModeration.Object,
                 _mockMapper.Object,
-                _mockNotifications.Object
+                _mockNotifications.Object,
+                new Mock<ApplicationLayer.Services.Storage.IFileStorageService>().Object
             );
         }
 
@@ -97,7 +98,7 @@ namespace TestingLayer
             _mockComplaints.Setup(r => r.GetByIdAsync(complaint.Id)).ReturnsAsync(complaint);
             _mockComplaints.Setup(r => r.UpdateStatusWithConcurrencyAsync(
                 complaint.Id, ComplaintStatus.Pending, ComplaintStatus.Resolved,
-                It.IsAny<string?>(), ComplaintResolutionAction.NoViolation, null, It.IsAny<DateTime>()))
+                It.IsAny<string?>(), ComplaintResolutionAction.NoViolation, null, It.IsAny<DateTime>(), It.IsAny<string?>()))
                 .ReturnsAsync(1);
             _mockComplaints.Setup(r => r.GetWithImagesByIdAsync(complaint.Id)).ReturnsAsync(complaint);
             _mockMapper.Setup(m => m.Map<ComplaintResponse>(It.IsAny<Complaint>())).Returns(new ComplaintResponse());
@@ -118,7 +119,7 @@ namespace TestingLayer
             _mockComplaints.Setup(r => r.GetByIdAsync(complaint.Id)).ReturnsAsync(complaint);
             _mockComplaints.Setup(r => r.UpdateStatusWithConcurrencyAsync(
                 complaint.Id, ComplaintStatus.Pending, ComplaintStatus.Rejected,
-                It.IsAny<string?>(), null, null, It.IsAny<DateTime>()))
+                It.IsAny<string?>(), null, null, It.IsAny<DateTime>(), It.IsAny<string?>()))
                 .ReturnsAsync(1);
             _mockComplaints.Setup(r => r.GetWithImagesByIdAsync(complaint.Id)).ReturnsAsync(complaint);
             _mockMapper.Setup(m => m.Map<ComplaintResponse>(It.IsAny<Complaint>())).Returns(new ComplaintResponse());
@@ -128,7 +129,7 @@ namespace TestingLayer
             Assert.True(result.Success);
             _mockComplaints.Verify(r => r.UpdateStatusWithConcurrencyAsync(
                 complaint.Id, ComplaintStatus.Pending, ComplaintStatus.Rejected,
-                It.IsAny<string?>(), null, null, It.IsAny<DateTime>()), Times.Once);
+                It.IsAny<string?>(), null, null, It.IsAny<DateTime>(), It.IsAny<string?>()), Times.Once);
         }
 
         [Fact]
@@ -140,7 +141,7 @@ namespace TestingLayer
             _mockComplaints.Setup(r => r.GetByIdAsync(complaint.Id)).ReturnsAsync(complaint);
             _mockComplaints.Setup(r => r.UpdateStatusWithConcurrencyAsync(
                 It.IsAny<Guid>(), It.IsAny<ComplaintStatus>(), It.IsAny<ComplaintStatus>(),
-                It.IsAny<string?>(), It.IsAny<ComplaintResolutionAction?>(), It.IsAny<string?>(), It.IsAny<DateTime>()))
+                It.IsAny<string?>(), It.IsAny<ComplaintResolutionAction?>(), It.IsAny<string?>(), It.IsAny<DateTime>(), It.IsAny<string?>()))
                 .ReturnsAsync(0);
 
             var ex = await Assert.ThrowsAsync<AppException>(() =>
@@ -203,7 +204,7 @@ namespace TestingLayer
             Assert.Equal(400, ex.StatusCode);
             _mockComplaints.Verify(r => r.UpdateStatusWithConcurrencyAsync(
                 It.IsAny<Guid>(), It.IsAny<ComplaintStatus>(), It.IsAny<ComplaintStatus>(),
-                It.IsAny<string?>(), It.IsAny<ComplaintResolutionAction?>(), It.IsAny<string?>(), It.IsAny<DateTime>()), Times.Never);
+                It.IsAny<string?>(), It.IsAny<ComplaintResolutionAction?>(), It.IsAny<string?>(), It.IsAny<DateTime>(), It.IsAny<string?>()), Times.Never);
         }
 
         [Fact]
@@ -225,7 +226,7 @@ namespace TestingLayer
             Assert.Equal(400, ex.StatusCode);
             _mockComplaints.Verify(r => r.UpdateStatusWithConcurrencyAsync(
                 It.IsAny<Guid>(), It.IsAny<ComplaintStatus>(), It.IsAny<ComplaintStatus>(),
-                It.IsAny<string?>(), It.IsAny<ComplaintResolutionAction?>(), It.IsAny<string?>(), It.IsAny<DateTime>()), Times.Never);
+                It.IsAny<string?>(), It.IsAny<ComplaintResolutionAction?>(), It.IsAny<string?>(), It.IsAny<DateTime>(), It.IsAny<string?>()), Times.Never);
         }
 
         [Fact]
@@ -257,7 +258,7 @@ namespace TestingLayer
             _mockComplaints.Setup(r => r.GetByIdAsync(complaint.Id)).ReturnsAsync(complaint);
             _mockComplaints.Setup(r => r.UpdateStatusWithConcurrencyAsync(
                 It.IsAny<Guid>(), It.IsAny<ComplaintStatus>(), It.IsAny<ComplaintStatus>(),
-                It.IsAny<string?>(), null, null, It.IsAny<DateTime>()))
+                It.IsAny<string?>(), null, null, It.IsAny<DateTime>(), It.IsAny<string?>()))
                 .ReturnsAsync(1);
             _mockComplaints.Setup(r => r.GetWithImagesByIdAsync(complaint.Id)).ReturnsAsync(complaint);
             _mockBooths.Setup(r => r.GetByIdAsync(complaint.BoothId)).ReturnsAsync((Booth?)null);
@@ -280,7 +281,7 @@ namespace TestingLayer
             _mockComplaints.Setup(r => r.GetByIdAsync(complaint.Id)).ReturnsAsync(complaint);
             _mockComplaints.Setup(r => r.UpdateStatusWithConcurrencyAsync(
                 It.IsAny<Guid>(), It.IsAny<ComplaintStatus>(), It.IsAny<ComplaintStatus>(),
-                It.IsAny<string?>(), ComplaintResolutionAction.SuspendBooth, It.IsAny<string?>(), It.IsAny<DateTime>()))
+                It.IsAny<string?>(), ComplaintResolutionAction.SuspendBooth, It.IsAny<string?>(), It.IsAny<DateTime>(), It.IsAny<string?>()))
                 .ReturnsAsync(1);
             _mockBooths.Setup(r => r.GetByIdAsync(complaint.BoothId)).ReturnsAsync(booth);
             _mockComplaints.Setup(r => r.GetWithImagesByIdAsync(complaint.Id)).ReturnsAsync(complaint);
@@ -389,7 +390,7 @@ namespace TestingLayer
             _mockComplaints.Setup(r => r.GetByIdAsync(complaint.Id)).ReturnsAsync(complaint);
             _mockComplaints.Setup(r => r.UpdateStatusWithConcurrencyAsync(
                 It.IsAny<Guid>(), It.IsAny<ComplaintStatus>(), It.IsAny<ComplaintStatus>(),
-                It.IsAny<string?>(), It.IsAny<ComplaintResolutionAction?>(), It.IsAny<string?>(), It.IsAny<DateTime>()))
+                It.IsAny<string?>(), It.IsAny<ComplaintResolutionAction?>(), It.IsAny<string?>(), It.IsAny<DateTime>(), It.IsAny<string?>()))
                 .ReturnsAsync(1);
             _mockComplaints.Setup(r => r.GetWithImagesByIdAsync(complaint.Id)).ReturnsAsync(complaint);
             _mockMapper.Setup(m => m.Map<ComplaintResponse>(It.IsAny<Complaint>())).Returns(new ComplaintResponse());
@@ -412,7 +413,7 @@ namespace TestingLayer
             _mockComplaints.Setup(r => r.GetByIdAsync(complaint.Id)).ReturnsAsync(complaint);
             _mockComplaints.Setup(r => r.UpdateStatusWithConcurrencyAsync(
                 It.IsAny<Guid>(), It.IsAny<ComplaintStatus>(), It.IsAny<ComplaintStatus>(),
-                It.IsAny<string?>(), ComplaintResolutionAction.SuspendBooth, It.IsAny<string?>(), It.IsAny<DateTime>()))
+                It.IsAny<string?>(), ComplaintResolutionAction.SuspendBooth, It.IsAny<string?>(), It.IsAny<DateTime>(), It.IsAny<string?>()))
                 .ReturnsAsync(1);
             _mockBooths.Setup(r => r.GetByIdAsync(complaint.BoothId)).ReturnsAsync(booth);
             _mockBooths.Setup(r => r.SaveChangesAsync()).ThrowsAsync(new Exception("DB connection lost"));

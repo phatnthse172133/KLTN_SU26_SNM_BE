@@ -242,7 +242,12 @@ public sealed class FoodAiProfile
     public string SearchText { get; set; } = null!;
     public float[]? Embedding { get; set; }
     public string? EmbeddingModel { get; set; }
+    /// <summary>Source fingerprint of Name + Description + Ingredient codes (not full SearchText).</summary>
     public string ContentHash { get; set; } = null!;
+    public string? AiDescription { get; set; }
+    public string? GeneratedByModel { get; set; }
+    public decimal? Confidence { get; set; }
+    public string? StructuredProfileJson { get; set; }
     public FoodAiProfileStatus Status { get; set; }
     public int Version { get; set; }
     public DateTime? EmbeddedAt { get; set; }

@@ -203,8 +203,8 @@ public class PostgresHomeDiscoveryTests
             ('51000000-0000-0000-0000-000000000001','51000000-0000-0000-0000-000000000099','pg-home-owner','hash','PG Home Owner','pg-home-owner@test.local','Local','Active',now(),now());
             INSERT INTO "NightMarket" ("Id","Name","Address","OpeningHours","ClosingHours","Status","ModerationStatus","IsDeleted","TotalBooth","CreatedAt","UpdatedAt") VALUES
             ('52000000-0000-0000-0000-000000000001','pg-home-fixture-market','pg-home-fixture-address','00:00','23:59','Active','Active',false,1,now(),now());
-            INSERT INTO "Booth" ("Id","RegistrationId","NightMarketId","BoothOwnerId","BoothName","OpenTime","CloseTime","Status","CreatedAt","UpdatedAt") VALUES
-            ('53000000-0000-0000-0000-000000000001','53000000-0000-0000-0000-000000000099','52000000-0000-0000-0000-000000000001','51000000-0000-0000-0000-000000000001','pg-home-fixture-booth','00:00','23:59','Active',now(),now());
+            INSERT INTO "Booth" ("Id","NightMarketId","BoothOwnerId","BoothName","OpenTime","CloseTime","Status","CreatedAt","UpdatedAt") VALUES
+            ('53000000-0000-0000-0000-000000000001','52000000-0000-0000-0000-000000000001','51000000-0000-0000-0000-000000000001','pg-home-fixture-booth','00:00','23:59','Active',now(),now());
             INSERT INTO "FoodCategories" ("Id","BoothId","Code","Name","IsSystem","IsActive","DisplayOrder","IsSelectable","IsDeleted","CreatedAt","UpdatedAt") VALUES
             ('54000000-0000-0000-0000-000000000001','53000000-0000-0000-0000-000000000001','PG_HOME_FIXTURE','PG home fixture',false,true,0,true,false,now(),now());
             INSERT INTO "FoodItem" ("Id","BoothId","CategoryId","Name","Description","Price","IsAvailable","IsFeatured","IsDeleted","SpiceLevel","CreatedAt","UpdatedAt") VALUES

@@ -10,8 +10,6 @@ public partial class Booth
 {
     public Guid Id { get; set; }
 
-    public Guid? RegistrationId { get; set; }
-
     public Guid NightMarketId { get; set; }
 
     public Guid BoothOwnerId { get; set; }
@@ -71,8 +69,6 @@ public partial class Booth
     public virtual User BoothOwner { get; set; } = null!;
 
     public virtual ICollection<BoothPaymentInfo> BoothPaymentInfos { get; set; } = new List<BoothPaymentInfo>();
-
-    public virtual BoothRegistration? Registration { get; set; }
 
     public virtual Zone? Zone { get; set; }
 

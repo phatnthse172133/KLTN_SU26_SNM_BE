@@ -25,7 +25,6 @@ public class AccountController : ControllerBase
 
     private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-    [Authorize(Roles = "Customer")]
     [HttpGet]
     public async Task<IActionResult> GetMyAccount(CancellationToken cancellationToken)
     {
@@ -33,7 +32,6 @@ public class AccountController : ControllerBase
         return response.Success ? Ok(response) : NotFound(response);
     }
 
-    [Authorize(Roles = "Customer")]
     [HttpPut]
     public async Task<IActionResult> UpdateMyAccount(UpdateProfileRequest request, CancellationToken cancellationToken)
     {
@@ -41,8 +39,10 @@ public class AccountController : ControllerBase
         return response.Success ? Ok(response) : NotFound(response);
     }
 
-    [Authorize(Roles = "Customer")]
+    // Keep the legacy alias while clients with an older cached bundle are
+    // still in use. New clients use /api/account/avatar.
     [HttpPost("avatar")]
+    [HttpPost("avatar/upload")]
     [EnableRateLimiting("AvatarUploadPolicy")]
     [Consumes("multipart/form-data")]
     // Allow multipart framing overhead; the storage service enforces a 5 MB file cap.
@@ -65,7 +65,6 @@ public class AccountController : ControllerBase
         return response.Success ? Ok(response) : NotFound(response);
     }
 
-    [Authorize(Roles = "Customer")]
     [HttpDelete("avatar")]
     public async Task<IActionResult> RemoveAvatar(CancellationToken cancellationToken)
     {
@@ -85,6 +84,26 @@ public class AccountController : ControllerBase
     public async Task<IActionResult> GetUsers([FromQuery] UserListQuery query, CancellationToken cancellationToken = default)
     {
         return Ok(await _service.GetUsersAsync(query, cancellationToken));
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpPost("market-owner-accounts")]
+    [EnableRateLimiting("AuthAbusePolicy")]
+    public async Task<IActionResult> CreateMarketOwnerAccount(
+        CreateMarketOwnerAccountRequest request,
+        CancellationToken cancellationToken)
+    {
+        return Ok(await _service.CreateMarketOwnerAccountAsync(CurrentUserId, request, cancellationToken));
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpPost("market-owner-accounts/{marketOwnerId:guid}/resend-invitation")]
+    [EnableRateLimiting("AuthAbusePolicy")]
+    public async Task<IActionResult> ResendMarketOwnerInvitation(
+        Guid marketOwnerId,
+        CancellationToken cancellationToken)
+    {
+        return Ok(await _service.ResendMarketOwnerInvitationAsync(CurrentUserId, marketOwnerId, cancellationToken));
     }
 
     [Authorize(Roles = "Admin")]

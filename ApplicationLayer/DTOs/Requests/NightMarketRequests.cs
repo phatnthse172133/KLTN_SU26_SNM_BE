@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 using ApplicationLayer.Helppers;
 using static DomainLayer.Enums.GeneralEnum;
 
@@ -45,7 +46,7 @@ public class CreateNightMarketRequest
 
     public TimeOnly? ClosingHours { get; set; }
 
-    [Url, StringLength(500)]
+    [StringLength(500)]
     public string? ThumbnailUrl { get; set; }
 }
 
@@ -72,5 +73,6 @@ public class UpdateNightMarketGeographicLocationRequest
 public class PatchNightMarketStatusRequest
 {
     [Required]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public NightMarketStatus Status { get; set; }
 }

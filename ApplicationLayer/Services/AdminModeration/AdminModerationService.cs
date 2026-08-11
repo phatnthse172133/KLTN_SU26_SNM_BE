@@ -482,6 +482,9 @@ public class AdminModerationService : IAdminModerationService
             Status = booth.Status.ToString(),
             AverageRating = booth.AverageRating,
             ComplaintCount = complaintCount,
+            IsFeatured = booth.IsFeatured,
+            PackageName = string.IsNullOrWhiteSpace(booth.PackageName) ? "Booth Basic" : booth.PackageName,
+            PackageExpiryDate = booth.PackageExpiryDate,
             CreatedAt = booth.CreatedAt,
             UpdatedAt = booth.UpdatedAt
         };
@@ -507,12 +510,12 @@ public class AdminModerationService : IAdminModerationService
             Status = booth.Status.ToString(),
             AverageRating = booth.AverageRating,
             ComplaintCount = complaintCount,
+            IsFeatured = booth.IsFeatured,
+            PackageName = string.IsNullOrWhiteSpace(booth.PackageName) ? "Booth Basic" : booth.PackageName,
+            PackageExpiryDate = booth.PackageExpiryDate,
             CreatedAt = booth.CreatedAt,
             UpdatedAt = booth.UpdatedAt,
             Documents = (booth.BoothDocuments ?? Enumerable.Empty<BoothDocument>())
-                .Concat(booth.Registration?.BoothDocuments ?? Enumerable.Empty<BoothDocument>())
-                .GroupBy(d => d.Id)
-                .Select(g => g.First())
                 .OrderBy(d => d.CreatedAt)
                 .Select(d => new BoothDocumentResponse
                 {

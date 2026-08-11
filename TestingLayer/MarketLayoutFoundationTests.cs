@@ -5,12 +5,15 @@ using ApplicationLayer.Services.LayoutEdges;
 using ApplicationLayer.Services.BoothLocations;
 using ApplicationLayer.Services.MapNavigation;
 using ApplicationLayer.Services.MarketLayouts;
+using ApplicationLayer.Services.Subscriptions;
 using AutoMapper;
 using DomainLayer.Entities;
+using DomainLayer.InterfaceRepository;
 using InfrastructureLayer.Data;
 using InfrastructureLayer.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using static DomainLayer.Enums.GeneralEnum;
 
 namespace TestingLayer;
@@ -77,9 +80,11 @@ public class MarketLayoutDistanceFoundationTests
             new LayoutEdgeRepository(db),
             new LayoutNodeRepository(db),
             new MarketLayoutRepository(db),
+            new NightMarketRepository(db),
             new MapperConfiguration(
                 configuration => configuration.AddProfile<MappingProfile>(),
-                NullLoggerFactory.Instance).CreateMapper());
+                NullLoggerFactory.Instance).CreateMapper(),
+            new Mock<ISubscriptionEntitlementService>().Object);
 
     private static async Task<SNMDbContext> CreateGraphAsync(bool calibrated)
     {

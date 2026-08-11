@@ -73,6 +73,7 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
                 Items = order.OrderDetails.OrderBy(detail => detail.CreatedAt)
                     .Select(detail => new CustomerOrderItemReadModel
                     {
+                        OrderDetailId = detail.Id,
                         FoodItemId = detail.FoodItemId,
                         FoodName = detail.FoodNameSnapshot,
                         Quantity = detail.Quantity,
@@ -103,6 +104,14 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
                         DiscountAmount = usage.DiscountAmount
                     }).FirstOrDefault()
             }).FirstOrDefaultAsync(cancellationToken);
+
+    public Task<OrderDetail?> GetCustomerOrderDetailLineAsync(Guid customerId, Guid orderDetailId, CancellationToken cancellationToken = default)
+        => _context.OrderDetails
+            .Include(detail => detail.Order)
+            .Include(detail => detail.FoodItem)
+            .FirstOrDefaultAsync(
+                detail => detail.Id == orderDetailId && detail.Order.CustomerId == customerId,
+                cancellationToken);
 
     public async Task<bool> ContainsBoothItemsAsync(Guid orderId, Guid boothId)
         => await _context.OrderDetails

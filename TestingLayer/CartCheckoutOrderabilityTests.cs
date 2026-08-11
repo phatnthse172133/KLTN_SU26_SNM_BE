@@ -241,7 +241,6 @@ public sealed class CartCheckoutOrderabilityTests
         var booth = new Booth
         {
             Id = Guid.NewGuid(),
-            RegistrationId = Guid.NewGuid(),
             NightMarketId = market.Id,
             BoothOwnerId = Guid.NewGuid(),
             BoothName = "Booth",

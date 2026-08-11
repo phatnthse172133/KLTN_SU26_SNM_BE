@@ -17,7 +17,7 @@ public class CreateFoodItemV2Request
     [Required, StringLength(200)] public string Name { get; set; } = string.Empty;
     [StringLength(2000)] public string? Description { get; set; }
     [Range(0.01, 999999999)] public decimal Price { get; set; }
-    [Url, StringLength(500)] public string? ThumbnailUrl { get; set; }
+    [StringLength(500)] public string? ThumbnailUrl { get; set; }
     public bool IsAvailable { get; set; } = true;
     public bool IsFeatured { get; set; }
     [JsonConverter(typeof(NullableEnumJsonConverter<FoodCourse>))] public FoodCourse? PrimaryCourse { get; set; }

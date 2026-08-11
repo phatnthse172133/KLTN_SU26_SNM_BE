@@ -13,21 +13,21 @@ namespace ApplicationLayer.DTOs.Requests
         public Guid BoothId { get; set; }
 
         //[Required(ErrorMessage = "ClientId không được để trống.")]
-        public string ClientId { get; set; }
+        public string? ClientId { get; set; }
 
         //[Required(ErrorMessage = "ApiKey không được để trống.")]
-        public string ApiKey { get; set; }
+        public string? ApiKey { get; set; }
 
         //[Required(ErrorMessage = "ChecksumKey không được để trống.")]
-        public string ChecksumKey { get; set; }
+        public string? ChecksumKey { get; set; }
 
         //[Required(ErrorMessage = "PayoutClientId không được để trống.")]
-        public string PayoutClientId { get; set; }
+        public string? PayoutClientId { get; set; }
 
         //[Required(ErrorMessage = "PayoutApiKey không được để trống.")]
-        public string PayoutApiKey { get; set; }
+        public string? PayoutApiKey { get; set; }
 
         //[Required(ErrorMessage = "PayoutChecksumKey không được để trống.")]
-        public string PayoutChecksumKey { get; set; }
+        public string? PayoutChecksumKey { get; set; }
     }
 }

@@ -385,11 +385,9 @@ public class LayoutGeneratorService : ILayoutGeneratorService
             .ToList();
         if (junctions.Any())
         {
-            // Chain all zone junctions together (J1↔J2↔J3…) so every zone is reachable
-            for (int i = 0; i < junctions.Count - 1; i++)
-            {
-                newEdges.Add(MakeEdge(layout.Id, junctions[i].Id, junctions[i + 1].Id, junctions[i], newNodes, now));
-            }
+            // Build a grid-like mesh of junction edges so every zone is reachable
+            // with shorter, more natural paths than a single linear chain.
+            ConnectJunctionsAsGrid(layout.Id, junctions, newNodes, newEdges, now);
 
             // Connect each Entrance/Exit to its closest Junction
             foreach (var utilityNode in entrances.Concat(exits))
@@ -407,6 +405,81 @@ public class LayoutGeneratorService : ILayoutGeneratorService
     }
 
     // ── Private helpers ──────────────────────────────────────────────────────
+
+    private static void ConnectJunctionsAsGrid(
+        Guid layoutId,
+        List<LayoutNode> junctions,
+        IReadOnlyList<LayoutNode> allNodes,
+        List<LayoutEdge> edges,
+        DateTime now)
+    {
+        if (junctions.Count <= 1)
+            return;
+
+        // Group junctions into rows by Y proximity.  A tolerance of 20% of the
+        // average junction spacing avoids splitting a row when the generator
+        // places junctions at slightly different Y values within the same row.
+        var sortedByY = junctions.OrderBy(j => j.Ycoordinate).ThenBy(j => j.Xcoordinate).ToList();
+        var yTolerance = Math.Max(10.0, (double)(sortedByY[^1].Ycoordinate - sortedByY[0].Ycoordinate) / Math.Max(1, sortedByY.Count) * 0.3);
+
+        var rows = new List<List<LayoutNode>>();
+        foreach (var junction in sortedByY)
+        {
+            if (rows.Count > 0 && Math.Abs((double)(junction.Ycoordinate - rows[^1][0].Ycoordinate)) <= yTolerance)
+                rows[^1].Add(junction);
+            else
+                rows.Add([junction]);
+        }
+
+        // Ensure each row is sorted by X for horizontal chaining
+        foreach (var row in rows)
+            row.Sort((a, b) => a.Xcoordinate.CompareTo(b.Xcoordinate));
+
+        // Horizontal edges: connect adjacent junctions within each row
+        foreach (var row in rows)
+        {
+            for (int i = 0; i < row.Count - 1; i++)
+            {
+                edges.Add(MakeEdge(layoutId, row[i].Id, row[i + 1].Id, row[i], allNodes, now));
+            }
+        }
+
+        // Vertical edges: connect junctions in the same column across consecutive rows
+        for (int r = 0; r < rows.Count - 1; r++)
+        {
+            var upperRow = rows[r];
+            var lowerRow = rows[r + 1];
+
+            // For each junction in the upper row, connect to the closest
+            // junction in the lower row that hasn't been connected yet.
+            var lowerUsed = new HashSet<Guid>();
+            foreach (var upper in upperRow)
+            {
+                var bestLower = lowerRow
+                    .Where(l => !lowerUsed.Contains(l.Id))
+                    .OrderBy(l => Math.Abs(l.Xcoordinate - upper.Xcoordinate))
+                    .ThenBy(l => Math.Abs(l.Ycoordinate - upper.Ycoordinate))
+                    .FirstOrDefault();
+
+                if (bestLower != null)
+                {
+                    lowerUsed.Add(bestLower.Id);
+                    edges.Add(MakeEdge(layoutId, upper.Id, bestLower.Id, upper, allNodes, now));
+                }
+            }
+
+            // Connect any remaining unconnected lower-row junctions to their
+            // closest upper-row junction so no zone is left disconnected.
+            foreach (var lower in lowerRow.Where(l => !lowerUsed.Contains(l.Id)))
+            {
+                var closestUpper = upperRow
+                    .OrderBy(u => Math.Abs(u.Xcoordinate - lower.Xcoordinate))
+                    .ThenBy(u => Math.Abs(u.Ycoordinate - lower.Ycoordinate))
+                    .First();
+                edges.Add(MakeEdge(layoutId, closestUpper.Id, lower.Id, closestUpper, allNodes, now));
+            }
+        }
+    }
 
     private static (List<LayoutBlock> blocks, List<string> errors, List<string> warnings)
         BuildZoneBlocks(

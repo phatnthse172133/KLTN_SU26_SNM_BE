@@ -35,7 +35,11 @@ namespace ApplicationLayer.DTOs.Subscriptions
         public bool HasPendingRequest { get; set; }
         public long? PayOSOrderCode { get; set; }
         public Guid? PendingSubscriptionId { get; set; }
+        public string? PendingPackageCode { get; set; }
         public string? PendingPackageName { get; set; }
+        public string? PendingStatus { get; set; }
+        public DateTime? PendingExpiresAt { get; set; }
+        // Kept during the client transition; new clients use PendingExpiresAt.
         public DateTime? PendingPaymentExpiresAt { get; set; }
     }
 

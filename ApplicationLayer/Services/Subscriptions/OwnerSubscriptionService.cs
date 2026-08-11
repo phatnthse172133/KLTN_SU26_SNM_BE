@@ -59,7 +59,8 @@ namespace ApplicationLayer.Services.Subscriptions
         {
             await EnsureBoothOwnershipAsync(ownerId, boothId, ct);
             var sub = await _repo.GetActiveBoothSubscriptionAsync(boothId, ct);
-            var hasPending = await _repo.HasPendingBoothSubscriptionAsync(boothId, ct);
+            var pending = await _repo.GetPendingBoothSubscriptionAsync(boothId, ct);
+            var hasPending = pending != null || await _repo.HasPendingBoothSubscriptionAsync(boothId, ct);
 
             if (sub == null)
             {
@@ -74,11 +75,17 @@ namespace ApplicationLayer.Services.Subscriptions
                     DaysRemaining = 0,
                     Entitlements = EntitlementHelper.SerializeBooth(BoothEntitlements.Free),
                     PaidAmount = 0,
-                    HasPendingRequest = hasPending
+                    HasPendingRequest = hasPending,
+                    PendingSubscriptionId = pending?.Id,
+                    PendingPackageCode = pending?.Package?.Code,
+                    PendingPackageName = pending?.Package?.PackageName,
+                    PendingStatus = pending?.Status.ToString(),
+                    PendingExpiresAt = pending?.PaymentExpiresAt,
+                    PendingPaymentExpiresAt = pending?.PaymentExpiresAt,
                 });
             }
 
-            return ApiResponse<CurrentSubscriptionResponse>.SuccessResponse(MapBoothCurrent(sub, hasPending));
+            return ApiResponse<CurrentSubscriptionResponse>.SuccessResponse(MapBoothCurrent(sub, hasPending, pending));
         }
 
         public async Task<ApiResponse<List<SubscriptionHistoryItem>>> GetBoothHistoryAsync(Guid ownerId, Guid boothId, CancellationToken ct = default)
@@ -93,7 +100,17 @@ namespace ApplicationLayer.Services.Subscriptions
             await EnsureBoothOwnershipAsync(ownerId, boothId, ct);
             var (pkg, policy, price, durationDays, amount) = await ResolvePackageAndPriceAsync(request.PackageId, request.DurationDays, PackageType.Booth, ct);
 
-            // Auto-cancel stale pending payment for a different package before proceeding
+            var pending = await _repo.GetPendingBoothSubscriptionAsync(boothId, ct);
+            if (pending != null && pending.PackageId == pkg.Id)
+            {
+                var resumed = await HandlePendingBoothPaymentAsync(pending, pkg, durationDays, ct);
+                if (resumed != null)
+                    return resumed;
+            }
+
+            // A pending payment for a different package is cancelled before the new
+            // selection starts. The same-package path above resumes rather than
+            // returning a generic conflict.
             await AutoCancelStalePendingBoothPaymentAsync(boothId, pkg.Id, ct);
 
             var active = await _repo.GetActiveBoothSubscriptionAsync(boothId, ct);
@@ -169,12 +186,21 @@ namespace ApplicationLayer.Services.Subscriptions
                 return ApiResponse<PayOSPaymentResponseDto>.SuccessResponse(
                     MapDirectActivationResponse(current.Id, pkg.PackageName, resolvedDuration, 0));
 
+            var pending = await _repo.GetPendingBoothSubscriptionAsync(boothId, ct);
+            if (pending != null && pending.PackageId == pkg.Id)
+            {
+                var resumed = await HandlePendingBoothPaymentAsync(pending, pkg, resolvedDuration, ct);
+                if (resumed != null)
+                    return resumed;
+            }
+
             var policyAcceptance = ValidateAndSnapshotPolicy(policy, request.AcceptedPolicy, request.AcceptedPolicyVersion);
 
             if (amount <= 0)
                 throw AppException.BadRequest("Package price must be greater than zero.", "INVALID_PACKAGE_PRICE");
 
-            // Auto-cancel stale pending payment before proceeding with renewal
+            // A different pending package is closed before a new renewal begins.
+            // The matching-package path above resumes its existing payment link.
             await AutoCancelStalePendingBoothPaymentAsync(boothId, pkg.Id, ct);
 
             var now = DateTime.UtcNow;
@@ -798,6 +824,102 @@ namespace ApplicationLayer.Services.Subscriptions
         }
 
         /// <summary>
+        /// Reopens a Booth Owner's own pending payment for the same package.
+        /// This mirrors the market-owner flow: retrying a payment is not a new
+        /// purchase and must not be rejected as a subscription conflict.
+        /// </summary>
+        private async Task<ApiResponse<PayOSPaymentResponseDto>?> HandlePendingBoothPaymentAsync(
+            BoothSubscription pending, Package targetPkg, int durationDays, CancellationToken ct)
+        {
+            var now = DateTime.UtcNow;
+            var isExpired = pending.PaymentExpiresAt.HasValue && pending.PaymentExpiresAt.Value <= now;
+
+            if (!isExpired && pending.PackageId != targetPkg.Id)
+                throw AppException.Conflict("You already have a pending payment for a different package. Complete or cancel it first.", "PENDING_PAYMENT_EXISTS");
+
+            if (pending.PayOSOrderCode.HasValue)
+            {
+                try
+                {
+                    var paymentStatus = await _payos.GetPaymentStatusAsync(pending.PayOSOrderCode.Value);
+                    if (paymentStatus != null)
+                    {
+                        if (string.Equals(paymentStatus.Status, "PAID", StringComparison.OrdinalIgnoreCase))
+                        {
+                            return ApiResponse<PayOSPaymentResponseDto>.SuccessResponse(
+                                new PayOSPaymentResponseDto
+                                {
+                                    SubscriptionId = pending.Id,
+                                    OrderCode = pending.PayOSOrderCode.Value,
+                                    PackageName = targetPkg.PackageName,
+                                    DurationDays = durationDays,
+                                    Amount = pending.PaidAmount,
+                                    Status = "AwaitingWebhook",
+                                },
+                                "Payment has been confirmed. Your subscription is being activated.");
+                        }
+
+                        if (!isExpired && string.Equals(paymentStatus.Status, "PENDING", StringComparison.OrdinalIgnoreCase))
+                        {
+                            return await RecreatePendingBoothPaymentLinkAsync(
+                                pending,
+                                targetPkg.PackageName,
+                                durationDays,
+                                "Your pending payment has been resumed. Please complete the payment.",
+                                ct);
+                        }
+                    }
+                }
+                catch
+                {
+                    // The provider status is advisory here. A fresh link below is
+                    // safer than leaving the owner without a way to continue.
+                }
+            }
+
+            if (!isExpired && pending.PackageId == targetPkg.Id && pending.PayOSOrderCode.HasValue)
+            {
+                return await RecreatePendingBoothPaymentLinkAsync(
+                    pending,
+                    targetPkg.PackageName,
+                    durationDays,
+                    "A new payment link has been created. Please complete the payment.",
+                    ct);
+            }
+
+            await _repo.CancelBoothSubscriptionAsync(pending.Id, ct);
+            await _repo.SaveChangesAsync(ct);
+            return null;
+        }
+
+        private async Task<ApiResponse<PayOSPaymentResponseDto>> RecreatePendingBoothPaymentLinkAsync(
+            BoothSubscription pending,
+            string packageName,
+            int durationDays,
+            string message,
+            CancellationToken ct)
+        {
+            if (pending.PayOSOrderCode.HasValue)
+            {
+                try { await _payos.CancelPaymentLinkAsync(pending.PayOSOrderCode.Value); }
+                catch { }
+            }
+
+            var orderCode = await _orderCodeGenerator.GenerateAsync(PayOSOrderSource.BoothSubscription);
+            var payment = await _payos.CreatePaymentLinkAsync(
+                BuildSubscriptionPaymentRequest(orderCode, pending.PaidAmount, pending.Id, "booth"));
+
+            pending.PayOSOrderCode = orderCode;
+            pending.PayOSPaymentLinkId = payment.PaymentLinkId;
+            pending.PaymentExpiresAt = ParsePayOSExpiry(payment.ExpiresAt);
+            await _repo.SaveChangesAsync(ct);
+
+            return ApiResponse<PayOSPaymentResponseDto>.SuccessResponse(
+                MapPayOSResponse(pending.Id, packageName, durationDays, pending.PaidAmount, payment, "PendingPaymentResumed"),
+                message);
+        }
+
+        /// <summary>
         /// Handles an existing pending market subscription payment.
         /// Returns a response if the pending payment is resolved (resumed/awaiting/paid),
         /// or null if the caller should proceed with a new purchase (pending was cancelled/expired).
@@ -906,13 +1028,20 @@ namespace ApplicationLayer.Services.Subscriptions
 
         private PayOSPaymentRequest BuildSubscriptionPaymentRequest(long orderCode, decimal amount, Guid subscriptionId, string flow)
         {
+            var returnUrl = flow == "booth" && !string.IsNullOrWhiteSpace(_payOSSettings.BoothReturnUrl)
+                ? _payOSSettings.BoothReturnUrl
+                : _payOSSettings.ReturnUrl;
+            var cancelUrl = flow == "booth" && !string.IsNullOrWhiteSpace(_payOSSettings.BoothCancelUrl)
+                ? _payOSSettings.BoothCancelUrl
+                : _payOSSettings.CancelUrl;
+
             return new PayOSPaymentRequest
             {
                 OrderCode = orderCode,
                 Amount = amount,
                 Description = $"SNM {orderCode}",
-                ReturnUrl = AppendCallbackContext(_payOSSettings.ReturnUrl, flow, subscriptionId),
-                CancelUrl = AppendCallbackContext(_payOSSettings.CancelUrl, flow, subscriptionId),
+                ReturnUrl = AppendCallbackContext(returnUrl, flow, subscriptionId),
+                CancelUrl = AppendCallbackContext(cancelUrl, flow, subscriptionId),
             };
         }
 
@@ -998,7 +1127,7 @@ namespace ApplicationLayer.Services.Subscriptions
             return daysRemaining > 0 ? daysRemaining : 0;
         }
 
-        private static CurrentSubscriptionResponse MapBoothCurrent(BoothSubscription sub, bool hasPending)
+        private static CurrentSubscriptionResponse MapBoothCurrent(BoothSubscription sub, bool hasPending, BoothSubscription? pendingInfo = null)
         {
             var daysRemaining = CalculateDaysRemaining(sub.EndDate, sub.Status);
             return new CurrentSubscriptionResponse
@@ -1018,6 +1147,12 @@ namespace ApplicationLayer.Services.Subscriptions
                 PaidAmount = sub.PaidAmount,
                 HasPendingRequest = hasPending,
                 PayOSOrderCode = sub.PayOSOrderCode,
+                PendingSubscriptionId = pendingInfo?.Id,
+                PendingPackageCode = pendingInfo?.Package?.Code,
+                PendingPackageName = pendingInfo?.Package?.PackageName,
+                PendingStatus = pendingInfo?.Status.ToString(),
+                PendingExpiresAt = pendingInfo?.PaymentExpiresAt,
+                PendingPaymentExpiresAt = pendingInfo?.PaymentExpiresAt,
             };
         }
 
@@ -1040,7 +1175,10 @@ namespace ApplicationLayer.Services.Subscriptions
                 HasPendingRequest = hasPending,
                 PayOSOrderCode = sub.PayOSOrderCode,
                 PendingSubscriptionId = pendingInfo?.Id,
+                PendingPackageCode = pendingInfo?.Package?.Code,
                 PendingPackageName = pendingInfo?.Package?.PackageName,
+                PendingStatus = pendingInfo?.Status.ToString(),
+                PendingExpiresAt = pendingInfo?.PaymentExpiresAt,
                 PendingPaymentExpiresAt = pendingInfo?.PaymentExpiresAt,
             };
         }

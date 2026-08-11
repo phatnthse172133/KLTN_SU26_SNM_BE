@@ -38,6 +38,9 @@ public class LayoutGraphValidationService : ILayoutGraphValidationService
         if (!nodes.Any(x => x.NodeType == LayoutNodeType.Entrance))
             errors.Add("Layout must have at least one entrance.");
 
+        if (!nodes.Any(x => x.NodeType == LayoutNodeType.Exit))
+            errors.Add("Layout must have at least one exit.");
+
         // BoothSlot support: require at least one Junction when booth slots exist.
         // Junctions are auto-generated per Zone by the layout generator; if the market owner
         // manually placed BoothSlots without the generator they must add a Junction manually.

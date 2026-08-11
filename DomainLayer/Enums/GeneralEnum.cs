@@ -98,7 +98,9 @@ namespace DomainLayer.Enums
             Exit = 2,        // Cổng ra của chợ, có thể dùng làm điểm bắt đầu hoặc điểm đích
             BoothAccess = 3, // Điểm tiếp cận một gian hàng, dùng để gán BoothLocation và tìm đường đến Booth
             Landmark = 4,    // Địa điểm nổi bật/dễ nhận biết như sân khấu, nhà vệ sinh hoặc khu check-in
-            BoothSlot = 5    // Vị trí slot thực tế trên layout dành riêng cho cinema-layout map.
+            BoothSlot = 5,   // Vị trí slot thực tế trên layout dành riêng cho cinema-layout map.
+            Restroom = 6,
+            Information = 7
         }
 
         public enum NightMarketStatus

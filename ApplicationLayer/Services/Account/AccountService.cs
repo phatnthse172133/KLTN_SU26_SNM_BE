@@ -179,8 +179,8 @@ public class AccountService : IAccountService
             "Market Owner account created. The invitation email is queued for delivery.");
     }
 
-    public async Task<ApiResponse<IReadOnlyCollection<BoothOwnerAccountInvitationResponse>>> GetCreatedBoothOwnerAccountsAsync(
-        Guid marketOwnerId,
+    public async Task<ApiResponse<PaginationResp<BoothOwnerAccountInvitationResponse>>> GetCreatedBoothOwnerAccountsAsync(
+        Guid marketOwnerId, BoothOwnerAccountListRequest request,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -188,24 +188,32 @@ public class AccountService : IAccountService
             .OrderByDescending(user => user.CreatedAt)
             .ToList();
 
-        if (accounts.Count == 0)
-        {
-            return ApiResponse<IReadOnlyCollection<BoothOwnerAccountInvitationResponse>>.SuccessResponse(
-                Array.Empty<BoothOwnerAccountInvitationResponse>());
-        }
-
         var accountIds = accounts.Select(user => user.Id).ToList();
         var invitations = (await _outbox.FindAsync(item =>
                 accountIds.Contains(item.ReferenceId) && item.EmailType == BoothOwnerInvitationType))
             .ToDictionary(item => item.ReferenceId);
 
-        IReadOnlyCollection<BoothOwnerAccountInvitationResponse> response = accounts
+        var normalizedKeyword = request.Keyword?.Trim();
+        var normalizedStatus = request.InvitationStatus?.Trim();
+        var response = accounts
             .Select(user => invitations.TryGetValue(user.Id, out var invitation)
                 ? ToInvitationResponse(user, invitation.Status, invitation.SentAt)
                 : ToInvitationResponse(user, "NotQueued"))
+            .Where(item => string.IsNullOrWhiteSpace(normalizedKeyword)
+                || item.FullName.Contains(normalizedKeyword, StringComparison.OrdinalIgnoreCase)
+                || item.Email.Contains(normalizedKeyword, StringComparison.OrdinalIgnoreCase)
+                || item.UserName.Contains(normalizedKeyword, StringComparison.OrdinalIgnoreCase))
+            .Where(item => string.IsNullOrWhiteSpace(normalizedStatus)
+                || string.Equals(item.InvitationStatus, normalizedStatus, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
-        return ApiResponse<IReadOnlyCollection<BoothOwnerAccountInvitationResponse>>.SuccessResponse(response);
+        var pageItems = response
+            .Skip((request.Page - 1) * request.PageSize)
+            .Take(request.PageSize)
+            .ToList();
+
+        return ApiResponse<PaginationResp<BoothOwnerAccountInvitationResponse>>.SuccessResponse(
+            PaginationResp<BoothOwnerAccountInvitationResponse>.Create(pageItems, response.Count, request));
     }
 
     public async Task<ApiResponse<BoothOwnerAccountInvitationResponse>> ResendBoothOwnerInvitationAsync(

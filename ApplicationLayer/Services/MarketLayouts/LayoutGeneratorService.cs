@@ -187,9 +187,9 @@ public class LayoutGeneratorService : ILayoutGeneratorService
 
             // ── Junction node (one per Zone, preserved or newly created) ──
             Guid junctionId;
-            // Keep the aisle point in the reserved corridor above the Zone,
-            // aligned near its right edge so it never covers the Zone title.
-            decimal junctionX = (decimal)Math.Max(zonePreview.X + 18, zonePreview.X + zonePreview.Width - 18);
+            // Keep the aisle point in the reserved corridor above the Zone.
+            // Centring it creates a clear shared walkway across each zone row.
+            decimal junctionX = (decimal)(zonePreview.X + zonePreview.Width / 2);
             decimal junctionY = (decimal)(zonePreview.Y + JunctionOffsetY);
 
             if (!existingJunctionsByZone.TryGetValue(zone.Id, out var existingJunction))

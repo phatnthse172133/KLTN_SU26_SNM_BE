@@ -25,7 +25,7 @@ public sealed class AiV2CutoverTests
     }
 
     [Fact]
-    public void FoodAiProfile_IsDeterministic_IgnoresTransientAndLegacyData_AndMarksStaleOnSemanticChange()
+    public void FoodAiProfile_IsDeterministic_IgnoresTransientAndLegacyData_AndMarksPendingOnSourceChange()
     {
         var food = Food();
         food.FoodItemTags.Add(new() { FoodTagId = Guid.NewGuid(), FoodTag = new() { Code = "OTHER_QUICK_SERVE", Name = "Quick" } });
@@ -33,15 +33,45 @@ public sealed class AiV2CutoverTests
         var now = DateTime.UtcNow;
         generator.Rebuild(food, now);
         var hash = food.AiProfile!.ContentHash;
+        Assert.Equal(FoodAiProfileStatus.PENDING, food.AiProfile.Status);
         Assert.DoesNotContain("quick", food.AiProfile.SearchText, StringComparison.OrdinalIgnoreCase);
         food.Price += 10000; food.IsAvailable = false;
         generator.Rebuild(food, now.AddMinutes(1));
         Assert.Equal(hash, food.AiProfile.ContentHash);
+        // Taste is not part of source hash — READY/PENDING stay without source invalidation.
         food.TasteProfiles.Add(new() { FoodItemId = food.Id, TasteProfileId = Guid.NewGuid(), TasteProfile = Catalog<TasteProfile>("TASTE_SWEET") });
         generator.Rebuild(food, now.AddMinutes(2));
+        Assert.Equal(hash, food.AiProfile.ContentHash);
+        Assert.Equal(FoodAiProfileStatus.PENDING, food.AiProfile.Status);
+        Assert.Contains("taste_sweet", food.AiProfile.SearchText, StringComparison.OrdinalIgnoreCase);
+        food.Name = "Bò nướng mật ong";
+        food.AiProfile.Status = FoodAiProfileStatus.READY;
+        food.AiProfile.AiDescription = "old";
+        food.AiProfile.Embedding = [0.1f];
+        generator.Rebuild(food, now.AddMinutes(3));
         Assert.NotEqual(hash, food.AiProfile.ContentHash);
-        Assert.Equal(FoodAiProfileStatus.STALE, food.AiProfile.Status);
+        Assert.Equal(FoodAiProfileStatus.PENDING, food.AiProfile.Status);
+        Assert.Null(food.AiProfile.AiDescription);
         Assert.Null(food.AiProfile.Embedding);
+    }
+
+    [Fact]
+    public void FoodAiProfile_ReadyUnchangedSource_SkipsRegeneration()
+    {
+        var food = Food();
+        var generator = new FoodAiProfileGenerator();
+        var now = DateTime.UtcNow;
+        generator.Rebuild(food, now);
+        food.AiProfile!.Status = FoodAiProfileStatus.READY;
+        food.AiProfile.AiDescription = "kept";
+        food.AiProfile.SearchText = "custom-ai-merged-text";
+        var hash = food.AiProfile.ContentHash;
+        food.TasteProfiles.Add(new() { FoodItemId = food.Id, TasteProfileId = Guid.NewGuid(), TasteProfile = Catalog<TasteProfile>("TASTE_SWEET") });
+        generator.Rebuild(food, now.AddMinutes(1));
+        Assert.Equal(hash, food.AiProfile.ContentHash);
+        Assert.Equal(FoodAiProfileStatus.READY, food.AiProfile.Status);
+        Assert.Equal("kept", food.AiProfile.AiDescription);
+        Assert.Equal("custom-ai-merged-text", food.AiProfile.SearchText);
     }
 
     [Fact]

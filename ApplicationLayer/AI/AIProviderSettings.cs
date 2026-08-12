@@ -4,10 +4,11 @@ public class AIProviderSettings
 {
     public const string SectionName = "AIProvider";
 
-    public string Provider { get; set; } = "Gemini";
+    /// <summary>V1 is local-only; external LLM access is configured under the OpenAI / V2 path.</summary>
+    public string Provider { get; set; } = "Local";
     public string ApiKey { get; set; } = string.Empty;
-    public string Model { get; set; } = "gemini-1.5-flash";
-    public string BaseUrl { get; set; } = "https://generativelanguage.googleapis.com/v1beta";
+    public string Model { get; set; } = string.Empty;
+    public string BaseUrl { get; set; } = string.Empty;
     public bool EnableExternalProvider { get; set; }
     public int CandidateLimit { get; set; } = 200;
     public int MaxPreferenceTags { get; set; } = 20;

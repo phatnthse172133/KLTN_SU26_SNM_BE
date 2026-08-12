@@ -136,8 +136,9 @@ public sealed class CustomerDiscoveryService : ICustomerDiscoveryService
         BasePrice = food.BasePrice, EffectivePrice = food.EffectivePrice,
         IsAvailable = food.IsAvailable, CanOrder = food.IsAvailable && CustomerAvailability.IsOpenNow(food, localTime),
         BoothId = food.BoothId, BoothName = food.BoothName,
-        MarketId = food.MarketId, MarketName = food.MarketName, IsFeatured = food.IsFeatured
-        , PrimaryCourse = food.PrimaryCourse, EstimatedServingCount = food.EstimatedServingCount, IsShareable = food.IsShareable
+        MarketId = food.MarketId, MarketName = food.MarketName, IsFeatured = food.IsFeatured,
+        AverageRating = food.AverageRating, ReviewCount = food.ReviewCount,
+        PrimaryCourse = food.PrimaryCourse, EstimatedServingCount = food.EstimatedServingCount, IsShareable = food.IsShareable
     };
 
     private static string? NormalizeSearch(string? search) => string.IsNullOrWhiteSpace(search) ? null : search.Trim();

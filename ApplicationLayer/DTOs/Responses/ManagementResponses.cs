@@ -11,6 +11,7 @@ public class ManagedUserResponse
     public string? AvatarUrl { get; set; }
     public string Role { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
+    public bool MustChangePassword { get; set; }
     public DateTime CreatedAt { get; set; }
 }
 
@@ -67,12 +68,4 @@ public class BoothDocumentResponse
     public string VerificationStatus { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
-}
-
-public class RegistrationCountsResponse
-{
-    public int PendingReview { get; set; }
-    public int Approved { get; set; }
-    public int Rejected { get; set; }
-    public int Total { get; set; }
 }

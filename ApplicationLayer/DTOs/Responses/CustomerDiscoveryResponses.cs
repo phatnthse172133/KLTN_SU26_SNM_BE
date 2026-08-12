@@ -71,6 +71,8 @@ public class CustomerFoodListItemResponse
     public Guid MarketId { get; set; }
     public string MarketName { get; set; } = string.Empty;
     public bool IsFeatured { get; set; }
+    public decimal AverageRating { get; set; }
+    public int ReviewCount { get; set; }
     [JsonConverter(typeof(NullableEnumJsonConverter<FoodCourse>))] public FoodCourse? PrimaryCourse { get; set; }
     public int? EstimatedServingCount { get; set; }
     public bool? IsShareable { get; set; }

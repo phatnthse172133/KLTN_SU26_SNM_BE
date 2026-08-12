@@ -17,6 +17,22 @@ public class ReviewRepository : GenericRepository<Review>, IReviewRepository
         => await QueryWithReply()
             .FirstOrDefaultAsync(review => review.Id == reviewId);
 
+    public Task<Review?> GetByOrderIdAsync(Guid orderId, CancellationToken cancellationToken = default)
+        => _dbSet.AsNoTracking().FirstOrDefaultAsync(review => review.OrderId == orderId, cancellationToken);
+
+    public async Task<IReadOnlyDictionary<Guid, Review>> GetByOrderIdsAsync(IEnumerable<Guid> orderIds, CancellationToken cancellationToken = default)
+    {
+        var ids = orderIds.Distinct().ToList();
+        if (ids.Count == 0)
+            return new Dictionary<Guid, Review>();
+
+        var reviews = await _dbSet.AsNoTracking()
+            .Where(review => ids.Contains(review.OrderId))
+            .ToListAsync(cancellationToken);
+
+        return reviews.ToDictionary(review => review.OrderId);
+    }
+
     public async Task<ReviewReply> UpsertReplyAsync(Guid reviewId, Guid boothOwnerId, string content)
     {
         var now = DateTime.UtcNow;
@@ -134,6 +150,32 @@ public class ReviewRepository : GenericRepository<Review>, IReviewRepository
             .ThenByDescending(review => review.Id)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return new PagedResult<Review>(items, totalCount);
+    }
+
+    public async Task<PagedResult<Review>> GetPagedByMarketOwnerWithReplyAsync(
+        Guid marketOwnerId, short? rating, Guid? marketId, int page, int pageSize, CancellationToken cancellationToken = default)
+    {
+        var query = from review in QueryWithReply()
+                    join booth in _context.Booths on review.BoothId equals booth.Id
+                    join market in _context.NightMarkets on booth.NightMarketId equals market.Id
+                    where market.MarketOwnerId == marketOwnerId && !market.IsDeleted
+                    select new { review, booth, market };
+
+        if (rating.HasValue)
+            query = query.Where(x => x.review.Rating == rating.Value);
+
+        if (marketId.HasValue)
+            query = query.Where(x => x.market.Id == marketId.Value);
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query
+            .OrderByDescending(x => x.review.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(x => x.review)
             .ToListAsync(cancellationToken);
 
         return new PagedResult<Review>(items, totalCount);

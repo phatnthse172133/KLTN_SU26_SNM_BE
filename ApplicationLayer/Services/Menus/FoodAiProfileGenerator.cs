@@ -11,26 +11,60 @@ public sealed class FoodAiProfileGenerator : IFoodAiProfileGenerator
 {
     public void Rebuild(FoodItem food, DateTime utcNow)
     {
-        var text = BuildSearchText(food);
-        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
+        var searchText = BuildSearchText(food);
+        var sourceHash = ComputeSourceHash(food);
         var profile = food.AiProfile;
         if (profile is null)
         {
-            food.AiProfile = new FoodAiProfile { FoodItemId = food.Id, SearchText = text, ContentHash = hash, Status = FoodAiProfileStatus.PENDING, Version = 1, CreatedAt = utcNow, UpdatedAt = utcNow };
+            food.AiProfile = new FoodAiProfile
+            {
+                FoodItemId = food.Id,
+                SearchText = searchText,
+                ContentHash = sourceHash,
+                Status = FoodAiProfileStatus.PENDING,
+                Version = 1,
+                CreatedAt = utcNow,
+                UpdatedAt = utcNow
+            };
         }
-        else if (!string.Equals(profile.ContentHash, hash, StringComparison.Ordinal) || !string.Equals(profile.SearchText, text, StringComparison.Ordinal))
+        else if (string.Equals(profile.ContentHash, sourceHash, StringComparison.Ordinal))
         {
-            profile.SearchText = text;
-            profile.ContentHash = hash;
-            profile.Status = profile.Status == FoodAiProfileStatus.DISABLED ? FoodAiProfileStatus.DISABLED : FoodAiProfileStatus.STALE;
-            profile.Embedding = null;
-            profile.EmbeddingModel = null;
-            profile.EmbeddedAt = null;
+            // Source unchanged: READY/DISABLED skip regeneration. Still refresh local SearchText
+            // only when not READY (READY SearchText may include merged AI terms).
+            if (profile.Status is FoodAiProfileStatus.READY or FoodAiProfileStatus.DISABLED)
+            {
+                // no-op for enrichment invalidation
+            }
+            else if (!string.Equals(profile.SearchText, searchText, StringComparison.Ordinal))
+            {
+                profile.SearchText = searchText;
+                profile.UpdatedAt = utcNow;
+            }
+        }
+        else
+        {
+            profile.SearchText = searchText;
+            profile.ContentHash = sourceHash;
+            ClearEnrichmentFields(profile);
+            if (profile.Status != FoodAiProfileStatus.DISABLED)
+                profile.Status = FoodAiProfileStatus.PENDING;
             profile.Version++;
             profile.UpdatedAt = utcNow;
         }
-        food.SemanticProfileVersion = profile?.Version ?? 1;
+
+        food.SemanticProfileVersion = food.AiProfile?.Version ?? 1;
         food.SemanticProfileUpdatedAt = utcNow;
+    }
+
+    public static string ComputeSourceHash(FoodItem food)
+    {
+        var parts = new List<string?> { food.Name, food.Description };
+        parts.AddRange(food.Ingredients.OrderBy(x => x.Ingredient.Code, StringComparer.Ordinal)
+            .Select(x => x.Ingredient.Code));
+        var fingerprint = string.Join("\u001f", parts
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => Normalize(x!)));
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(fingerprint)));
     }
 
     public static string BuildSearchText(FoodItem food)
@@ -46,8 +80,29 @@ public sealed class FoodAiProfileGenerator : IFoodAiProfileGenerator
         if (food.EstimatedServingCount.HasValue) values.Add($"serves {food.EstimatedServingCount.Value}");
         values.Add(food.ServingSizeDescription);
         if (food.IsShareable == true) values.Add("shareable");
-        return string.Join(" | ", values.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => Normalize(x!)).Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal));
+        return JoinSearchTerms(values);
     }
+
+    public static string MergeSearchText(string localSearchText, IEnumerable<string?> aiTerms)
+        => JoinSearchTerms(
+            localSearchText.Split(" | ", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Concat(aiTerms));
+
+    public static void ClearEnrichmentFields(FoodAiProfile profile)
+    {
+        profile.AiDescription = null;
+        profile.GeneratedByModel = null;
+        profile.Confidence = null;
+        profile.StructuredProfileJson = null;
+        profile.Embedding = null;
+        profile.EmbeddingModel = null;
+        profile.EmbeddedAt = null;
+        profile.LastError = null;
+    }
+
+    private static string JoinSearchTerms(IEnumerable<string?> values)
+        => string.Join(" | ", values.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => Normalize(x!))
+            .Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal));
 
     private static string Normalize(string value)
         => Regex.Replace(value.Normalize(NormalizationForm.FormKC).Trim(), @"\s+", " ").ToLower(CultureInfo.InvariantCulture);

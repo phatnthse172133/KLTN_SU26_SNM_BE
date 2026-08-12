@@ -116,3 +116,18 @@ public class NightMarketImageResponse
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }
+
+public sealed class ActivationReadinessResponse
+{
+    public bool CanActivate { get; set; }
+    public List<ActivationReadinessCheckResponse> Checks { get; set; } = [];
+}
+
+public sealed class ActivationReadinessCheckResponse
+{
+    public string Code { get; set; } = string.Empty;
+    public string Message { get; set; } = string.Empty;
+    public bool Passed { get; set; }
+    public string? CtaLabel { get; set; }
+    public string? CtaAction { get; set; }
+}

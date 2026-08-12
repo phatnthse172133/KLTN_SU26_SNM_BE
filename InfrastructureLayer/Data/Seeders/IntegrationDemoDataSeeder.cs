@@ -258,15 +258,9 @@ public static class IntegrationDemoDataSeeder
 
         foreach (var booth in Booths)
         {
-            await AddIfMissingAsync(db.BoothRegistrations, RegistrationId(booth.Index), () => new BoothRegistration { Id = RegistrationId(booth.Index), OwnerId = OwnerId(booth.Index), RequestedNightMarketId = MarketId, PreferredZoneId = booth.ZoneId, PreferredLayoutNodeId = NodeId(booth.Index switch { 1 => 3, 2 => 4, 3 => 7, 4 => 8, _ => 10 }), BoothName = booth.Name, Description = booth.Description, Phone = $"0900035{booth.Index:000}", Status = BoothRegistrationStatus.Approved, CreatedAt = now, UpdatedAt = now });
-        }
-        await db.SaveChangesAsync(ct);
-
-        foreach (var booth in Booths)
-        {
             await AddIfMissingAsync(db.Booths, BoothId(booth.Index), () => new Booth
             {
-                Id = BoothId(booth.Index), RegistrationId = RegistrationId(booth.Index), NightMarketId = MarketId,
+                Id = BoothId(booth.Index), NightMarketId = MarketId,
                 BoothOwnerId = OwnerId(booth.Index), ZoneId = booth.ZoneId, BoothName = booth.Name,
                 BoothCode = $"DEMO-{booth.Index:00}", Description = booth.Description, PhoneNumber = $"0900035{booth.Index:000}",
                 SlotNumber = booth.Slot, ThumbnailUrl = FoodAssetUrl(booth.Index, 1), MapPositionX = booth.X, MapPositionY = booth.Y,
@@ -518,7 +512,6 @@ public static class IntegrationDemoDataSeeder
     public static Guid FoodId(int booth, int food) => Id($"5{booth:00}{food:00}");
     public static Guid NodeId(int i) => Id($"3{i:00}");
     private static Guid OwnerId(int i) => Id($"1{i:02}");
-    private static Guid RegistrationId(int i) => Id($"4{i:02}1");
     private static Guid LocationId(int i) => Id($"4{i:02}2");
     private static Guid CategoryId(int i) => Id($"5{i:02}0");
     private static Guid EdgeId(int i) => Id($"6{i:02}");

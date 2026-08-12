@@ -36,7 +36,7 @@ public class LayoutNodeRepository : GenericRepository<LayoutNode>, ILayoutNodeRe
     {
         var query = _dbSet.AsNoTracking().Where(node =>
             node.LayoutId == layoutId && !node.IsDeleted && node.IsAccessible &&
-            node.NodeType == LayoutNodeType.BoothAccess &&
+            node.NodeType == LayoutNodeType.BoothSlot &&
             (!zoneId.HasValue || node.ZoneId == zoneId) &&
             !_context.BoothLocations.Any(location => location.LayoutNodeId == node.Id && !location.IsDeleted));
         var total = await query.CountAsync(cancellationToken);

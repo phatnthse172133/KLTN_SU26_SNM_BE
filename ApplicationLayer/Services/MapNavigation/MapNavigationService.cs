@@ -44,7 +44,7 @@ public class MapNavigationService : IMapNavigationService
         var nodes = await _nodes.GetByLayoutAsync(layout.Id, cancellationToken: cancellationToken);
         var edges = await _edges.GetByLayoutAsync(layout.Id, cancellationToken: cancellationToken);
         var locations = await _locations.GetCustomerCurrentByLayoutAsync(layout.Id, cancellationToken);
-        var zones = await _zones.GetActiveByNightMarketIdAsync(nightMarketId, cancellationToken);
+        var zones = await _zones.GetActiveByNightMarketIdAsync(nightMarketId, cancellationToken: cancellationToken);
 
         return ApiResponse<NightMarketMapResponse>.SuccessResponse(new()
         {

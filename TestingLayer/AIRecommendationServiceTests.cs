@@ -226,13 +226,7 @@ public class AIRecommendationServiceTests
     [Fact]
     public async Task LocalIntentParser_DoesNotMergeGroupSizeIntoBudget()
     {
-        var settingsRepository = new Mock<IGenericRepository<SystemSetting>>();
-        settingsRepository.Setup(repository => repository.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<SystemSetting, bool>>>()))
-            .ReturnsAsync([]);
-        var provider = new GeminiAIProviderService(
-            new HttpClient(),
-            Options.Create(new AIProviderSettings { EnableExternalProvider = false }),
-            settingsRepository.Object);
+        var provider = new LocalOnlyAIProviderService();
 
         var intent = await provider.ParseFoodIntentAsync("Đi 4 người với ngân sách 300k", []);
 
@@ -242,14 +236,7 @@ public class AIRecommendationServiceTests
     [Fact]
     public async Task LocalIntentParser_CurrentNotSpicyOverridesSpicyKeyword()
     {
-        var settingsRepository = new Mock<IGenericRepository<SystemSetting>>();
-        settingsRepository.Setup(repository => repository.FindAsync(
-                It.IsAny<System.Linq.Expressions.Expression<Func<SystemSetting, bool>>>()))
-            .ReturnsAsync([]);
-        var provider = new GeminiAIProviderService(
-            new HttpClient(),
-            Options.Create(new AIProviderSettings { EnableExternalProvider = false }),
-            settingsRepository.Object);
+        var provider = new LocalOnlyAIProviderService();
 
         var intent = await provider.ParseFoodIntentAsync("Hôm nay tôi muốn món không cay", ["SPICY", "MILD"]);
 

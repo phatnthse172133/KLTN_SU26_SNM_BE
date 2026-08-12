@@ -305,15 +305,33 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
     public async Task<IReadOnlyCollection<FoodItem>> GetSemanticProfileBatchAsync(Guid? foodItemId, int batchSize, CancellationToken cancellationToken = default)
     {
         if (batchSize is < 1 or > 1000) throw new ArgumentOutOfRangeException(nameof(batchSize));
-        var query = ActiveQuery().Include(x => x.Category).Include(x => x.Courses)
+        var query = SemanticProfileQuery();
+        if (foodItemId.HasValue) query = query.Where(x => x.Id == foodItemId.Value);
+        return await query.OrderBy(x => x.Id).Take(batchSize).ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyCollection<FoodItem>> GetAiProfileEnrichmentBatchAsync(int batchSize, bool includeFailed, CancellationToken cancellationToken = default)
+    {
+        if (batchSize is < 1 or > 50) throw new ArgumentOutOfRangeException(nameof(batchSize));
+        var statuses = includeFailed
+            ? new[] { FoodAiProfileStatus.PENDING, FoodAiProfileStatus.STALE, FoodAiProfileStatus.FAILED }
+            : new[] { FoodAiProfileStatus.PENDING, FoodAiProfileStatus.STALE };
+        return await SemanticProfileQuery()
+            .Where(x => x.AiProfile != null && statuses.Contains(x.AiProfile.Status))
+            .OrderBy(x => x.AiProfile!.LastAttemptAt == null ? 0 : 1)
+            .ThenBy(x => x.AiProfile!.LastAttemptAt)
+            .ThenBy(x => x.Id)
+            .Take(batchSize)
+            .ToListAsync(cancellationToken);
+    }
+
+    private IQueryable<FoodItem> SemanticProfileQuery()
+        => ActiveQuery().Include(x => x.Category).Include(x => x.Courses)
             .Include(x => x.Ingredients).ThenInclude(x => x.Ingredient)
             .Include(x => x.DietaryAttributes).ThenInclude(x => x.DietaryAttribute)
             .Include(x => x.PreparationMethods).ThenInclude(x => x.PreparationMethod)
             .Include(x => x.TasteProfiles).ThenInclude(x => x.TasteProfile)
             .Include(x => x.AiProfile).AsSplitQuery();
-        if (foodItemId.HasValue) query = query.Where(x => x.Id == foodItemId.Value);
-        return await query.OrderBy(x => x.Id).Take(batchSize).ToListAsync(cancellationToken);
-    }
 
     private IQueryable<FoodItem> CustomerVisibleQuery()
         => ActiveQuery().AsNoTracking().Where(item =>
@@ -375,7 +393,9 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
             ServingTemperature = priced.FoodItem.ServingTemperature,
             EstimatedServingCount = priced.FoodItem.EstimatedServingCount,
             ServingSizeDescription = priced.FoodItem.ServingSizeDescription,
-            IsShareable = priced.FoodItem.IsShareable
+            IsShareable = priced.FoodItem.IsShareable,
+            AverageRating = priced.FoodItem.AverageRating,
+            ReviewCount = priced.FoodItem.ReviewCount
         });
 
     private async Task<PagedResult<CustomerFoodReadModel>> GetCustomerPagedInMemoryAsync(
@@ -464,6 +484,8 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
             EstimatedServingCount = item.EstimatedServingCount,
             ServingSizeDescription = item.ServingSizeDescription,
             IsShareable = item.IsShareable,
+            AverageRating = item.AverageRating,
+            ReviewCount = item.ReviewCount,
             SemanticMetadata = new CustomerFoodSemanticReadModel
             {
                 PrimaryCourse = item.Courses.SingleOrDefault(x => x.IsPrimary)?.Course,

@@ -14,6 +14,7 @@ using InfrastructureLayer.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Npgsql;
@@ -176,7 +177,14 @@ public sealed class PostgresCustomerHistoryReviewComplaintVerificationTests
                 seed.Booth, It.IsAny<Func<BoothEntitlements, bool>>(), It.IsAny<string>(), It.IsAny<string>()))
             .Returns(Task.CompletedTask);
         var service = new ReviewService(reviews, new BoothRepository(context), new OrderRepository(context),
-            mapper.Object, notificationService, entitlements.Object);
+            mapper.Object, notificationService, entitlements.Object,
+            new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ReviewSettings:EditWindowDays"] = "7"
+            }).Build(),
+            new FoodReviewRepository(context),
+            new FoodItemRepository(context),
+            Mock.Of<ApplicationLayer.Services.Storage.IFileStorageService>());
 
         var request = new UpsertReviewReplyRequest { Content = "Thank you for your feedback." };
         await service.UpsertReplyAsync(seed.Owner, reviewAId, request);
@@ -231,7 +239,8 @@ public sealed class PostgresCustomerHistoryReviewComplaintVerificationTests
             .Returns((CreateComplaintRequest request) => new Complaint
             {
                 OrderId = request.OrderId, BoothId = request.BoothId,
-                Title = request.Title.Trim(), Description = request.Description.Trim()
+                Title = (request.Title ?? "Other").Trim(), Description = request.Description.Trim(),
+                Category = request.Category
             });
         mapper.Setup(value => value.Map<ComplaintResponse>(It.IsAny<Complaint>())).Returns(new ComplaintResponse());
         var markets = new Mock<INightMarketRepository>();
@@ -240,7 +249,8 @@ public sealed class PostgresCustomerHistoryReviewComplaintVerificationTests
         var service = new ComplaintService(
             new ComplaintRepository(context), new BoothRepository(context), new OrderRepository(context),
             markets.Object, Mock.Of<ISubscriptionRepository>(), Mock.Of<IModerationRepository>(), mapper.Object,
-            PersistentNotificationService(context));
+            PersistentNotificationService(context),
+            Mock.Of<ApplicationLayer.Services.Storage.IFileStorageService>());
 
         var created = await service.CreateAsync(seed.CustomerA, new CreateComplaintRequest
         {
@@ -360,6 +370,7 @@ public sealed class PostgresCustomerHistoryReviewComplaintVerificationTests
     {
         Id = Guid.NewGuid(), CustomerId = customerId, OrderId = orderId, BoothId = boothId,
         Title = "Concurrent complaint", Description = "Concurrent duplicate verification.",
+        Category = ComplaintCategory.Other,
         Status = ComplaintStatus.Pending, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
     };
 
@@ -404,8 +415,8 @@ public sealed class PostgresCustomerHistoryReviewComplaintVerificationTests
                 (@customerA, @role, 'verify-a', 'hash', 'Customer A', 'verify-a@test.local', 'Local', 'Active', now(), now()),
                 (@customerB, @role, 'verify-b', 'hash', 'Customer B', 'verify-b@test.local', 'Local', 'Active', now(), now());
             INSERT INTO "Booth"
-                ("Id", "RegistrationId", "NightMarketId", "BoothOwnerId", "BoothName", "Status", "CreatedAt", "UpdatedAt")
-            VALUES (@booth, @registration, @market, @owner, 'Verification booth', 'Active', now(), now());
+                ("Id", "NightMarketId", "BoothOwnerId", "BoothName", "Status", "CreatedAt", "UpdatedAt")
+            VALUES (@booth, @market, @owner, 'Verification booth', 'Active', now(), now());
             INSERT INTO "FoodCategories" ("Id", "BoothId", "Code", "Name", "IsActive", "IsSelectable", "IsDeleted", "CreatedAt", "UpdatedAt")
             VALUES (@category, @booth, 'VERIFICATION_CATEGORY', 'Category', true, true, false, now(), now());
             INSERT INTO "FoodItem"
@@ -419,7 +430,6 @@ public sealed class PostgresCustomerHistoryReviewComplaintVerificationTests
         command.Parameters.AddWithValue("customerB", seed.CustomerB);
         command.Parameters.AddWithValue("role", Guid.NewGuid());
         command.Parameters.AddWithValue("booth", seed.Booth);
-        command.Parameters.AddWithValue("registration", Guid.NewGuid());
         command.Parameters.AddWithValue("category", seed.Category);
         command.Parameters.AddWithValue("food", seed.Food);
         await command.ExecuteNonQueryAsync();

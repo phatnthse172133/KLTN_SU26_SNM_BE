@@ -373,26 +373,19 @@ namespace TestingLayer
         public async Task GetBoothDetailAsync_ReturnsDetail()
         {
             var booth = CreateBooth();
-            var registrationId = Guid.NewGuid();
-            booth.RegistrationId = registrationId;
             var documentCreatedAt = DateTime.UtcNow.AddDays(-3);
-            booth.Registration = new BoothRegistration
+            booth.BoothDocuments = new List<BoothDocument>
             {
-                Id = registrationId,
-                BoothName = booth.BoothName,
-                BoothDocuments = new List<BoothDocument>
+                new()
                 {
-                    new()
-                    {
-                        Id = Guid.NewGuid(),
-                        RegistrationId = registrationId,
-                        DocumentType = BoothDocumentType.BusinessLicense,
-                        DocumentUrl = "/uploads/documents/license.pdf",
-                        FileUrl = "/uploads/documents/license.pdf",
-                        VerificationStatus = BoothDocumentStatus.PendingReview,
-                        CreatedAt = documentCreatedAt,
-                        UpdatedAt = documentCreatedAt
-                    }
+                    Id = Guid.NewGuid(),
+                    BoothId = booth.Id,
+                    DocumentType = BoothDocumentType.BusinessLicense,
+                    DocumentUrl = "/uploads/documents/license.pdf",
+                    FileUrl = "/uploads/documents/license.pdf",
+                    VerificationStatus = BoothDocumentStatus.PendingReview,
+                    CreatedAt = documentCreatedAt,
+                    UpdatedAt = documentCreatedAt
                 }
             };
             _mockModerationRepo.Setup(r => r.GetBoothDetailAsync(booth.Id, It.IsAny<CancellationToken>()))
@@ -413,7 +406,7 @@ namespace TestingLayer
         }
 
         [Fact]
-        public async Task GetBoothDetailAsync_DirectBoothLinkedDocuments_ReturnedWithoutRegistration()
+        public async Task GetBoothDetailAsync_BoothLinkedDocuments_Returned()
         {
             var booth = CreateBooth();
             booth.BoothDocuments = new List<BoothDocument>
@@ -422,7 +415,6 @@ namespace TestingLayer
                 {
                     Id = Guid.NewGuid(),
                     BoothId = booth.Id,
-                    RegistrationId = null,
                     DocumentType = BoothDocumentType.FoodSafetyCertificate,
                     DocumentUrl = "/uploads/images/booth-documents/direct.pdf",
                     FileUrl = "/uploads/images/booth-documents/direct.pdf",
@@ -445,17 +437,13 @@ namespace TestingLayer
         }
 
         [Fact]
-        public async Task GetBoothDetailAsync_DocumentInBothLinks_IsDeduplicated()
+        public async Task GetBoothDetailAsync_MultipleBoothDocuments_AllReturned()
         {
             var booth = CreateBooth();
-            var registrationId = Guid.NewGuid();
-            booth.RegistrationId = registrationId;
-            var sharedId = Guid.NewGuid();
-            var backfilled = new BoothDocument
+            var licenseDocument = new BoothDocument
             {
-                Id = sharedId,
+                Id = Guid.NewGuid(),
                 BoothId = booth.Id,
-                RegistrationId = registrationId,
                 DocumentType = BoothDocumentType.BusinessLicense,
                 DocumentUrl = "/uploads/images/booth-documents/license.png",
                 FileUrl = "/uploads/images/booth-documents/license.png",
@@ -463,11 +451,10 @@ namespace TestingLayer
                 CreatedAt = DateTime.UtcNow.AddDays(-2),
                 UpdatedAt = DateTime.UtcNow.AddDays(-2)
             };
-            var registrationOnly = new BoothDocument
+            var idDocument = new BoothDocument
             {
                 Id = Guid.NewGuid(),
-                BoothId = null,
-                RegistrationId = registrationId,
+                BoothId = booth.Id,
                 DocumentType = BoothDocumentType.OwnerIdentification,
                 DocumentUrl = "/uploads/images/booth-documents/id.png",
                 FileUrl = "/uploads/images/booth-documents/id.png",
@@ -475,13 +462,7 @@ namespace TestingLayer
                 CreatedAt = DateTime.UtcNow.AddDays(-1),
                 UpdatedAt = DateTime.UtcNow.AddDays(-1)
             };
-            booth.BoothDocuments = new List<BoothDocument> { backfilled };
-            booth.Registration = new BoothRegistration
-            {
-                Id = registrationId,
-                BoothName = booth.BoothName,
-                BoothDocuments = new List<BoothDocument> { backfilled, registrationOnly }
-            };
+            booth.BoothDocuments = new List<BoothDocument> { licenseDocument, idDocument };
             _mockModerationRepo.Setup(r => r.GetBoothDetailAsync(booth.Id, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(booth);
             _mockModerationRepo.Setup(r => r.CountComplaintsByBoothAsync(booth.Id, It.IsAny<CancellationToken>()))
@@ -492,8 +473,8 @@ namespace TestingLayer
             var result = await _service.GetBoothDetailAsync(booth.Id);
 
             Assert.Equal(2, result.Data!.Documents.Count);
-            Assert.Single(result.Data.Documents, d => d.Id == sharedId);
-            Assert.Single(result.Data.Documents, d => d.Id == registrationOnly.Id);
+            Assert.Single(result.Data.Documents, d => d.Id == licenseDocument.Id);
+            Assert.Single(result.Data.Documents, d => d.Id == idDocument.Id);
         }
 
         [Theory]

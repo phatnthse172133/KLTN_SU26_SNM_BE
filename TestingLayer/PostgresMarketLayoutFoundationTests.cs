@@ -87,21 +87,19 @@ public class PostgresMarketLayoutFoundationTests
                 VALUES (@id, @market, 'Second Active', 2, 100, 100, 'Active', 1, now(), now())
                 """, ("id", Guid.NewGuid()), ("market", marketId));
 
-            var roleId = Guid.NewGuid(); var ownerId = Guid.NewGuid(); var registrationId = Guid.NewGuid(); var boothId = Guid.NewGuid();
+            var roleId = Guid.NewGuid(); var ownerId = Guid.NewGuid(); var boothId = Guid.NewGuid();
             await ExecuteAsync(connection, """
                 INSERT INTO "Role" ("Id", "RoleName", "CreatedAt", "UpdatedAt")
                 VALUES (@role, 'FoundationBoothOwner', now(), now());
                 INSERT INTO "User" ("Id", "RoleId", "UserName", "PasswordHash", "FullName", "Email", "Status", "CreatedAt", "UpdatedAt")
                 VALUES (@owner, @role, 'foundation-owner', 'not-used', 'Foundation Owner', 'foundation-owner@example.test', 'Active', now(), now());
-                INSERT INTO "BoothRegistrations" ("Id", "OwnerId", "RequestedNightMarketId", "BoothName", "Status", "CreatedAt", "UpdatedAt")
-                VALUES (@registration, @owner, @market, 'Foundation Booth', 2, now(), now());
-                INSERT INTO "Booth" ("Id", "RegistrationId", "NightMarketId", "BoothOwnerId", "BoothName", "Status", "CreatedAt", "UpdatedAt")
-                VALUES (@booth, @registration, @market, @owner, 'Foundation Booth', 'Active', now(), now());
+                INSERT INTO "Booth" ("Id", "NightMarketId", "BoothOwnerId", "BoothName", "Status", "CreatedAt", "UpdatedAt")
+                VALUES (@booth, @market, @owner, 'Foundation Booth', 'Active', now(), now());
                 INSERT INTO "LayoutEdges" ("Id", "LayoutId", "FromNodeId", "ToNodeId", "Distance", "IsBidirectional", "IsAccessible", "IsDeleted", "CreatedAt", "UpdatedAt")
                 VALUES (@edge, @layout, @from, @to, 10, true, true, false, now(), now());
                 INSERT INTO "BoothLocations" ("Id", "BoothId", "LayoutId", "LayoutNodeId", "XCoordinate", "YCoordinate", "IsDeleted", "CreatedAt", "UpdatedAt")
                 VALUES (@location, @booth, @layout, @to, 10, 0, false, now(), now());
-                """, ("role", roleId), ("owner", ownerId), ("registration", registrationId),
+                """, ("role", roleId), ("owner", ownerId),
                 ("market", marketId), ("booth", boothId), ("edge", Guid.NewGuid()), ("layout", layoutId),
                 ("from", fromId), ("to", toId), ("location", Guid.NewGuid()));
 

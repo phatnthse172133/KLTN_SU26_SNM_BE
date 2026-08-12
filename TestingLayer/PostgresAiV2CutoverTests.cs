@@ -83,8 +83,8 @@ public sealed class PostgresAiV2CutoverTests
             ('22222222-2222-2222-2222-222222222102','22222222-2222-2222-2222-222222222002','owner','hash','Owner','owner@cutover.local','Local','Active',now(),now());
             INSERT INTO "NightMarket" ("Id","Name","Address","Status","ModerationStatus","IsDeleted","TotalBooth","CreatedAt","UpdatedAt") VALUES
             ('33333333-3333-3333-3333-333333333001','Cutover market','Address','Active','Active',false,1,now(),now());
-            INSERT INTO "Booth" ("Id","RegistrationId","NightMarketId","BoothOwnerId","BoothName","Status","CreatedAt","UpdatedAt") VALUES
-            ('44444444-4444-4444-4444-444444444001','44444444-4444-4444-4444-444444444099','33333333-3333-3333-3333-333333333001','22222222-2222-2222-2222-222222222102','Cutover booth','Active',now(),now());
+            INSERT INTO "Booth" ("Id","NightMarketId","BoothOwnerId","BoothName","Status","CreatedAt","UpdatedAt") VALUES
+            ('44444444-4444-4444-4444-444444444001','33333333-3333-3333-3333-333333333001','22222222-2222-2222-2222-222222222102','Cutover booth','Active',now(),now());
             INSERT INTO "FoodCategories" ("Id","BoothId","Code","Name","IsSystem","IsActive","DisplayOrder","IsSelectable","IsDeleted","CreatedAt","UpdatedAt") VALUES
             ('88888888-8888-8888-8888-888888888001','44444444-4444-4444-4444-444444444001','MAIN','Main',true,true,0,true,false,now(),now());
             SET session_replication_role = origin;

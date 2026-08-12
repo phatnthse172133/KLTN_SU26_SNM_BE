@@ -48,4 +48,6 @@ public class UserResponse
     public string Status { get; set; } = string.Empty;
 
     public string? AvatarUrl { get; set; }
+
+    public bool MustChangePassword { get; set; }
 }

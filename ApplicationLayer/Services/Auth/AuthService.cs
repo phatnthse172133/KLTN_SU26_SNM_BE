@@ -298,6 +298,7 @@ public class AuthService : IAuthService
                 AuthErrorCodes.InvalidOrExpiredResetOtp);
 
         user.PasswordHash = _passwordHasher.HashPassword(request.NewPassword);
+        user.MustChangePassword = false;
         ClearPasswordResetTokens(user);
         ClearRefreshToken(user);
         user.UpdatedAt = DateTime.UtcNow;
@@ -331,6 +332,7 @@ public class AuthService : IAuthService
                 AuthErrorCodes.PasswordReuseNotAllowed);
 
         user.PasswordHash = _passwordHasher.HashPassword(request.NewPassword);
+        user.MustChangePassword = false;
         ClearPasswordResetTokens(user);
         ClearRefreshToken(user);
         user.UpdatedAt = now;
@@ -366,6 +368,7 @@ public class AuthService : IAuthService
                 AuthErrorCodes.PasswordReuseNotAllowed);
 
         user.PasswordHash = _passwordHasher.HashPassword(request.NewPassword);
+        user.MustChangePassword = false;
         ClearRefreshToken(user);
         user.UpdatedAt = DateTime.UtcNow;
         _userRepository.Update(user);

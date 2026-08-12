@@ -22,6 +22,7 @@ namespace ApplicationLayer.DTOs.Subscriptions
     public class CurrentSubscriptionResponse
     {
         public Guid SubscriptionId { get; set; }
+        public Guid? PackageId { get; set; }
         public string? PackageCode { get; set; }
         public string PackageName { get; set; } = string.Empty;
         public string? PackageImageUrl { get; set; }
@@ -33,6 +34,13 @@ namespace ApplicationLayer.DTOs.Subscriptions
         public decimal PaidAmount { get; set; }
         public bool HasPendingRequest { get; set; }
         public long? PayOSOrderCode { get; set; }
+        public Guid? PendingSubscriptionId { get; set; }
+        public string? PendingPackageCode { get; set; }
+        public string? PendingPackageName { get; set; }
+        public string? PendingStatus { get; set; }
+        public DateTime? PendingExpiresAt { get; set; }
+        // Kept during the client transition; new clients use PendingExpiresAt.
+        public DateTime? PendingPaymentExpiresAt { get; set; }
     }
 
     public class SubscriptionHistoryItem

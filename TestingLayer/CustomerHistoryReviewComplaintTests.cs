@@ -11,6 +11,7 @@ using DomainLayer.InterfaceRepository;
 using InfrastructureLayer.Data;
 using InfrastructureLayer.Repositories;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Moq;
 using static DomainLayer.Enums.GeneralEnum;
 
@@ -29,7 +30,7 @@ public sealed class CustomerHistoryReviewComplaintTests
         var customerId = Guid.NewGuid();
         var booth = new Booth
         {
-            Id = Guid.NewGuid(), RegistrationId = Guid.NewGuid(), NightMarketId = Guid.NewGuid(),
+            Id = Guid.NewGuid(), NightMarketId = Guid.NewGuid(),
             BoothOwnerId = Guid.NewGuid(), BoothName = "Original booth", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
         };
         var food = new FoodItem
@@ -62,6 +63,7 @@ public sealed class CustomerHistoryReviewComplaintTests
 
         Assert.NotNull(detail);
         Assert.Equal("Original food", Assert.Single(detail!.Items).FoodName);
+        Assert.NotEqual(Guid.Empty, detail.Items.Single().OrderDetailId);
         Assert.Equal(40_000m, detail.Items.Single().UnitPrice);
         Assert.Equal(70_000m, detail.FinalAmount);
         Assert.Equal(PaymentStatus.Paid, Assert.Single(detail.Payments).Status);
@@ -163,12 +165,14 @@ public sealed class CustomerHistoryReviewComplaintTests
         var service = new ComplaintService(
             complaints.Object, new Mock<IBoothRepository>().Object, orders.Object,
             new Mock<INightMarketRepository>().Object, new Mock<ISubscriptionRepository>().Object,
-            new Mock<IModerationRepository>().Object, mapper.Object, new Mock<INotificationService>().Object);
+            new Mock<IModerationRepository>().Object, mapper.Object, new Mock<INotificationService>().Object,
+            new Mock<ApplicationLayer.Services.Storage.IFileStorageService>().Object);
 
         var exception = await Assert.ThrowsAsync<AppException>(() => service.CreateAsync(customerId,
             new CreateComplaintRequest
             {
                 OrderId = orderId,
+                Category = ComplaintCategory.Other,
                 Title = "Duplicate",
                 Description = "Duplicate complaint body."
             }));
@@ -191,17 +195,119 @@ public sealed class CustomerHistoryReviewComplaintTests
         Assert.Equal(404, exception.StatusCode);
     }
 
+    [Fact]
+    public async Task ReviewUpdate_RejectsOutsideEditWindow()
+    {
+        var customerId = Guid.NewGuid();
+        var reviewId = Guid.NewGuid();
+        var reviews = new Mock<IReviewRepository>();
+        reviews.Setup(repository => repository.GetWithReplyByIdAsync(reviewId))
+            .ReturnsAsync(new Review
+            {
+                Id = reviewId,
+                CustomerId = customerId,
+                Rating = 3,
+                IsVisible = true,
+                CreatedAt = DateTime.UtcNow.AddDays(-10),
+                UpdatedAt = DateTime.UtcNow.AddDays(-10)
+            });
+        var service = CreateReviewService(reviews: reviews);
+
+        var exception = await Assert.ThrowsAsync<AppException>(() => service.UpdateAsync(
+            customerId, reviewId, new UpdateReviewRequest { Rating = 4 }));
+
+        Assert.Equal("REVIEW_EDIT_WINDOW_EXPIRED", exception.ErrorCode);
+    }
+
+    [Fact]
+    public async Task FoodReviewCreate_RequiresCompletedOwnedOrderDetail()
+    {
+        var customerId = Guid.NewGuid();
+        var orderDetailId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var foodItemId = Guid.NewGuid();
+        var boothId = Guid.NewGuid();
+        var orders = new Mock<IOrderRepository>();
+        var foodReviews = new Mock<IFoodReviewRepository>();
+        orders.Setup(repository => repository.GetCustomerOrderDetailLineAsync(customerId, orderDetailId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new OrderDetail
+            {
+                Id = orderDetailId,
+                OrderId = orderId,
+                FoodItemId = foodItemId,
+                Order = new Order { Id = orderId, CustomerId = customerId, Status = OrderStatus.Completed },
+                FoodItem = new FoodItem { Id = foodItemId, BoothId = boothId, Name = "Bun" }
+            });
+        foodReviews.Setup(repository => repository.ExistsByOrderDetailAsync(orderDetailId, It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        foodReviews.Setup(repository => repository.TrySaveNewFoodReviewAsync(It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        foodReviews.Setup(repository => repository.GetByIdWithNavAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Guid id, CancellationToken _) => new FoodReview
+            {
+                Id = id,
+                OrderDetailId = orderDetailId,
+                OrderId = orderId,
+                FoodItemId = foodItemId,
+                CustomerId = customerId,
+                BoothId = boothId,
+                Rating = 5,
+                IsVisible = true,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            });
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["ReviewSettings:EditWindowDays"] = "7" })
+            .Build();
+        var service = new ReviewService(
+            new Mock<IReviewRepository>().Object,
+            new Mock<IBoothRepository>().Object,
+            orders.Object,
+            new Mock<IMapper>().Object,
+            new Mock<INotificationService>().Object,
+            new Mock<ISubscriptionEntitlementService>().Object,
+            configuration,
+            foodReviews.Object,
+            new Mock<IFoodItemRepository>().Object,
+            new Mock<ApplicationLayer.Services.Storage.IFileStorageService>().Object);
+
+        var result = await service.CreateFoodReviewAsync(customerId, new CreateFoodReviewRequest
+        {
+            OrderDetailId = orderDetailId,
+            Rating = 5
+        });
+
+        Assert.True(result.Success);
+        foodReviews.Verify(repository => repository.AddAsync(It.Is<FoodReview>(review =>
+            review.CustomerId == customerId &&
+            review.OrderDetailId == orderDetailId &&
+            review.BoothId == boothId)), Times.Once);
+        foodReviews.Verify(repository => repository.RefreshFoodItemAverageRatingAsync(foodItemId, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
     private static ReviewService CreateReviewService(
         Mock<IReviewRepository>? reviews = null,
         Mock<IOrderRepository>? orders = null,
         Mock<IMapper>? mapper = null)
-        => new(
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ReviewSettings:EditWindowDays"] = "7"
+            })
+            .Build();
+
+        return new ReviewService(
             (reviews ?? new Mock<IReviewRepository>()).Object,
             new Mock<IBoothRepository>().Object,
             (orders ?? new Mock<IOrderRepository>()).Object,
             (mapper ?? new Mock<IMapper>()).Object,
             new Mock<INotificationService>().Object,
-            new Mock<ISubscriptionEntitlementService>().Object);
+            new Mock<ISubscriptionEntitlementService>().Object,
+            configuration,
+            new Mock<IFoodReviewRepository>().Object,
+            new Mock<IFoodItemRepository>().Object,
+            new Mock<ApplicationLayer.Services.Storage.IFileStorageService>().Object);
+    }
 
     private static ComplaintService CreateComplaintService(Mock<IComplaintRepository> complaints)
         => new(
@@ -212,5 +318,6 @@ public sealed class CustomerHistoryReviewComplaintTests
             new Mock<ISubscriptionRepository>().Object,
             new Mock<IModerationRepository>().Object,
             new Mock<IMapper>().Object,
-            new Mock<INotificationService>().Object);
+            new Mock<INotificationService>().Object,
+            new Mock<ApplicationLayer.Services.Storage.IFileStorageService>().Object);
 }

@@ -38,6 +38,34 @@ public class ComplaintsController : ControllerBase
     public async Task<IActionResult> GetMineDetail(Guid complaintId, CancellationToken cancellationToken)
         => Ok(await _service.GetMineDetailAsync(CurrentUserId, complaintId, cancellationToken));
 
+    [Authorize(Roles = "Customer")]
+    [HttpPost("mine/{complaintId:guid}/withdraw")]
+    public async Task<IActionResult> Withdraw(Guid complaintId, CancellationToken cancellationToken)
+    {
+        var response = await _service.WithdrawAsync(CurrentUserId, complaintId, cancellationToken);
+        return response.Success ? Ok(response) : BadRequest(response);
+    }
+
+    [Authorize(Roles = "Customer")]
+    [HttpPost("mine/{complaintId:guid}/evidence")]
+    public async Task<IActionResult> AddEvidence(Guid complaintId, AddComplaintEvidenceRequest request, CancellationToken cancellationToken)
+    {
+        var response = await _service.AddEvidenceAsync(CurrentUserId, complaintId, request, cancellationToken);
+        return response.Success ? Ok(response) : BadRequest(response);
+    }
+
+    [Authorize(Roles = "Customer")]
+    [HttpPost("images")]
+    public async Task<IActionResult> UploadImage(IFormFile file, CancellationToken cancellationToken)
+    {
+        if (file is null || file.Length == 0)
+            return BadRequest(new { message = "Image file is required." });
+
+        await using var stream = file.OpenReadStream();
+        var response = await _service.UploadImageAsync(stream, file.FileName, file.ContentType, file.Length, cancellationToken);
+        return response.Success ? Ok(response) : BadRequest(response);
+    }
+
     [Authorize(Roles = "Admin")]
     [HttpGet]
     public async Task<IActionResult> GetAll([FromQuery] AdminComplaintQueryRequest query, CancellationToken cancellationToken)
@@ -73,7 +101,8 @@ public class ComplaintsController : ControllerBase
     public async Task<IActionResult> UpdateStatus(Guid complaintId, UpdateComplaintStatusRequest request, CancellationToken cancellationToken)
     {
         var actorId = User.IsInRole("MarketOwner") ? CurrentUserId : (Guid?)null;
-        var response = await _service.UpdateStatusAsync(complaintId, request, cancellationToken, actorId);
+        var actorRole = User.IsInRole("MarketOwner") ? "MarketOwner" : "Admin";
+        var response = await _service.UpdateStatusAsync(complaintId, request, cancellationToken, actorId, actorRole);
         return response.Success ? Ok(response) : BadRequest(response);
     }
 }

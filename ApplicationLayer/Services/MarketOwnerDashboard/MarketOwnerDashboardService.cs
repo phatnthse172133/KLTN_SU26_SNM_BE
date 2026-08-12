@@ -17,7 +17,9 @@ public class MarketOwnerDashboardService : IMarketOwnerDashboardService
     private readonly IMarketOwnerDashboardRepository _repo;
     private readonly ISubscriptionEntitlementService _entitlements;
 
-    private static readonly TimeZoneInfo VnZone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh");
+    // Windows uses a different registry identifier than Linux for Vietnam time.
+    // Resolve both once so dashboard date ranges work in local, Linux and Windows deployments.
+    private static readonly TimeZoneInfo VnZone = ResolveVietnamTimeZone();
 
     public MarketOwnerDashboardService(
         IMarketOwnerDashboardRepository repo,
@@ -59,20 +61,17 @@ public class MarketOwnerDashboardService : IMarketOwnerDashboardService
         // Basic summary â€” always available
         var nightMarketsCount = await _repo.CountNightMarketsAsync(marketOwnerId, ct);
         var activeBooths = await _repo.CountActiveBoothsAsync(ownedMarkets, marketId, ct);
-        var pendingRegistrations = await _repo.CountPendingRegistrationsAsync(ownedMarkets, marketId, ct);
 
         var summary = new DashboardSummary
         {
             NightMarkets = nightMarketsCount,
             ActiveBooths = activeBooths,
-            PendingRegistrations = pendingRegistrations,
             ValidOrders = null,
             PendingComplaints = null
         };
 
         // Pro (advancedReports) data â€” only query if entitled
         List<OrderTrendBucket>? orderTrend = null;
-        RegistrationStatusBreakdown? registrationStatus = null;
         ComplaintStatusBreakdown? complaintStatus = null;
         BoothStatusBreakdown? boothStatus = null;
 
@@ -85,14 +84,6 @@ public class MarketOwnerDashboardService : IMarketOwnerDashboardService
 
             var trendData = await _repo.GetOrderTrendAsync(ownedMarkets, marketId, fromUtc, toUtc, granularity, ct);
             orderTrend = BuildTrendBuckets(trendData, fromUtc, toUtc, granularity);
-
-            var regCounts = await _repo.CountRegistrationStatusesAsync(ownedMarkets, marketId, fromUtc, toUtc, ct);
-            registrationStatus = new RegistrationStatusBreakdown
-            {
-                PendingReview = regCounts.PendingReview,
-                Approved = regCounts.Approved,
-                Rejected = regCounts.Rejected
-            };
 
             complaintStatus = new ComplaintStatusBreakdown
             {
@@ -161,7 +152,6 @@ public class MarketOwnerDashboardService : IMarketOwnerDashboardService
                 ZoneInsightsEnabled = zoneInsightsEnabled
             },
             OrderTrend = orderTrend,
-            RegistrationStatus = registrationStatus,
             ComplaintStatus = complaintStatus,
             BoothStatus = boothStatus,
             Advanced = advanced
@@ -193,7 +183,6 @@ public class MarketOwnerDashboardService : IMarketOwnerDashboardService
             {
                 NightMarkets = 0,
                 ActiveBooths = 0,
-                PendingRegistrations = 0,
                 ValidOrders = null,
                 PendingComplaints = null
             },
@@ -204,7 +193,6 @@ public class MarketOwnerDashboardService : IMarketOwnerDashboardService
                 ZoneInsightsEnabled = zoneInsightsEnabled
             },
             OrderTrend = null,
-            RegistrationStatus = null,
             ComplaintStatus = null,
             BoothStatus = null,
             Advanced = null
@@ -244,6 +232,23 @@ public class MarketOwnerDashboardService : IMarketOwnerDashboardService
     {
         return TimeZoneInfo.ConvertTimeToUtc(
             DateTime.SpecifyKind(vnTime, DateTimeKind.Unspecified), VnZone);
+    }
+
+    private static TimeZoneInfo ResolveVietnamTimeZone()
+    {
+        foreach (var timeZoneId in new[] { "Asia/Ho_Chi_Minh", "SE Asia Standard Time" })
+        {
+            try
+            {
+                return TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
+            }
+            catch (TimeZoneNotFoundException)
+            {
+                // Try the platform-specific identifier next.
+            }
+        }
+
+        throw new InvalidOperationException("The Vietnam time zone is not available on this server.");
     }
 
     private static List<OrderTrendBucket> BuildTrendBuckets(

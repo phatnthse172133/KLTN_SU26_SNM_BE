@@ -67,14 +67,14 @@ namespace ApplicationLayer.Services.Dashboard
         public async Task<List<DashboardRecentRegistrationDto>> GetRecentBoothRegistrationsAsync(int limit = 5)
         {
             var res = await _dashboardRepository.GetRecentBoothRegistrationsAsync(limit);
-            return res.Select(r => new DashboardRecentRegistrationDto
+            return res.Select(b => new DashboardRecentRegistrationDto
             {
-                Id = r.Id,
-                BoothName = r.BoothName,
-                OwnerName = r.OwnerName,
-                MarketName = r.MarketName,
-                CreatedAt = r.CreatedAt,
-                Status = r.Status
+                Id = b.Id,
+                BoothName = b.BoothName,
+                OwnerName = b.OwnerName,
+                MarketName = b.MarketName,
+                CreatedAt = b.CreatedAt,
+                Status = b.Status
             }).ToList();
         }
 

@@ -26,7 +26,9 @@ public class AISettingsService : IAISettingsService
         var configSettings = _settings.CurrentValue;
 
         var provider = dbSettings.TryGetValue("AIProvider.Provider", out var p) ? p : configSettings.Provider;
-        var enableExternal = dbSettings.TryGetValue("AIProvider.EnableExternalProvider", out var e) && bool.TryParse(e, out var parsed) ? parsed : configSettings.EnableExternalProvider;
+        if (!provider.Equals("Local", StringComparison.OrdinalIgnoreCase))
+            provider = "Local";
+        var enableExternal = false;
         var model = dbSettings.TryGetValue("AIProvider.Model", out var m) ? m : configSettings.Model;
         var baseUrl = dbSettings.TryGetValue("AIProvider.BaseUrl", out var b) ? b : configSettings.BaseUrl;
         var hasApiKey = !string.IsNullOrWhiteSpace(configSettings.ApiKey);
@@ -46,27 +48,17 @@ public class AISettingsService : IAISettingsService
     {
         if (string.IsNullOrWhiteSpace(request.Provider))
             throw AppException.BadRequest("Provider is required.");
-        if (!request.Provider.Equals("Gemini", StringComparison.OrdinalIgnoreCase))
-            throw AppException.BadRequest("Only the configured Gemini provider is supported.");
-
-        if (string.IsNullOrWhiteSpace(request.Model))
-            throw AppException.BadRequest("Model is required.");
-        if (request.Model.Length > 100 || request.Model.Any(character => !char.IsLetterOrDigit(character) && character is not '.' and not '_' and not '-'))
-            throw AppException.BadRequest("Model contains unsupported characters.");
-
-        if (string.IsNullOrWhiteSpace(request.BaseUrl))
-            throw AppException.BadRequest("Base URL is required.");
-        if (!Uri.TryCreate(request.BaseUrl, UriKind.Absolute, out var baseUri)
-            || baseUri.Scheme != Uri.UriSchemeHttps
-            || !baseUri.Host.Equals("generativelanguage.googleapis.com", StringComparison.OrdinalIgnoreCase))
-            throw AppException.BadRequest("Gemini BaseUrl must use the official HTTPS host.");
+        if (!request.Provider.Equals("Local", StringComparison.OrdinalIgnoreCase))
+            throw AppException.BadRequest("V1 AI provider is local-only. Configure OpenAI under the OpenAI section for V2.");
+        if (request.EnableExternalProvider)
+            throw AppException.BadRequest("V1 external AI provider is permanently disabled. Use OpenAI V2 configuration instead.");
         if (!string.IsNullOrWhiteSpace(request.ApiKey))
-            throw AppException.BadRequest("API keys must be configured through AIProvider__ApiKey, not stored in the database.");
+            throw AppException.BadRequest("API keys must be configured through OpenAI__ApiKey, not stored in the database.");
 
-        await SaveSettingAsync("AIProvider.Provider", request.Provider, cancellationToken);
-        await SaveSettingAsync("AIProvider.EnableExternalProvider", request.EnableExternalProvider.ToString().ToLowerInvariant(), cancellationToken);
-        await SaveSettingAsync("AIProvider.Model", request.Model, cancellationToken);
-        await SaveSettingAsync("AIProvider.BaseUrl", request.BaseUrl, cancellationToken);
+        await SaveSettingAsync("AIProvider.Provider", "Local", cancellationToken);
+        await SaveSettingAsync("AIProvider.EnableExternalProvider", "false", cancellationToken);
+        await SaveSettingAsync("AIProvider.Model", request.Model ?? string.Empty, cancellationToken);
+        await SaveSettingAsync("AIProvider.BaseUrl", request.BaseUrl ?? string.Empty, cancellationToken);
         var legacyApiKey = await _settingsRepo.FirstOrDefaultAsync(setting => setting.Key == "AIProvider.ApiKey");
         if (legacyApiKey is not null)
             _settingsRepo.Delete(legacyApiKey);
@@ -77,10 +69,10 @@ public class AISettingsService : IAISettingsService
 
         var response = new AISettingsResponse
         {
-            Provider = request.Provider,
-            EnableExternalProvider = request.EnableExternalProvider,
-            Model = request.Model,
-            BaseUrl = request.BaseUrl,
+            Provider = "Local",
+            EnableExternalProvider = false,
+            Model = request.Model ?? string.Empty,
+            BaseUrl = request.BaseUrl ?? string.Empty,
             HasApiKey = hasApiKey,
         };
 

@@ -42,7 +42,7 @@ public class PromotionValidationService : IPromotionValidationService
             throw AppException.BadRequest("Promotion is inactive.", "PROMOTION_INACTIVE");
 
         if (promotion.Status == PromotionStatus.Suspended)
-            throw AppException.BadRequest("Promotion is suspended.", "PROMOTION_SUSPENDED");
+            throw AppException.BadRequest("Promotion is banned.", "PROMOTION_SUSPENDED");
 
         if (promotion.Status is not (PromotionStatus.Active or PromotionStatus.Scheduled))
             throw AppException.BadRequest("Promotion is not active.", "PROMOTION_NOT_ACTIVE");

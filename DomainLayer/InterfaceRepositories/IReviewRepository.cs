@@ -6,6 +6,8 @@ namespace DomainLayer.InterfaceRepository;
 public interface IReviewRepository : IGenericRepository<Review>
 {
     Task<Review?> GetWithReplyByIdAsync(Guid reviewId);
+    Task<Review?> GetByOrderIdAsync(Guid orderId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyDictionary<Guid, Review>> GetByOrderIdsAsync(IEnumerable<Guid> orderIds, CancellationToken cancellationToken = default);
     Task<ReviewReply> UpsertReplyAsync(Guid reviewId, Guid boothOwnerId, string content);
     Task<bool> ExistsByOrderAsync(Guid orderId);
     Task<bool> TrySaveNewReviewAsync(CancellationToken cancellationToken = default);
@@ -14,4 +16,5 @@ public interface IReviewRepository : IGenericRepository<Review>
     Task<PagedResult<Review>> GetPagedByCustomerWithReplyAsync(Guid customerId, int page, int pageSize, CancellationToken cancellationToken = default);
     Task<PagedResult<Review>> GetPagedVisibleByBoothWithReplyAsync(Guid boothId, int page, int pageSize, CancellationToken cancellationToken = default);
     Task RefreshBoothAverageRatingAsync(Guid boothId);
+    Task<PagedResult<Review>> GetPagedByMarketOwnerWithReplyAsync(Guid marketOwnerId, short? rating, Guid? marketId, int page, int pageSize, CancellationToken cancellationToken = default);
 }

@@ -67,46 +67,13 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.Role, o => o.Ignore())
                 .ForMember(d => d.Status, o => o.MapFrom(s => s.Status.ToString()));
 
-            CreateMap<CreateBoothRegistrationRequest, BoothRegistration>()
-                .ForMember(d => d.Id, o => o.Ignore())
-                .ForMember(d => d.OwnerId, o => o.Ignore())
-                .ForMember(d => d.Status, o => o.Ignore())
-                .ForMember(d => d.RejectReason, o => o.Ignore())
-                .ForMember(d => d.CreatedAt, o => o.Ignore())
-                .ForMember(d => d.UpdatedAt, o => o.Ignore())
-                .ForMember(d => d.Owner, o => o.Ignore())
-                .ForMember(d => d.RequestedNightMarket, o => o.Ignore())
-                .ForMember(d => d.PreferredLayoutNodeId, o => o.Ignore())
-                .ForMember(d => d.PreferredZone, o => o.Ignore())
-                .ForMember(d => d.PreferredLayoutNode, o => o.Ignore())
-                .ForMember(d => d.BoothDocuments, o => o.Ignore())
-                .ForMember(d => d.Booth, o => o.Ignore());
-
-            CreateMap<BoothDocumentRequest, BoothDocument>()
-                .ForMember(d => d.Id, o => o.Ignore())
-                .ForMember(d => d.RegistrationId, o => o.Ignore())
-                .ForMember(d => d.BoothId, o => o.Ignore())
-                .ForMember(d => d.DocumentType, o => o.MapFrom(s => s.DocumentType!.Value))
-                .ForMember(d => d.DocumentUrl, o => o.MapFrom(s => s.FileUrl))
-                .ForMember(d => d.VerificationStatus, o => o.Ignore())
-                .ForMember(d => d.CreatedAt, o => o.Ignore())
-                .ForMember(d => d.UpdatedAt, o => o.Ignore())
-                .ForMember(d => d.Registration, o => o.Ignore())
-                .ForMember(d => d.Booth, o => o.Ignore());
-
-            CreateMap<BoothRegistration, BoothRegistrationResponse>()
-                .ForMember(d => d.Status, o => o.MapFrom(s => s.Status.ToString()))
-                .ForMember(d => d.Documents, o => o.MapFrom(s => s.BoothDocuments))
-                .ForMember(d => d.BoothId, o => o.MapFrom(s => s.Booth == null ? (Guid?)null : s.Booth.Id))
-                .ForMember(d => d.OwnerName, o => o.MapFrom(s => s.Owner == null ? string.Empty : s.Owner.FullName))
-                .ForMember(d => d.OwnerEmail, o => o.MapFrom(s => s.Owner == null ? string.Empty : s.Owner.Email));
-
             CreateMap<BoothDocument, BoothDocumentResponse>()
                 .ForMember(d => d.FileUrl, o => o.MapFrom(s => s.DocumentUrl))
                 .ForMember(d => d.VerificationStatus, o => o.MapFrom(s => s.VerificationStatus.ToString()));
 
             CreateMap<UpdateMyBoothRequest, Booth>()
-                .ForMember(d => d.Id, o => o.Ignore()).ForMember(d => d.RegistrationId, o => o.Ignore())
+                .ForMember(d => d.Id, o => o.Ignore())
+                .ForMember(d => d.LogoUrl, o => o.Ignore())
                 .ForMember(d => d.NightMarketId, o => o.Ignore()).ForMember(d => d.BoothOwnerId, o => o.Ignore())
                 .ForMember(d => d.ZoneId, o => o.Ignore()).ForMember(d => d.BoothCode, o => o.Ignore())
                 .ForMember(d => d.Status, o => o.Ignore()).ForMember(d => d.IsFeatured, o => o.Ignore())
@@ -117,7 +84,7 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.PackageName, o => o.Ignore()).ForMember(d => d.PackageExpiryDate, o => o.Ignore())
                 .ForMember(d => d.BoothDocuments, o => o.Ignore()).ForMember(d => d.BoothImages, o => o.Ignore())
                 .ForMember(d => d.BoothLocations, o => o.Ignore()).ForMember(d => d.BoothOwner, o => o.Ignore())
-                .ForMember(d => d.BoothPaymentInfos, o => o.Ignore()).ForMember(d => d.Registration, o => o.Ignore())
+                .ForMember(d => d.BoothPaymentInfos, o => o.Ignore())
                 .ForMember(d => d.Zone, o => o.Ignore()).ForMember(d => d.BoothSubscriptions, o => o.Ignore())
                 .ForMember(d => d.Complaints, o => o.Ignore()).ForMember(d => d.FoodItems, o => o.Ignore())
                 .ForMember(d => d.AiMealPlanItems, o => o.Ignore())
@@ -126,7 +93,8 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.Notifications, o => o.Ignore()).ForMember(d => d.Promotions, o => o.Ignore())
                 .ForMember(d => d.Reviews, o => o.Ignore());
             CreateMap<AdminUpdateBoothRequest, Booth>().IncludeBase<UpdateMyBoothRequest, Booth>()
-                .ForMember(d => d.Id, o => o.Ignore()).ForMember(d => d.RegistrationId, o => o.Ignore())
+                .ForMember(d => d.Id, o => o.Ignore())
+                .ForMember(d => d.LogoUrl, o => o.Ignore())
                 .ForMember(d => d.NightMarketId, o => o.Ignore()).ForMember(d => d.BoothOwnerId, o => o.Ignore())
                 .ForMember(d => d.BoothCode, o => o.Ignore()).ForMember(d => d.CreatedAt, o => o.Ignore())
                 .ForMember(d => d.UpdatedAt, o => o.Ignore()).ForMember(d => d.Latitude, o => o.Ignore())
@@ -134,7 +102,7 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.PackageName, o => o.Ignore()).ForMember(d => d.PackageExpiryDate, o => o.Ignore())
                 .ForMember(d => d.BoothDocuments, o => o.Ignore()).ForMember(d => d.BoothImages, o => o.Ignore())
                 .ForMember(d => d.BoothLocations, o => o.Ignore()).ForMember(d => d.BoothOwner, o => o.Ignore())
-                .ForMember(d => d.BoothPaymentInfos, o => o.Ignore()).ForMember(d => d.Registration, o => o.Ignore())
+                .ForMember(d => d.BoothPaymentInfos, o => o.Ignore())
                 .ForMember(d => d.Zone, o => o.Ignore()).ForMember(d => d.BoothSubscriptions, o => o.Ignore())
                 .ForMember(d => d.Complaints, o => o.Ignore()).ForMember(d => d.FoodItems, o => o.Ignore())
                 .ForMember(d => d.AiMealPlanItems, o => o.Ignore())
@@ -143,6 +111,7 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.Reviews, o => o.Ignore());
             CreateMap<Booth, BoothResponse>()
                 .ForMember(d => d.Status, o => o.MapFrom(s => s.Status.ToString()))
+                .ForMember(d => d.NightMarketName, o => o.MapFrom(s => s.NightMarket == null ? null : s.NightMarket.Name))
                 .ForMember(d => d.ZoneName, o => o.MapFrom(s => s.Zone == null ? null : s.Zone.ZoneName))
                 .ForMember(d => d.LogoUrl, o => o.Ignore())
                 .ForMember(d => d.BanReason, o => o.Ignore());
@@ -168,7 +137,6 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.NightMarketImages, o => o.Ignore())
                 .ForMember(d => d.AIRecommendationLogs, o => o.Ignore())
                 .ForMember(d => d.AiMealPlans, o => o.Ignore())
-                .ForMember(d => d.BoothRegistrations, o => o.Ignore())
                 .ForMember(d => d.ModerationStatus, o => o.Ignore())
                 .ForMember(d => d.Status, o => o.Ignore());
             CreateMap<UpdateNightMarketRequest, NightMarket>()
@@ -200,7 +168,6 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.NightMarketImages, o => o.Ignore())
                 .ForMember(d => d.AIRecommendationLogs, o => o.Ignore())
                 .ForMember(d => d.AiMealPlans, o => o.Ignore())
-                .ForMember(d => d.BoothRegistrations, o => o.Ignore())
                 .ForMember(d => d.ModerationStatus, o => o.Ignore());
             CreateMap<NightMarket, NightMarketResponse>()
                 .ForMember(d => d.Status, o => o.MapFrom(s => s.Status.ToString()));
@@ -257,6 +224,9 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.FoodPrices, o => o.Ignore())
                 .ForMember(d => d.OrderDetails, o => o.Ignore())
                 .ForMember(d => d.PromotionFoodItems, o => o.Ignore())
+                .ForMember(d => d.FoodReviews, o => o.Ignore())
+                .ForMember(d => d.AverageRating, o => o.Ignore())
+                .ForMember(d => d.ReviewCount, o => o.Ignore())
                 .ForMember(d => d.SpiceLevel, o => o.Ignore())
                 .ForMember(d => d.ServingTemperature, o => o.Ignore())
                 .ForMember(d => d.EstimatedServingCount, o => o.Ignore())
@@ -282,9 +252,11 @@ namespace ApplicationLayer.Mappings
             CreateMap<CreateComplaintRequest, Complaint>()
                 .ForMember(d => d.Id, o => o.Ignore())
                 .ForMember(d => d.CustomerId, o => o.Ignore())
-                .ForMember(d => d.Title, o => o.MapFrom(s => s.Title.Trim()))
+                .ForMember(d => d.Title, o => o.Ignore())
                 .ForMember(d => d.Description, o => o.MapFrom(s => s.Description.Trim()))
+                .ForMember(d => d.Category, o => o.MapFrom(s => s.Category))
                 .ForMember(d => d.AdminResponse, o => o.Ignore())
+                .ForMember(d => d.CustomerEvidenceRequestNote, o => o.Ignore())
                 .ForMember(d => d.Status, o => o.Ignore())
                 .ForMember(d => d.CreatedAt, o => o.Ignore())
                 .ForMember(d => d.UpdatedAt, o => o.Ignore())
@@ -292,11 +264,16 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.Customer, o => o.Ignore())
                 .ForMember(d => d.Order, o => o.Ignore())
                 .ForMember(d => d.ComplaintImages, o => o.Ignore())
+                .ForMember(d => d.StatusHistories, o => o.Ignore())
                 .ForMember(d => d.ResolutionAction, o => o.Ignore())
                 .ForMember(d => d.PolicyViolation, o => o.Ignore());
             CreateMap<Complaint, ComplaintResponse>()
                 .ForMember(d => d.Status, o => o.MapFrom(s => s.Status.ToString()))
+                .ForMember(d => d.Category, o => o.MapFrom(s => s.Category.ToString()))
                 .ForMember(d => d.ResolutionAction, o => o.MapFrom(s => s.ResolutionAction == null ? null : s.ResolutionAction.ToString()))
+                .ForMember(d => d.EvidenceRequestNote, o => o.MapFrom(s => s.CustomerEvidenceRequestNote))
+                .ForMember(d => d.CanWithdraw, o => o.Ignore())
+                .ForMember(d => d.StatusHistory, o => o.Ignore())
                 .ForMember(d => d.ImageUrls, o => o.MapFrom(s => s.ComplaintImages.Select(i => i.ImageUrl)));
 
             CreateMap<CreateReviewRequest, Review>()
@@ -328,17 +305,26 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.CreatedAt, o => o.Ignore())
                 .ForMember(d => d.UpdatedAt, o => o.Ignore())
                 .ForMember(d => d.NightMarket, o => o.Ignore())
-                .ForMember(d => d.BoothRegistrations, o => o.Ignore())
                 .ForMember(d => d.BoothLocations, o => o.Ignore())
-                .ForMember(d => d.LayoutNodes, o => o.Ignore());
+                .ForMember(d => d.LayoutNodes, o => o.Ignore())
+                .ForMember(d => d.WidthMeters, o => o.Ignore())
+                .ForMember(d => d.LengthMeters, o => o.Ignore())
+                .ForMember(d => d.BoothWidthMeters, o => o.Ignore())
+                .ForMember(d => d.BoothLengthMeters, o => o.Ignore())
+                .ForMember(d => d.HorizontalGapMeters, o => o.Ignore())
+                .ForMember(d => d.VerticalGapMeters, o => o.Ignore());
             CreateMap<UpdateZoneRequest, Zone>().IncludeBase<CreateZoneRequest, Zone>();
-            CreateMap<Zone, ZoneResponse>().ForMember(d => d.Status, o => o.MapFrom(s => s.Status.ToString()));
+            CreateMap<Zone, ZoneResponse>()
+                .ForMember(d => d.Status, o => o.MapFrom(s => s.Status.ToString()))
+                .ForMember(d => d.AssignedSlotCount, o => o.MapFrom(s =>
+                    s.BoothLocations.Count(location => !location.IsDeleted && location.ReleasedAt == null)));
 
             CreateMap<CreateMarketLayoutRequest, MarketLayout>()
                 .ForMember(d => d.Id, o => o.Ignore())
                 .ForMember(d => d.NightMarketId, o => o.Ignore())
                 .ForMember(d => d.LayoutName, o => o.MapFrom(s => s.LayoutName.Trim()))
                 .ForMember(d => d.LayoutImageUrl, o => o.Ignore())
+                .ForMember(d => d.Version, o => o.Ignore())
                 .ForMember(d => d.Width, o => o.Ignore())
                 .ForMember(d => d.Height, o => o.Ignore())
                 .ForMember(d => d.CoordinateUnit, o => o.Ignore())
@@ -353,6 +339,9 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.LayoutNodes, o => o.Ignore())
                 .ForMember(d => d.LayoutEdges, o => o.Ignore())
                 .ForMember(d => d.NavigationAnchors, o => o.Ignore())
+                .ForMember(d => d.MarketWidthMeters, o => o.Ignore())
+                .ForMember(d => d.MarketLengthMeters, o => o.Ignore())
+                .ForMember(d => d.PixelsPerMeter, o => o.Ignore())
                 .ForMember(d => d.NightMarket, o => o.Ignore());
             CreateMap<UpdateMarketLayoutRequest, MarketLayout>()
                 .IncludeBase<CreateMarketLayoutRequest, MarketLayout>();
@@ -373,11 +362,21 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.LayoutNodes, o => o.Ignore())
                 .ForMember(d => d.LayoutEdges, o => o.Ignore())
                 .ForMember(d => d.NavigationAnchors, o => o.Ignore())
+                .ForMember(d => d.MarketWidthMeters, o => o.Ignore())
+                .ForMember(d => d.MarketLengthMeters, o => o.Ignore())
+                .ForMember(d => d.PixelsPerMeter, o => o.Ignore())
                 .ForMember(d => d.NightMarket, o => o.Ignore());
             CreateMap<MarketLayout, MarketLayoutResponse>()
                 .ForMember(d => d.Status, o => o.MapFrom(s => s.Status.ToString()))
                 .ForMember(d => d.CoordinateUnit, o => o.MapFrom(s => s.CoordinateUnit.ToString()))
                 .ForMember(d => d.DistanceCalibrationStatus, o => o.MapFrom(s => s.DistanceCalibrationStatus.ToString()));
+            CreateMap<LayoutBlock, LayoutBlockResponse>()
+                .ForMember(d => d.ZoneName, o => o.MapFrom(s => s.Zone == null ? null : s.Zone.ZoneName))
+                .ForMember(d => d.ZoneCode, o => o.MapFrom(s => s.Zone == null ? null : s.Zone.ZoneCode))
+                .ForMember(d => d.ZoneColor, o => o.MapFrom(s => s.Zone == null ? null : s.Zone.Color))
+                .ForMember(d => d.ZoneType, o => o.Ignore())
+                .ForMember(d => d.Capacity, o => o.MapFrom(s => s.Zone == null ? 0 : s.Zone.Capacity))
+                .ForMember(d => d.SlotCount, o => o.Ignore());
             CreateMap<CreateLayoutNodeRequest, LayoutNode>()
                 .ForMember(d => d.Id, o => o.Ignore())
                 .ForMember(d => d.LayoutId, o => o.Ignore())
@@ -388,6 +387,7 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.UpdatedAt, o => o.Ignore())
                 .ForMember(d => d.Layout, o => o.Ignore())
                 .ForMember(d => d.Zone, o => o.Ignore())
+                .ForMember(d => d.LayoutBlock, o => o.Ignore())
                 .ForMember(d => d.OutgoingEdges, o => o.Ignore())
                 .ForMember(d => d.IncomingEdges, o => o.Ignore())
                 .ForMember(d => d.BoothLocations, o => o.Ignore())

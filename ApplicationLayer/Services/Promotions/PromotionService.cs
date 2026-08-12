@@ -8,6 +8,7 @@ using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
 using static DomainLayer.Enums.GeneralEnum;
 using DomainLayer.Common;
+using ApplicationLayer.Services.Subscriptions;
 
 namespace ApplicationLayer.Services.Promotions;
 
@@ -22,8 +23,9 @@ public class PromotionService : IPromotionService
     private readonly IFoodCategoryRepository _categories;
     private readonly IPromotionValidationService _validation;
     private readonly IMapper _mapper;
+    private readonly ISubscriptionEntitlementService _entitlements;
 
-    public PromotionService(IBoothRepository booths, IPromotionRepository promotions, IPromotionUsageRepository usages, ICartRepository carts, ICartItemRepository cartItems, IFoodItemRepository foodItems, IFoodCategoryRepository categories, IPromotionValidationService validation, IMapper mapper)
+    public PromotionService(IBoothRepository booths, IPromotionRepository promotions, IPromotionUsageRepository usages, ICartRepository carts, ICartItemRepository cartItems, IFoodItemRepository foodItems, IFoodCategoryRepository categories, IPromotionValidationService validation, IMapper mapper, ISubscriptionEntitlementService entitlements)
     {
         _booths = booths;
         _promotions = promotions;
@@ -34,6 +36,7 @@ public class PromotionService : IPromotionService
         _categories = categories;
         _validation = validation;
         _mapper = mapper;
+        _entitlements = entitlements;
     }
 
     public async Task<ApiResponse<PaginationResp<PromotionResponse>>> GetByBoothAsync(Guid ownerId, Guid boothId, PromotionListRequest request, CancellationToken cancellationToken = default)
@@ -83,6 +86,11 @@ public class PromotionService : IPromotionService
     public async Task<ApiResponse<PromotionResponse>> CreateAsync(Guid ownerId, Guid boothId, CreatePromotionRequest request, CancellationToken cancellationToken = default)
     {
         await EnsureBoothAccessAsync(ownerId, boothId, requireManageable: true);
+        await _entitlements.RequireBoothFeatureAsync(
+            boothId,
+            entitlement => entitlement.Promotion,
+            "Promotions are not included in your current package.",
+            "PROMOTION_NOT_INCLUDED");
         var targets = await ValidateRequestAsync(
             boothId,
             request,
@@ -118,6 +126,11 @@ public class PromotionService : IPromotionService
     public async Task<ApiResponse<PromotionResponse>> UpdateAsync(Guid ownerId, Guid promotionId, UpdatePromotionRequest request, CancellationToken cancellationToken = default)
     {
         var promotion = await GetOwnedPromotionAsync(ownerId, promotionId, cancellationToken);
+        await _entitlements.RequireBoothFeatureAsync(
+            promotion.BoothId,
+            entitlement => entitlement.Promotion,
+            "Promotions are not included in your current package.",
+            "PROMOTION_NOT_INCLUDED");
         await EnsureBoothAccessAsync(ownerId, promotion.BoothId, requireManageable: true);
         var targets = await ValidateRequestAsync(
             promotion.BoothId,
@@ -155,9 +168,14 @@ public class PromotionService : IPromotionService
     {
         var promotion = await GetOwnedPromotionAsync(ownerId, promotionId, cancellationToken);
         await EnsureBoothAccessAsync(ownerId, promotion.BoothId, requireManageable: true);
+        await _entitlements.RequireBoothFeatureAsync(
+            promotion.BoothId,
+            entitlement => entitlement.Promotion,
+            "Promotions are not included in your current package.",
+            "PROMOTION_NOT_INCLUDED");
         if (promotion.Status == PromotionStatus.Suspended)
             throw AppException.Forbidden(
-                "A suspended promotion can only be changed by an administrator.",
+                "A banned promotion can only be changed by an administrator.",
                 "PROMOTION_ACCESS_DENIED");
 
         var now = DateTime.UtcNow;
@@ -180,7 +198,7 @@ public class PromotionService : IPromotionService
         var promotion = await GetOwnedPromotionAsync(ownerId, promotionId, cancellationToken);
         if (promotion.Status == PromotionStatus.Suspended)
             throw AppException.Forbidden(
-                "A suspended promotion can only be changed by an administrator.",
+                "A banned promotion can only be changed by an administrator.",
                 "PROMOTION_ACCESS_DENIED");
 
         promotion.Status = PromotionStatus.Inactive;
@@ -201,7 +219,7 @@ public class PromotionService : IPromotionService
 
         return ApiResponse<PromotionResponse>.SuccessResponse(
             MapPromotion(promotion),
-            "Promotion suspended successfully.");
+            "Promotion banned successfully.");
     }
 
     public async Task<ApiResponse<object>> DeleteAsync(Guid ownerId, Guid promotionId, CancellationToken cancellationToken = default)
@@ -210,7 +228,7 @@ public class PromotionService : IPromotionService
         if (promotion.Status == PromotionStatus.Suspended)
         {
             throw AppException.Forbidden(
-                "A suspended promotion can only be deleted by an administrator.",
+                "A banned promotion can only be deleted by an administrator.",
                 "PROMOTION_ACCESS_DENIED");
         }
 

@@ -56,7 +56,8 @@ public static class CustomerAvailability
 
     public static bool IsWithinInterval(TimeOnly? open, TimeOnly? close, TimeOnly localTime)
     {
-        if (!open.HasValue || !close.HasValue || open.Value == close.Value) return false;
+        if (!open.HasValue || !close.HasValue) return false;
+        if (open.Value == close.Value) return true;
         return open.Value < close.Value
             ? open.Value <= localTime && localTime < close.Value
             : localTime >= open.Value || localTime < close.Value;

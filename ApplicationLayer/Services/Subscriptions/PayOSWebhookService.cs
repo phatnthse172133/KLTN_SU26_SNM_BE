@@ -2,6 +2,7 @@ using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
 using ApplicationLayer.Services.Notifications;
 using ApplicationLayer.Services.PayOS;
+using ApplicationLayer.Services.Realtime;
 using DomainLayer.InterfaceRepository;
 using Microsoft.Extensions.Logging;
 using System;
@@ -21,12 +22,14 @@ namespace ApplicationLayer.Services.Subscriptions
     {
         private readonly ISubscriptionRepository _repo;
         private readonly INotificationService _notifications;
+        private readonly IRealtimeEventPublisher _eventPublisher;
         private readonly ILogger<PayOSWebhookService> _logger;
 
-        public PayOSWebhookService(ISubscriptionRepository repo, INotificationService notifications, ILogger<PayOSWebhookService> logger)
+        public PayOSWebhookService(ISubscriptionRepository repo, INotificationService notifications, IRealtimeEventPublisher eventPublisher, ILogger<PayOSWebhookService> logger)
         {
             _repo = repo;
             _notifications = notifications;
+            _eventPublisher = eventPublisher;
             _logger = logger;
         }
 
@@ -48,7 +51,10 @@ namespace ApplicationLayer.Services.Subscriptions
                     await _repo.CommitTransactionAsync();
 
                     if (result == WebhookDispatchResult.SubscriptionHandled)
+                    {
                         await SendNotificationAsync(boothSub.Booth?.BoothOwnerId, boothSub.Package?.PackageName, "Booth", boothSub.Id);
+                        await PublishSubscriptionActivatedAsync(boothSub.Booth?.BoothOwnerId, "Booth", boothSub.Id);
+                    }
 
                     return result;
                 }
@@ -60,7 +66,10 @@ namespace ApplicationLayer.Services.Subscriptions
                     await _repo.CommitTransactionAsync();
 
                     if (result == WebhookDispatchResult.SubscriptionHandled)
+                    {
                         await SendNotificationAsync(marketSub.MarketOwnerId, marketSub.Package?.PackageName, "Market", marketSub.Id);
+                        await PublishSubscriptionActivatedAsync(marketSub.MarketOwnerId, "Market", marketSub.Id);
+                    }
 
                     return result;
                 }
@@ -212,6 +221,24 @@ namespace ApplicationLayer.Services.Subscriptions
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Failed to send payment success notification for subscription {Id}", subscriptionId);
+            }
+        }
+
+        private async Task PublishSubscriptionActivatedAsync(Guid? userId, string ownerType, Guid subscriptionId)
+        {
+            if (!userId.HasValue) return;
+            try
+            {
+                await _eventPublisher.PublishAsync(new RealtimeEvent
+                {
+                    EventType = "SubscriptionActivated",
+                    RecipientId = userId.Value,
+                    Payload = new { subscriptionId, ownerType, activated = true }
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to publish SubscriptionActivated event for subscription {Id}", subscriptionId);
             }
         }
 

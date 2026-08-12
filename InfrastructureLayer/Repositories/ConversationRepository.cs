@@ -77,6 +77,7 @@ public class ConversationRepository : GenericRepository<Conversation>, IConversa
 
     public async Task<PagedResult<Conversation>> GetPagedByUserAsync(
         Guid userId,
+        string? keyword,
         int page,
         int pageSize,
         CancellationToken cancellationToken = default)
@@ -89,6 +90,16 @@ public class ConversationRepository : GenericRepository<Conversation>, IConversa
             .Include(conversation => conversation.LastMessage)
             .Where(conversation => conversation.CustomerId == userId
                 || conversation.Booth.BoothOwnerId == userId);
+
+        var normalizedKeyword = keyword?.Trim();
+        if (!string.IsNullOrWhiteSpace(normalizedKeyword))
+        {
+            query = query.Where(conversation =>
+                (conversation.CustomerId == userId &&
+                 conversation.Booth.BoothOwner.FullName.Contains(normalizedKeyword)) ||
+                (conversation.Booth.BoothOwnerId == userId &&
+                 conversation.Customer.FullName.Contains(normalizedKeyword)));
+        }
 
         var total = await query.CountAsync(cancellationToken);
         var items = await query

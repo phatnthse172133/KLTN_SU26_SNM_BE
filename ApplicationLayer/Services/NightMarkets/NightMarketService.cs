@@ -21,7 +21,6 @@ public class NightMarketService : INightMarketService
     private readonly ISubscriptionEntitlementService _entitlements;
     private readonly IBoothRepository _booths;
     private readonly ISubscriptionRepository _subscriptions;
-    private readonly IBoothRegistrationRepository _registrations;
     private readonly IMarketLayoutRepository _layouts;
     private readonly IZoneRepository _zones;
     private readonly IOrderRepository _orders;
@@ -35,7 +34,6 @@ public class NightMarketService : INightMarketService
         ISubscriptionEntitlementService entitlements,
         IBoothRepository booths,
         ISubscriptionRepository subscriptions,
-        IBoothRegistrationRepository registrations,
         IMarketLayoutRepository layouts,
         IZoneRepository zones,
         IOrderRepository orders,
@@ -48,7 +46,6 @@ public class NightMarketService : INightMarketService
         _entitlements = entitlements;
         _booths = booths;
         _subscriptions = subscriptions;
-        _registrations = registrations;
         _layouts = layouts;
         _zones = zones;
         _orders = orders;
@@ -339,7 +336,6 @@ public class NightMarketService : INightMarketService
         {
             impact.ActiveBooths,
             impact.OpenOrders,
-            impact.PendingRegistrations,
             impact.Layouts,
             impact.Zones
         });
@@ -359,16 +355,12 @@ public class NightMarketService : INightMarketService
                 boothOwnerIds.Contains(o.BoothOwnerId)
                 && (o.Status == OrderStatus.Placed || o.Status == OrderStatus.Preparing || o.Status == OrderStatus.ReadyForPickup));
 
-        var pendingRegistrations = await _registrations.CountAsync(
-            r => r.RequestedNightMarketId == nightMarketId
-                && r.Status == BoothRegistrationStatus.PendingReview);
         var layouts = await _layouts.CountAsync(l => l.NightMarketId == nightMarketId);
         var zones = await _zones.CountAsync(z => z.NightMarketId == nightMarketId);
 
         return new NightMarketDeletionImpact(
             booths.Count(b => b.Status == BoothStatus.Active),
             openOrders,
-            pendingRegistrations,
             layouts,
             zones);
     }
@@ -379,7 +371,6 @@ public class NightMarketService : INightMarketService
     private sealed record NightMarketDeletionImpact(
         int ActiveBooths,
         int OpenOrders,
-        int PendingRegistrations,
         int Layouts,
         int Zones);
 
@@ -409,10 +400,9 @@ public class NightMarketService : INightMarketService
         if (request.OpeningHours.HasValue != request.ClosingHours.HasValue)
             throw AppException.BadRequest("Opening hours and closing hours must be provided together.");
 
-        if (request.OpeningHours.HasValue &&
-            request.ClosingHours.HasValue &&
-            request.OpeningHours.Value >= request.ClosingHours.Value)
-            throw AppException.BadRequest("Opening hours must be earlier than closing hours for same-day operation.");
+        // TimeOnly represents a time within one day. A closing time before the
+        // opening time is an overnight schedule; the same time represents a
+        // 24-hour market. Both are valid and never exceed one day.
 
         if (await _markets.ActiveNameExistsAsync(request.Name, excludeId, cancellationToken))
             throw AppException.Conflict("Night market name already exists.", "MARKET_NAME_EXISTS");
@@ -456,7 +446,7 @@ public class NightMarketService : INightMarketService
 
         if (market.ModerationStatus == ModerationStatus.Suspended)
             throw AppException.Forbidden(
-                "This night market is suspended by an administrator. You cannot change its status until the suspension is lifted.",
+                "This night market has been banned by an administrator. You cannot change its status until the ban is lifted.",
                 "MARKET_SUSPENDED");
 
         if (market.Status == request.Status)
@@ -485,6 +475,65 @@ public class NightMarketService : INightMarketService
         return ApiResponse<NightMarketResponse>.SuccessResponse(
             _mapper.Map<NightMarketResponse>(market),
             $"Night market status changed to {request.Status} successfully.");
+    }
+
+    public async Task<ApiResponse<ActivationReadinessResponse>> GetActivationReadinessAsync(
+        Guid id,
+        Guid currentUserId,
+        string currentUserRole,
+        CancellationToken cancellationToken = default)
+    {
+        var market = await _markets.GetByIdAsync(id);
+        if (market is null || market.IsDeleted)
+            throw AppException.NotFound("This night market no longer exists.", "MARKET_NOT_FOUND");
+
+        EnsureOwnership(market, currentUserId, currentUserRole);
+
+        var hasSubscription = market.MarketOwnerId.HasValue
+            && await _entitlements.HasActiveMarketSubscriptionAsync(market.MarketOwnerId.Value);
+        var hasActiveLayout = await _layouts.CountAsync(layout =>
+            layout.NightMarketId == id
+            && layout.Status == MarketLayoutStatus.Active
+            && !layout.IsDeleted) > 0;
+        var isNotSuspended = market.ModerationStatus != ModerationStatus.Suspended;
+
+        var checks = new List<ActivationReadinessCheckResponse>
+        {
+            new()
+            {
+                Code = "MARKET_SUBSCRIPTION_REQUIRED",
+                Passed = hasSubscription,
+                Message = hasSubscription
+                    ? "Your Market subscription is active."
+                    : "Choose and complete payment for a Market plan before activating this night market.",
+                CtaLabel = hasSubscription ? null : "View plans",
+                CtaAction = hasSubscription ? null : "navigate:/marketowner/subscriptions"
+            },
+            new()
+            {
+                Code = "LAYOUT_REQUIRED",
+                Passed = hasActiveLayout,
+                Message = hasActiveLayout
+                    ? "An active layout is ready."
+                    : "Create, validate, and activate a layout before activating this night market.",
+                CtaLabel = hasActiveLayout ? null : "Open layouts",
+                CtaAction = hasActiveLayout ? null : "navigate:/marketowner/layouts"
+            },
+            new()
+            {
+                Code = "MARKET_SUSPENDED",
+                Passed = isNotSuspended,
+                Message = isNotSuspended
+                    ? "This night market is not banned."
+                    : "This night market was banned by an administrator. Contact Support if you need assistance."
+            }
+        };
+
+        return ApiResponse<ActivationReadinessResponse>.SuccessResponse(new ActivationReadinessResponse
+        {
+            CanActivate = checks.All(check => check.Passed),
+            Checks = checks
+        });
     }
 
     private async Task<List<NightMarketImage>> GetActiveImagesAsync(Guid marketId)

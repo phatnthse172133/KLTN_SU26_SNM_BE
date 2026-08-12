@@ -175,7 +175,7 @@ public class PromotionService : IPromotionService
             "PROMOTION_NOT_INCLUDED");
         if (promotion.Status == PromotionStatus.Suspended)
             throw AppException.Forbidden(
-                "A suspended promotion can only be changed by an administrator.",
+                "A banned promotion can only be changed by an administrator.",
                 "PROMOTION_ACCESS_DENIED");
 
         var now = DateTime.UtcNow;
@@ -198,7 +198,7 @@ public class PromotionService : IPromotionService
         var promotion = await GetOwnedPromotionAsync(ownerId, promotionId, cancellationToken);
         if (promotion.Status == PromotionStatus.Suspended)
             throw AppException.Forbidden(
-                "A suspended promotion can only be changed by an administrator.",
+                "A banned promotion can only be changed by an administrator.",
                 "PROMOTION_ACCESS_DENIED");
 
         promotion.Status = PromotionStatus.Inactive;
@@ -219,7 +219,7 @@ public class PromotionService : IPromotionService
 
         return ApiResponse<PromotionResponse>.SuccessResponse(
             MapPromotion(promotion),
-            "Promotion suspended successfully.");
+            "Promotion banned successfully.");
     }
 
     public async Task<ApiResponse<object>> DeleteAsync(Guid ownerId, Guid promotionId, CancellationToken cancellationToken = default)
@@ -228,7 +228,7 @@ public class PromotionService : IPromotionService
         if (promotion.Status == PromotionStatus.Suspended)
         {
             throw AppException.Forbidden(
-                "A suspended promotion can only be deleted by an administrator.",
+                "A banned promotion can only be deleted by an administrator.",
                 "PROMOTION_ACCESS_DENIED");
         }
 

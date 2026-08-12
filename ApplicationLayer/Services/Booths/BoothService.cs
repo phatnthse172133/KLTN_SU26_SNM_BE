@@ -5,6 +5,7 @@ using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
 using ApplicationLayer.Mappings;
 using ApplicationLayer.Services.Subscriptions;
+using ApplicationLayer.Services.Notifications;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
 using static DomainLayer.Enums.GeneralEnum;
@@ -27,7 +28,9 @@ public class BoothService : IBoothService
     private readonly ISubscriptionRepository _subscriptions;
     private readonly ApplicationLayer.Services.Storage.IFileStorageService _fileStorage;
     private readonly IGenericRepository<ModerationActionHistory> _moderationHistory;
-    public BoothService(IBoothRepository booths, IZoneRepository zones, IMapper mapper, IBoothLocationRepository locations, ISubscriptionEntitlementService entitlements, INightMarketRepository nightMarkets, IUserRepository users, IGenericRepository<Role> roles, IUnitOfWork unitOfWork, ILayoutNodeRepository layoutNodes, IMarketLayoutRepository marketLayouts, ISubscriptionRepository subscriptions, ApplicationLayer.Services.Storage.IFileStorageService fileStorage, IGenericRepository<ModerationActionHistory> moderationHistory)
+    private readonly IGenericRepository<EmailOutbox> _emailOutbox;
+    private readonly INotificationService _notifications;
+    public BoothService(IBoothRepository booths, IZoneRepository zones, IMapper mapper, IBoothLocationRepository locations, ISubscriptionEntitlementService entitlements, INightMarketRepository nightMarkets, IUserRepository users, IGenericRepository<Role> roles, IUnitOfWork unitOfWork, ILayoutNodeRepository layoutNodes, IMarketLayoutRepository marketLayouts, ISubscriptionRepository subscriptions, ApplicationLayer.Services.Storage.IFileStorageService fileStorage, IGenericRepository<ModerationActionHistory> moderationHistory, IGenericRepository<EmailOutbox> emailOutbox, INotificationService notifications)
     {
         _booths = booths;
         _zones = zones;
@@ -43,6 +46,8 @@ public class BoothService : IBoothService
         _subscriptions = subscriptions;
         _fileStorage = fileStorage;
         _moderationHistory = moderationHistory;
+        _emailOutbox = emailOutbox;
+        _notifications = notifications;
     }
 
     public async Task<ApiResponse<BoothResponse>> GetMyBoothAsync(
@@ -355,7 +360,7 @@ public class BoothService : IBoothService
         var market = await VerifyMarketOwnershipAsync(marketOwnerId, marketId, cancellationToken);
 
         if (market.ModerationStatus == ModerationStatus.Suspended)
-            throw AppException.BadRequest("Cannot create a booth in a suspended market.", "MARKET_NOT_AVAILABLE");
+            throw AppException.BadRequest("Cannot create a booth in a banned market.", "MARKET_NOT_AVAILABLE");
 
         var fieldErrors = new Dictionary<string, string[]>();
 
@@ -666,6 +671,7 @@ public class BoothService : IBoothService
             var market = await _nightMarkets.GetByIdAsync(marketId);
             Zone? zone = null;
             if (node.ZoneId.HasValue) zone = await _zones.GetByIdAsync(node.ZoneId.Value);
+            await NotifyBoothLocationChangedAsync(booth, boothOwner, market, zone, boothLocation, "assigned", cancellationToken);
             return ApiResponse<MarketOwnerBoothResponse>.SuccessResponse(
                 MapMarketOwnerBooth(booth, boothOwner, market, zone),
                 "Booth created and assigned successfully.");
@@ -762,6 +768,8 @@ public class BoothService : IBoothService
             var market = await _nightMarkets.GetByIdAsync(marketId);
             Zone? zone = null;
             if (node.ZoneId.HasValue) zone = await _zones.GetByIdAsync(node.ZoneId.Value);
+            if (targetLocation is null)
+                await NotifyBoothLocationChangedAsync(booth, owner, market, zone, newLocation, currentLocation is null ? "assigned" : "moved", cancellationToken);
             return ApiResponse<MarketOwnerBoothResponse>.SuccessResponse(
                 MapMarketOwnerBooth(booth, owner, market, zone),
                 targetLocation is null ? "Booth assigned successfully." : "Booth is already assigned to this slot.");
@@ -822,7 +830,7 @@ public class BoothService : IBoothService
     {
         var market = await VerifyMarketOwnershipAsync(marketOwnerId, marketId, cancellationToken);
         if (market.ModerationStatus == ModerationStatus.Suspended)
-            throw AppException.BadRequest("Cannot release a booth in a suspended market.", "MARKET_NOT_AVAILABLE");
+            throw AppException.BadRequest("Cannot release a booth in a banned market.", "MARKET_NOT_AVAILABLE");
 
         await _unitOfWork.BeginTransactionAsync(cancellationToken);
         try
@@ -860,6 +868,7 @@ public class BoothService : IBoothService
             await _unitOfWork.CommitTransactionAsync(cancellationToken);
 
             var owner = await _users.GetByIdAsync(booth.BoothOwnerId);
+            await NotifyBoothLocationChangedAsync(booth, owner, market, null, targetLocation, "released", cancellationToken);
             return ApiResponse<MarketOwnerBoothResponse>.SuccessResponse(
                 MapMarketOwnerBooth(booth, owner, market, null),
                 "Booth released from slot successfully.");
@@ -897,6 +906,69 @@ public class BoothService : IBoothService
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             throw;
+        }
+    }
+
+    private async Task NotifyBoothLocationChangedAsync(
+        Booth booth,
+        User? owner,
+        NightMarket? market,
+        Zone? zone,
+        BoothLocation location,
+        string action,
+        CancellationToken cancellationToken)
+    {
+        if (owner is null) return;
+
+        var slotCode = location.SlotNumber ?? "the selected slot";
+        var marketName = market?.Name ?? "your night market";
+        var zoneName = zone?.ZoneName ?? "General Area";
+        var isRelease = string.Equals(action, "released", StringComparison.OrdinalIgnoreCase);
+        var title = isRelease ? "Your booth location was released" : "Your booth location was updated";
+        var content = isRelease
+            ? $"Your booth \"{booth.BoothName}\" was released from slot {slotCode} at {marketName}."
+            : $"Your booth \"{booth.BoothName}\" was {action} to slot {slotCode} in {zoneName}, {marketName}.";
+
+        try
+        {
+            await _notifications.NotifyAsync(new NotificationMessage(
+                owner.Id,
+                NotificationType.SystemAnnouncement,
+                title,
+                content,
+                booth.Id,
+                "BoothLocation",
+                location.Id), cancellationToken);
+        }
+        catch
+        {
+            // Assignment is already committed. A notification failure must never undo it.
+        }
+
+        var emailType = isRelease ? "BoothLocationReleased" : "BoothLocationAssigned";
+        try
+        {
+            if (await _emailOutbox.AnyAsync(email => email.ReferenceId == location.Id && email.EmailType == emailType))
+                return;
+
+            var now = DateTime.UtcNow;
+            await _emailOutbox.AddAsync(new EmailOutbox
+            {
+                Id = Guid.NewGuid(),
+                RecipientEmail = owner.Email,
+                Subject = title,
+                HtmlBody = $"<p>Hello {System.Net.WebUtility.HtmlEncode(owner.FullName)},</p><p>{System.Net.WebUtility.HtmlEncode(content)}</p><p>Please sign in to Smart Night Market to view your booth details.</p>",
+                EmailType = emailType,
+                ReferenceId = location.Id,
+                Status = "Pending",
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+            await _emailOutbox.SaveChangesAsync();
+        }
+        catch
+        {
+            // Email delivery is retried through the outbox when it is persisted; failures do not affect the assignment.
         }
     }
 

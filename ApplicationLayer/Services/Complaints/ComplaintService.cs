@@ -430,7 +430,7 @@ public class ComplaintService : IComplaintService
                     "ACTIVE_MARKET_SUBSCRIPTION_REQUIRED");
 
             if (request.Status == ComplaintStatus.Resolved && request.ResolutionAction == ComplaintResolutionAction.SuspendBooth)
-                throw AppException.Forbidden("Only Admin can suspend a booth.", "ADMIN_SANCTION_REQUIRED");
+                throw AppException.Forbidden("Only an administrator can ban a booth.", "ADMIN_SANCTION_REQUIRED");
         }
 
         if (TerminalStatuses.Contains(complaint.Status) &&
@@ -515,7 +515,7 @@ public class ComplaintService : IComplaintService
                         AdminName = "Complaint Workflow",
                         PreviousStatus = previousBoothStatus.ToString(),
                         NewStatus = BoothStatus.Banned.ToString(),
-                        Reason = $"Auto-suspended via complaint: {complaint.Title}",
+                        Reason = $"Auto-banned via complaint: {complaint.Title}",
                         Source = ModerationActionSource.Complaint,
                         ComplaintId = complaint.Id,
                         CreatedAt = now
@@ -636,8 +636,8 @@ public class ComplaintService : IComplaintService
                                 "Booth warning issued",
                                 $"Your booth \"{boothEntity.BoothName}\" received a warning.\n\nReason: {policyViolation}"),
                             ComplaintResolutionAction.SuspendBooth => (
-                                "Booth suspended",
-                                $"Your booth \"{boothEntity.BoothName}\" has been suspended following a complaint.\n\nViolation: {policyViolation}"),
+                                "Booth banned",
+                                $"Your booth \"{boothEntity.BoothName}\" has been banned following a complaint.\n\nViolation: {policyViolation}"),
                             _ => ("Complaint resolved", "Your complaint has been resolved.")
                         };
 
@@ -763,7 +763,7 @@ public class ComplaintService : IComplaintService
                 throw AppException.BadRequest("Resolution action is required when resolving a complaint.");
 
             if (request.ResolutionAction is not (ComplaintResolutionAction.NoViolation or ComplaintResolutionAction.Warning or ComplaintResolutionAction.SuspendBooth))
-                throw AppException.BadRequest("Invalid resolution action. Only NoViolation, Warning, and SuspendBooth are allowed.");
+                throw AppException.BadRequest("Invalid resolution action. Only no violation, warning, and ban booth are allowed.");
 
             if (request.ResolutionAction != ComplaintResolutionAction.NoViolation && policyViolation is null)
                 throw AppException.BadRequest("Policy violation is required when applying a penalty.");

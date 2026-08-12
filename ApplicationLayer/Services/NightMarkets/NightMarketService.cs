@@ -446,7 +446,7 @@ public class NightMarketService : INightMarketService
 
         if (market.ModerationStatus == ModerationStatus.Suspended)
             throw AppException.Forbidden(
-                "This night market is suspended by an administrator. You cannot change its status until the suspension is lifted.",
+                "This night market has been banned by an administrator. You cannot change its status until the ban is lifted.",
                 "MARKET_SUSPENDED");
 
         if (market.Status == request.Status)
@@ -524,8 +524,8 @@ public class NightMarketService : INightMarketService
                 Code = "MARKET_SUSPENDED",
                 Passed = isNotSuspended,
                 Message = isNotSuspended
-                    ? "This night market is not suspended."
-                    : "This night market was suspended by an administrator. Contact Support if you need assistance."
+                    ? "This night market is not banned."
+                    : "This night market was banned by an administrator. Contact Support if you need assistance."
             }
         };
 

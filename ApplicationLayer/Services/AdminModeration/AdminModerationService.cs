@@ -158,9 +158,9 @@ public class AdminModerationService : IAdminModerationService
         {
             try
             {
-                var title = request.Status == ModerationStatus.Suspended ? "Night market suspended" : "Night market restored";
+                var title = request.Status == ModerationStatus.Suspended ? "Night market banned" : "Night market restored";
                 var content = request.Status == ModerationStatus.Suspended
-                    ? $"Your night market \"{market.Name}\" has been suspended.\n\nReason: {request.Reason.Trim()}"
+                    ? $"Your night market \"{market.Name}\" has been banned.\n\nReason: {request.Reason.Trim()}"
                     : $"Your night market \"{market.Name}\" has been restored.\n\nReason: {request.Reason.Trim()}";
 
                 await _notifications.NotifyAsync(new NotificationMessage(
@@ -181,7 +181,7 @@ public class AdminModerationService : IAdminModerationService
 
         return ApiResponse<ModerationActionResponse>.SuccessResponse(
             new ModerationActionResponse { Id = history.Id, Success = true, Message = $"Night market has been {request.Status.ToString().ToLower()}." },
-            request.Status == ModerationStatus.Suspended ? "Night market has been suspended." : "Night market has been restored.");
+            request.Status == ModerationStatus.Suspended ? "Night market has been banned." : "Night market has been restored.");
     }
 
     public async Task<ApiResponse<PaginationResp<ModerationActionHistoryResponse>>> GetMarketHistoryAsync(
@@ -393,7 +393,7 @@ public class AdminModerationService : IAdminModerationService
     private static void ValidateModerationStatus(ModerationStatus status)
     {
         if (status != ModerationStatus.Active && status != ModerationStatus.Suspended)
-            throw AppException.BadRequest($"Invalid moderation status '{status}'. Only Active or Suspended are allowed.");
+            throw AppException.BadRequest($"Invalid moderation status '{status}'. Only Active or Banned are allowed.");
     }
 
     private static MarketModerationOverviewResponse MapMarketOverview(

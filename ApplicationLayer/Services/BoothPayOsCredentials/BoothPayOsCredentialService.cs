@@ -1,5 +1,6 @@
 using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.DTOs.Responses;
+using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
 using ApplicationLayer.Services.EncryptionServices;
 using DomainLayer.Entities;
@@ -30,6 +31,24 @@ namespace ApplicationLayer.Services.BoothPayOsCredentials
             UpsertPayOsCredentialRequest request,
             CancellationToken cancellationToken = default)
         {
+            var payInValues = new[] { request.ClientId, request.ApiKey, request.ChecksumKey };
+            if (payInValues.Any(value => !string.IsNullOrWhiteSpace(value))
+                && payInValues.Any(string.IsNullOrWhiteSpace))
+            {
+                throw AppException.BadRequest(
+                    "Enter the client ID, API key, and checksum key together.",
+                    "PAYMENT_CREDENTIALS_INCOMPLETE");
+            }
+
+            var payoutValues = new[] { request.PayoutClientId, request.PayoutApiKey, request.PayoutChecksumKey };
+            if (payoutValues.Any(value => !string.IsNullOrWhiteSpace(value))
+                && payoutValues.Any(string.IsNullOrWhiteSpace))
+            {
+                throw AppException.BadRequest(
+                    "Enter all payout credential fields together.",
+                    "PAYOUT_CREDENTIALS_INCOMPLETE");
+            }
+
             var credential = await _repository.GetByBoothIdAsync(request.BoothId, cancellationToken);
             bool isNew = false;
 

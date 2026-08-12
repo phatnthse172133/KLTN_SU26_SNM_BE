@@ -15,7 +15,7 @@ public class SupportTicketService : ISupportTicketService
     private static readonly HashSet<string> Categories = new(StringComparer.OrdinalIgnoreCase)
     { "Account", "Subscription", "Payment", "Booth", "NightMarket", "LayoutAssignment", "Menu", "Order", "Promotion", "TechnicalIssue", "Other" };
     private static readonly HashSet<string> Statuses = new(StringComparer.OrdinalIgnoreCase)
-    { "Open", "InProgress", "WaitingForRequester", "Resolved", "Closed" };
+    { "Pending", "InProgress", "Resolved", "Rejected" };
     private readonly ISupportTicketRepository _repository;
     private readonly IFileStorageService _storage;
     private readonly INotificationService _notifications;
@@ -46,13 +46,13 @@ public class SupportTicketService : ISupportTicketService
             Title = request.Title.Trim(),
             Description = request.Description.Trim(),
             PageUrl = string.IsNullOrWhiteSpace(request.PageUrl) ? null : request.PageUrl.Trim(),
-            Status = "Open",
+            Status = "Pending",
             Priority = "Normal",
             DueAt = now.AddHours(24),
             CreatedAt = now,
             UpdatedAt = now,
         };
-        ticket.StatusHistory.Add(new SupportStatusHistory { Id = Guid.NewGuid(), ActorId = userId, FromStatus = null, ToStatus = "Open", Note = "Support request created.", CreatedAt = now });
+        ticket.StatusHistory.Add(new SupportStatusHistory { Id = Guid.NewGuid(), ActorId = userId, FromStatus = null, ToStatus = "Pending", Note = "Support request created.", CreatedAt = now });
         await _repository.AddAsync(ticket, ct);
         await _repository.SaveChangesAsync(ct);
         await NotifySafelyAsync(new RoleNotificationMessage("Admin", NotificationType.System, "New support request", $"{ticket.TicketCode}: {ticket.Title}", ReferenceType: "SupportTicket", ReferenceId: ticket.Id), ct);
@@ -95,13 +95,12 @@ public class SupportTicketService : ISupportTicketService
         var ticket = await RequireTicketAsync(ticketId, ct);
         if (!isAdmin && ticket.RequesterId != userId) throw AppException.Forbidden("You can only reply to your own support requests.", "SUPPORT_TICKET_ACCESS_DENIED");
         if (!isAdmin && request.IsInternalNote) throw AppException.Forbidden("Internal notes are available to administrators only.", "SUPPORT_INTERNAL_NOTE_FORBIDDEN");
-        if (ticket.Status == "Closed") throw AppException.Conflict("This support request is closed. Reopen it before sending a reply.", "SUPPORT_TICKET_CLOSED");
+        if (IsFinalStatus(ticket.Status)) throw AppException.Conflict("This support request has been finalized and can no longer receive replies.", "SUPPORT_TICKET_FINALIZED");
         var now = DateTime.UtcNow;
         ticket.Messages.Add(new SupportMessage { Id = Guid.NewGuid(), TicketId = ticket.Id, SenderId = userId, SenderRole = role, Body = request.Body.Trim(), IsInternalNote = isAdmin && request.IsInternalNote, CreatedAt = now });
         if (isAdmin && !request.IsInternalNote && ticket.FirstRespondedAt is null) ticket.FirstRespondedAt = now;
         var previousStatus = ticket.Status;
-        if (isAdmin && !request.IsInternalNote && ticket.Status == "Open") ticket.Status = "InProgress";
-        if (!isAdmin && ticket.Status == "WaitingForRequester") ticket.Status = "InProgress";
+        if (isAdmin && !request.IsInternalNote && CanonicalStatus(ticket.Status) == "Pending") ticket.Status = "InProgress";
         if (!string.Equals(previousStatus, ticket.Status, StringComparison.Ordinal))
         {
             ticket.StatusHistory.Add(new SupportStatusHistory
@@ -173,17 +172,17 @@ public class SupportTicketService : ISupportTicketService
 
     public async Task<ApiResponse<SupportTicketDetail>> UpdateAsync(Guid adminId, Guid ticketId, UpdateSupportTicketRequest request, CancellationToken ct = default)
     {
-        if (!Statuses.Contains(request.Status)) throw AppException.BadRequest("Select a valid support status.", "SUPPORT_STATUS_INVALID");
+        if (!Statuses.Contains(request.Status)) throw AppException.BadRequest("Select Pending, In progress, Resolved, or Rejected.", "SUPPORT_STATUS_INVALID");
         var ticket = await RequireTicketAsync(ticketId, ct);
         var normalized = NormalizeStatus(request.Status);
+        if (normalized == "Rejected" && string.IsNullOrWhiteSpace(request.Note))
+            throw AppException.BadRequest("Enter a reason before rejecting this support request.", "SUPPORT_REJECTION_REASON_REQUIRED");
         var previous = ticket.Status;
         var now = DateTime.UtcNow;
         ticket.Status = normalized;
         ticket.AssignedAdminId = request.AssignedAdminId ?? ticket.AssignedAdminId ?? adminId;
-        if (normalized == "Resolved") ticket.ResolvedAt = now;
-        if (normalized == "Closed") ticket.ClosedAt = now;
-        if (normalized != "Resolved") ticket.ResolvedAt = null;
-        if (normalized != "Closed") ticket.ClosedAt = null;
+        ticket.ResolvedAt = normalized == "Resolved" ? now : null;
+        ticket.ClosedAt = normalized == "Rejected" ? now : null;
         ticket.UpdatedAt = now;
         ticket.StatusHistory.Add(new SupportStatusHistory { Id = Guid.NewGuid(), TicketId = ticket.Id, ActorId = adminId, FromStatus = previous, ToStatus = normalized, Note = string.IsNullOrWhiteSpace(request.Note) ? null : request.Note.Trim(), CreatedAt = now });
         await _repository.SaveChangesAsync(ct);
@@ -221,18 +220,20 @@ public class SupportTicketService : ISupportTicketService
     private async Task NotifySafelyAsync(RoleNotificationMessage message, CancellationToken ct) { try { await _notifications.NotifyRoleAsync(message, ct); } catch { } }
     private static string NormalizeCategory(string value) => Categories.First(c => c.Equals(value, StringComparison.OrdinalIgnoreCase));
     private static string NormalizeStatus(string value) => Statuses.First(s => s.Equals(value, StringComparison.OrdinalIgnoreCase));
-    private static string ToDisplayStatus(string value) => value switch { "InProgress" => "In Progress", "WaitingForRequester" => "Waiting for Requester", _ => value };
-    private static SupportTicketListItem MapList(SupportTicket t) => new() { Id = t.Id, TicketCode = t.TicketCode, Title = t.Title, Category = t.Category, Status = t.Status, Priority = t.Priority, RequesterName = t.Requester?.FullName ?? "User", RequesterEmail = t.Requester?.Email ?? "", RequesterRole = t.RequesterRole, DueAt = t.DueAt, IsOverdue = t.FirstRespondedAt is null && t.DueAt < DateTime.UtcNow && t.Status != "Closed", CreatedAt = t.CreatedAt, UpdatedAt = t.UpdatedAt };
+    private static string CanonicalStatus(string value) => value switch { "Open" => "Pending", "WaitingForRequester" => "InProgress", "Closed" => "Resolved", _ => value };
+    private static bool IsFinalStatus(string value) => CanonicalStatus(value) is "Resolved" or "Rejected";
+    private static string ToDisplayStatus(string value) => CanonicalStatus(value) switch { "InProgress" => "In progress", _ => CanonicalStatus(value) };
+    private static SupportTicketListItem MapList(SupportTicket t) => new() { Id = t.Id, TicketCode = t.TicketCode, Title = t.Title, Category = t.Category, Status = CanonicalStatus(t.Status), Priority = t.Priority, RequesterName = t.Requester?.FullName ?? "User", RequesterEmail = t.Requester?.Email ?? "", RequesterRole = t.RequesterRole, DueAt = t.DueAt, IsOverdue = t.FirstRespondedAt is null && t.DueAt < DateTime.UtcNow && !IsFinalStatus(t.Status), CreatedAt = t.CreatedAt, UpdatedAt = t.UpdatedAt };
     private static SupportAttachmentResponse MapAttachment(SupportAttachment a) => new() { Id = a.Id, FileUrl = a.FileUrl, OriginalFileName = a.OriginalFileName, ContentType = a.ContentType, FileSize = a.FileSize };
     private static SupportTicketDetail MapDetail(SupportTicket t, bool includeInternal) => new()
     {
-        Id = t.Id, TicketCode = t.TicketCode, Title = t.Title, Category = t.Category, Status = t.Status, Priority = t.Priority,
+        Id = t.Id, TicketCode = t.TicketCode, Title = t.Title, Category = t.Category, Status = CanonicalStatus(t.Status), Priority = t.Priority,
         RequesterName = t.Requester?.FullName ?? "User", RequesterEmail = t.Requester?.Email ?? "", RequesterRole = t.RequesterRole,
-        DueAt = t.DueAt, IsOverdue = t.FirstRespondedAt is null && t.DueAt < DateTime.UtcNow && t.Status != "Closed", CreatedAt = t.CreatedAt, UpdatedAt = t.UpdatedAt,
+        DueAt = t.DueAt, IsOverdue = t.FirstRespondedAt is null && t.DueAt < DateTime.UtcNow && !IsFinalStatus(t.Status), CreatedAt = t.CreatedAt, UpdatedAt = t.UpdatedAt,
         Description = t.Description, PageUrl = t.PageUrl, BoothId = t.BoothId, NightMarketId = t.NightMarketId, AssignedAdminId = t.AssignedAdminId,
         AssignedAdminName = t.AssignedAdmin?.FullName, FirstRespondedAt = t.FirstRespondedAt, ResolvedAt = t.ResolvedAt,
         Messages = t.Messages.Where(m => includeInternal || !m.IsInternalNote).OrderBy(m => m.CreatedAt).Select(m => new SupportMessageResponse { Id = m.Id, SenderName = m.Sender?.FullName ?? m.SenderRole, SenderRole = m.SenderRole, Body = m.Body, IsInternalNote = m.IsInternalNote, CreatedAt = m.CreatedAt }).ToList(),
         Attachments = t.Attachments.OrderBy(a => a.CreatedAt).Select(MapAttachment).ToList(),
-        StatusHistory = t.StatusHistory.OrderBy(h => h.CreatedAt).Select(h => new SupportStatusHistoryResponse { FromStatus = h.FromStatus, ToStatus = h.ToStatus, Note = h.Note, ActorName = h.Actor?.FullName ?? "User", CreatedAt = h.CreatedAt }).ToList()
+        StatusHistory = t.StatusHistory.OrderBy(h => h.CreatedAt).Select(h => new SupportStatusHistoryResponse { FromStatus = h.FromStatus is null ? null : CanonicalStatus(h.FromStatus), ToStatus = CanonicalStatus(h.ToStatus), Note = h.Note, ActorName = h.Actor?.FullName ?? "User", CreatedAt = h.CreatedAt }).ToList()
     };
 }

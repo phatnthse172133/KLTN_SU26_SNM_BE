@@ -45,7 +45,9 @@ public class LayoutGraphValidationService : ILayoutGraphValidationService
         if (boothSlots.Count > 0 && !nodes.Any(x => x.NodeType == LayoutNodeType.Junction))
             errors.Add("Layout must have at least one path point (junction). Use the Generate Layout feature or add one manually.");
 
-        // Legacy BoothAccess nodes are not required for new layouts but are still validated if present
+        // BoothAccess is a retired, legacy-only node type. Existing rows are retained
+        // for compatibility but do not affect whether a modern Gate-based layout can
+        // be activated.
 
         if (nodes.Any(x => x.Xcoordinate < 0 || x.Xcoordinate > layout.Width || x.Ycoordinate < 0 || x.Ycoordinate > layout.Height))
             errors.Add("All nodes must be inside the layout dimensions.");
@@ -69,19 +71,16 @@ public class LayoutGraphValidationService : ILayoutGraphValidationService
 
         var connectedIds = edges.SelectMany(x => new[] { x.FromNodeId, x.ToNodeId }).ToHashSet();
 
-        // Entrance, BoothSlot and legacy BoothAccess nodes cannot be isolated
-        if (nodes.Any(x => x.NodeType is LayoutNodeType.Entrance or LayoutNodeType.BoothSlot or LayoutNodeType.BoothAccess && !connectedIds.Contains(x.Id)))
-            errors.Add("Required entrance, booth slot, and booth access nodes cannot be isolated.");
+        // A Gate (stored as Entrance) and each booth slot must be connected. Retired
+        // BoothAccess records from an older layout are deliberately ignored here.
+        if (nodes.Any(x => (x.NodeType is LayoutNodeType.Entrance or LayoutNodeType.BoothSlot) && !connectedIds.Contains(x.Id)))
+            errors.Add("Each gate and booth slot must be connected to the layout.");
 
         var reachable = ReachableFromEntrances(nodes.Where(x => x.NodeType == LayoutNodeType.Entrance).Select(x => x.Id), edges);
 
         // Every BoothSlot must be reachable from an entrance
         if (boothSlots.Any(bs => !reachable.Contains(bs.Id)))
             errors.Add("Every booth slot must be reachable from an entrance.");
-
-        // Legacy: BoothAccess nodes should also be reachable if present
-        if (nodes.Any(x => x.NodeType == LayoutNodeType.BoothAccess && !reachable.Contains(x.Id)))
-            errors.Add("Every booth access node must be reachable from an entrance.");
 
         // SlotCode validation for BoothSlots
         var slotsWithEmptyCode = boothSlots.Where(x => string.IsNullOrWhiteSpace(x.SlotCode)).ToList();

@@ -68,6 +68,37 @@ public class LayoutNodeService : ILayoutNodeService
         var now = DateTime.UtcNow;
         node.Id = Guid.NewGuid(); node.LayoutId = layoutId; node.IsDeleted = false; node.CreatedAt = now; node.UpdatedAt = now;
         await _nodes.AddAsync(node); await _nodes.SaveChangesAsync();
+
+        // A user-facing Gate is stored as an Entrance for backwards-compatible
+        // routing. Link it to the nearest junction when it is placed so the
+        // new gate works immediately without manual edge editing.
+        if (request.NodeType == DomainLayer.Enums.GeneralEnum.LayoutNodeType.Entrance)
+        {
+            var layoutNodes = await _nodes.GetByLayoutAsync(layoutId, cancellationToken: cancellationToken);
+            var nearestJunction = layoutNodes
+                .Where(candidate => !candidate.IsDeleted
+                    && candidate.NodeType == DomainLayer.Enums.GeneralEnum.LayoutNodeType.Junction)
+                .OrderBy(candidate => SquaredDistance(node, candidate))
+                .FirstOrDefault();
+
+            if (nearestJunction is not null)
+            {
+                await _edges.AddAsync(new LayoutEdge
+                {
+                    Id = Guid.NewGuid(),
+                    LayoutId = layoutId,
+                    FromNodeId = node.Id,
+                    ToNodeId = nearestJunction.Id,
+                    Distance = (decimal)Math.Sqrt((double)SquaredDistance(node, nearestJunction)),
+                    IsBidirectional = true,
+                    IsAccessible = true,
+                    IsDeleted = false,
+                    CreatedAt = now,
+                    UpdatedAt = now
+                });
+                await _edges.SaveChangesAsync();
+            }
+        }
         return ApiResponse<LayoutNodeResponse>.SuccessResponse(_mapper.Map<LayoutNodeResponse>(node), "Layout node created successfully.");
     }
 
@@ -295,16 +326,12 @@ public class LayoutNodeService : ILayoutNodeService
         if (await _locations.GetCurrentByNodeAsync(id, cancellationToken) is not null)
             throw AppException.Conflict("Release the booth location before deleting this node.");
 
-        if (node.NodeType is DomainLayer.Enums.GeneralEnum.LayoutNodeType.Entrance or DomainLayer.Enums.GeneralEnum.LayoutNodeType.Exit)
+        if (node.NodeType == DomainLayer.Enums.GeneralEnum.LayoutNodeType.Entrance)
         {
             var existingOfSameType = await _nodes.FindAsync(n => n.LayoutId == node.LayoutId && n.NodeType == node.NodeType && !n.IsDeleted);
             if (existingOfSameType.Count() <= 1)
             {
-                var typeName = node.NodeType == DomainLayer.Enums.GeneralEnum.LayoutNodeType.Entrance ? "Entrance" : "Exit";
-                var errorCode = node.NodeType == DomainLayer.Enums.GeneralEnum.LayoutNodeType.Entrance
-                    ? "LAYOUT_LAST_ENTRANCE_DELETE_FORBIDDEN"
-                    : "LAYOUT_LAST_EXIT_DELETE_FORBIDDEN";
-                throw AppException.BadRequest($"Cannot remove the last {typeName} from the layout.", errorCode);
+                throw AppException.BadRequest("Cannot remove the last gate from the layout.", "LAYOUT_LAST_ENTRANCE_DELETE_FORBIDDEN");
             }
         }
 
@@ -379,6 +406,14 @@ public class LayoutNodeService : ILayoutNodeService
         if (layout.Width <= 0 || layout.Height <= 0) throw AppException.BadRequest("Upload a valid layout image before adding nodes.");
         if (x < 0 || x > layout.Width || y < 0 || y > layout.Height) throw AppException.BadRequest("Node coordinates must be inside the layout dimensions.");
     }
+
+    private static decimal SquaredDistance(LayoutNode first, LayoutNode second)
+    {
+        var dx = first.Xcoordinate - second.Xcoordinate;
+        var dy = first.Ycoordinate - second.Ycoordinate;
+        return dx * dx + dy * dy;
+    }
+
     private async Task ValidateZoneAsync(MarketLayout layout, Guid? zoneId, CancellationToken token)
     {
         if (!zoneId.HasValue) return;

@@ -318,36 +318,15 @@ public class LayoutGeneratorService : ILayoutGeneratorService
             });
         }
 
-        if (!newNodes.Any(n => n.NodeType == LayoutNodeType.Exit))
-        {
-            newNodes.Add(new LayoutNode
-            {
-                Id = Guid.NewGuid(),
-                LayoutId = layout.Id,
-                NodeType = LayoutNodeType.Exit,
-                NodeName = "Main Exit",
-                Xcoordinate = Math.Max(24, preview.CanvasWidth / 2),
-                Ycoordinate = Math.Max(24, preview.CanvasHeight - 24),
-                IsAccessible = true,
-                IsStartingPoint = false,
-                IsDeleted = false,
-                CreatedAt = now,
-                UpdatedAt = now
-            });
-        }
-
         // Physical/auto-fit layouts own explicit facility corridors. Re-anchor
-        // the primary entrance and exit on every generation so older saved
-        // coordinates cannot leave a gate inside a Zone after dimensions change.
+        // the primary Gate on every generation so it cannot be left inside a
+        // Zone after dimensions change. Existing Exit nodes are retained as
+        // legacy Gates, but new layouts use only the unified Gate concept.
         if ((request.AutoFitZones || request.MarketWidthMeters.HasValue) && layoutBlocks.Count > 0)
         {
             var zoneTop = layoutBlocks.Min(block => block.Y);
-            var zoneBottom = layoutBlocks.Max(block => block.Y + block.Height);
             var centerX = (decimal)Math.Max(24, preview.CanvasWidth / 2);
             var entranceY = (decimal)Math.Max(16, zoneTop / 2);
-            var exitY = (decimal)Math.Min(
-                preview.CanvasHeight - 16,
-                zoneBottom + Math.Max(16, (preview.CanvasHeight - zoneBottom) / 2));
 
             var primaryEntrance = newNodes
                 .Where(n => n.NodeType == LayoutNodeType.Entrance)
@@ -359,15 +338,6 @@ public class LayoutGeneratorService : ILayoutGeneratorService
             primaryEntrance.IsStartingPoint = true;
             primaryEntrance.UpdatedAt = now;
 
-            var primaryExit = newNodes
-                .Where(n => n.NodeType == LayoutNodeType.Exit)
-                .OrderBy(n => n.CreatedAt)
-                .First();
-            primaryExit.Xcoordinate = centerX;
-            primaryExit.Ycoordinate = exitY;
-            primaryExit.NodeName = "Main Exit";
-            primaryExit.IsStartingPoint = false;
-            primaryExit.UpdatedAt = now;
         }
 
         // Utility edges are preserved by MarketLayoutService.ApplyGenerationAsync,
@@ -377,7 +347,6 @@ public class LayoutGeneratorService : ILayoutGeneratorService
         // Each Entrance/Exit connects to its closest Junction.
         // All zone Junctions are chained together so every BoothSlot is reachable from any Entrance.
         var entrances = newNodes.Where(n => n.NodeType == LayoutNodeType.Entrance).ToList();
-        var exits = newNodes.Where(n => n.NodeType == LayoutNodeType.Exit).ToList();
         var junctions = newNodes
             .Where(n => n.NodeType == LayoutNodeType.Junction)
             .OrderBy(j => j.Xcoordinate)
@@ -390,7 +359,7 @@ public class LayoutGeneratorService : ILayoutGeneratorService
             ConnectJunctionsAsGrid(layout.Id, junctions, newNodes, newEdges, now);
 
             // Connect each Entrance/Exit to its closest Junction
-            foreach (var utilityNode in entrances.Concat(exits))
+            foreach (var utilityNode in entrances.Concat(newNodes.Where(n => n.NodeType == LayoutNodeType.Exit)))
             {
                 var closestJunction = junctions
                     .OrderBy(j => (j.Xcoordinate - utilityNode.Xcoordinate) * (j.Xcoordinate - utilityNode.Xcoordinate)

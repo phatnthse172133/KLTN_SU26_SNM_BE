@@ -47,6 +47,7 @@ public class MapNavigationService : IMapNavigationService
         var layout = await _layouts.GetActiveMapAsync(nightMarketId, cancellationToken) ?? throw AppException.NotFound("This night market has no active map.");
         var nodes = await _nodes.GetByLayoutAsync(layout.Id, cancellationToken: cancellationToken);
         var edges = await _edges.GetByLayoutAsync(layout.Id, cancellationToken: cancellationToken);
+        var blocks = await _layouts.GetBlocksByLayoutIdAsync(layout.Id, cancellationToken);
         var locations = await _locations.GetCustomerCurrentByLayoutAsync(layout.Id, cancellationToken);
         var zones = await _zones.GetActiveByNightMarketIdAsync(nightMarketId, cancellationToken: cancellationToken);
 
@@ -67,6 +68,7 @@ public class MapNavigationService : IMapNavigationService
                 PixelsPerMeter = layout.PixelsPerMeter
             },
             Zones = _mapper.Map<List<ZoneResponse>>(zones),
+            Blocks = blocks.Select(ToMapBlock).ToList(),
             Nodes = _mapper.Map<List<LayoutNodeResponse>>(nodes),
             Edges = _mapper.Map<List<LayoutEdgeResponse>>(edges),
             StartingPoints = _mapper.Map<List<LayoutNodeResponse>>(nodes.Where(node => node.IsAccessible && IsStartingPoint(node))),
@@ -162,7 +164,7 @@ public class MapNavigationService : IMapNavigationService
             : (decimal?)null;
         var edgesById = graph.Edges.ToDictionary(x => x.Id);
         var instructions = _instructions.Build(solution.NodeIds, solution.EdgeIds, routeNodes, edgesById,
-            _navigationOptions.MinimumInstructionSegmentMeters).ToList();
+            _navigationOptions.MinimumInstructionSegmentMeters, slot).ToList();
         if (meters is null)
         {
             foreach (var instruction in instructions)
@@ -186,7 +188,8 @@ public class MapNavigationService : IMapNavigationService
             ScaleX = scale?.ScaleX,
             ScaleY = scale?.ScaleY,
             TraversedEdgeIds = solution.EdgeIds,
-            RouteStepCount = instructions.Count(x => x.InstructionCode is not "START" and not "ARRIVE"),
+            RouteStepCount = instructions.Count(x =>
+                x.InstructionCode is not "START" && !x.InstructionCode.StartsWith("ARRIVE", StringComparison.Ordinal)),
             Instructions = instructions,
             Path = solution.NodeIds.Select((id, index) => new RoutePathNodeResponse
             {
@@ -206,6 +209,23 @@ public class MapNavigationService : IMapNavigationService
     }
     private static bool IsStartingPoint(LayoutNode x) => x.IsStartingPoint ||
         x.NodeType is DomainLayer.Enums.GeneralEnum.LayoutNodeType.Entrance or DomainLayer.Enums.GeneralEnum.LayoutNodeType.Exit or DomainLayer.Enums.GeneralEnum.LayoutNodeType.Landmark;
+
+    // Read-only projection of persisted zone rectangles. Coordinates are copied
+    // as stored; ConfigJson is intentionally omitted from the customer map DTO.
+    private static MapLayoutBlockResponse ToMapBlock(LayoutBlock block) => new()
+    {
+        Id = block.Id,
+        ZoneId = block.ZoneId,
+        Name = block.Name,
+        Type = block.Type,
+        Color = block.Zone?.Color,
+        X = block.X,
+        Y = block.Y,
+        Width = block.Width,
+        Height = block.Height,
+        Rotation = block.Rotation
+    };
+
     private static decimal Distance(decimal x1, decimal y1, decimal x2, decimal y2)
         => (decimal)Math.Sqrt(Math.Pow((double)(x1 - x2), 2) + Math.Pow((double)(y1 - y2), 2));
 

@@ -10,6 +10,7 @@ using DomainLayer.InterfaceCore.External;
 using DomainLayer.InterfaceCore.JWT;
 using DomainLayer.InterfaceRepository;
 using InfrastructureLayer.Cores.JWTs;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using static DomainLayer.Enums.GeneralEnum;
@@ -547,7 +548,8 @@ public class AuthenticationServiceTests
             emailService.Object,
             googleValidator.Object,
             deviceTokens.Object,
-            mapper.Object);
+            mapper.Object,
+            NullLogger<AuthService>.Instance);
 
         return new AuthFixture(
             service,

@@ -366,6 +366,68 @@ public class IndoorNavigationCorridorTests
         Assert.Equal(2, await db.LayoutNodes.CountAsync());
     }
 
+    [Fact]
+    public async Task GetMap_ReturnsPersistedBlocksWithoutMutatingLayout()
+    {
+        await using var db = new SNMDbContext(new DbContextOptionsBuilder<SNMDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString("N")).Options);
+        var marketId = Guid.NewGuid();
+        var layoutId = Guid.NewGuid();
+        var blockId = Guid.NewGuid();
+        var zoneId = Guid.NewGuid();
+        var gateId = Guid.NewGuid();
+        db.NightMarkets.Add(new NightMarket
+        {
+            Id = marketId, Name = "Market", Address = "Test", Status = NightMarketStatus.Active,
+            ModerationStatus = ModerationStatus.Active
+        });
+        db.Zones.Add(new Zone
+        {
+            Id = zoneId, NightMarketId = marketId, ZoneName = "Khu A", Color = "#E76F51",
+            Status = ZoneStatus.Active
+        });
+        db.MarketLayouts.Add(new MarketLayout
+        {
+            Id = layoutId, NightMarketId = marketId, LayoutName = "Live", Version = 2, GraphRevision = 4,
+            Width = 200, Height = 160, Status = MarketLayoutStatus.Active, PixelsPerMeter = 10
+        });
+        db.LayoutBlocks.Add(new LayoutBlock
+        {
+            Id = blockId, LayoutId = layoutId, ZoneId = zoneId, Name = "Zone A", Type = "Zone",
+            X = 20, Y = 40, Width = 90, Height = 90, Rotation = 0, DisplayOrder = 1,
+            ConfigJson = """{"boothWidth":30,"boothHeight":30,"columns":2,"rows":2,"physical":true}"""
+        });
+        db.LayoutNodes.Add(new LayoutNode
+        {
+            Id = gateId, LayoutId = layoutId, NodeType = LayoutNodeType.Entrance, NodeName = "Main Entrance",
+            Xcoordinate = 68, Ycoordinate = 16, IsAccessible = true, IsStartingPoint = true
+        });
+        await db.SaveChangesAsync();
+
+        var mapper = new MapperConfiguration(configuration => configuration.AddProfile<MappingProfile>(), NullLoggerFactory.Instance).CreateMapper();
+        var map = await new MapNavigationService(
+            new NightMarketRepository(db), new MarketLayoutRepository(db), new ZoneRepository(db),
+            new LayoutNodeRepository(db), new LayoutEdgeRepository(db), new BoothLocationRepository(db),
+            new BoothRepository(db), mapper).GetMapAsync(marketId);
+
+        var block = Assert.Single(map.Data!.Blocks);
+        Assert.Equal(blockId, block.Id);
+        Assert.Equal(zoneId, block.ZoneId);
+        Assert.Equal("Zone A", block.Name);
+        Assert.Equal("Zone", block.Type);
+        Assert.Equal("#E76F51", block.Color);
+        Assert.Equal(20, block.X);
+        Assert.Equal(40, block.Y);
+        Assert.Equal(90, block.Width);
+        Assert.Equal(90, block.Height);
+        Assert.Equal(0, block.Rotation);
+        Assert.Null(block.GetType().GetProperty("ConfigJson"));
+        Assert.Equal(4, (await db.MarketLayouts.SingleAsync()).GraphRevision);
+        Assert.Equal(20, (await db.LayoutBlocks.SingleAsync()).X);
+        Assert.Equal("""{"boothWidth":30,"boothHeight":30,"columns":2,"rows":2,"physical":true}""",
+            (await db.LayoutBlocks.SingleAsync()).ConfigJson);
+    }
+
     private static (Guid LayoutId, LayoutBlock Block, LayoutNode[] Slots, LayoutNode Gate) StandardFixture()
     {
         var layoutId = Guid.NewGuid();

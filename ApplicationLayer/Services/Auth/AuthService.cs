@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using AutoMapper;
 using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.DTOs.Responses;
@@ -8,6 +9,7 @@ using DomainLayer.InterfaceCore.Email;
 using DomainLayer.InterfaceCore.External;
 using DomainLayer.InterfaceCore.JWT;
 using DomainLayer.InterfaceRepository;
+using Microsoft.Extensions.Logging;
 using static DomainLayer.Enums.GeneralEnum;
 
 namespace ApplicationLayer.Services.Auth;
@@ -22,6 +24,7 @@ public class AuthService : IAuthService
     private readonly IGoogleTokenValidator _googleTokenValidator;
     private readonly IUserDeviceTokenRepository _deviceTokens;
     private readonly IMapper _mapper;
+    private readonly ILogger<AuthService> _logger;
 
     public AuthService(
         IGenericRepository<User> userRepository,
@@ -31,7 +34,8 @@ public class AuthService : IAuthService
         IEmailService emailService,
         IGoogleTokenValidator googleTokenValidator,
         IUserDeviceTokenRepository deviceTokens,
-        IMapper mapper)
+        IMapper mapper,
+        ILogger<AuthService> logger)
     {
         _userRepository = userRepository;
         _roleRepository = roleRepository;
@@ -41,6 +45,7 @@ public class AuthService : IAuthService
         _googleTokenValidator = googleTokenValidator;
         _deviceTokens = deviceTokens;
         _mapper = mapper;
+        _logger = logger;
     }
 
     public Task<ApiResponse<object>> RegisterCustomerAsync(
@@ -248,11 +253,38 @@ public class AuthService : IAuthService
 
     public async Task<ApiResponse<object>> ForgotPasswordAsync(ForgotPasswordRequest request, CancellationToken cancellationToken = default)
     {
+        var started = Stopwatch.StartNew();
         EnsurePasswordResetEmailConfigured();
 
         var user = await _userRepository.FirstOrDefaultAsync(item => item.Email == request.Email.Trim().ToLowerInvariant());
         if (user is null || user.Status != UserStatus.Active || user.AuthProvider == AuthProvider.Google)
+        {
+            var skipReason = user is null
+                ? "NotFound"
+                : user.AuthProvider == AuthProvider.Google
+                    ? "Google"
+                    : "NotActive";
+            _logger.LogInformation(
+                "Forgot password skipped. UserFound={UserFound} UserEligible={UserEligible} SkipReason={SkipReason} OtpGenerated={OtpGenerated} OtpPersisted={OtpPersisted} EmailSendAttempted={EmailSendAttempted} EmailSendSucceeded={EmailSendSucceeded} EmailSendFailed={EmailSendFailed} DurationMs={DurationMs}",
+                user is not null,
+                false,
+                skipReason,
+                false,
+                false,
+                false,
+                false,
+                false,
+                started.ElapsedMilliseconds);
             return ApiResponse<object>.SuccessResponse(new { }, "If the email exists, a password-reset OTP has been sent.");
+        }
+
+        _logger.LogInformation(
+            "Forgot password user located. UserFound={UserFound} UserEligible={UserEligible} UserId={UserId} Status={Status} AuthProvider={AuthProvider}",
+            true,
+            true,
+            user.Id,
+            user.Status,
+            user.AuthProvider);
 
         var otp = _jwtService.GenerateNumericCode(6);
         var rawResetToken = _jwtService.GenerateSecureToken();
@@ -265,9 +297,25 @@ public class AuthService : IAuthService
         _userRepository.Update(user);
         await _userRepository.SaveChangesAsync();
 
+        _logger.LogInformation(
+            "Forgot password OTP persisted. UserFound={UserFound} OtpGenerated={OtpGenerated} OtpPersisted={OtpPersisted} OtpExpiresAt={OtpExpiresAt}",
+            true,
+            true,
+            true,
+            user.PasswordResetOtpExpiresAt);
+
         try
         {
+            _logger.LogInformation(
+                "Forgot password email send attempted. EmailSendAttempted={EmailSendAttempted} EmailType={EmailType}",
+                true,
+                "PasswordResetOtp");
             await _emailService.SendPasswordResetOtpAsync(user.Email, user.FullName, otp, cancellationToken);
+            _logger.LogInformation(
+                "Forgot password email send succeeded. EmailSendAttempted={EmailSendAttempted} EmailSendSucceeded={EmailSendSucceeded} EmailSendFailed={EmailSendFailed}",
+                true,
+                true,
+                false);
             await _emailService.SendPasswordResetLinkAsync(user.Email, user.FullName, rawResetToken, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -278,8 +326,21 @@ public class AuthService : IAuthService
         {
             // Delivery failure is already logged by EmailService. Keep a generic success
             // so this endpoint cannot be used to confirm that an account exists.
+            _logger.LogWarning(
+                "Forgot password email send failed. EmailSendAttempted={EmailSendAttempted} EmailSendSucceeded={EmailSendSucceeded} EmailSendFailed={EmailSendFailed} DurationMs={DurationMs}",
+                true,
+                false,
+                true,
+                started.ElapsedMilliseconds);
         }
 
+        _logger.LogInformation(
+            "Forgot password completed. UserFound={UserFound} UserEligible={UserEligible} OtpGenerated={OtpGenerated} OtpPersisted={OtpPersisted} DurationMs={DurationMs}",
+            true,
+            true,
+            true,
+            true,
+            started.ElapsedMilliseconds);
         return ApiResponse<object>.SuccessResponse(new { }, "If the email exists, a password-reset OTP has been sent.");
     }
 

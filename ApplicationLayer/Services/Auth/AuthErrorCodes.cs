@@ -21,6 +21,7 @@ public static class AuthErrorCodes
     public const string InvalidOrExpiredResetToken = "INVALID_OR_EXPIRED_RESET_TOKEN";
     public const string InvalidOrExpiredRefreshToken = "INVALID_OR_EXPIRED_REFRESH_TOKEN";
     public const string EmailNotVerified = "EMAIL_NOT_VERIFIED";
+    public const string EmailDeliveryFailed = "EMAIL_DELIVERY_FAILED";
     public const string AccountNotActive = "ACCOUNT_NOT_ACTIVE";
     public const string InvalidAccountRole = "INVALID_ACCOUNT_ROLE";
     public const string AccountNotFound = "ACCOUNT_NOT_FOUND";

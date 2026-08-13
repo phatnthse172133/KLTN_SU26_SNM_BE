@@ -76,6 +76,8 @@ public class AuthService : IAuthService
             throw AppException.Conflict("Username is already in use.", AuthErrorCodes.UserNameAlreadyExists);
         }
 
+        EnsureVerificationEmailConfigured();
+
         var role = await GetOrCreateRoleAsync(roleName);
         var now = DateTime.UtcNow;
         var user = new User
@@ -94,7 +96,7 @@ public class AuthService : IAuthService
 
         await _userRepository.AddAsync(user);
         await _userRepository.SaveChangesAsync();
-        await CreateAndSendVerificationTokenAsync(user, cancellationToken);
+        await CreateAndSendVerificationTokenAsync(user, cancellationToken, throwOnDeliveryFailure: true);
 
         return ApiResponse<object>.SuccessResponse(
             new { user.Id, user.Email, Role = role.RoleName },
@@ -230,6 +232,8 @@ public class AuthService : IAuthService
 
     public async Task<ApiResponse<object>> ResendVerificationAsync(ResendVerificationRequest request, CancellationToken cancellationToken = default)
     {
+        EnsureVerificationEmailConfigured();
+
         var email = request.Email.Trim().ToLowerInvariant();
         var user = await _userRepository.FirstOrDefaultAsync(item => item.Email == email);
 
@@ -238,12 +242,14 @@ public class AuthService : IAuthService
             return ApiResponse<object>.SuccessResponse(new { }, "If the account requires verification, an email has been sent.");
         }
 
-        await CreateAndSendVerificationTokenAsync(user, cancellationToken);
+        await CreateAndSendVerificationTokenAsync(user, cancellationToken, throwOnDeliveryFailure: false);
         return ApiResponse<object>.SuccessResponse(new { }, "If the account requires verification, an email has been sent.");
     }
 
     public async Task<ApiResponse<object>> ForgotPasswordAsync(ForgotPasswordRequest request, CancellationToken cancellationToken = default)
     {
+        EnsurePasswordResetEmailConfigured();
+
         var user = await _userRepository.FirstOrDefaultAsync(item => item.Email == request.Email.Trim().ToLowerInvariant());
         if (user is null || user.Status != UserStatus.Active || user.AuthProvider == AuthProvider.Google)
             return ApiResponse<object>.SuccessResponse(new { }, "If the email exists, a password-reset OTP has been sent.");
@@ -259,8 +265,20 @@ public class AuthService : IAuthService
         _userRepository.Update(user);
         await _userRepository.SaveChangesAsync();
 
-        await _emailService.SendPasswordResetOtpAsync(user.Email, user.FullName, otp, cancellationToken);
-        await _emailService.SendPasswordResetLinkAsync(user.Email, user.FullName, rawResetToken, cancellationToken);
+        try
+        {
+            await _emailService.SendPasswordResetOtpAsync(user.Email, user.FullName, otp, cancellationToken);
+            await _emailService.SendPasswordResetLinkAsync(user.Email, user.FullName, rawResetToken, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            // Delivery failure is already logged by EmailService. Keep a generic success
+            // so this endpoint cannot be used to confirm that an account exists.
+        }
 
         return ApiResponse<object>.SuccessResponse(new { }, "If the email exists, a password-reset OTP has been sent.");
     }
@@ -506,7 +524,10 @@ public class AuthService : IAuthService
         return role;
     }
 
-    private async Task CreateAndSendVerificationTokenAsync(User user, CancellationToken cancellationToken)
+    private async Task CreateAndSendVerificationTokenAsync(
+        User user,
+        CancellationToken cancellationToken,
+        bool throwOnDeliveryFailure)
     {
         var rawToken = _jwtService.GenerateSecureToken();
         user.EmailVerificationTokenHash = _jwtService.HashToken(rawToken);
@@ -514,8 +535,45 @@ public class AuthService : IAuthService
         user.UpdatedAt = DateTime.UtcNow;
         _userRepository.Update(user);
         await _userRepository.SaveChangesAsync();
-        await _emailService.SendVerificationEmailAsync(user.Email, user.FullName, rawToken, cancellationToken);
+
+        try
+        {
+            await _emailService.SendVerificationEmailAsync(user.Email, user.FullName, rawToken, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            if (throwOnDeliveryFailure)
+            {
+                throw EmailDeliveryFailed(exception);
+            }
+        }
     }
+
+    private void EnsureVerificationEmailConfigured()
+    {
+        if (!_emailService.CanSendVerificationEmail())
+        {
+            throw EmailDeliveryFailed();
+        }
+    }
+
+    private void EnsurePasswordResetEmailConfigured()
+    {
+        if (!_emailService.CanSendPasswordResetEmail())
+        {
+            throw EmailDeliveryFailed();
+        }
+    }
+
+    private static AppException EmailDeliveryFailed(Exception? innerException = null)
+        => AppException.ServiceUnavailable(
+            "Unable to send email right now. Please try again later.",
+            AuthErrorCodes.EmailDeliveryFailed,
+            innerException);
 
     private Task<User?> FindActiveUserByEmailAsync(string email)
     {

@@ -3,6 +3,7 @@ using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Services.Notifications;
 using ApplicationLayer.Services.Orders;
 using ApplicationLayer.Services.PayOS;
+using ApplicationLayer.Services.PayOutClients;
 using ApplicationLayer.Services.Promotions;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
@@ -92,7 +93,7 @@ public class OrderZeroPaymentTests
             orders.Object,
             promotions.Object,
             validation.Object,
-            Mock.Of<IPayOSPayoutService>(),
+            Mock.Of<IPayOSPayoutClientFactory>(),
             notifications.Object,
             foods.Object,
             Mock.Of<ILogger<OrderService>>(),
@@ -180,7 +181,7 @@ public class OrderZeroPaymentTests
             orders.Object,
             Mock.Of<IPromotionRepository>(),
             Mock.Of<IPromotionValidationService>(),
-            Mock.Of<IPayOSPayoutService>(),
+            Mock.Of<IPayOSPayoutClientFactory>(),
             Mock.Of<IRealtimeNotificationPublisher>(),
             foods.Object,
             Mock.Of<ILogger<OrderService>>(),
@@ -256,7 +257,7 @@ public class OrderZeroPaymentTests
             .ReturnsAsync(100_000_000_000_004L);
         var service = new OrderService(
             orders.Object, Mock.Of<IPromotionRepository>(), Mock.Of<IPromotionValidationService>(),
-            Mock.Of<IPayOSPayoutService>(), Mock.Of<IRealtimeNotificationPublisher>(), foods.Object,
+            Mock.Of<IPayOSPayoutClientFactory>(), Mock.Of<IRealtimeNotificationPublisher>(), foods.Object,
             Mock.Of<ILogger<OrderService>>(), new ConfigurationBuilder().Build(), payos.Object,
             codeGenerator.Object, Mock.Of<IBoothRepository>(), Mock.Of<IPromotionUsageRepository>());
 
@@ -322,7 +323,7 @@ public class OrderZeroPaymentTests
             orders.Object,
             Mock.Of<IPromotionRepository>(),
             Mock.Of<IPromotionValidationService>(),
-            Mock.Of<IPayOSPayoutService>(),
+            Mock.Of<IPayOSPayoutClientFactory>(),
             notifications.Object,
             Mock.Of<IFoodItemRepository>(),
             Mock.Of<ILogger<OrderService>>(),

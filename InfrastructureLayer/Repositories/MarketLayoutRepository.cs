@@ -389,6 +389,7 @@ public class MarketLayoutRepository : GenericRepository<MarketLayout>, IMarketLa
                 existingBlock.Height = block.Height;
                 existingBlock.Rotation = block.Rotation;
                 existingBlock.DisplayOrder = block.DisplayOrder;
+                existingBlock.ConfigJson = block.ConfigJson ?? existingBlock.ConfigJson;
                 existingBlock.IsDeleted = false;
                 existingBlock.UpdatedAt = now;
             }
@@ -401,6 +402,7 @@ public class MarketLayoutRepository : GenericRepository<MarketLayout>, IMarketLa
         var layout = await _context.MarketLayouts.FirstOrDefaultAsync(l => l.Id == layoutId, cancellationToken);
         if (layout != null)
         {
+            layout.GraphRevision = checked(layout.GraphRevision + 1);
             layout.UpdatedAt = now;
         }
 

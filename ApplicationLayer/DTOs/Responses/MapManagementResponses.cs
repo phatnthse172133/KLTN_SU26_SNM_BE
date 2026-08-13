@@ -37,6 +37,9 @@ public class MapLayoutResponse
     public decimal? MetersPerLayoutUnit { get; set; }
     public string DistanceCalibrationStatus { get; set; } = string.Empty;
     public int GraphRevision { get; set; }
+    public double? MarketWidthMeters { get; set; }
+    public double? MarketLengthMeters { get; set; }
+    public double? PixelsPerMeter { get; set; }
 }
 
 public class MapLayoutBlockResponse
@@ -78,11 +81,14 @@ public class ShortestPathResponse
     public int GraphRevision { get; set; }
     public RouteNodeSummaryResponse FromNode { get; set; } = new();
     public RouteDestinationResponse Destination { get; set; } = new();
-    public decimal TotalDistance { get; set; }
-    public decimal TotalDistanceMeters { get; set; }
+    public decimal? TotalDistance { get; set; }
+    public decimal? TotalDistanceMeters { get; set; }
     public int? EstimatedWalkingMinutes { get; set; }
     public bool IsDistanceCalibrated { get; set; }
     public string DistanceCalibrationStatus { get; set; } = string.Empty;
+    public string? DistanceScaleSource { get; set; }
+    public double? ScaleX { get; set; }
+    public double? ScaleY { get; set; }
     public IReadOnlyCollection<RoutePathNodeResponse> Path { get; set; } = [];
     public IReadOnlyCollection<Guid> TraversedEdgeIds { get; set; } = [];
     public int RouteStepCount { get; set; }
@@ -92,7 +98,7 @@ public class ShortestPathResponse
 public class RouteInstructionResponse
 {
     public string InstructionCode { get; set; } = string.Empty;
-    public decimal DistanceMeters { get; set; }
+    public decimal? DistanceMeters { get; set; }
     public string? ReferenceName { get; set; }
     public Guid? AtNodeId { get; set; }
 }

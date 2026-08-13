@@ -7,6 +7,7 @@ using DomainLayer.InterfaceRepository;
 using ApplicationLayer.Services.Subscriptions;
 using ApplicationLayer.Services.PayOS;
 using ApplicationLayer.Services.Notifications;
+using ApplicationLayer.Services.Realtime;
 using ApplicationLayer.Exceptions;
 using Microsoft.Extensions.Logging;
 using static DomainLayer.Enums.GeneralEnum;
@@ -31,7 +32,11 @@ namespace TestingLayer
             _mockRepo = new Mock<ISubscriptionRepository>();
             _mockNotifications = new Mock<INotificationService>();
             _mockLogger = new Mock<ILogger<PayOSWebhookService>>();
-            _service = new PayOSWebhookService(_mockRepo.Object, _mockNotifications.Object, _mockLogger.Object);
+            _service = new PayOSWebhookService(
+                _mockRepo.Object,
+                _mockNotifications.Object,
+                Mock.Of<IRealtimeEventPublisher>(),
+                _mockLogger.Object);
         }
 
         private PayOSWebhookData CreateWebhookData(string code = "00")

@@ -164,6 +164,7 @@ namespace InfrastructureLayer
             services.AddScoped<IMapNavigationService, MapNavigationService>();
             services.AddScoped<IIndoorRouteSolver, DijkstraIndoorRouteSolver>();
             services.AddScoped<IIndoorRouteInstructionBuilder, IndoorRouteInstructionBuilder>();
+            services.AddScoped<INavigationGraphBuilder, NavigationGraphBuilder>();
             services.AddScoped<INavigationAnchorService, NavigationAnchorService>();
             services.AddScoped<IIndoorPositioningService, IndoorPositioningService>();
             services.AddScoped<IIndoorPositioningService, IndoorPositioningService>();

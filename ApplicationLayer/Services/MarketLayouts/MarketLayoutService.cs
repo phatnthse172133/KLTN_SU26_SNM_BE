@@ -313,6 +313,7 @@ public class MarketLayoutService : IMarketLayoutService
                 Height = existing?.Height ?? 0,
                 Rotation = existing?.Rotation ?? 0,
                 DisplayOrder = existing?.DisplayOrder ?? 0,
+                ConfigJson = existing?.ConfigJson,
                 IsDeleted = false,
                 CreatedAt = existing?.CreatedAt ?? now,
                 UpdatedAt = now

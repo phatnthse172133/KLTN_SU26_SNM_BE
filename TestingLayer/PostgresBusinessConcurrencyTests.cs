@@ -4,6 +4,7 @@ using ApplicationLayer.Exceptions;
 using ApplicationLayer.Services.Notifications;
 using ApplicationLayer.Services.Orders;
 using ApplicationLayer.Services.PayOS;
+using ApplicationLayer.Services.PayOutClients;
 using ApplicationLayer.Services.Promotions;
 using DomainLayer.InterfaceRepository;
 using InfrastructureLayer.Data;
@@ -508,7 +509,7 @@ public sealed class PostgresBusinessConcurrencyTests
             orders,
             promotions,
             new PromotionValidationService(usages, TimeProvider.System),
-            payouts ?? Mock.Of<IPayOSPayoutService>(),
+            Mock.Of<IPayOSPayoutClientFactory>(),
             notifications ?? Mock.Of<IRealtimeNotificationPublisher>(),
             new FoodItemRepository(context),
             Mock.Of<ILogger<OrderService>>(),

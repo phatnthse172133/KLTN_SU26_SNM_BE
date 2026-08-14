@@ -3,7 +3,7 @@ using ApplicationLayer.Helppers;
 
 namespace ApplicationLayer.DTOs.Requests;
 
-public sealed class CustomerBoothQueryRequest : PaginationReq
+public sealed class CustomerBoothQueryRequest : PaginationReq, IValidatableObject
 {
     public Guid? MarketId { get; set; }
 
@@ -15,8 +15,22 @@ public sealed class CustomerBoothQueryRequest : PaginationReq
     [Range(0, 5)]
     public decimal? MinimumRating { get; set; }
 
+    [Range(0, 5)]
+    public decimal? MaximumRating { get; set; }
+
     [RegularExpression("^(featured|name|rating)$", ErrorMessage = "Sort must be featured, name, or rating.")]
     public string Sort { get; set; } = "featured";
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (MinimumRating.HasValue && MaximumRating.HasValue && MaximumRating.Value < MinimumRating.Value)
+        {
+            yield return new ValidationResult(
+                "MaximumRating must be greater than or equal to MinimumRating.",
+                new[] { nameof(MaximumRating), nameof(MinimumRating) }
+            );
+        }
+    }
 }
 
 public sealed class CustomerFoodQueryRequest : PaginationReq

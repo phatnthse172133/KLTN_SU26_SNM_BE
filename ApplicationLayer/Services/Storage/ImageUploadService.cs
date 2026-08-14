@@ -63,7 +63,13 @@ public class ImageUploadService : IImageUploadService
         if (!ownerMarkets.Any(m => m.Id == booth.NightMarketId))
             throw AppException.Forbidden("You do not own the night market this booth belongs to.", "BOOTH_NOT_IN_OWN_MARKET");
 
+        var previousUrl = booth.ThumbnailUrl;
         var url = await _fileStorage.SaveImageAsync("booth-thumbnail", stream, fileName, contentType, length, ct);
+        booth.ThumbnailUrl = url;
+        booth.UpdatedAt = DateTime.UtcNow;
+        _booths.Update(booth);
+        await _booths.SaveChangesAsync();
+        await DeletePreviousImageBestEffortAsync(previousUrl, ct);
         return ApiResponse<object>.SuccessResponse(new { url }, "Booth thumbnail uploaded successfully.");
     }
 
@@ -74,7 +80,13 @@ public class ImageUploadService : IImageUploadService
         if (booth is null)
             throw AppException.NotFound("Booth not found or you do not own this booth.", "BOOTH_NOT_FOUND");
 
+        var previousUrl = booth.ThumbnailUrl;
         var url = await _fileStorage.SaveImageAsync("booth-thumbnail", stream, fileName, contentType, length, ct);
+        booth.ThumbnailUrl = url;
+        booth.UpdatedAt = DateTime.UtcNow;
+        _booths.Update(booth);
+        await _booths.SaveChangesAsync();
+        await DeletePreviousImageBestEffortAsync(previousUrl, ct);
         return ApiResponse<object>.SuccessResponse(new { url }, "Booth thumbnail uploaded successfully.");
     }
 

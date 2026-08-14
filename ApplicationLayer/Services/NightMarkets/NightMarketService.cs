@@ -1,3 +1,4 @@
+using ApplicationLayer.Services.Booths;
 using AutoMapper;
 using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.DTOs.Responses;
@@ -227,6 +228,49 @@ public class NightMarketService : INightMarketService
         EnsureOwnership(market, currentUserId, currentUserRole);
 
         await ValidateAsync(request, id, cancellationToken);
+
+        var hoursChanging = market.OpeningHours != request.OpeningHours || market.ClosingHours != request.ClosingHours;
+        if (hoursChanging)
+        {
+            var booths = await _booths.FindAsync(b => b.NightMarketId == id && b.OpenTime.HasValue && b.CloseTime.HasValue);
+
+            var newHoursCleared = !request.OpeningHours.HasValue || !request.ClosingHours.HasValue;
+            if (newHoursCleared && booths.Any())
+            {
+                var boothList = string.Join(", ", booths.Select(b => $"\"{b.BoothName}\""));
+                throw AppException.BadRequest(
+                    $"Cannot remove market operating hours because the following booth(s) still have operating hours set: {boothList}. " +
+                    $"Please clear their hours first or set new market hours.",
+                    "MARKET_HOURS_CONFLICT");
+            }
+
+            if (request.OpeningHours.HasValue && request.ClosingHours.HasValue)
+            {
+                var violatingBooths = booths.Where(b =>
+                {
+                    try
+                    {
+                        MarketOperatingHoursValidator.Validate(request.OpeningHours, request.ClosingHours, b.OpenTime, b.CloseTime);
+                        return false;
+                    }
+                    catch
+                    {
+                        return true;
+                    }
+                }).ToList();
+
+                if (violatingBooths.Count > 0)
+                {
+                    var boothList = string.Join(", ", violatingBooths.Select(b =>
+                        $"\"{b.BoothName}\" ({b.OpenTime:HH:mm}-{b.CloseTime:HH:mm})"));
+                    throw AppException.BadRequest(
+                        $"Cannot change market hours to {MarketOperatingHoursValidator.FormatSchedule(request.OpeningHours.Value, request.ClosingHours.Value)}. " +
+                        $"The following booth(s) would operate outside market hours: {boothList}. " +
+                        $"Please adjust their hours first.",
+                        "MARKET_HOURS_CONFLICT");
+                }
+            }
+        }
 
         var originalStatus = market.Status;
         var oldThumbnailUrl = market.ThumbnailUrl;

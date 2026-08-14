@@ -25,6 +25,8 @@ public class BoothResponse
     public string? NightMarketName { get; set; }
     public string? ZoneName { get; set; }
     public string? BanReason { get; set; }
+    public TimeOnly? MarketOpeningHours { get; set; }
+    public TimeOnly? MarketClosingHours { get; set; }
 }
 
 public class BoothImageResponse

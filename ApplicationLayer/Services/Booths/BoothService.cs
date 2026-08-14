@@ -59,6 +59,9 @@ public class BoothService : IBoothService
             throw AppException.NotFound("You do not have a booth.");
 
         var response = _mapper.Map<BoothResponse>(booth);
+        var market = await _nightMarkets.GetByIdAsync(booth.NightMarketId);
+        response.MarketOpeningHours = market?.OpeningHours;
+        response.MarketClosingHours = market?.ClosingHours;
         if (booth.Status == BoothStatus.Banned)
         {
             var bannedStatus = BoothStatus.Banned.ToString();
@@ -78,7 +81,9 @@ public class BoothService : IBoothService
         if (booth is null)
             throw AppException.NotFound("You do not have a booth.");
 
-        ValidateBoothFields(request.BoothName, request.PhoneNumber, request.OpenTime, request.CloseTime);
+        var market = await _nightMarkets.GetByIdAsync(booth.NightMarketId);
+        ValidateBoothFields(request.BoothName, request.PhoneNumber, request.OpenTime, request.CloseTime,
+            market?.OpeningHours, market?.ClosingHours);
         var oldThumbnailUrl = booth.ThumbnailUrl;
 
         _mapper.Map(request, booth);
@@ -93,7 +98,10 @@ public class BoothService : IBoothService
             await _fileStorage.DeleteImageIfManagedAsync(oldThumbnailUrl, cancellationToken);
         }
 
-        return ApiResponse<BoothResponse>.SuccessResponse(_mapper.Map<BoothResponse>(booth), "Booth updated successfully.");
+        var updatedResponse = _mapper.Map<BoothResponse>(booth);
+        updatedResponse.MarketOpeningHours = market?.OpeningHours;
+        updatedResponse.MarketClosingHours = market?.ClosingHours;
+        return ApiResponse<BoothResponse>.SuccessResponse(updatedResponse, "Booth updated successfully.");
     }
 
     public async Task<ApiResponse<BoothResponse>> TogglePauseMyBoothAsync(Guid ownerId, CancellationToken cancellationToken = default)
@@ -157,7 +165,9 @@ public class BoothService : IBoothService
         if (booth is null)
             throw AppException.NotFound("Booth was not found.");
 
-        ValidateBoothFields(request.BoothName, request.PhoneNumber, request.OpenTime, request.CloseTime);
+        var market = await _nightMarkets.GetByIdAsync(booth.NightMarketId);
+        ValidateBoothFields(request.BoothName, request.PhoneNumber, request.OpenTime, request.CloseTime,
+            market?.OpeningHours, market?.ClosingHours);
         if (request.ZoneId.HasValue && (await _zones.GetActiveByIdAsync(request.ZoneId.Value))?.NightMarketId != booth.NightMarketId)
             throw AppException.BadRequest("The assigned zone does not belong to this booth's night market.");
 
@@ -284,7 +294,9 @@ public class BoothService : IBoothService
         string boothName,
         string? phoneNumber,
         TimeOnly? openTime,
-        TimeOnly? closeTime)
+        TimeOnly? closeTime,
+        TimeOnly? marketOpen = null,
+        TimeOnly? marketClose = null)
     {
         var fieldErrors = new Dictionary<string, string[]>();
         if (string.IsNullOrWhiteSpace(boothName))
@@ -299,6 +311,8 @@ public class BoothService : IBoothService
 
         if (fieldErrors.Count > 0)
             throw AppException.Validation("Please correct the highlighted fields.", fieldErrors, "VALIDATION_ERROR");
+
+        MarketOperatingHoursValidator.Validate(marketOpen, marketClose, openTime, closeTime);
     }
 
     public async Task<ApiResponse<PaginationResp<MarketOwnerBoothResponse>>> GetByMarketOwnerAsync(
@@ -382,6 +396,8 @@ public class BoothService : IBoothService
         if (fieldErrors.Count > 0)
             throw AppException.Validation("Please correct the highlighted fields.", fieldErrors, "VALIDATION_ERROR");
 
+        MarketOperatingHoursValidator.Validate(market.OpeningHours, market.ClosingHours, request.OpenTime, request.CloseTime);
+
         // Verify booth owner exists and has BoothOwner role
         var boothOwner = await _users.GetByIdAsync(request.BoothOwnerId);
         if (boothOwner is null)
@@ -455,6 +471,7 @@ public class BoothService : IBoothService
         Guid marketOwnerId, Guid boothId, MarketOwnerUpdateBoothRequest request, CancellationToken cancellationToken = default)
     {
         var booth = await GetBoothOwnedByMarketOwnerAsync(marketOwnerId, boothId, cancellationToken);
+        var market = await _nightMarkets.GetByIdAsync(booth.NightMarketId);
 
         var fieldErrors = new Dictionary<string, string[]>();
 
@@ -472,6 +489,8 @@ public class BoothService : IBoothService
 
         if (fieldErrors.Count > 0)
             throw AppException.Validation("Please correct the highlighted fields.", fieldErrors, "VALIDATION_ERROR");
+
+        MarketOperatingHoursValidator.Validate(market?.OpeningHours, market?.ClosingHours, request.OpenTime, request.CloseTime);
 
         booth.BoothName = request.BoothName.Trim();
         booth.Description = request.Description;
@@ -497,7 +516,6 @@ public class BoothService : IBoothService
         }
 
         var owner = await _users.GetByIdAsync(booth.BoothOwnerId);
-        var market = await _nightMarkets.GetByIdAsync(booth.NightMarketId);
         Zone? zone = null;
         if (booth.ZoneId.HasValue) zone = await _zones.GetByIdAsync(booth.ZoneId.Value);
 
@@ -558,6 +576,7 @@ public class BoothService : IBoothService
         Guid marketOwnerId, Guid marketId, Guid layoutId, Guid nodeId, MarketOwnerCreateBoothRequest request, CancellationToken cancellationToken = default)
     {
         await VerifyMarketOwnershipAsync(marketOwnerId, marketId, cancellationToken);
+        var marketForValidation = await _nightMarkets.GetByIdAsync(marketId);
         await _unitOfWork.BeginTransactionAsync(cancellationToken);
         try
         {
@@ -581,6 +600,8 @@ public class BoothService : IBoothService
 
             if (fieldErrors.Count > 0)
                 throw AppException.Validation("Please correct the highlighted fields.", fieldErrors, "VALIDATION_ERROR");
+
+            MarketOperatingHoursValidator.Validate(marketForValidation?.OpeningHours, marketForValidation?.ClosingHours, request.OpenTime, request.CloseTime);
 
 
             var layout = await _marketLayouts.GetByIdAsync(layoutId);

@@ -247,7 +247,9 @@ public class AuthService : IAuthService
             return ApiResponse<object>.SuccessResponse(new { }, "If the account requires verification, an email has been sent.");
         }
 
-        await CreateAndSendVerificationTokenAsync(user, cancellationToken, throwOnDeliveryFailure: false);
+        // Resending is user-visible: surface SMTP delivery failures instead of
+        // reporting success when the provider rejected the message.
+        await CreateAndSendVerificationTokenAsync(user, cancellationToken, throwOnDeliveryFailure: true);
         return ApiResponse<object>.SuccessResponse(new { }, "If the account requires verification, an email has been sent.");
     }
 

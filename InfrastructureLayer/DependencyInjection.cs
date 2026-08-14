@@ -140,6 +140,7 @@ namespace InfrastructureLayer
 
             services.AddScoped<IOrderService, OrderService>();
             services.AddScoped<ICustomerCheckoutService, CustomerCheckoutService>();
+            services.AddScoped<BoothOperatingHoursEvaluator>();
 
             services.AddScoped<IFoodCategoryService, FoodCategoryService>();
             services.AddScoped<IMenuService, MenuService>();

@@ -294,6 +294,9 @@ public class BoothService : IBoothService
         if (openTime.HasValue != closeTime.HasValue)
             fieldErrors["openTime"] = new[] { "Opening hours and closing hours must be provided together." };
 
+        if (openTime.HasValue && openTime == closeTime)
+            fieldErrors["openTime"] = new[] { "Opening and closing times cannot be the same. Use 00:00 as the closing time for an overnight schedule." };
+
         if (fieldErrors.Count > 0)
             throw AppException.Validation("Please correct the highlighted fields.", fieldErrors, "VALIDATION_ERROR");
     }
@@ -372,6 +375,9 @@ public class BoothService : IBoothService
 
         if (request.OpenTime.HasValue != request.CloseTime.HasValue)
             fieldErrors["openTime"] = new[] { "Opening hours and closing hours must be provided together." };
+
+        if (request.OpenTime.HasValue && request.OpenTime == request.CloseTime)
+            fieldErrors["openTime"] = new[] { "Opening and closing times cannot be the same. Use 00:00 as the closing time for an overnight schedule." };
 
         if (fieldErrors.Count > 0)
             throw AppException.Validation("Please correct the highlighted fields.", fieldErrors, "VALIDATION_ERROR");
@@ -460,6 +466,9 @@ public class BoothService : IBoothService
 
         if (request.OpenTime.HasValue != request.CloseTime.HasValue)
             fieldErrors["openTime"] = new[] { "Opening hours and closing hours must be provided together." };
+
+        if (request.OpenTime.HasValue && request.OpenTime == request.CloseTime)
+            fieldErrors["openTime"] = new[] { "Opening and closing times cannot be the same. Use 00:00 as the closing time for an overnight schedule." };
 
         if (fieldErrors.Count > 0)
             throw AppException.Validation("Please correct the highlighted fields.", fieldErrors, "VALIDATION_ERROR");
@@ -566,6 +575,9 @@ public class BoothService : IBoothService
             if ((request.OpenTime.HasValue && !request.CloseTime.HasValue) ||
                 (!request.OpenTime.HasValue && request.CloseTime.HasValue))
                 fieldErrors["openTime"] = new[] { "Opening hours and closing hours must be provided together." };
+
+            if (request.OpenTime.HasValue && request.OpenTime == request.CloseTime)
+                fieldErrors["openTime"] = new[] { "Opening and closing times cannot be the same. Use 00:00 as the closing time for an overnight schedule." };
 
             if (fieldErrors.Count > 0)
                 throw AppException.Validation("Please correct the highlighted fields.", fieldErrors, "VALIDATION_ERROR");

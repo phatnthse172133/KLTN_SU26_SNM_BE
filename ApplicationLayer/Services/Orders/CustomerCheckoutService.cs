@@ -181,11 +181,19 @@ public sealed class CustomerCheckoutService : ICustomerCheckoutService
             ?? throw AppException.UnprocessableEntity("Cart is empty.", "CART_EMPTY");
         var items = await _cartItems.GetActiveByCartAndBoothAsync(cart.Id, boothId, cancellationToken);
         if (items.Count == 0) throw AppException.UnprocessableEntity("The cart does not contain items from this booth.", "CART_BOOTH_EMPTY");
+        var utcNow = DateTime.UtcNow;
         foreach (var item in items)
         {
             if (item.Quantity <= 0 || item.FoodItem is null) throw AppException.Conflict("Cart changed. Refresh it and try again.", "PRICE_CHANGED");
-            var orderability = CustomerOrderability.Evaluate(item.FoodItem, DateTime.UtcNow);
-            if (!orderability.CanOrder) throw AppException.UnprocessableEntity(CustomerOrderability.GetPublicMessage(orderability.ReasonCode!), "FOOD_UNAVAILABLE");
+            var orderability = CustomerOrderability.Evaluate(item.FoodItem, utcNow);
+            if (!orderability.CanOrder)
+            {
+                var boothName = item.FoodItem.Booth?.BoothName ?? "The booth";
+                var message = orderability.ReasonCode == CustomerOrderability.BoothClosed && orderability.NextOpenAt.HasValue
+                    ? $"{boothName} is currently closed. It opens at {orderability.NextOpenAt.Value:HH:mm}."
+                    : CustomerOrderability.GetPublicMessage(orderability.ReasonCode!);
+                throw AppException.UnprocessableEntity(message, orderability.ReasonCode!);
+            }
         }
         return (cart, items);
     }

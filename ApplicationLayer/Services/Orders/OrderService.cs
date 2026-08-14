@@ -237,9 +237,13 @@ namespace ApplicationLayer.Services.Orders
                 var food = foodsById[item.FoodItemId];
                 var orderability = CustomerOrderability.Evaluate(food, utcNow);
                 if (!orderability.CanOrder)
-                    throw AppException.Conflict(
-                        CustomerOrderability.GetPublicMessage(orderability.ReasonCode!),
-                        orderability.ReasonCode!);
+                {
+                    var boothName = food.Booth?.BoothName ?? "The booth";
+                    var message = orderability.ReasonCode == CustomerOrderability.BoothClosed && orderability.NextOpenAt.HasValue
+                        ? $"{boothName} is currently closed. It opens at {orderability.NextOpenAt.Value:HH:mm}."
+                        : CustomerOrderability.GetPublicMessage(orderability.ReasonCode!);
+                    throw AppException.Conflict(message, orderability.ReasonCode!);
+                }
                 if (item.UnitPrice != FoodPriceResolver.GetCurrentPrice(food, utcNow))
                     throw AppException.Conflict(
                         $"The price of '{food.Name}' has changed. Refresh the cart.",

@@ -29,6 +29,10 @@ namespace PresentationLayer.Controllers
         public async Task<IActionResult> GetHistory(Guid boothId, CancellationToken cancellationToken)
             => Ok(await _service.GetBoothHistoryAsync(CurrentUserId, boothId, cancellationToken));
 
+        [HttpPost("quote")]
+        public async Task<IActionResult> Quote(Guid boothId, [FromBody] SubscriptionQuoteRequest request, CancellationToken cancellationToken)
+            => Ok(await _service.QuoteBoothAsync(CurrentUserId, boothId, request, cancellationToken));
+
         [HttpPost("purchase")]
         public async Task<IActionResult> Purchase(Guid boothId, [FromBody] PurchaseSubscriptionRequest request, CancellationToken cancellationToken)
             => Ok(await _service.PurchaseBoothAsync(CurrentUserId, boothId, request, cancellationToken));

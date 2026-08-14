@@ -18,7 +18,11 @@ namespace DomainLayer.Entities
         public DateTime EndDate { get; set; }
         public SubscriptionStatus Status { get; set; }
         public string? AdminNotes { get; set; }
+        public decimal BaseAmount { get; set; }
+        public decimal CreditAmount { get; set; }
         public decimal PaidAmount { get; set; }
+        public string? ChangeType { get; set; }
+        public string? PreviousPackageName { get; set; }
         public long? PayOSOrderCode { get; set; }
         public DateTime? PaidAt { get; set; }
         public DateTime CreatedAt { get; set; }

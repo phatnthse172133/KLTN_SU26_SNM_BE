@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using ApplicationLayer.Common;
 
 namespace ApplicationLayer.DTOs.Requests;
 
@@ -13,10 +14,10 @@ public class RegisterRequest
     [Required, EmailAddress, StringLength(150)]
     public string Email { get; set; } = string.Empty;
 
-    [Required, StringLength(128, MinimumLength = 8)]
+    [Required, StringLength(PasswordPolicy.MaxLength, MinimumLength = PasswordPolicy.MinLength, ErrorMessage = PasswordPolicy.TooShortMessage)]
     public string Password { get; set; } = string.Empty;
 
-    [Required, Compare(nameof(Password))]
+    [Required, Compare(nameof(Password), ErrorMessage = "Confirmation password does not match the password.")]
     public string ConfirmPassword { get; set; } = string.Empty;
 }
 
@@ -81,10 +82,10 @@ public class VerifyPasswordResetOtpRequest
 
 public class ResetPasswordRequest : VerifyPasswordResetOtpRequest
 {
-    [Required, StringLength(128, MinimumLength = 8)]
+    [Required, StringLength(PasswordPolicy.MaxLength, MinimumLength = PasswordPolicy.MinLength, ErrorMessage = PasswordPolicy.TooShortMessage)]
     public string NewPassword { get; set; } = string.Empty;
 
-    [Required, Compare(nameof(NewPassword))]
+    [Required, Compare(nameof(NewPassword), ErrorMessage = "Confirmation password does not match the new password.")]
     public string ConfirmNewPassword { get; set; } = string.Empty;
 }
 
@@ -93,9 +94,9 @@ public class ResetPasswordByTokenRequest
     [Required, StringLength(4096)]
     public string Token { get; set; } = string.Empty;
 
-    [Required, StringLength(128, MinimumLength = 8)]
+    [Required, StringLength(PasswordPolicy.MaxLength, MinimumLength = PasswordPolicy.MinLength, ErrorMessage = PasswordPolicy.TooShortMessage)]
     public string NewPassword { get; set; } = string.Empty;
 
-    [Required, Compare(nameof(NewPassword))]
+    [Required, Compare(nameof(NewPassword), ErrorMessage = "Confirmation password does not match the new password.")]
     public string ConfirmNewPassword { get; set; } = string.Empty;
 }

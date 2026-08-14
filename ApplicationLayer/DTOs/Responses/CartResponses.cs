@@ -15,6 +15,9 @@ public class CartBoothResponse
 {
     public Guid BoothId { get; set; }
     public string BoothName { get; set; } = string.Empty;
+    public bool IsOpen { get; set; }
+    public string? NextOpenAt { get; set; }
+    public string? CloseReason { get; set; }
     public IReadOnlyCollection<CartCategoryResponse> Categories { get; set; } = [];
     public decimal Subtotal { get; set; }
 }

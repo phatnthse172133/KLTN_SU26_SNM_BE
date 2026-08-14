@@ -11,6 +11,7 @@ public interface IBoothRepository : IGenericRepository<Booth>
         bool? openNow,
         TimeOnly localTime,
         decimal? minimumRating,
+        decimal? maximumRating,
         int page,
         int pageSize,
         string sort,

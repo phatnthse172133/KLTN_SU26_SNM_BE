@@ -19,6 +19,7 @@ public class BoothRepository : GenericRepository<Booth>, IBoothRepository
         bool? openNow,
         TimeOnly localTime,
         decimal? minimumRating,
+        decimal? maximumRating,
         int page,
         int pageSize,
         string sort,
@@ -36,7 +37,14 @@ public class BoothRepository : GenericRepository<Booth>, IBoothRepository
         }
 
         if (minimumRating.HasValue)
+        {
             query = query.Where(booth => (booth.AverageRating ?? 0) >= minimumRating.Value);
+        }
+
+        if (maximumRating.HasValue)
+        {
+            query = query.Where(booth => (booth.AverageRating ?? 0) < maximumRating.Value);
+        }
 
         if (openNow.HasValue)
         {

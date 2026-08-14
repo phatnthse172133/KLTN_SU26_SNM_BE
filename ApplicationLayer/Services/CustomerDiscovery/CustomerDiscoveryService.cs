@@ -24,7 +24,7 @@ public sealed class CustomerDiscoveryService : ICustomerDiscoveryService
         var utcNow = _timeProvider.GetUtcNow().UtcDateTime;
         var localTime = TimeOnly.FromDateTime(NightMarketAvailability.GetVietnamLocalTime(utcNow));
         var page = await _booths.GetCustomerPagedAsync(request.MarketId, NormalizeSearch(request.Search), request.OpenNow, localTime,
-            request.MinimumRating, request.Page, request.PageSize, request.Sort, cancellationToken);
+            request.MinimumRating, request.MaximumRating, request.Page, request.PageSize, request.Sort, cancellationToken);
         var items = page.Items.Select(item => MapBoothList(item, localTime)).ToList();
         return ApiResponse<PaginationResp<CustomerBoothListItemResponse>>.SuccessResponse(
             PaginationResp<CustomerBoothListItemResponse>.Create(items, page.TotalCount, request));

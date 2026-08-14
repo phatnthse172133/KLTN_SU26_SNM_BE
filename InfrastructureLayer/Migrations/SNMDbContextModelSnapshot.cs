@@ -1084,10 +1084,8 @@ namespace InfrastructureLayer.Migrations
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .ValueGeneratedOnAdd()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
-                        .HasDefaultValueSql("'Active'::character varying")
                         .HasComment("Active | Expired | Cancelled");
 
                     b.Property<DateTime>("UpdatedAt")
@@ -3203,10 +3201,8 @@ namespace InfrastructureLayer.Migrations
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .ValueGeneratedOnAdd()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
-                        .HasDefaultValueSql("'Active'::character varying")
                         .HasComment("Active | Expired | Cancelled | PendingPayment");
 
                     b.Property<DateTime>("UpdatedAt")

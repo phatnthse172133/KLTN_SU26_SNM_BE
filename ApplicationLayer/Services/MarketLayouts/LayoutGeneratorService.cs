@@ -187,9 +187,9 @@ public class LayoutGeneratorService : ILayoutGeneratorService
 
             // ── Junction node (one per Zone, preserved or newly created) ──
             Guid junctionId;
-            // Keep the aisle point in the reserved corridor above the Zone,
-            // aligned near its right edge so it never covers the Zone title.
-            decimal junctionX = (decimal)Math.Max(zonePreview.X + 18, zonePreview.X + zonePreview.Width - 18);
+            // Keep the aisle point in the reserved corridor above the Zone.
+            // Centring it creates a clear shared walkway across each zone row.
+            decimal junctionX = (decimal)(zonePreview.X + zonePreview.Width / 2);
             decimal junctionY = (decimal)(zonePreview.Y + JunctionOffsetY);
 
             if (!existingJunctionsByZone.TryGetValue(zone.Id, out var existingJunction))
@@ -318,36 +318,15 @@ public class LayoutGeneratorService : ILayoutGeneratorService
             });
         }
 
-        if (!newNodes.Any(n => n.NodeType == LayoutNodeType.Exit))
-        {
-            newNodes.Add(new LayoutNode
-            {
-                Id = Guid.NewGuid(),
-                LayoutId = layout.Id,
-                NodeType = LayoutNodeType.Exit,
-                NodeName = "Main Exit",
-                Xcoordinate = Math.Max(24, preview.CanvasWidth / 2),
-                Ycoordinate = Math.Max(24, preview.CanvasHeight - 24),
-                IsAccessible = true,
-                IsStartingPoint = false,
-                IsDeleted = false,
-                CreatedAt = now,
-                UpdatedAt = now
-            });
-        }
-
         // Physical/auto-fit layouts own explicit facility corridors. Re-anchor
-        // the primary entrance and exit on every generation so older saved
-        // coordinates cannot leave a gate inside a Zone after dimensions change.
+        // the primary Gate on every generation so it cannot be left inside a
+        // Zone after dimensions change. Existing Exit nodes are retained as
+        // legacy Gates, but new layouts use only the unified Gate concept.
         if ((request.AutoFitZones || request.MarketWidthMeters.HasValue) && layoutBlocks.Count > 0)
         {
             var zoneTop = layoutBlocks.Min(block => block.Y);
-            var zoneBottom = layoutBlocks.Max(block => block.Y + block.Height);
             var centerX = (decimal)Math.Max(24, preview.CanvasWidth / 2);
             var entranceY = (decimal)Math.Max(16, zoneTop / 2);
-            var exitY = (decimal)Math.Min(
-                preview.CanvasHeight - 16,
-                zoneBottom + Math.Max(16, (preview.CanvasHeight - zoneBottom) / 2));
 
             var primaryEntrance = newNodes
                 .Where(n => n.NodeType == LayoutNodeType.Entrance)
@@ -359,15 +338,6 @@ public class LayoutGeneratorService : ILayoutGeneratorService
             primaryEntrance.IsStartingPoint = true;
             primaryEntrance.UpdatedAt = now;
 
-            var primaryExit = newNodes
-                .Where(n => n.NodeType == LayoutNodeType.Exit)
-                .OrderBy(n => n.CreatedAt)
-                .First();
-            primaryExit.Xcoordinate = centerX;
-            primaryExit.Ycoordinate = exitY;
-            primaryExit.NodeName = "Main Exit";
-            primaryExit.IsStartingPoint = false;
-            primaryExit.UpdatedAt = now;
         }
 
         // Utility edges are preserved by MarketLayoutService.ApplyGenerationAsync,
@@ -377,7 +347,6 @@ public class LayoutGeneratorService : ILayoutGeneratorService
         // Each Entrance/Exit connects to its closest Junction.
         // All zone Junctions are chained together so every BoothSlot is reachable from any Entrance.
         var entrances = newNodes.Where(n => n.NodeType == LayoutNodeType.Entrance).ToList();
-        var exits = newNodes.Where(n => n.NodeType == LayoutNodeType.Exit).ToList();
         var junctions = newNodes
             .Where(n => n.NodeType == LayoutNodeType.Junction)
             .OrderBy(j => j.Xcoordinate)
@@ -385,14 +354,12 @@ public class LayoutGeneratorService : ILayoutGeneratorService
             .ToList();
         if (junctions.Any())
         {
-            // Chain all zone junctions together (J1↔J2↔J3…) so every zone is reachable
-            for (int i = 0; i < junctions.Count - 1; i++)
-            {
-                newEdges.Add(MakeEdge(layout.Id, junctions[i].Id, junctions[i + 1].Id, junctions[i], newNodes, now));
-            }
+            // Build a grid-like mesh of junction edges so every zone is reachable
+            // with shorter, more natural paths than a single linear chain.
+            ConnectJunctionsAsGrid(layout.Id, junctions, newNodes, newEdges, now);
 
             // Connect each Entrance/Exit to its closest Junction
-            foreach (var utilityNode in entrances.Concat(exits))
+            foreach (var utilityNode in entrances.Concat(newNodes.Where(n => n.NodeType == LayoutNodeType.Exit)))
             {
                 var closestJunction = junctions
                     .OrderBy(j => (j.Xcoordinate - utilityNode.Xcoordinate) * (j.Xcoordinate - utilityNode.Xcoordinate)
@@ -407,6 +374,81 @@ public class LayoutGeneratorService : ILayoutGeneratorService
     }
 
     // ── Private helpers ──────────────────────────────────────────────────────
+
+    private static void ConnectJunctionsAsGrid(
+        Guid layoutId,
+        List<LayoutNode> junctions,
+        IReadOnlyList<LayoutNode> allNodes,
+        List<LayoutEdge> edges,
+        DateTime now)
+    {
+        if (junctions.Count <= 1)
+            return;
+
+        // Group junctions into rows by Y proximity.  A tolerance of 20% of the
+        // average junction spacing avoids splitting a row when the generator
+        // places junctions at slightly different Y values within the same row.
+        var sortedByY = junctions.OrderBy(j => j.Ycoordinate).ThenBy(j => j.Xcoordinate).ToList();
+        var yTolerance = Math.Max(10.0, (double)(sortedByY[^1].Ycoordinate - sortedByY[0].Ycoordinate) / Math.Max(1, sortedByY.Count) * 0.3);
+
+        var rows = new List<List<LayoutNode>>();
+        foreach (var junction in sortedByY)
+        {
+            if (rows.Count > 0 && Math.Abs((double)(junction.Ycoordinate - rows[^1][0].Ycoordinate)) <= yTolerance)
+                rows[^1].Add(junction);
+            else
+                rows.Add([junction]);
+        }
+
+        // Ensure each row is sorted by X for horizontal chaining
+        foreach (var row in rows)
+            row.Sort((a, b) => a.Xcoordinate.CompareTo(b.Xcoordinate));
+
+        // Horizontal edges: connect adjacent junctions within each row
+        foreach (var row in rows)
+        {
+            for (int i = 0; i < row.Count - 1; i++)
+            {
+                edges.Add(MakeEdge(layoutId, row[i].Id, row[i + 1].Id, row[i], allNodes, now));
+            }
+        }
+
+        // Vertical edges: connect junctions in the same column across consecutive rows
+        for (int r = 0; r < rows.Count - 1; r++)
+        {
+            var upperRow = rows[r];
+            var lowerRow = rows[r + 1];
+
+            // For each junction in the upper row, connect to the closest
+            // junction in the lower row that hasn't been connected yet.
+            var lowerUsed = new HashSet<Guid>();
+            foreach (var upper in upperRow)
+            {
+                var bestLower = lowerRow
+                    .Where(l => !lowerUsed.Contains(l.Id))
+                    .OrderBy(l => Math.Abs(l.Xcoordinate - upper.Xcoordinate))
+                    .ThenBy(l => Math.Abs(l.Ycoordinate - upper.Ycoordinate))
+                    .FirstOrDefault();
+
+                if (bestLower != null)
+                {
+                    lowerUsed.Add(bestLower.Id);
+                    edges.Add(MakeEdge(layoutId, upper.Id, bestLower.Id, upper, allNodes, now));
+                }
+            }
+
+            // Connect any remaining unconnected lower-row junctions to their
+            // closest upper-row junction so no zone is left disconnected.
+            foreach (var lower in lowerRow.Where(l => !lowerUsed.Contains(l.Id)))
+            {
+                var closestUpper = upperRow
+                    .OrderBy(u => Math.Abs(u.Xcoordinate - lower.Xcoordinate))
+                    .ThenBy(u => Math.Abs(u.Ycoordinate - lower.Ycoordinate))
+                    .First();
+                edges.Add(MakeEdge(layoutId, closestUpper.Id, lower.Id, closestUpper, allNodes, now));
+            }
+        }
+    }
 
     private static (List<LayoutBlock> blocks, List<string> errors, List<string> warnings)
         BuildZoneBlocks(

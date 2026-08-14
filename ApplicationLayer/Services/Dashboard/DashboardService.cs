@@ -64,6 +64,20 @@ namespace ApplicationLayer.Services.Dashboard
             }).ToList();
         }
 
+        public async Task<List<DashboardRecentRegistrationDto>> GetRecentBoothRegistrationsAsync(int limit = 5)
+        {
+            var res = await _dashboardRepository.GetRecentBoothRegistrationsAsync(limit);
+            return res.Select(b => new DashboardRecentRegistrationDto
+            {
+                Id = b.Id,
+                BoothName = b.BoothName,
+                OwnerName = b.OwnerName,
+                MarketName = b.MarketName,
+                CreatedAt = b.CreatedAt,
+                Status = b.Status
+            }).ToList();
+        }
+
         private static void ValidateDateRange(DateTime startDate, DateTime endDate)
         {
             if (startDate >= endDate)

@@ -112,7 +112,7 @@ public class OrderRefundLifecycleTests
             repository,
             Mock.Of<IPromotionRepository>(),
             Mock.Of<ApplicationLayer.Services.Promotions.IPromotionValidationService>(),
-            payouts,
+            Mock.Of<ApplicationLayer.Services.PayOutClients.IPayOSPayoutClientFactory>(),
             Mock.Of<IRealtimeNotificationPublisher>(),
             Mock.Of<IFoodItemRepository>(),
             Mock.Of<ILogger<OrderService>>(),

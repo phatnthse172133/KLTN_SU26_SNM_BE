@@ -10,6 +10,7 @@ using DomainLayer.InterfaceCore.External;
 using DomainLayer.InterfaceCore.JWT;
 using DomainLayer.InterfaceRepository;
 using InfrastructureLayer.Cores.JWTs;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using static DomainLayer.Enums.GeneralEnum;
@@ -293,6 +294,229 @@ public class AuthenticationServiceTests
         }
     }
 
+    [Fact]
+    public async Task ForgotPassword_UnknownEmail_ReturnsGenericSuccessWithoutSending()
+    {
+        var fixture = CreateFixture(Array.Empty<User>());
+
+        var response = await fixture.Service.ForgotPasswordAsync(
+            new ForgotPasswordRequest { Email = " missing@example.com " });
+
+        Assert.True(response.Success);
+        Assert.Contains("If the email exists", response.Message, StringComparison.Ordinal);
+        fixture.Email.Verify(
+            service => service.SendPasswordResetOtpAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+        fixture.Email.Verify(
+            service => service.SendPasswordResetLinkAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task ForgotPassword_EmailNotConfigured_FailsBeforeUserLookup()
+    {
+        var user = CreateUser(AuthProvider.Local, "customer@example.com");
+        var fixture = CreateFixture(new[] { user });
+        fixture.Email.Setup(service => service.CanSendPasswordResetEmail()).Returns(false);
+
+        var exception = await Assert.ThrowsAsync<AppException>(() => fixture.Service.ForgotPasswordAsync(
+            new ForgotPasswordRequest { Email = user.Email }));
+
+        Assert.Equal(503, exception.StatusCode);
+        Assert.Equal(AuthErrorCodes.EmailDeliveryFailed, exception.ErrorCode);
+        fixture.Users.Verify(
+            repository => repository.FirstOrDefaultAsync(It.IsAny<Expression<Func<User, bool>>>()),
+            Times.Never);
+        fixture.Email.Verify(
+            service => service.SendPasswordResetOtpAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task ForgotPassword_ActiveLocalUser_SendsOtpAndOptionalLink()
+    {
+        var user = CreateUser(AuthProvider.Local, "customer@example.com");
+        var fixture = CreateFixture(new[] { user });
+        fixture.Jwt.Setup(service => service.GenerateNumericCode(6)).Returns("123456");
+        fixture.Jwt.Setup(service => service.GenerateSecureToken()).Returns("reset-token");
+        fixture.Jwt.Setup(service => service.HashToken("123456")).Returns("otp-hash");
+        fixture.Jwt.Setup(service => service.HashToken("reset-token")).Returns("reset-hash");
+
+        var response = await fixture.Service.ForgotPasswordAsync(
+            new ForgotPasswordRequest { Email = " Customer@Example.com " });
+
+        Assert.True(response.Success);
+        Assert.Equal("otp-hash", user.PasswordResetOtpHash);
+        Assert.Equal("reset-hash", user.PasswordResetTokenHash);
+        fixture.Users.Verify(repository => repository.SaveChangesAsync(), Times.Once);
+        fixture.Email.Verify(
+            service => service.SendPasswordResetOtpAsync(
+                user.Email,
+                user.FullName,
+                "123456",
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+        fixture.Email.Verify(
+            service => service.SendPasswordResetLinkAsync(
+                user.Email,
+                user.FullName,
+                "reset-token",
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task ForgotPassword_SendFailure_StillReturnsGenericSuccess()
+    {
+        var user = CreateUser(AuthProvider.Local, "customer@example.com");
+        var fixture = CreateFixture(new[] { user });
+        fixture.Jwt.Setup(service => service.GenerateNumericCode(6)).Returns("123456");
+        fixture.Jwt.Setup(service => service.GenerateSecureToken()).Returns("reset-token");
+        fixture.Jwt.Setup(service => service.HashToken(It.IsAny<string>())).Returns("hash");
+        fixture.Email
+            .Setup(service => service.SendPasswordResetOtpAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("SMTP unavailable"));
+
+        var response = await fixture.Service.ForgotPasswordAsync(
+            new ForgotPasswordRequest { Email = user.Email });
+
+        Assert.True(response.Success);
+        Assert.Contains("If the email exists", response.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ResendVerification_UnknownOrActiveAccount_DoesNotSend()
+    {
+        var active = CreateUser(AuthProvider.Local, "active@example.com");
+        var fixture = CreateFixture(new[] { active });
+
+        var unknown = await fixture.Service.ResendVerificationAsync(
+            new ResendVerificationRequest { Email = "missing@example.com" });
+        var alreadyActive = await fixture.Service.ResendVerificationAsync(
+            new ResendVerificationRequest { Email = active.Email });
+
+        Assert.True(unknown.Success);
+        Assert.True(alreadyActive.Success);
+        fixture.Email.Verify(
+            service => service.SendVerificationEmailAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task ResendVerification_PendingAccount_SendsNewToken()
+    {
+        var user = CreateUser(AuthProvider.Local, "pending@example.com");
+        user.Status = UserStatus.PendingVerification;
+        var fixture = CreateFixture(new[] { user });
+        fixture.Jwt.Setup(service => service.GenerateSecureToken()).Returns("verify-token");
+        fixture.Jwt.Setup(service => service.HashToken("verify-token")).Returns("verify-hash");
+        fixture.Jwt.Setup(service => service.GetEmailVerificationExpiry()).Returns(DateTime.UtcNow.AddHours(24));
+
+        var response = await fixture.Service.ResendVerificationAsync(
+            new ResendVerificationRequest { Email = " Pending@Example.com " });
+
+        Assert.True(response.Success);
+        Assert.Equal("verify-hash", user.EmailVerificationTokenHash);
+        fixture.Email.Verify(
+            service => service.SendVerificationEmailAsync(
+                user.Email,
+                user.FullName,
+                "verify-token",
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task ResendVerification_EmailNotConfigured_FailsBeforeUserLookup()
+    {
+        var fixture = CreateFixture(Array.Empty<User>());
+        fixture.Email.Setup(service => service.CanSendVerificationEmail()).Returns(false);
+
+        var exception = await Assert.ThrowsAsync<AppException>(() => fixture.Service.ResendVerificationAsync(
+            new ResendVerificationRequest { Email = "pending@example.com" }));
+
+        Assert.Equal(503, exception.StatusCode);
+        Assert.Equal(AuthErrorCodes.EmailDeliveryFailed, exception.ErrorCode);
+        fixture.Users.Verify(
+            repository => repository.FirstOrDefaultAsync(It.IsAny<Expression<Func<User, bool>>>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Register_EmailNotConfigured_DoesNotCreateUser()
+    {
+        var fixture = CreateFixture(Array.Empty<User>());
+        fixture.Email.Setup(service => service.CanSendVerificationEmail()).Returns(false);
+
+        var exception = await Assert.ThrowsAsync<AppException>(() => fixture.Service.RegisterCustomerAsync(
+            new RegisterCustomerRequest
+            {
+                Email = "new@example.com",
+                UserName = "new-customer",
+                FullName = "New Customer",
+                Password = "password-123",
+                ConfirmPassword = "password-123"
+            }));
+
+        Assert.Equal(503, exception.StatusCode);
+        Assert.Equal(AuthErrorCodes.EmailDeliveryFailed, exception.ErrorCode);
+        fixture.Users.Verify(repository => repository.AddAsync(It.IsAny<User>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Register_EmailSendFailure_ReturnsEmailDeliveryFailedAfterCreatingPendingUser()
+    {
+        var fixture = CreateFixture(Array.Empty<User>());
+        fixture.Roles
+            .Setup(repository => repository.FirstOrDefaultAsync(It.IsAny<Expression<Func<Role, bool>>>()))
+            .ReturnsAsync(new Role { Id = Guid.NewGuid(), RoleName = "Customer" });
+        fixture.Jwt.Setup(service => service.GenerateSecureToken()).Returns("verify-token");
+        fixture.Jwt.Setup(service => service.HashToken("verify-token")).Returns("verify-hash");
+        fixture.Jwt.Setup(service => service.GetEmailVerificationExpiry()).Returns(DateTime.UtcNow.AddHours(24));
+        fixture.Email
+            .Setup(service => service.SendVerificationEmailAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("SMTP unavailable"));
+
+        var exception = await Assert.ThrowsAsync<AppException>(() => fixture.Service.RegisterCustomerAsync(
+            new RegisterCustomerRequest
+            {
+                Email = "new@example.com",
+                UserName = "new-customer",
+                FullName = "New Customer",
+                Password = "password-123",
+                ConfirmPassword = "password-123"
+            }));
+
+        Assert.Equal(503, exception.StatusCode);
+        Assert.Equal(AuthErrorCodes.EmailDeliveryFailed, exception.ErrorCode);
+        fixture.Users.Verify(repository => repository.AddAsync(It.IsAny<User>()), Times.Once);
+        fixture.Users.Verify(repository => repository.SaveChangesAsync(), Times.AtLeastOnce);
+    }
+
     private static AuthFixture CreateFixture(IReadOnlyCollection<User> users)
     {
         var userRepository = new Mock<IGenericRepository<User>>();
@@ -310,6 +534,8 @@ public class AuthenticationServiceTests
         var passwordHasher = new Mock<IPasswordHasher>();
         var jwtService = new Mock<IJwtService>();
         var emailService = new Mock<IEmailService>();
+        emailService.Setup(service => service.CanSendVerificationEmail()).Returns(true);
+        emailService.Setup(service => service.CanSendPasswordResetEmail()).Returns(true);
         var googleValidator = new Mock<IGoogleTokenValidator>();
         var deviceTokens = new Mock<IUserDeviceTokenRepository>();
         var mapper = new Mock<IMapper>();
@@ -322,7 +548,8 @@ public class AuthenticationServiceTests
             emailService.Object,
             googleValidator.Object,
             deviceTokens.Object,
-            mapper.Object);
+            mapper.Object,
+            NullLogger<AuthService>.Instance);
 
         return new AuthFixture(
             service,
@@ -330,6 +557,7 @@ public class AuthenticationServiceTests
             roleRepository,
             passwordHasher,
             jwtService,
+            emailService,
             googleValidator);
     }
 
@@ -355,5 +583,6 @@ public class AuthenticationServiceTests
         Mock<IGenericRepository<Role>> Roles,
         Mock<IPasswordHasher> PasswordHasher,
         Mock<IJwtService> Jwt,
+        Mock<IEmailService> Email,
         Mock<IGoogleTokenValidator> Google);
 }

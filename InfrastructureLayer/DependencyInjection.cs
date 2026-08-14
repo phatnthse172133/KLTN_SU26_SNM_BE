@@ -140,6 +140,7 @@ namespace InfrastructureLayer
 
             services.AddScoped<IOrderService, OrderService>();
             services.AddScoped<ICustomerCheckoutService, CustomerCheckoutService>();
+            services.AddScoped<BoothOperatingHoursEvaluator>();
 
             services.AddScoped<IFoodCategoryService, FoodCategoryService>();
             services.AddScoped<IMenuService, MenuService>();
@@ -164,6 +165,7 @@ namespace InfrastructureLayer
             services.AddScoped<IMapNavigationService, MapNavigationService>();
             services.AddScoped<IIndoorRouteSolver, DijkstraIndoorRouteSolver>();
             services.AddScoped<IIndoorRouteInstructionBuilder, IndoorRouteInstructionBuilder>();
+            services.AddScoped<INavigationGraphBuilder, NavigationGraphBuilder>();
             services.AddScoped<INavigationAnchorService, NavigationAnchorService>();
             services.AddScoped<IIndoorPositioningService, IndoorPositioningService>();
             services.AddScoped<IIndoorPositioningService, IndoorPositioningService>();
@@ -235,7 +237,6 @@ namespace InfrastructureLayer
 
             // PayOS configuration and service (uses PayOSClient singleton registered in Program.cs)
             services.Configure<PayOSSettings>(configuration.GetSection(PayOSSettings.SectionName));
-            services.AddScoped<IPayOSService, PayOSService>();
             services.AddScoped<IPayOSPayoutService, PayOSPayoutService>();
             services.AddScoped<DomainLayer.InterfaceRepository.ISequenceRepository, SequenceRepository>();
             services.AddScoped<IPayOSOrderCodeGenerator, PayOSOrderCodeGenerator>();

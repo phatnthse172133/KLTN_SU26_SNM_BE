@@ -20,8 +20,8 @@ public sealed class MarketOwnerBoothOwnerAccountsController : ControllerBase
     private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
     [HttpGet]
-    public async Task<IActionResult> List(CancellationToken cancellationToken)
-        => Ok(await _accountService.GetCreatedBoothOwnerAccountsAsync(CurrentUserId, cancellationToken));
+    public async Task<IActionResult> List([FromQuery] BoothOwnerAccountListRequest request, CancellationToken cancellationToken)
+        => Ok(await _accountService.GetCreatedBoothOwnerAccountsAsync(CurrentUserId, request, cancellationToken));
 
     [HttpPost]
     [EnableRateLimiting("AuthAbusePolicy")]

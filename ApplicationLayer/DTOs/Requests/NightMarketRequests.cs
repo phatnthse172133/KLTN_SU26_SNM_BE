@@ -46,7 +46,7 @@ public class CreateNightMarketRequest
 
     public TimeOnly? ClosingHours { get; set; }
 
-    [Url, StringLength(500)]
+    [StringLength(500)]
     public string? ThumbnailUrl { get; set; }
 }
 

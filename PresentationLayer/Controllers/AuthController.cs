@@ -1,8 +1,10 @@
 using ApplicationLayer.DTOs.Requests;
+using ApplicationLayer.Exceptions;
 using ApplicationLayer.Services.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using PresentationLayer.Helpers;
 
 namespace PresentationLayer.Controllers;
 
@@ -51,10 +53,20 @@ public class AuthController : ControllerBase
 
     [HttpGet("verify-email")]
     [EnableRateLimiting("AuthAbusePolicy")]
-    public async Task<IActionResult> VerifyEmail([FromQuery] string token, CancellationToken cancellationToken)
+    public async Task<IActionResult> VerifyEmail([FromQuery] string? token, CancellationToken cancellationToken)
     {
-        var response = await _authService.VerifyEmailAsync(token, cancellationToken);
-        return response.Success ? Ok(response) : BadRequest(response);
+        var wantsHtml = EmailVerificationHtml.WantsHtml(Request);
+        try
+        {
+            var response = await _authService.VerifyEmailAsync(token ?? string.Empty, cancellationToken);
+            return wantsHtml
+                ? EmailVerificationHtml.Page(success: true, StatusCodes.Status200OK)
+                : response.Success ? Ok(response) : BadRequest(response);
+        }
+        catch (AppException exception) when (wantsHtml)
+        {
+            return EmailVerificationHtml.Page(success: false, exception.StatusCode);
+        }
     }
 
     [HttpPost("resend-verification")]

@@ -5,6 +5,7 @@ using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
 using ApplicationLayer.Mappings;
 using ApplicationLayer.Services.Subscriptions;
+using ApplicationLayer.Services.Notifications;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
 using static DomainLayer.Enums.GeneralEnum;
@@ -27,7 +28,9 @@ public class BoothService : IBoothService
     private readonly ISubscriptionRepository _subscriptions;
     private readonly ApplicationLayer.Services.Storage.IFileStorageService _fileStorage;
     private readonly IGenericRepository<ModerationActionHistory> _moderationHistory;
-    public BoothService(IBoothRepository booths, IZoneRepository zones, IMapper mapper, IBoothLocationRepository locations, ISubscriptionEntitlementService entitlements, INightMarketRepository nightMarkets, IUserRepository users, IGenericRepository<Role> roles, IUnitOfWork unitOfWork, ILayoutNodeRepository layoutNodes, IMarketLayoutRepository marketLayouts, ISubscriptionRepository subscriptions, ApplicationLayer.Services.Storage.IFileStorageService fileStorage, IGenericRepository<ModerationActionHistory> moderationHistory)
+    private readonly IGenericRepository<EmailOutbox> _emailOutbox;
+    private readonly INotificationService _notifications;
+    public BoothService(IBoothRepository booths, IZoneRepository zones, IMapper mapper, IBoothLocationRepository locations, ISubscriptionEntitlementService entitlements, INightMarketRepository nightMarkets, IUserRepository users, IGenericRepository<Role> roles, IUnitOfWork unitOfWork, ILayoutNodeRepository layoutNodes, IMarketLayoutRepository marketLayouts, ISubscriptionRepository subscriptions, ApplicationLayer.Services.Storage.IFileStorageService fileStorage, IGenericRepository<ModerationActionHistory> moderationHistory, IGenericRepository<EmailOutbox> emailOutbox, INotificationService notifications)
     {
         _booths = booths;
         _zones = zones;
@@ -43,6 +46,8 @@ public class BoothService : IBoothService
         _subscriptions = subscriptions;
         _fileStorage = fileStorage;
         _moderationHistory = moderationHistory;
+        _emailOutbox = emailOutbox;
+        _notifications = notifications;
     }
 
     public async Task<ApiResponse<BoothResponse>> GetMyBoothAsync(
@@ -288,8 +293,9 @@ public class BoothService : IBoothService
             fieldErrors["phoneNumber"] = new[] { "Invalid phone number format." };
         if (openTime.HasValue != closeTime.HasValue)
             fieldErrors["openTime"] = new[] { "Opening hours and closing hours must be provided together." };
-        else if (openTime.HasValue && closeTime.HasValue && openTime.Value >= closeTime.Value)
-            fieldErrors["openTime"] = new[] { "Opening time must be earlier than closing time." };
+
+        if (openTime.HasValue && openTime == closeTime)
+            fieldErrors["openTime"] = new[] { "Opening and closing times cannot be the same. Use 00:00 as the closing time for an overnight schedule." };
 
         if (fieldErrors.Count > 0)
             throw AppException.Validation("Please correct the highlighted fields.", fieldErrors, "VALIDATION_ERROR");
@@ -357,7 +363,7 @@ public class BoothService : IBoothService
         var market = await VerifyMarketOwnershipAsync(marketOwnerId, marketId, cancellationToken);
 
         if (market.ModerationStatus == ModerationStatus.Suspended)
-            throw AppException.BadRequest("Cannot create a booth in a suspended market.", "MARKET_NOT_AVAILABLE");
+            throw AppException.BadRequest("Cannot create a booth in a banned market.", "MARKET_NOT_AVAILABLE");
 
         var fieldErrors = new Dictionary<string, string[]>();
 
@@ -369,8 +375,9 @@ public class BoothService : IBoothService
 
         if (request.OpenTime.HasValue != request.CloseTime.HasValue)
             fieldErrors["openTime"] = new[] { "Opening hours and closing hours must be provided together." };
-        else if (request.OpenTime.HasValue && request.CloseTime.HasValue && request.OpenTime.Value >= request.CloseTime.Value)
-            fieldErrors["openTime"] = new[] { "Opening time must be earlier than closing time." };
+
+        if (request.OpenTime.HasValue && request.OpenTime == request.CloseTime)
+            fieldErrors["openTime"] = new[] { "Opening and closing times cannot be the same. Use 00:00 as the closing time for an overnight schedule." };
 
         if (fieldErrors.Count > 0)
             throw AppException.Validation("Please correct the highlighted fields.", fieldErrors, "VALIDATION_ERROR");
@@ -412,29 +419,23 @@ public class BoothService : IBoothService
         {
             await _booths.AddAsync(booth);
 
-            var freePackage = await _subscriptions.GetPackageByCodeAsync("BOOTH_FREE", cancellationToken)
-                ?? throw AppException.ServiceUnavailable(
-                    "The default booth plan is not available. Please contact the system administrator.",
-                    "DEFAULT_BOOTH_PACKAGE_UNAVAILABLE");
-
-            if (freePackage.Type != PackageType.Booth || freePackage.Price != 0 || freePackage.Status != PackageStatus.Active)
-                throw AppException.ServiceUnavailable(
-                    "The default booth plan is not configured correctly. Please contact the system administrator.",
-                    "DEFAULT_BOOTH_PACKAGE_INVALID");
-
-            await _subscriptions.AddBoothSubscriptionAsync(new BoothSubscription
+            var freePackage = await _subscriptions.GetPackageByCodeAsync("BOOTH_FREE", cancellationToken);
+            if (IsValidFreeBoothPackage(freePackage))
             {
-                Id = Guid.NewGuid(),
-                BoothId = booth.Id,
-                PackageId = freePackage.Id,
-                StartDate = now,
-                EndDate = DateTime.MaxValue,
-                Status = SubscriptionStatus.Active,
-                PaidAmount = 0,
-                ChangeType = "FreeDefault",
-                CreatedAt = now,
-                UpdatedAt = now
-            }, cancellationToken);
+                await _subscriptions.AddBoothSubscriptionAsync(new BoothSubscription
+                {
+                    Id = Guid.NewGuid(),
+                    BoothId = booth.Id,
+                    PackageId = freePackage!.Id,
+                    StartDate = now,
+                    EndDate = DateTime.MaxValue,
+                    Status = SubscriptionStatus.Active,
+                    PaidAmount = 0,
+                    ChangeType = "FreeDefault",
+                    CreatedAt = now,
+                    UpdatedAt = now
+                }, cancellationToken);
+            }
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
             await _unitOfWork.CommitTransactionAsync(cancellationToken);
@@ -465,8 +466,9 @@ public class BoothService : IBoothService
 
         if (request.OpenTime.HasValue != request.CloseTime.HasValue)
             fieldErrors["openTime"] = new[] { "Opening hours and closing hours must be provided together." };
-        else if (request.OpenTime.HasValue && request.CloseTime.HasValue && request.OpenTime.Value >= request.CloseTime.Value)
-            fieldErrors["openTime"] = new[] { "Opening time must be earlier than closing time." };
+
+        if (request.OpenTime.HasValue && request.OpenTime == request.CloseTime)
+            fieldErrors["openTime"] = new[] { "Opening and closing times cannot be the same. Use 00:00 as the closing time for an overnight schedule." };
 
         if (fieldErrors.Count > 0)
             throw AppException.Validation("Please correct the highlighted fields.", fieldErrors, "VALIDATION_ERROR");
@@ -573,9 +575,9 @@ public class BoothService : IBoothService
             if ((request.OpenTime.HasValue && !request.CloseTime.HasValue) ||
                 (!request.OpenTime.HasValue && request.CloseTime.HasValue))
                 fieldErrors["openTime"] = new[] { "Opening hours and closing hours must be provided together." };
-            else if (request.OpenTime.HasValue && request.CloseTime.HasValue &&
-                     request.OpenTime.Value >= request.CloseTime.Value)
-                fieldErrors["openTime"] = new[] { "Opening time must be earlier than closing time." };
+
+            if (request.OpenTime.HasValue && request.OpenTime == request.CloseTime)
+                fieldErrors["openTime"] = new[] { "Opening and closing times cannot be the same. Use 00:00 as the closing time for an overnight schedule." };
 
             if (fieldErrors.Count > 0)
                 throw AppException.Validation("Please correct the highlighted fields.", fieldErrors, "VALIDATION_ERROR");
@@ -603,11 +605,16 @@ public class BoothService : IBoothService
                 "PLAN_LIMIT_REACHED");
             if (node.ZoneId.HasValue)
             {
-                await _entitlements.RequireMarketFeatureAsync(
-                    marketOwnerId,
-                    entitlement => entitlement.ZoneManagement,
-                    "Zone management is available with the Pro Market package.",
-                    "ZONE_MANAGEMENT_NOT_INCLUDED");
+                var nodeZone = await _zones.GetByIdAsync(node.ZoneId.Value);
+                var isGeneralArea = string.Equals(nodeZone?.ZoneCode, "G", StringComparison.OrdinalIgnoreCase);
+                if (!isGeneralArea)
+                {
+                    await _entitlements.RequireMarketFeatureAsync(
+                        marketOwnerId,
+                        entitlement => entitlement.ZoneManagement,
+                        "Zone management is available with the Pro Market package.",
+                        "ZONE_MANAGEMENT_NOT_INCLUDED");
+                }
             }
 
             var boothOwner = await _users.GetByIdAsync(request.BoothOwnerId);
@@ -620,13 +627,6 @@ public class BoothService : IBoothService
                 throw AppException.Conflict("This Booth Owner already has a booth.", "OWNER_ALREADY_HAS_BOOTH");
 
             var freePackage = await _subscriptions.GetPackageByCodeAsync("BOOTH_FREE", cancellationToken);
-            if (freePackage is null
-                || freePackage.Type != PackageType.Booth
-                || freePackage.Price != 0
-                || freePackage.Status != PackageStatus.Active)
-                throw AppException.ServiceUnavailable(
-                    "The default booth plan is not configured correctly. Please contact the system administrator.",
-                    "DEFAULT_BOOTH_PACKAGE_INVALID");
 
             var now = DateTime.UtcNow;
             var booth = new Booth
@@ -658,23 +658,24 @@ public class BoothService : IBoothService
                 CreatedAt = now,
                 UpdatedAt = now
             };
-            var subscription = new BoothSubscription
-            {
-                Id = Guid.NewGuid(),
-                BoothId = booth.Id,
-                PackageId = freePackage.Id,
-                StartDate = now,
-                EndDate = DateTime.MaxValue,
-                Status = DomainLayer.Enums.GeneralEnum.SubscriptionStatus.Active,
-                PaidAmount = 0,
-                ChangeType = "FreeDefault",
-                CreatedAt = now,
-                UpdatedAt = now
-            };
-
             await _booths.AddAsync(booth);
             await _locations.AddAsync(boothLocation);
-            await _subscriptions.AddBoothSubscriptionAsync(subscription, cancellationToken);
+            if (IsValidFreeBoothPackage(freePackage))
+            {
+                await _subscriptions.AddBoothSubscriptionAsync(new BoothSubscription
+                {
+                    Id = Guid.NewGuid(),
+                    BoothId = booth.Id,
+                    PackageId = freePackage!.Id,
+                    StartDate = now,
+                    EndDate = DateTime.MaxValue,
+                    Status = DomainLayer.Enums.GeneralEnum.SubscriptionStatus.Active,
+                    PaidAmount = 0,
+                    ChangeType = "FreeDefault",
+                    CreatedAt = now,
+                    UpdatedAt = now
+                }, cancellationToken);
+            }
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
             await _unitOfWork.CommitTransactionAsync(cancellationToken);
@@ -682,6 +683,7 @@ public class BoothService : IBoothService
             var market = await _nightMarkets.GetByIdAsync(marketId);
             Zone? zone = null;
             if (node.ZoneId.HasValue) zone = await _zones.GetByIdAsync(node.ZoneId.Value);
+            await NotifyBoothLocationChangedAsync(booth, boothOwner, market, zone, boothLocation, "assigned", cancellationToken);
             return ApiResponse<MarketOwnerBoothResponse>.SuccessResponse(
                 MapMarketOwnerBooth(booth, boothOwner, market, zone),
                 "Booth created and assigned successfully.");
@@ -735,11 +737,16 @@ public class BoothService : IBoothService
             }
             if (node.ZoneId.HasValue)
             {
-                await _entitlements.RequireMarketFeatureAsync(
-                    marketOwnerId,
-                    entitlement => entitlement.ZoneManagement,
-                    "Zone management is available with the Pro Market package.",
-                    "ZONE_MANAGEMENT_NOT_INCLUDED");
+                var nodeZone = await _zones.GetByIdAsync(node.ZoneId.Value);
+                var isGeneralArea = string.Equals(nodeZone?.ZoneCode, "G", StringComparison.OrdinalIgnoreCase);
+                if (!isGeneralArea)
+                {
+                    await _entitlements.RequireMarketFeatureAsync(
+                        marketOwnerId,
+                        entitlement => entitlement.ZoneManagement,
+                        "Zone management is available with the Pro Market package.",
+                        "ZONE_MANAGEMENT_NOT_INCLUDED");
+                }
             }
 
             var now = DateTime.UtcNow;
@@ -773,6 +780,8 @@ public class BoothService : IBoothService
             var market = await _nightMarkets.GetByIdAsync(marketId);
             Zone? zone = null;
             if (node.ZoneId.HasValue) zone = await _zones.GetByIdAsync(node.ZoneId.Value);
+            if (targetLocation is null)
+                await NotifyBoothLocationChangedAsync(booth, owner, market, zone, newLocation, currentLocation is null ? "assigned" : "moved", cancellationToken);
             return ApiResponse<MarketOwnerBoothResponse>.SuccessResponse(
                 MapMarketOwnerBooth(booth, owner, market, zone),
                 targetLocation is null ? "Booth assigned successfully." : "Booth is already assigned to this slot.");
@@ -793,25 +802,25 @@ public class BoothService : IBoothService
         if (activeSubscription is not null)
             return;
 
-        var freePackage = await _subscriptions.GetPackageByCodeAsync("BOOTH_FREE", cancellationToken)
-            ?? throw AppException.ServiceUnavailable(
-                "The free Booth plan is temporarily unavailable. Please contact support.",
-                "DEFAULT_BOOTH_PACKAGE_UNAVAILABLE");
+        var freePackage = await _subscriptions.GetPackageByCodeAsync("BOOTH_FREE", cancellationToken);
 
-        if (freePackage.Type != PackageType.Booth
-            || freePackage.Price != 0
-            || freePackage.Status != PackageStatus.Active)
+        // Booth Basic is the built-in entitlement for every booth. A damaged or
+        // temporarily incomplete package catalogue must never prevent a Market
+        // Owner from assigning an otherwise valid booth to a slot. The
+        // entitlement service already falls back to Booth Basic when there is
+        // no active subscription record. When the canonical package is valid,
+        // we still persist the explicit free subscription for a complete audit
+        // history.
+        if (!IsValidFreeBoothPackage(freePackage))
         {
-            throw AppException.ServiceUnavailable(
-                "The free Booth plan is temporarily unavailable. Please contact support.",
-                "DEFAULT_BOOTH_PACKAGE_INVALID");
+            return;
         }
 
         await _subscriptions.AddBoothSubscriptionAsync(new BoothSubscription
         {
             Id = Guid.NewGuid(),
             BoothId = boothId,
-            PackageId = freePackage.Id,
+            PackageId = freePackage!.Id,
             StartDate = now,
             EndDate = DateTime.MaxValue,
             Status = SubscriptionStatus.Active,
@@ -822,12 +831,18 @@ public class BoothService : IBoothService
         }, cancellationToken);
     }
 
+    private static bool IsValidFreeBoothPackage(Package? package)
+        => package is not null
+           && package.Type == PackageType.Booth
+           && package.Price == 0
+           && package.Status == PackageStatus.Active;
+
     public async Task<ApiResponse<MarketOwnerBoothResponse>> ReleaseSlotBoothAsync(
         Guid marketOwnerId, Guid marketId, Guid layoutId, Guid nodeId, CancellationToken cancellationToken = default)
     {
         var market = await VerifyMarketOwnershipAsync(marketOwnerId, marketId, cancellationToken);
         if (market.ModerationStatus == ModerationStatus.Suspended)
-            throw AppException.BadRequest("Cannot release a booth in a suspended market.", "MARKET_NOT_AVAILABLE");
+            throw AppException.BadRequest("Cannot release a booth in a banned market.", "MARKET_NOT_AVAILABLE");
 
         await _unitOfWork.BeginTransactionAsync(cancellationToken);
         try
@@ -865,6 +880,7 @@ public class BoothService : IBoothService
             await _unitOfWork.CommitTransactionAsync(cancellationToken);
 
             var owner = await _users.GetByIdAsync(booth.BoothOwnerId);
+            await NotifyBoothLocationChangedAsync(booth, owner, market, null, targetLocation, "released", cancellationToken);
             return ApiResponse<MarketOwnerBoothResponse>.SuccessResponse(
                 MapMarketOwnerBooth(booth, owner, market, null),
                 "Booth released from slot successfully.");
@@ -902,6 +918,69 @@ public class BoothService : IBoothService
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             throw;
+        }
+    }
+
+    private async Task NotifyBoothLocationChangedAsync(
+        Booth booth,
+        User? owner,
+        NightMarket? market,
+        Zone? zone,
+        BoothLocation location,
+        string action,
+        CancellationToken cancellationToken)
+    {
+        if (owner is null) return;
+
+        var slotCode = location.SlotNumber ?? "the selected slot";
+        var marketName = market?.Name ?? "your night market";
+        var zoneName = zone?.ZoneName ?? "General Area";
+        var isRelease = string.Equals(action, "released", StringComparison.OrdinalIgnoreCase);
+        var title = isRelease ? "Your booth location was released" : "Your booth location was updated";
+        var content = isRelease
+            ? $"Your booth \"{booth.BoothName}\" was released from slot {slotCode} at {marketName}."
+            : $"Your booth \"{booth.BoothName}\" was {action} to slot {slotCode} in {zoneName}, {marketName}.";
+
+        try
+        {
+            await _notifications.NotifyAsync(new NotificationMessage(
+                owner.Id,
+                NotificationType.SystemAnnouncement,
+                title,
+                content,
+                booth.Id,
+                "BoothLocation",
+                location.Id), cancellationToken);
+        }
+        catch
+        {
+            // Assignment is already committed. A notification failure must never undo it.
+        }
+
+        var emailType = isRelease ? "BoothLocationReleased" : "BoothLocationAssigned";
+        try
+        {
+            if (await _emailOutbox.AnyAsync(email => email.ReferenceId == location.Id && email.EmailType == emailType))
+                return;
+
+            var now = DateTime.UtcNow;
+            await _emailOutbox.AddAsync(new EmailOutbox
+            {
+                Id = Guid.NewGuid(),
+                RecipientEmail = owner.Email,
+                Subject = title,
+                HtmlBody = $"<p>Hello {System.Net.WebUtility.HtmlEncode(owner.FullName)},</p><p>{System.Net.WebUtility.HtmlEncode(content)}</p><p>Please sign in to Smart Night Market to view your booth details.</p>",
+                EmailType = emailType,
+                ReferenceId = location.Id,
+                Status = "Pending",
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+            await _emailOutbox.SaveChangesAsync();
+        }
+        catch
+        {
+            // Email delivery is retried through the outbox when it is persisted; failures do not affect the assignment.
         }
     }
 

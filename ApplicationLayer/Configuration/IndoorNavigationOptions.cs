@@ -7,4 +7,6 @@ public class IndoorNavigationOptions
     public decimal MinimumInstructionSegmentMeters { get; set; } = 1m;
     public decimal MaximumSnapDistanceMeters { get; set; } = 8m;
     public decimal MaximumSnapDistanceLayoutUnits { get; set; } = 20m;
+    public double PedestrianClearanceMeters { get; set; } = 0.40d;
+    public double MinimumCorridorMeters { get; set; } = 0.80d;
 }

@@ -6,7 +6,9 @@ using AutoMapper;
 using DomainLayer.Entities;
 using DomainLayer.Common;
 using DomainLayer.InterfaceRepository;
+using ApplicationLayer.Services.Booths;
 using ApplicationLayer.Services.CustomerDiscovery;
+using ApplicationLayer.Services.NightMarkets;
 
 namespace ApplicationLayer.Services.Carts;
 
@@ -39,19 +41,15 @@ public class CartService : ICartService
         var items = await _cartItems.GetActiveByCartAsync(cart.Id, cancellationToken);
         var utcNow = _timeProvider.GetUtcNow().UtcDateTime;
         var boothGroups = items
-            .GroupBy(item => new
-            {
-                item.FoodItem.BoothId,
-                item.FoodItem.Booth.BoothName
-            })
+            .GroupBy(item => item.FoodItem.Booth)
             .OrderBy(group => group.Key.BoothName)
-            .ThenBy(group => group.Key.BoothId)
+            .ThenBy(group => group.Key.Id)
             .ToList();
 
         var pagedBooths = boothGroups
             .Skip((pagination.Page - 1) * pagination.PageSize)
             .Take(pagination.PageSize)
-            .Select(group => MapBooth(group.Key.BoothId, group.Key.BoothName, group, utcNow))
+            .Select(group => MapBooth(group.Key, group, utcNow))
             .ToList();
 
         var response = new CartResponse
@@ -59,8 +57,10 @@ public class CartService : ICartService
             CartId = cart.Id,
             TotalItemCount = items.Sum(item => (long)item.Quantity),
             TotalAmount = items.Sum(item => GetCurrentPrice(item.FoodItem, utcNow) * item.Quantity),
+            // Checkout is performed per booth. A closed booth keeps its cart items, but
+            // must not prevent checkout for another booth that is currently open.
             CanCheckout = items.Count > 0
-                && items.All(item => CustomerOrderability.Evaluate(item.FoodItem, utcNow).CanOrder),
+                && items.Any(item => CustomerOrderability.Evaluate(item.FoodItem, utcNow).CanOrder),
             Booths = PaginationResp<CartBoothResponse>.Create(
                 pagedBooths,
                 boothGroups.Count,
@@ -312,16 +312,23 @@ public class CartService : ICartService
     };
 
     private CartBoothResponse MapBooth(
-        Guid boothId,
-        string boothName,
+        Booth booth,
         IEnumerable<CartItem> boothItems,
         DateTime utcNow)
     {
         var items = boothItems.ToList();
+        var hoursResult = new BoothOperatingHoursEvaluator().Evaluate(booth, utcNow);
         return new CartBoothResponse
         {
-            BoothId = boothId,
-            BoothName = boothName,
+            BoothId = booth.Id,
+            BoothName = booth.BoothName,
+            IsOpen = hoursResult.IsOpen,
+            NextOpenAt = hoursResult.NextOpenAt.HasValue
+                ? BoothOperatingHoursEvaluator.FormatNextOpenAt(hoursResult.NextOpenAt)
+                : null,
+            CloseReason = hoursResult.Status != BoothOperatingStatus.Open
+                ? hoursResult.Reason
+                : null,
             Subtotal = items.Sum(item => GetCurrentPrice(item.FoodItem, utcNow) * item.Quantity),
             Categories = items
                 .GroupBy(item => new
@@ -361,7 +368,7 @@ public class CartService : ICartService
 
     private static void EnsureOrderable(FoodItem foodItem, DateTime utcNow)
     {
-        var result = CustomerOrderability.Evaluate(foodItem, utcNow);
+        var result = CustomerOrderability.EvaluateForCartAdd(foodItem, utcNow);
         if (!result.CanOrder)
             throw AppException.Conflict(
                 CustomerOrderability.GetPublicMessage(result.ReasonCode!),

@@ -4,6 +4,7 @@ using ApplicationLayer.Configuration;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
 using ApplicationLayer.Mappings;
+using ApplicationLayer.Services.MarketLayouts;
 using AutoMapper;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
@@ -23,17 +24,20 @@ public class MapNavigationService : IMapNavigationService
     private readonly IMapper _mapper;
     private readonly IIndoorRouteSolver _solver;
     private readonly IIndoorRouteInstructionBuilder _instructions;
+    private readonly INavigationGraphBuilder _graphBuilder;
     private readonly IndoorNavigationOptions _navigationOptions;
     public MapNavigationService(INightMarketRepository markets, IMarketLayoutRepository layouts, IZoneRepository zones,
         ILayoutNodeRepository nodes, ILayoutEdgeRepository edges, IBoothLocationRepository locations,
         IBoothRepository booths, IMapper mapper, IIndoorRouteSolver? solver = null,
-        IIndoorRouteInstructionBuilder? instructions = null, IOptions<IndoorNavigationOptions>? navigationOptions = null)
+        IIndoorRouteInstructionBuilder? instructions = null, IOptions<IndoorNavigationOptions>? navigationOptions = null,
+        INavigationGraphBuilder? graphBuilder = null)
     {
         (_markets, _layouts, _zones, _nodes, _edges, _locations, _booths, _mapper) =
             (markets, layouts, zones, nodes, edges, locations, booths, mapper);
         _solver = solver ?? new DijkstraIndoorRouteSolver();
         _instructions = instructions ?? new IndoorRouteInstructionBuilder();
         _navigationOptions = navigationOptions?.Value ?? new IndoorNavigationOptions();
+        _graphBuilder = graphBuilder ?? new NavigationGraphBuilder(navigationOptions);
     }
 
     public async Task<ApiResponse<NightMarketMapResponse>> GetMapAsync(Guid nightMarketId, CancellationToken cancellationToken = default)
@@ -43,6 +47,7 @@ public class MapNavigationService : IMapNavigationService
         var layout = await _layouts.GetActiveMapAsync(nightMarketId, cancellationToken) ?? throw AppException.NotFound("This night market has no active map.");
         var nodes = await _nodes.GetByLayoutAsync(layout.Id, cancellationToken: cancellationToken);
         var edges = await _edges.GetByLayoutAsync(layout.Id, cancellationToken: cancellationToken);
+        var blocks = await _layouts.GetBlocksByLayoutIdAsync(layout.Id, cancellationToken);
         var locations = await _locations.GetCustomerCurrentByLayoutAsync(layout.Id, cancellationToken);
         var zones = await _zones.GetActiveByNightMarketIdAsync(nightMarketId, cancellationToken: cancellationToken);
 
@@ -57,9 +62,13 @@ public class MapNavigationService : IMapNavigationService
                 CoordinateUnit = layout.CoordinateUnit.ToString(),
                 MetersPerLayoutUnit = layout.MetersPerLayoutUnit,
                 DistanceCalibrationStatus = layout.DistanceCalibrationStatus.ToString(),
-                GraphRevision = layout.GraphRevision
+                GraphRevision = layout.GraphRevision,
+                MarketWidthMeters = layout.MarketWidthMeters,
+                MarketLengthMeters = layout.MarketLengthMeters,
+                PixelsPerMeter = layout.PixelsPerMeter
             },
             Zones = _mapper.Map<List<ZoneResponse>>(zones),
+            Blocks = blocks.Select(ToMapBlock).ToList(),
             Nodes = _mapper.Map<List<LayoutNodeResponse>>(nodes),
             Edges = _mapper.Map<List<LayoutEdgeResponse>>(edges),
             StartingPoints = _mapper.Map<List<LayoutNodeResponse>>(nodes.Where(node => node.IsAccessible && IsStartingPoint(node))),
@@ -129,14 +138,38 @@ public class MapNavigationService : IMapNavigationService
         if (location.LayoutId != layoutId || !byId.ContainsKey(location.LayoutNodeId))
             throw AppException.BadRequest("The booth is not located on this accessible layout.");
 
-        var edges = await _edges.GetByLayoutAsync(layoutId, cancellationToken: cancellationToken);
-        var solution = _solver.Solve(nodes, edges, fromNodeId, location.LayoutNodeId, new IndoorRoutePolicy());
+        var blocks = await _layouts.GetBlocksByLayoutIdAsync(layoutId, cancellationToken);
+        var market = await _markets.GetByIdAsync(layout.NightMarketId);
+        var scale = LayoutPhysicalCalibration.TryResolve(layout, market);
+        var graph = _graphBuilder.Build(layout, blocks, nodes, scale);
+        if (!graph.IsValid)
+            throw AppException.BadRequest(
+                graph.InvalidReason ?? "navigation geometry invalid",
+                "NAVIGATION_GEOMETRY_INVALID");
+
+        var slot = byId[location.LayoutNodeId];
+        if (!graph.TryGetAccess(slot.SlotCode, out var access)
+            || graph.UnreachableSlotCodes.Contains(slot.SlotCode ?? string.Empty, StringComparer.OrdinalIgnoreCase))
+            throw AppException.NotFound("No accessible route to the booth was found.", "ROUTE_NOT_FOUND");
+
+        var routeNodes = graph.Nodes.ToDictionary(node => node.Id);
+        if (!routeNodes.ContainsKey(fromNodeId))
+            throw AppException.BadRequest("The starting node is invalid or inaccessible.");
+
+        var solution = _solver.Solve(graph.Nodes, graph.Edges, fromNodeId, access.Id, new IndoorRoutePolicy());
         if (!solution.Found) throw AppException.NotFound("No accessible route to the booth was found.", "ROUTE_NOT_FOUND");
-        var distance = solution.TotalDistanceMeters;
-        var calibrated = layout.DistanceCalibrationStatus == DomainLayer.Enums.GeneralEnum.DistanceCalibrationStatus.Calibrated;
-        var edgesById = edges.ToDictionary(x => x.Id);
-        var instructions = _instructions.Build(solution.NodeIds, solution.EdgeIds, byId, edgesById,
-            _navigationOptions.MinimumInstructionSegmentMeters);
+        var pathNodes = solution.NodeIds.Select(id => routeNodes[id]).ToList();
+        var meters = scale is { } physical
+            ? LayoutDistance.PathMeters(pathNodes, physical)
+            : (decimal?)null;
+        var edgesById = graph.Edges.ToDictionary(x => x.Id);
+        var instructions = _instructions.Build(solution.NodeIds, solution.EdgeIds, routeNodes, edgesById,
+            _navigationOptions.MinimumInstructionSegmentMeters, slot).ToList();
+        if (meters is null)
+        {
+            foreach (var instruction in instructions)
+                instruction.DistanceMeters = null;
+        }
         return ApiResponse<ShortestPathResponse>.SuccessResponse(new()
         {
             LayoutId = layoutId,
@@ -144,17 +177,23 @@ public class MapNavigationService : IMapNavigationService
             GraphRevision = layout.GraphRevision,
             FromNode = new() { NodeId = from.Id, NodeName = from.NodeName },
             Destination = new() { BoothId = booth.Id, BoothName = booth.Name, NodeId = location.LayoutNodeId },
-            TotalDistance = distance,
-            TotalDistanceMeters = distance,
-            EstimatedWalkingMinutes = calibrated ? Math.Max(1, (int)Math.Ceiling((double)distance / _navigationOptions.WalkingSpeedMetersPerMinute)) : null,
-            IsDistanceCalibrated = calibrated,
-            DistanceCalibrationStatus = layout.DistanceCalibrationStatus.ToString(),
+            TotalDistance = meters,
+            TotalDistanceMeters = meters,
+            EstimatedWalkingMinutes = meters is > 0
+                ? Math.Max(1, (int)Math.Ceiling((double)meters.Value / _navigationOptions.WalkingSpeedMetersPerMinute))
+                : null,
+            IsDistanceCalibrated = meters is not null,
+            DistanceCalibrationStatus = meters is not null ? "Calibrated" : "Uncalibrated",
+            DistanceScaleSource = scale?.Source,
+            ScaleX = scale?.ScaleX,
+            ScaleY = scale?.ScaleY,
             TraversedEdgeIds = solution.EdgeIds,
-            RouteStepCount = instructions.Count(x => x.InstructionCode is not "START" and not "ARRIVE"),
+            RouteStepCount = instructions.Count(x =>
+                x.InstructionCode is not "START" && !x.InstructionCode.StartsWith("ARRIVE", StringComparison.Ordinal)),
             Instructions = instructions,
             Path = solution.NodeIds.Select((id, index) => new RoutePathNodeResponse
             {
-                Sequence = index + 1, NodeId = id, XCoordinate = byId[id].Xcoordinate, YCoordinate = byId[id].Ycoordinate
+                Sequence = index + 1, NodeId = id, XCoordinate = routeNodes[id].Xcoordinate, YCoordinate = routeNodes[id].Ycoordinate
             }).ToList()
         });
     }
@@ -170,6 +209,23 @@ public class MapNavigationService : IMapNavigationService
     }
     private static bool IsStartingPoint(LayoutNode x) => x.IsStartingPoint ||
         x.NodeType is DomainLayer.Enums.GeneralEnum.LayoutNodeType.Entrance or DomainLayer.Enums.GeneralEnum.LayoutNodeType.Exit or DomainLayer.Enums.GeneralEnum.LayoutNodeType.Landmark;
+
+    // Read-only projection of persisted zone rectangles. Coordinates are copied
+    // as stored; ConfigJson is intentionally omitted from the customer map DTO.
+    private static MapLayoutBlockResponse ToMapBlock(LayoutBlock block) => new()
+    {
+        Id = block.Id,
+        ZoneId = block.ZoneId,
+        Name = block.Name,
+        Type = block.Type,
+        Color = block.Zone?.Color,
+        X = block.X,
+        Y = block.Y,
+        Width = block.Width,
+        Height = block.Height,
+        Rotation = block.Rotation
+    };
+
     private static decimal Distance(decimal x1, decimal y1, decimal x2, decimal y2)
         => (decimal)Math.Sqrt(Math.Pow((double)(x1 - x2), 2) + Math.Pow((double)(y1 - y2), 2));
 

@@ -313,6 +313,7 @@ public class MarketLayoutService : IMarketLayoutService
                 Height = existing?.Height ?? 0,
                 Rotation = existing?.Rotation ?? 0,
                 DisplayOrder = existing?.DisplayOrder ?? 0,
+                ConfigJson = existing?.ConfigJson,
                 IsDeleted = false,
                 CreatedAt = existing?.CreatedAt ?? now,
                 UpdatedAt = now
@@ -461,6 +462,7 @@ public class MarketLayoutService : IMarketLayoutService
         var generationResult = _generator.ComputeGeneration(
             layout, plan.EffectiveZones, existingNodes, boothLocations, plan.NormalizedRequest);
         var result = generationResult.Preview;
+        result.Warnings.AddRange(physicalPreparation.Warnings);
         result.Nodes = _mapper.Map<List<LayoutNodeResponse>>(generationResult.Nodes) ?? [];
         result.Edges = _mapper.Map<List<LayoutEdgeResponse>>(generationResult.Edges) ?? [];
         result.Blocks = _mapper.Map<List<LayoutBlockResponse>>(generationResult.Blocks) ?? [];
@@ -1261,6 +1263,7 @@ public class MarketLayoutService : IMarketLayoutService
         GenerateLayoutRequest request, List<ZoneGenerationConfig> configs) => new()
     {
         ExpectedUpdatedAt = request.ExpectedUpdatedAt,
+        RequestedBoothCount = request.RequestedBoothCount,
         ZoneConfigs = configs,
         DefaultZoneCapacity = request.DefaultZoneCapacity,
         StartX = request.StartX,

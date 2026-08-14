@@ -31,6 +31,10 @@ namespace PresentationLayer.Controllers
         public async Task<IActionResult> GetHistory(CancellationToken cancellationToken)
             => Ok(await _service.GetMarketHistoryAsync(CurrentUserId, cancellationToken));
 
+        [HttpPost("quote")]
+        public async Task<IActionResult> Quote([FromBody] SubscriptionQuoteRequest request, CancellationToken cancellationToken)
+            => Ok(await _service.QuoteMarketAsync(CurrentUserId, request, cancellationToken));
+
         [HttpPost("purchase")]
         public async Task<IActionResult> Purchase([FromBody] PurchaseSubscriptionRequest request, CancellationToken cancellationToken)
             => Ok(await _service.PurchaseMarketAsync(CurrentUserId, request, cancellationToken));

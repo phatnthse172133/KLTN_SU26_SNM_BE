@@ -8,5 +8,5 @@ public interface IIndoorRouteInstructionBuilder
     IReadOnlyCollection<RouteInstructionResponse> Build(
         IReadOnlyList<Guid> orderedNodeIds, IReadOnlyList<Guid> traversedEdgeIds,
         IReadOnlyDictionary<Guid, LayoutNode> nodes, IReadOnlyDictionary<Guid, LayoutEdge> edges,
-        decimal minimumSegmentMeters = 1m);
+        decimal minimumSegmentMeters = 1m, LayoutNode? destinationBooth = null);
 }

@@ -37,6 +37,20 @@ public class IndoorRouteInstructionBuilderTests
         Assert.Equal(10m, result[1].DistanceMeters);
     }
 
+    [Fact]
+    public void Build_UsesDestinationBoothForArrivalSide()
+    {
+        var start = Node(0, 0); var access = Node(10, 0); var booth = Node(10, 10);
+        booth.SlotCode = "A-01";
+        var edge = Edge(start, access, 4);
+        var result = new IndoorRouteInstructionBuilder().Build(
+            [start.Id, access.Id], [edge.Id],
+            new[] { start, access }.ToDictionary(x => x.Id), new[] { edge }.ToDictionary(x => x.Id),
+            1m, booth).ToList();
+        Assert.Equal(["START", "STRAIGHT", "ARRIVE_RIGHT"], result.Select(x => x.InstructionCode));
+        Assert.Equal("A-01", result[^1].ReferenceName);
+    }
+
     private static LayoutNode Node(decimal x, decimal y) => new() { Id = Guid.NewGuid(), Xcoordinate = x, Ycoordinate = y };
     private static LayoutEdge Edge(LayoutNode from, LayoutNode to, decimal distance) => new()
         { Id = Guid.NewGuid(), FromNodeId = from.Id, ToNodeId = to.Id, Distance = distance };

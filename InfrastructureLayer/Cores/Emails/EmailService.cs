@@ -1,15 +1,19 @@
+using System.Diagnostics;
+using System.Net;
 using DomainLayer.InterfaceCore.Email;
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using MimeKit;
-using System.Net;
 
 namespace InfrastructureLayer.Cores.Emails;
 
 public class EmailService : IEmailService
 {
+    private const int SmtpTimeoutMs = 15_000;
+    private const string ProviderName = "SMTP";
+
     private readonly IConfiguration _configuration;
     private readonly ILogger<EmailService> _logger;
 
@@ -19,28 +23,30 @@ public class EmailService : IEmailService
         _logger = logger;
     }
 
+    public bool CanSendVerificationEmail()
+        => GetSmtpConfiguration() is not null && !string.IsNullOrWhiteSpace(GetVerificationEndpoint());
+
+    public bool CanSendPasswordResetEmail()
+        => GetSmtpConfiguration() is not null;
+
     public async Task SendVerificationEmailAsync(string email, string fullName, string verificationToken, CancellationToken cancellationToken = default)
     {
-        var endpoint = _configuration["Auth:VerificationEndpoint"];
+        var endpoint = GetVerificationEndpoint();
         var smtp = GetSmtpConfiguration();
         if (string.IsNullOrWhiteSpace(endpoint) || smtp is null)
         {
-            _logger.LogWarning("Email is not configured. Verification token for {Email} was generated but not delivered.", email);
-            return;
+            throw new InvalidOperationException("Verification email is not configured.");
         }
 
         var link = $"{endpoint}{(endpoint.Contains('?') ? '&' : '?')}token={Uri.EscapeDataString(verificationToken)}";
         var encodedName = WebUtility.HtmlEncode(fullName);
         var encodedLink = WebUtility.HtmlEncode(link);
 
-        var message = new MimeMessage();
-
-        message.From.Add(new MailboxAddress(smtp.FromName, smtp.FromAddress));
-        message.To.Add(MailboxAddress.Parse(email));
-        message.Subject = "Verify your Smart Night Market account";
-        message.Body = new TextPart("html")
-        {
-            Text = $$"""
+        var message = CreateMessage(
+            smtp,
+            email,
+            "Verify your Smart Night Market account",
+            $$"""
                 <!doctype html>
                 <html lang="en">
                 <head>
@@ -114,44 +120,23 @@ public class EmailService : IEmailService
                     </table>
                 </body>
                 </html>
-                """
-        };
+                """);
 
-        using var client = new SmtpClient();
-
-        await client.ConnectAsync(smtp.Host, smtp.Port, SecureSocketOptions.StartTls, cancellationToken);
-
-        if (smtp.Username is not null && smtp.Password is not null)
-            await client.AuthenticateAsync(smtp.Username, smtp.Password, cancellationToken);
-
-        await client.SendAsync(message, cancellationToken);
-        await client.DisconnectAsync(true, cancellationToken);
+        await SendMessageAsync(message, "Verification", smtp, cancellationToken);
     }
 
     public async Task SendPasswordResetOtpAsync(string email, string fullName, string otp, CancellationToken cancellationToken = default)
     {
-        var smtp = GetSmtpConfiguration();
-        if (smtp is null)
-        {
-            _logger.LogWarning("Email is not configured. Password reset OTP for {Email} was generated but not delivered.", email);
-            return;
-        }
+        var smtp = GetSmtpConfiguration()
+            ?? throw new InvalidOperationException("SMTP email configuration is missing.");
 
-        var message = new MimeMessage();
-        message.From.Add(new MailboxAddress(smtp.FromName, smtp.FromAddress));
-        message.To.Add(MailboxAddress.Parse(email));
-        message.Subject = "Smart Night Market password reset code";
-        message.Body = new TextPart("html")
-        {
-            Text = $"<p>Hello {System.Net.WebUtility.HtmlEncode(fullName)},</p><p>Your password reset OTP is <strong>{otp}</strong>.</p><p>This code expires in 10 minutes. Do not share it with anyone.</p>"
-        };
+        var message = CreateMessage(
+            smtp,
+            email,
+            "Smart Night Market password reset code",
+            $"<p>Hello {WebUtility.HtmlEncode(fullName)},</p><p>Your password reset OTP is <strong>{WebUtility.HtmlEncode(otp)}</strong>.</p><p>This code expires in 10 minutes. Do not share it with anyone.</p>");
 
-        using var client = new SmtpClient();
-        await client.ConnectAsync(smtp.Host, smtp.Port, SecureSocketOptions.StartTls, cancellationToken);
-        if (smtp.Username is not null && smtp.Password is not null)
-            await client.AuthenticateAsync(smtp.Username, smtp.Password, cancellationToken);
-        await client.SendAsync(message, cancellationToken);
-        await client.DisconnectAsync(true, cancellationToken);
+        await SendMessageAsync(message, "PasswordResetOtp", smtp, cancellationToken);
     }
 
     public async Task SendPasswordResetLinkAsync(string email, string fullName, string token, CancellationToken cancellationToken = default)
@@ -160,52 +145,62 @@ public class EmailService : IEmailService
         var smtp = GetSmtpConfiguration();
         if (string.IsNullOrWhiteSpace(endpoint) || smtp is null)
         {
-            _logger.LogWarning("SMTP email configuration or password-reset endpoint is missing. Email skipped.");
+            _logger.LogInformation(
+                "Password reset link email skipped. EmailType={EmailType} DeliveryStatus={DeliveryStatus} Provider={Provider} DurationMs={DurationMs}",
+                "PasswordResetLink",
+                "Skipped",
+                ProviderName,
+                0);
             return;
         }
 
         var link = $"{endpoint}{(endpoint.Contains('?') ? '&' : '?')}token={Uri.EscapeDataString(token)}";
-        var message = new MimeMessage();
-        message.From.Add(new MailboxAddress(smtp.FromName, smtp.FromAddress));
-        message.To.Add(MailboxAddress.Parse(email));
-        message.Subject = "Reset your Smart Night Market password";
-        message.Body = new TextPart("html") { Text = $"<p>Hello {System.Net.WebUtility.HtmlEncode(fullName)},</p><p>Reset your password <a href=\"{link}\">here</a>. This link expires in 15 minutes.</p>" };
-        using var client = new SmtpClient();
-        await client.ConnectAsync(smtp.Host, smtp.Port, SecureSocketOptions.StartTls, cancellationToken);
-        if (smtp.Username is not null && smtp.Password is not null)
-            await client.AuthenticateAsync(smtp.Username, smtp.Password, cancellationToken);
-        await client.SendAsync(message, cancellationToken);
-        await client.DisconnectAsync(true, cancellationToken);
+        var encodedLink = WebUtility.HtmlEncode(link);
+        var message = CreateMessage(
+            smtp,
+            email,
+            "Reset your Smart Night Market password",
+            $"<p>Hello {WebUtility.HtmlEncode(fullName)},</p><p>Reset your password <a href=\"{encodedLink}\">here</a>. This link expires in 15 minutes.</p>");
+
+        await SendMessageAsync(message, "PasswordResetLink", smtp, cancellationToken);
     }
 
     public async Task SendHtmlEmailAsync(string recipientEmail, string subject, string htmlBody, CancellationToken cancellationToken = default)
     {
-        var smtp = GetSmtpConfiguration();
-        if (smtp is null)
-        {
-            throw new InvalidOperationException("SMTP email configuration is missing.");
-        }
+        var smtp = GetSmtpConfiguration()
+            ?? throw new InvalidOperationException("SMTP email configuration is missing.");
 
-        var message = new MimeMessage();
-        message.From.Add(new MailboxAddress(smtp.FromName, smtp.FromAddress));
-        message.To.Add(MailboxAddress.Parse(recipientEmail));
-        message.Subject = subject;
-        message.Body = new TextPart("html")
-        {
-            Text = htmlBody
-        };
+        var message = CreateMessage(smtp, recipientEmail, subject, htmlBody);
+        await SendMessageAsync(message, "Html", smtp, cancellationToken);
+    }
 
-        using var client = new SmtpClient();
+    private async Task SendMessageAsync(
+        MimeMessage message,
+        string emailType,
+        SmtpConfiguration smtp,
+        CancellationToken cancellationToken)
+    {
+        var started = Stopwatch.StartNew();
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(SmtpTimeoutMs);
+        using var client = new SmtpClient { Timeout = SmtpTimeoutMs };
+
         try
         {
-            await client.ConnectAsync(smtp.Host, smtp.Port, SecureSocketOptions.StartTls, cancellationToken);
+            await client.ConnectAsync(smtp.Host, smtp.Port, SecureSocketOptions.StartTls, timeoutCts.Token);
             if (smtp.Username is not null && smtp.Password is not null)
             {
-                await client.AuthenticateAsync(smtp.Username, smtp.Password, cancellationToken);
+                await client.AuthenticateAsync(smtp.Username, smtp.Password, timeoutCts.Token);
             }
 
-            await client.SendAsync(message, cancellationToken);
-            _logger.LogInformation("Sent email to {Email}", recipientEmail);
+            await client.SendAsync(message, timeoutCts.Token);
+            _logger.LogInformation(
+                "Email delivery succeeded. EmailType={EmailType} DeliveryStatus={DeliveryStatus} Provider={Provider} Port={Port} DurationMs={DurationMs}",
+                emailType,
+                "Success",
+                ProviderName,
+                smtp.Port,
+                started.ElapsedMilliseconds);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -213,8 +208,15 @@ public class EmailService : IEmailService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to send email to {Email}", recipientEmail);
-            throw; // Re-throw to let the worker handle retry
+            _logger.LogError(
+                ex,
+                "Email delivery failed. EmailType={EmailType} DeliveryStatus={DeliveryStatus} Provider={Provider} Port={Port} DurationMs={DurationMs}",
+                emailType,
+                "Failure",
+                ProviderName,
+                smtp.Port,
+                started.ElapsedMilliseconds);
+            throw;
         }
         finally
         {
@@ -222,11 +224,7 @@ public class EmailService : IEmailService
             {
                 try
                 {
-                    await client.DisconnectAsync(true, cancellationToken);
-                }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                {
-                    // Disposal closes the connection; shutdown cancellation is expected here.
+                    await client.DisconnectAsync(true, CancellationToken.None);
                 }
                 catch (Exception ex)
                 {
@@ -235,6 +233,19 @@ public class EmailService : IEmailService
             }
         }
     }
+
+    private static MimeMessage CreateMessage(SmtpConfiguration smtp, string recipient, string subject, string htmlBody)
+    {
+        var message = new MimeMessage();
+        message.From.Add(new MailboxAddress(smtp.FromName, smtp.FromAddress));
+        message.To.Add(MailboxAddress.Parse(recipient));
+        message.Subject = subject;
+        message.Body = new TextPart("html") { Text = htmlBody };
+        return message;
+    }
+
+    private string? GetVerificationEndpoint()
+        => _configuration["Auth:VerificationEndpoint"];
 
     private SmtpConfiguration? GetSmtpConfiguration()
     {

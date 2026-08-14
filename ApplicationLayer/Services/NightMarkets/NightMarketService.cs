@@ -400,10 +400,9 @@ public class NightMarketService : INightMarketService
         if (request.OpeningHours.HasValue != request.ClosingHours.HasValue)
             throw AppException.BadRequest("Opening hours and closing hours must be provided together.");
 
-        if (request.OpeningHours.HasValue &&
-            request.ClosingHours.HasValue &&
-            request.OpeningHours.Value >= request.ClosingHours.Value)
-            throw AppException.BadRequest("Opening hours must be earlier than closing hours for same-day operation.");
+        // TimeOnly represents a time within one day. A closing time before the
+        // opening time is an overnight schedule; the same time represents a
+        // 24-hour market. Both are valid and never exceed one day.
 
         if (await _markets.ActiveNameExistsAsync(request.Name, excludeId, cancellationToken))
             throw AppException.Conflict("Night market name already exists.", "MARKET_NAME_EXISTS");
@@ -447,7 +446,7 @@ public class NightMarketService : INightMarketService
 
         if (market.ModerationStatus == ModerationStatus.Suspended)
             throw AppException.Forbidden(
-                "This night market is suspended by an administrator. You cannot change its status until the suspension is lifted.",
+                "This night market has been banned by an administrator. You cannot change its status until the ban is lifted.",
                 "MARKET_SUSPENDED");
 
         if (market.Status == request.Status)
@@ -525,8 +524,8 @@ public class NightMarketService : INightMarketService
                 Code = "MARKET_SUSPENDED",
                 Passed = isNotSuspended,
                 Message = isNotSuspended
-                    ? "This night market is not suspended."
-                    : "This night market was suspended by an administrator. Contact Support if you need assistance."
+                    ? "This night market is not banned."
+                    : "This night market was banned by an administrator. Contact Support if you need assistance."
             }
         };
 

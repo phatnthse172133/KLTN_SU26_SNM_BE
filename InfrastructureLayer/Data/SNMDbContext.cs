@@ -438,7 +438,6 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.Status)
                     .HasConversion<string>()
                     .HasMaxLength(20)
-                    .HasDefaultValueSql("'Active'::character varying")
                     .HasComment("Active | Expired | Cancelled");
                 entity.Property(e => e.PaidAmount).HasColumnType("numeric(18,2)").HasDefaultValue(0m);
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
@@ -476,7 +475,6 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.Status)
                     .HasConversion<string>()
                     .HasMaxLength(20)
-                    .HasDefaultValueSql("'Active'::character varying")
                     .HasComment("Active | Expired | Cancelled | PendingPayment");
                 entity.Property(e => e.PaidAmount).HasColumnType("numeric(18,2)").HasDefaultValue(0m);
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");

@@ -11,6 +11,7 @@ public class ManagedUserResponse
     public string? AvatarUrl { get; set; }
     public string Role { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
+    public bool MustChangePassword { get; set; }
     public DateTime CreatedAt { get; set; }
 }
 

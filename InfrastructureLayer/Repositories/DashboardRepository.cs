@@ -24,14 +24,21 @@ namespace InfrastructureLayer.Repositories
             var totalMarkets = await _context.NightMarkets.CountAsync(market => market.CreatedAt < endDate && !market.IsDeleted);
             var totalBooths = await _context.Booths.CountAsync(booth => booth.CreatedAt < endDate);
 
+            // A subscription row is also the historical sale record. Its current
+            // status can later become Expired or Cancelled, but a confirmed payment
+            // must remain visible in platform revenue. Old verified subscriptions
+            // created before PaidAt was persisted use StartDate only when Active;
+            // pending/cancelled rows never qualify through that fallback.
             var boothRevenue = await _context.BoothSubscriptions
-                .Where(b => b.PaidAt.HasValue && b.PaidAt.Value >= startDate && b.PaidAt.Value < endDate &&
-                    (b.Status == DomainLayer.Enums.GeneralEnum.SubscriptionStatus.Active || b.Status == DomainLayer.Enums.GeneralEnum.SubscriptionStatus.Expired))
+                .Where(b => b.PaidAmount > 0 && (
+                    (b.PaidAt.HasValue && b.PaidAt.Value >= startDate && b.PaidAt.Value < endDate) ||
+                    (!b.PaidAt.HasValue && b.Status == DomainLayer.Enums.GeneralEnum.SubscriptionStatus.Active && b.StartDate >= startDate && b.StartDate < endDate)))
                 .SumAsync(b => b.PaidAmount);
 
             var marketRevenue = await _context.MarketSubscriptions
-                .Where(m => m.PaidAt.HasValue && m.PaidAt.Value >= startDate && m.PaidAt.Value < endDate &&
-                    (m.Status == DomainLayer.Enums.GeneralEnum.SubscriptionStatus.Active || m.Status == DomainLayer.Enums.GeneralEnum.SubscriptionStatus.Expired))
+                .Where(m => m.PaidAmount > 0 && (
+                    (m.PaidAt.HasValue && m.PaidAt.Value >= startDate && m.PaidAt.Value < endDate) ||
+                    (!m.PaidAt.HasValue && m.Status == DomainLayer.Enums.GeneralEnum.SubscriptionStatus.Active && m.StartDate >= startDate && m.StartDate < endDate)))
                 .SumAsync(m => m.PaidAmount);
 
             var newBooths = await _context.Booths.CountAsync(booth => booth.CreatedAt >= startDate && booth.CreatedAt < endDate);
@@ -66,15 +73,17 @@ namespace InfrastructureLayer.Repositories
         public async Task<List<RevenueChartModel>> GetRevenueChartAsync(DateTime startDate, DateTime endDate, string granularity)
         {
             var boothRev = await _context.BoothSubscriptions.AsNoTracking()
-                .Where(b => b.PaidAt.HasValue && b.PaidAt.Value >= startDate && b.PaidAt.Value < endDate &&
-                    (b.Status == DomainLayer.Enums.GeneralEnum.SubscriptionStatus.Active || b.Status == DomainLayer.Enums.GeneralEnum.SubscriptionStatus.Expired))
-                .Select(b => new { Date = b.PaidAt!.Value, Revenue = b.PaidAmount })
+                .Where(b => b.PaidAmount > 0 && (
+                    (b.PaidAt.HasValue && b.PaidAt.Value >= startDate && b.PaidAt.Value < endDate) ||
+                    (!b.PaidAt.HasValue && b.Status == DomainLayer.Enums.GeneralEnum.SubscriptionStatus.Active && b.StartDate >= startDate && b.StartDate < endDate)))
+                .Select(b => new { Date = b.PaidAt ?? b.StartDate, Revenue = b.PaidAmount })
                 .ToListAsync();
 
             var marketRev = await _context.MarketSubscriptions.AsNoTracking()
-                .Where(m => m.PaidAt.HasValue && m.PaidAt.Value >= startDate && m.PaidAt.Value < endDate &&
-                    (m.Status == DomainLayer.Enums.GeneralEnum.SubscriptionStatus.Active || m.Status == DomainLayer.Enums.GeneralEnum.SubscriptionStatus.Expired))
-                .Select(m => new { Date = m.PaidAt!.Value, Revenue = m.PaidAmount })
+                .Where(m => m.PaidAmount > 0 && (
+                    (m.PaidAt.HasValue && m.PaidAt.Value >= startDate && m.PaidAt.Value < endDate) ||
+                    (!m.PaidAt.HasValue && m.Status == DomainLayer.Enums.GeneralEnum.SubscriptionStatus.Active && m.StartDate >= startDate && m.StartDate < endDate)))
+                .Select(m => new { Date = m.PaidAt ?? m.StartDate, Revenue = m.PaidAmount })
                 .ToListAsync();
 
             var boothDates = await _context.Booths.AsNoTracking()
@@ -153,6 +162,26 @@ namespace InfrastructureLayer.Repositories
                     CustomerName = c.Customer != null ? c.Customer.FullName : "Unknown",
                     BoothName = c.Booth != null ? c.Booth.BoothName : "Unknown",
                     CreatedAt = c.CreatedAt
+                })
+                .ToListAsync();
+        }
+
+        public async Task<List<DashboardRecentRegistrationModel>> GetRecentBoothRegistrationsAsync(int limit = 5)
+        {
+            return await _context.Booths
+                .AsNoTracking()
+                .Include(b => b.BoothOwner)
+                .Include(b => b.NightMarket)
+                .OrderByDescending(b => b.CreatedAt)
+                .Take(limit)
+                .Select(b => new DashboardRecentRegistrationModel
+                {
+                    Id = b.Id,
+                    BoothName = b.BoothName,
+                    OwnerName = b.BoothOwner != null ? b.BoothOwner.FullName : "Unknown",
+                    MarketName = b.NightMarket != null ? b.NightMarket.Name : "Unknown",
+                    CreatedAt = b.CreatedAt,
+                    Status = b.Status.ToString()
                 })
                 .ToListAsync();
         }

@@ -2,6 +2,7 @@ using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Services.Notifications;
 using ApplicationLayer.Services.Orders;
 using ApplicationLayer.Services.PayOS;
+using ApplicationLayer.Services.PayOutClients;
 using ApplicationLayer.Services.Promotions;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
@@ -153,7 +154,7 @@ public sealed class OrderPaymentWebhookTests
             orders.Object,
             Mock.Of<IPromotionRepository>(),
             Mock.Of<IPromotionValidationService>(),
-            Mock.Of<IPayOSPayoutService>(),
+            Mock.Of<IPayOSPayoutClientFactory>(),
             Mock.Of<IRealtimeNotificationPublisher>(),
             Mock.Of<IFoodItemRepository>(),
             Mock.Of<ILogger<OrderService>>(),

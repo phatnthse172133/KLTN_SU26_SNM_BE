@@ -173,6 +173,14 @@ public class GenerateLayoutRequest
 
     public List<ZoneGenerationConfig> ZoneConfigs { get; set; } = new();
 
+    /// <summary>
+    /// Total number of booth slots requested by the market owner. During physical
+    /// generation the value is safely reduced to the number that fits inside the
+    /// declared market boundary; it is never increased beyond this request.
+    /// </summary>
+    [Range(1, 1000)]
+    public int? RequestedBoothCount { get; set; }
+
     /// <summary>Capacity of the single default block generated for markets without zone management.</summary>
     [Range(1, 1000)]
     public int? DefaultZoneCapacity { get; set; }

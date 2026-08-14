@@ -129,10 +129,10 @@ public class NightMarketRepository : GenericRepository<NightMarket>, INightMarke
             market.Status == NightMarketStatus.Active &&
             market.OpeningHours.HasValue &&
             market.ClosingHours.HasValue &&
-            market.OpeningHours.Value != market.ClosingHours.Value &&
-            (market.OpeningHours.Value < market.ClosingHours.Value
+            (market.OpeningHours.Value == market.ClosingHours.Value ||
+             (market.OpeningHours.Value < market.ClosingHours.Value
                 ? market.OpeningHours.Value <= localTime && localTime < market.ClosingHours.Value
-                : localTime >= market.OpeningHours.Value || localTime < market.ClosingHours.Value);
+                : localTime >= market.OpeningHours.Value || localTime < market.ClosingHours.Value));
 
     private static Expression<Func<NightMarket, bool>> Negate(Expression<Func<NightMarket, bool>> predicate)
         => Expression.Lambda<Func<NightMarket, bool>>(Expression.Not(predicate.Body), predicate.Parameters);

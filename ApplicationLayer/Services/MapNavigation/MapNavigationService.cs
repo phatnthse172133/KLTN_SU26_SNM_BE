@@ -75,7 +75,8 @@ public class MapNavigationService : IMapNavigationService
             Booths = locations.Select(x => new MapBoothResponse
             {
                 BoothId = x.BoothId, BoothName = x.Booth.BoothName, NodeId = x.LayoutNodeId,
-                ZoneId = x.ZoneId, SlotNumber = x.SlotNumber, XCoordinate = x.Xcoordinate, YCoordinate = x.Ycoordinate
+                ZoneId = x.ZoneId, SlotNumber = x.SlotNumber, XCoordinate = x.Xcoordinate, YCoordinate = x.Ycoordinate,
+                SlotCode = x.LayoutNode?.SlotCode, ZoneName = x.Zone?.ZoneName
             }).ToList()
         });
     }
@@ -139,16 +140,39 @@ public class MapNavigationService : IMapNavigationService
             throw AppException.BadRequest("The booth is not located on this accessible layout.");
 
         var blocks = await _layouts.GetBlocksByLayoutIdAsync(layoutId, cancellationToken);
+        var persistedEdges = await _edges.GetByLayoutAsync(layoutId, cancellationToken: cancellationToken);
         var market = await _markets.GetByIdAsync(layout.NightMarketId);
         var scale = LayoutPhysicalCalibration.TryResolve(layout, market);
-        var graph = _graphBuilder.Build(layout, blocks, nodes, scale);
+        // Layouts created before the physical Zone generator store a complete,
+        // persisted navigation graph but have no LayoutBlocks. Keep those maps
+        // navigable while modern layouts use the safer, transient corridor graph.
+        var hasZoneBlocks = blocks.Any(block => !block.IsDeleted);
+        var usesLegacyPersistedGraph = !hasZoneBlocks
+            && nodes.Any(node => node.NodeType == DomainLayer.Enums.GeneralEnum.LayoutNodeType.BoothAccess);
+        var graph = usesLegacyPersistedGraph
+            // Only layouts using the retired BoothAccess model may fall back to
+            // their persisted graph. A modern BoothSlot layout with no Zone
+            // geometry is still invalid and must not receive a fabricated route.
+            ? new NavigationGraph
+            {
+                Nodes = nodes.Where(node => !node.IsDeleted).ToList(),
+                Edges = persistedEdges.Where(edge => !edge.IsDeleted && edge.IsAccessible).ToList()
+            }
+            : _graphBuilder.Build(layout, blocks, nodes, scale);
         if (!graph.IsValid)
             throw AppException.BadRequest(
                 graph.InvalidReason ?? "navigation geometry invalid",
                 "NAVIGATION_GEOMETRY_INVALID");
 
         var slot = byId[location.LayoutNodeId];
-        if (!graph.TryGetAccess(slot.SlotCode, out var access)
+        var zones = await _zones.GetActiveByNightMarketIdAsync(layout.NightMarketId, cancellationToken: cancellationToken);
+        var zoneName = slot.ZoneId.HasValue
+            ? zones.FirstOrDefault(z => z.Id == slot.ZoneId.Value)?.ZoneName
+            : null;
+        var hasGeneratedAccess = graph.TryGetAccess(slot.SlotCode, out var access);
+        var target = hasGeneratedAccess ? access : slot;
+        var isLegacyAccessTarget = slot.NodeType == DomainLayer.Enums.GeneralEnum.LayoutNodeType.BoothAccess;
+        if ((!hasGeneratedAccess && !isLegacyAccessTarget)
             || graph.UnreachableSlotCodes.Contains(slot.SlotCode ?? string.Empty, StringComparer.OrdinalIgnoreCase))
             throw AppException.NotFound("No accessible route to the booth was found.", "ROUTE_NOT_FOUND");
 
@@ -156,12 +180,14 @@ public class MapNavigationService : IMapNavigationService
         if (!routeNodes.ContainsKey(fromNodeId))
             throw AppException.BadRequest("The starting node is invalid or inaccessible.");
 
-        var solution = _solver.Solve(graph.Nodes, graph.Edges, fromNodeId, access.Id, new IndoorRoutePolicy());
+        var solution = _solver.Solve(graph.Nodes, graph.Edges, fromNodeId, target.Id, new IndoorRoutePolicy());
         if (!solution.Found) throw AppException.NotFound("No accessible route to the booth was found.", "ROUTE_NOT_FOUND");
         var pathNodes = solution.NodeIds.Select(id => routeNodes[id]).ToList();
-        var meters = scale is { } physical
-            ? LayoutDistance.PathMeters(pathNodes, physical)
-            : (decimal?)null;
+        var meters = usesLegacyPersistedGraph
+            ? solution.TotalDistanceMeters
+            : scale is { } physical
+                ? LayoutDistance.PathMeters(pathNodes, physical)
+                : (decimal?)null;
         var edgesById = graph.Edges.ToDictionary(x => x.Id);
         var instructions = _instructions.Build(solution.NodeIds, solution.EdgeIds, routeNodes, edgesById,
             _navigationOptions.MinimumInstructionSegmentMeters, slot).ToList();
@@ -170,13 +196,21 @@ public class MapNavigationService : IMapNavigationService
             foreach (var instruction in instructions)
                 instruction.DistanceMeters = null;
         }
+        else
+        {
+            foreach (var instruction in instructions)
+            {
+                if (instruction.DistanceMeters is not null)
+                    instruction.Text = RebuildTextWithDistance(instruction, meters.Value);
+            }
+        }
         return ApiResponse<ShortestPathResponse>.SuccessResponse(new()
         {
             LayoutId = layoutId,
             LayoutVersion = layout.Version,
             GraphRevision = layout.GraphRevision,
-            FromNode = new() { NodeId = from.Id, NodeName = from.NodeName },
-            Destination = new() { BoothId = booth.Id, BoothName = booth.Name, NodeId = location.LayoutNodeId },
+            FromNode = new() { NodeId = from.Id, NodeName = from.NodeName, NodeType = from.NodeType.ToString() },
+            Destination = new() { BoothId = booth.Id, BoothName = booth.Name, NodeId = location.LayoutNodeId, SlotCode = slot.SlotCode, ZoneName = zoneName },
             TotalDistance = meters,
             TotalDistanceMeters = meters,
             EstimatedWalkingMinutes = meters is > 0
@@ -225,6 +259,27 @@ public class MapNavigationService : IMapNavigationService
         Height = block.Height,
         Rotation = block.Rotation
     };
+
+    private static string RebuildTextWithDistance(RouteInstructionResponse instruction, decimal totalMeters)
+    {
+        if (instruction.DistanceMeters is not null and > 0)
+        {
+            var dist = instruction.DistanceMeters < 10
+                ? $"{Math.Round(instruction.DistanceMeters.Value * 10) / 10:F1} m"
+                : $"{Math.Round(instruction.DistanceMeters.Value)} m";
+            return instruction.InstructionCode switch
+            {
+                "STRAIGHT" => $"\u0110i th\u1eb3ng {dist}",
+                "SLIGHT_LEFT" => $"H\u01a1i l\u1ec7ch tr\u00e1i {dist}",
+                "SLIGHT_RIGHT" => $"H\u01a1i l\u1ec7ch ph\u1ea3i {dist}",
+                "TURN_LEFT" => $"R\u1ebd tr\u00e1i {dist}",
+                "TURN_RIGHT" => $"R\u1ebd ph\u1ea3i {dist}",
+                "UTURN" => $"Quay \u0111\u1ea7u {dist}",
+                _ => $"{instruction.Text}"
+            };
+        }
+        return instruction.Text;
+    }
 
     private static decimal Distance(decimal x1, decimal y1, decimal x2, decimal y2)
         => (decimal)Math.Sqrt(Math.Pow((double)(x1 - x2), 2) + Math.Pow((double)(y1 - y2), 2));

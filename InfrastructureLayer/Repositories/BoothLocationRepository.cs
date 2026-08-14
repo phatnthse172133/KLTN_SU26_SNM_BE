@@ -45,6 +45,8 @@ public class BoothLocationRepository : GenericRepository<BoothLocation>, IBoothL
         => await _dbSet.AsNoTracking()
             .Include(location => location.Booth)
                 .ThenInclude(booth => booth.NightMarket)
+            .Include(location => location.LayoutNode)
+            .Include(location => location.Zone)
             .Where(location =>
                 location.LayoutId == layoutId &&
                 !location.IsDeleted &&

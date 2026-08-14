@@ -77,7 +77,9 @@ public class PostgresHomeDiscoveryTests
         var reduced = all.Data.Items.First(x => x.EffectivePrice < x.BasePrice);
         Assert.Equal(normal.BasePrice, (await discovery.GetFoodAsync(normal.Id)).Data!.EffectivePrice);
         Assert.True((await discovery.GetFoodAsync(reduced.Id)).Data!.EffectivePrice < reduced.BasePrice);
-        Assert.Contains(all.Data.Items, x => !x.CanOrder);
+        // CanOrder is cart-add eligibility (available + active market), not open-hours checkout eligibility.
+        Assert.All(all.Data.Items, x => Assert.True(x.IsAvailable));
+        Assert.Contains(all.Data.Items, x => x.CanOrder);
     }
 
     [Fact]
@@ -160,7 +162,7 @@ public class PostgresHomeDiscoveryTests
         var aiOrderableFoods = await new FoodItemRepository(context).GetAiOrderableCandidatesAsync(
             marketId, FixtureLocalTime, 200);
         var booths = await new BoothRepository(context).GetCustomerPagedAsync(
-            marketId, null, null, FixtureLocalTime, null, 1, 100, "featured");
+            marketId, null, null, FixtureLocalTime, null, null, 1, 100, "featured");
         var foodTagRepository = new FoodTagRepository(context);
         var foodTags = await foodTagRepository.GetPagedTagsAsync(null, null, 1, 100);
         var aiHome = await CreateAiService(foodTagRepository).GetHomeAsync(null);

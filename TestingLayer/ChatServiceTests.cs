@@ -240,6 +240,7 @@ public class ChatServiceTests
             });
         _realtime.Setup(publisher => publisher.PublishMessageCreatedAsync(
                 conversationId,
+                ownerId,
                 It.IsAny<MessageResponse>(),
                 It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("SignalR unavailable"));
@@ -264,6 +265,122 @@ public class ChatServiceTests
                 && message.ReferenceType == "Conversation"
                 && message.ReferenceId == conversationId),
             It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task SendMessage_FromBoothOwner_PublishesRealtimeToCustomerRecipient()
+    {
+        var customerId = Guid.NewGuid();
+        var ownerId = Guid.NewGuid();
+        var conversationId = Guid.NewGuid();
+        var booth = new Booth { Id = Guid.NewGuid(), BoothOwnerId = ownerId };
+        var conversation = Conversation(customerId, ownerId, booth, conversationId);
+        Message? persisted = null;
+
+        _conversations.Setup(repository => repository.GetOwnedWithUsersAsync(
+                conversationId,
+                ownerId,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(conversation);
+        _booths.Setup(repository => repository.CustomerVisibleExistsAsync(
+                booth.Id,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        _messages.Setup(repository => repository.AddAsync(It.IsAny<Message>()))
+            .Callback<Message>(message => persisted = message)
+            .Returns(Task.CompletedTask);
+        _messages.Setup(repository => repository.SaveChangesAsync()).ReturnsAsync(1);
+        _messages.Setup(repository => repository.GetOwnedAsync(
+                It.IsAny<Guid>(),
+                ownerId,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => persisted);
+        _mapper.Setup(mapper => mapper.Map<MessageResponse>(It.IsAny<Message>()))
+            .Returns((Message message) => new MessageResponse
+            {
+                Id = message.Id,
+                ConversationId = message.ConversationId,
+                SenderId = message.SenderId,
+                SenderName = "Booth Owner",
+                Type = message.Type,
+                Content = message.Content,
+                CreatedAt = message.CreatedAt
+            });
+
+        var result = await _service.SendMessageAsync(
+            ownerId,
+            conversationId,
+            new SendMessageRequest { Type = MessageType.Text, Content = "Reply from booth" });
+
+        Assert.True(result.Success);
+        _messages.Verify(repository => repository.AddAsync(It.IsAny<Message>()), Times.Once);
+        _messages.Verify(repository => repository.SaveChangesAsync(), Times.Once);
+        _realtime.Verify(publisher => publisher.PublishMessageCreatedAsync(
+            conversationId,
+            customerId,
+            It.Is<MessageResponse>(message => message.Content == "Reply from booth"),
+            It.IsAny<CancellationToken>()), Times.Once);
+        _events.Verify(publisher => publisher.PublishAsync(
+            It.Is<RealtimeEvent>(evt => evt.EventType == "MessageCreated"),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SendMessage_FromCustomer_PublishesRealtimeToBoothOwnerRecipient()
+    {
+        var customerId = Guid.NewGuid();
+        var ownerId = Guid.NewGuid();
+        var conversationId = Guid.NewGuid();
+        var booth = new Booth { Id = Guid.NewGuid(), BoothOwnerId = ownerId };
+        var conversation = Conversation(customerId, ownerId, booth, conversationId);
+        Message? persisted = null;
+
+        _conversations.Setup(repository => repository.GetOwnedWithUsersAsync(
+                conversationId,
+                customerId,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(conversation);
+        _booths.Setup(repository => repository.CustomerVisibleExistsAsync(
+                booth.Id,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        _messages.Setup(repository => repository.AddAsync(It.IsAny<Message>()))
+            .Callback<Message>(message => persisted = message)
+            .Returns(Task.CompletedTask);
+        _messages.Setup(repository => repository.SaveChangesAsync()).ReturnsAsync(1);
+        _messages.Setup(repository => repository.GetOwnedAsync(
+                It.IsAny<Guid>(),
+                customerId,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => persisted);
+        _mapper.Setup(mapper => mapper.Map<MessageResponse>(It.IsAny<Message>()))
+            .Returns((Message message) => new MessageResponse
+            {
+                Id = message.Id,
+                ConversationId = message.ConversationId,
+                SenderId = message.SenderId,
+                SenderName = "Customer",
+                Type = message.Type,
+                Content = message.Content,
+                CreatedAt = message.CreatedAt
+            });
+
+        var result = await _service.SendMessageAsync(
+            customerId,
+            conversationId,
+            new SendMessageRequest { Type = MessageType.Text, Content = "Hello booth" });
+
+        Assert.True(result.Success);
+        _messages.Verify(repository => repository.AddAsync(It.IsAny<Message>()), Times.Once);
+        _messages.Verify(repository => repository.SaveChangesAsync(), Times.Once);
+        _realtime.Verify(publisher => publisher.PublishMessageCreatedAsync(
+            conversationId,
+            ownerId,
+            It.Is<MessageResponse>(message => message.Content == "Hello booth"),
+            It.IsAny<CancellationToken>()), Times.Once);
+        _events.Verify(publisher => publisher.PublishAsync(
+            It.Is<RealtimeEvent>(evt => evt.EventType == "MessageCreated"),
+            It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]

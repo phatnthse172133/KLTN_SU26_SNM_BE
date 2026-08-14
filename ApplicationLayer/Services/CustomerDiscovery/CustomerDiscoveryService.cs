@@ -129,17 +129,21 @@ public sealed class CustomerDiscoveryService : ICustomerDiscoveryService
         ReviewCount = booth.ReviewCount, FoodCount = booth.FoodCount, IsFeatured = booth.IsFeatured
     };
 
-    private static CustomerFoodListItemResponse MapFoodList(CustomerFoodReadModel food, TimeOnly localTime) => new()
+    private static CustomerFoodListItemResponse MapFoodList(CustomerFoodReadModel food, TimeOnly localTime)
     {
+        _ = localTime; // open-now is exposed on booth/market surfaces; CanOrder is cart-add eligibility
+        return new()
+        {
         Id = food.Id, Name = food.Name, ThumbnailUrl = food.ThumbnailUrl,
         CategoryId = food.CategoryId, CategoryName = food.CategoryName,
         BasePrice = food.BasePrice, EffectivePrice = food.EffectivePrice,
-        IsAvailable = food.IsAvailable, CanOrder = food.IsAvailable && CustomerAvailability.IsOpenNow(food, localTime),
+        IsAvailable = food.IsAvailable, CanOrder = food.IsAvailable && food.MarketIsOperational,
         BoothId = food.BoothId, BoothName = food.BoothName,
         MarketId = food.MarketId, MarketName = food.MarketName, IsFeatured = food.IsFeatured,
         AverageRating = food.AverageRating, ReviewCount = food.ReviewCount,
         PrimaryCourse = food.PrimaryCourse, EstimatedServingCount = food.EstimatedServingCount, IsShareable = food.IsShareable
-    };
+        };
+    }
 
     private static string? NormalizeSearch(string? search) => string.IsNullOrWhiteSpace(search) ? null : search.Trim();
 

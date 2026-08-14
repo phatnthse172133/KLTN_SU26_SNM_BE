@@ -10,6 +10,8 @@ public static class RealtimeGroups
     // Keep the established notification group name so upgraded publishers are
     // compatible with clients connected through the existing hub.
     public static string User(Guid userId) => $"notification:{userId}";
+    /// <summary>Personal ChatHub inbox so participants receive messages without joining each conversation group.</summary>
+    public static string ChatUser(Guid userId) => $"chat-user:{userId}";
     public static string Conversation(Guid conversationId) => $"conversation:{conversationId}";
     public static string Market(Guid marketId) => $"market:{marketId}";
     public static string Layout(Guid layoutId) => $"layout:{layoutId}";

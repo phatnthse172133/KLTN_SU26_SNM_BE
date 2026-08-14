@@ -215,26 +215,21 @@ public class ChatService : IChatService
 
         var created = await _messages.GetOwnedAsync(message.Id, userId, cancellationToken) ?? message;
         var response = _mapper.Map<MessageResponse>(created);
+        var receiverId = conversation.CustomerId == userId
+            ? conversation.Booth.BoothOwnerId
+            : conversation.CustomerId;
+        // Sender already has the REST response optimistically; publish MessageCreated
+        // only to the other participant via chat-user:{receiverId} (no sender echo,
+        // no conversation-group fan-out, no SignalREventPublisher duplicate).
         await RunPostCommitSafelyAsync(
             () => _realtime.PublishMessageCreatedAsync(
                 conversationId,
+                receiverId,
                 response,
                 CancellationToken.None),
             "realtime message delivery",
             message.Id);
-        await RunPostCommitSafelyAsync(
-            () => _eventPublisher.PublishAsync(new RealtimeEvent
-            {
-                EventType = "MessageCreated",
-                GroupName = RealtimeGroups.Conversation(conversationId),
-                Payload = response
-            }),
-            "unified message event delivery",
-            message.Id);
 
-        var receiverId = conversation.CustomerId == userId
-            ? conversation.Booth.BoothOwnerId
-            : conversation.CustomerId;
         await RunPostCommitSafelyAsync(
             () => _notifications.NotifyAsync(
                 new NotificationMessage(

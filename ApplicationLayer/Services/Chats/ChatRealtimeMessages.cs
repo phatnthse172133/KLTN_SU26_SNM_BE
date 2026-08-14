@@ -4,8 +4,13 @@ namespace ApplicationLayer.Services.Chats;
 
 public interface IRealtimeChatPublisher
 {
+    /// <summary>
+    /// Delivers MessageCreated only to the recipient's personal chat inbox
+    /// (<c>chat-user:{recipientUserId}</c>). Does not target conversation groups.
+    /// </summary>
     Task PublishMessageCreatedAsync(
         Guid conversationId,
+        Guid recipientUserId,
         MessageResponse message,
         CancellationToken cancellationToken = default);
 

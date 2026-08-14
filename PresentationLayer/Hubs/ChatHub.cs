@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using ApplicationLayer.Services.Chats;
+using ApplicationLayer.Services.Realtime;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 
@@ -13,6 +14,16 @@ public class ChatHub : Hub
     public ChatHub(IChatService chatService)
     {
         _chatService = chatService;
+    }
+
+    public override async Task OnConnectedAsync()
+    {
+        var userId = CurrentUserId();
+        await Groups.AddToGroupAsync(
+            Context.ConnectionId,
+            RealtimeGroups.ChatUser(userId),
+            Context.ConnectionAborted);
+        await base.OnConnectedAsync();
     }
 
     public async Task JoinConversation(Guid conversationId)
@@ -72,7 +83,7 @@ public class ChatHub : Hub
     }
 
     internal static string ConversationGroupName(Guid conversationId)
-        => $"conversation:{conversationId}";
+        => RealtimeGroups.Conversation(conversationId);
 
     private Guid CurrentUserId()
     {

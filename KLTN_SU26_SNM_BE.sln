@@ -1,4 +1,4 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.14.36429.23
@@ -13,7 +13,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InfrastructureLayer", "Infr
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestingLayer", "TestingLayer\TestingLayer.csproj", "{14942CA0-67DC-4706-BA39-66B8B787690B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AiV2BackfillTool", "AiV2BackfillTool\AiV2BackfillTool.csproj", "{BBDE04DF-D85A-40AA-804B-8FD83F852CD0}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -85,18 +84,6 @@ Global
 		{14942CA0-67DC-4706-BA39-66B8B787690B}.Release|x64.Build.0 = Release|Any CPU
 		{14942CA0-67DC-4706-BA39-66B8B787690B}.Release|x86.ActiveCfg = Release|Any CPU
 		{14942CA0-67DC-4706-BA39-66B8B787690B}.Release|x86.Build.0 = Release|Any CPU
-		{BBDE04DF-D85A-40AA-804B-8FD83F852CD0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{BBDE04DF-D85A-40AA-804B-8FD83F852CD0}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{BBDE04DF-D85A-40AA-804B-8FD83F852CD0}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{BBDE04DF-D85A-40AA-804B-8FD83F852CD0}.Debug|x64.Build.0 = Debug|Any CPU
-		{BBDE04DF-D85A-40AA-804B-8FD83F852CD0}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{BBDE04DF-D85A-40AA-804B-8FD83F852CD0}.Debug|x86.Build.0 = Debug|Any CPU
-		{BBDE04DF-D85A-40AA-804B-8FD83F852CD0}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{BBDE04DF-D85A-40AA-804B-8FD83F852CD0}.Release|Any CPU.Build.0 = Release|Any CPU
-		{BBDE04DF-D85A-40AA-804B-8FD83F852CD0}.Release|x64.ActiveCfg = Release|Any CPU
-		{BBDE04DF-D85A-40AA-804B-8FD83F852CD0}.Release|x64.Build.0 = Release|Any CPU
-		{BBDE04DF-D85A-40AA-804B-8FD83F852CD0}.Release|x86.ActiveCfg = Release|Any CPU
-		{BBDE04DF-D85A-40AA-804B-8FD83F852CD0}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

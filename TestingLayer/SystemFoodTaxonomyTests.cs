@@ -1,4 +1,4 @@
-using ApplicationLayer.AI.Services;
+using ApplicationLayer.Services.FoodTags;
 using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.Mappings;
 using ApplicationLayer.Services.Menus;

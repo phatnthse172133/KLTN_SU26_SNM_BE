@@ -19,6 +19,14 @@ public static class NightMarketAvailability
             DateTime.SpecifyKind(utcNow, DateTimeKind.Utc),
             VietnamTimeZone);
 
+    public static (DateTime StartUtc, DateTime EndUtc) GetVietnamDayUtcRange(DateTime utcNow)
+    {
+        var local = GetVietnamLocalTime(utcNow);
+        var startLocal = DateTime.SpecifyKind(local.Date, DateTimeKind.Unspecified);
+        var startUtc = TimeZoneInfo.ConvertTimeToUtc(startLocal, VietnamTimeZone);
+        return (startUtc, startUtc.AddDays(1));
+    }
+
     public static NightMarketAvailabilityResult Evaluate(
         NightMarketCustomerReadModel market,
         DateTime utcNow)

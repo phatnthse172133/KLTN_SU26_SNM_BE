@@ -1,6 +1,6 @@
 using System.Security.Claims;
-using ApplicationLayer.AI.DTOs;
-using ApplicationLayer.AI.Services;
+using ApplicationLayer.DTOs.Requests;
+using ApplicationLayer.Services.CustomerFoodProfiles;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 

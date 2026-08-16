@@ -1,7 +1,7 @@
 using System;
 using System.Threading.Tasks;
-using ApplicationLayer.AI.DTOs;
-using ApplicationLayer.AI.Services;
+using ApplicationLayer.DTOs.Requests;
+using ApplicationLayer.Services.FoodTags;
 using ApplicationLayer.Helppers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;

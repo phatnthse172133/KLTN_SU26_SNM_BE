@@ -11,7 +11,7 @@
     "restoredCloneVerified":  true,
     "repeatApplyNoOp":  true,
     "modelDrift":  "none",
-    "productionBuild":  "PresentationLayer and AiV2BackfillTool: 0 errors, 0 warnings",
+    "productionBuild":  "PresentationLayer: 0 errors, 0 warnings",
     "testBaseline":  "TestingLayer on source dev has 2 pre-existing NotificationService logger constructor compile errors; no test files changed",
     "files":  [
                   {

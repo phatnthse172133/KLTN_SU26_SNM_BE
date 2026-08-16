@@ -91,8 +91,6 @@ public partial class FoodItem : ISoftDelete
 
     public virtual ICollection<FoodItemDiningPurpose> DiningPurposes { get; set; } = new List<FoodItemDiningPurpose>();
 
-    public virtual FoodAiProfile? AiProfile { get; set; }
-
     public virtual ICollection<OrderDetail> OrderDetails { get; set; } = new List<OrderDetail>();
 
     public virtual ICollection<FoodReview> FoodReviews { get; set; } = new List<FoodReview>();

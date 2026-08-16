@@ -1,6 +1,5 @@
-using ApplicationLayer.AI.DTOs;
+using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.DTOs.Responses;
-using DomainLayer.Entities;
 
 namespace TestingLayer;
 
@@ -53,19 +52,18 @@ public sealed class CustomerProfileContractTests
     }
 
     [Fact]
-    public void DoB_IsAbsentFromAiNotificationAndPublicResponseContracts()
+    public void DoB_IsAbsentFromNotificationAndPublicResponseContracts()
     {
         var applicationAssembly = typeof(UserResponse).Assembly;
         var protectedTypes = applicationAssembly.GetTypes()
             .Where(type =>
                 type.IsPublic &&
-                (type.Namespace == "ApplicationLayer.AI.DTOs" ||
-                 type.Namespace == "ApplicationLayer.DTOs.Admin" ||
+                (type.Namespace == "ApplicationLayer.DTOs.Admin" ||
+                 type.Name.Contains("CustomerFoodProfile", StringComparison.Ordinal) ||
                  type.Name.Contains("Notification", StringComparison.Ordinal) ||
                  type == typeof(ConversationUserResponse) ||
                  type == typeof(ReviewResponse) ||
-                 type == typeof(CustomerReviewResponse)))
-            .Append(typeof(AIRecommendationLog));
+                 type == typeof(CustomerReviewResponse)));
 
         Assert.All(
             protectedTypes,
@@ -83,17 +81,6 @@ public sealed class CustomerProfileContractTests
             .ToArray();
 
         Assert.Equal(new[] { typeof(AuthResponse) }, consumers);
-    }
-
-    [Fact]
-    public void AiProviderIntentContract_HasNoProfilePersonalData()
-    {
-        var properties = PropertyNames(typeof(FoodIntentDto));
-
-        Assert.DoesNotContain(nameof(UserResponse.DoB), properties);
-        Assert.DoesNotContain(nameof(UserResponse.Email), properties);
-        Assert.DoesNotContain(nameof(UserResponse.Phone), properties);
-        Assert.DoesNotContain(nameof(UserResponse.Address), properties);
     }
 
     private static string[] PropertyNames(Type type)

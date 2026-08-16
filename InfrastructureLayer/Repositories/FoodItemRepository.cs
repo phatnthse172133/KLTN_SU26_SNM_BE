@@ -47,7 +47,7 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
         {
             var keyword = search.Trim().ToLower();
             query = query.Where(item => item.Name.ToLower().Contains(keyword)
-                || (item.AiProfile != null && item.AiProfile.SearchText.ToLower().Contains(keyword)));
+                || (item.Description != null && item.Description.ToLower().Contains(keyword)));
         }
 
         if (availableOnly)
@@ -155,7 +155,6 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
             .Include(item => item.DietaryAttributes).ThenInclude(item => item.DietaryAttribute)
             .Include(item => item.PreparationMethods).ThenInclude(item => item.PreparationMethod)
             .Include(item => item.TasteProfiles).ThenInclude(item => item.TasteProfile)
-            .Include(item => item.AiProfile)
             .AsSplitQuery()
             .Where(item => item.BoothId == boothId && !item.IsDeleted);
         var totalCount = await query.CountAsync(cancellationToken);
@@ -180,7 +179,6 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
             .Include(item => item.DietaryAttributes).ThenInclude(item => item.DietaryAttribute)
             .Include(item => item.PreparationMethods).ThenInclude(item => item.PreparationMethod)
             .Include(item => item.TasteProfiles).ThenInclude(item => item.TasteProfile)
-            .Include(item => item.AiProfile)
             .AsSplitQuery()
             .FirstOrDefaultAsync(item => item.Id == foodItemId && item.BoothId == boothId && !item.IsDeleted);
 
@@ -211,84 +209,6 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
             .Where(item => item.BoothId == boothId && foodItemIds.Contains(item.Id))
             .ToListAsync(cancellationToken);
 
-    public async Task<IReadOnlyCollection<FoodItem>> GetAiCandidatesAsync(
-        Guid? nightMarketId,
-        int maxCandidates,
-        CancellationToken cancellationToken = default)
-    {
-        if (maxCandidates is < 1 or > 500)
-            throw new ArgumentOutOfRangeException(nameof(maxCandidates));
-
-        var query = ActiveQuery()
-            .AsNoTracking()
-            .Include(item => item.Category)
-            .Include(item => item.FoodPrices)
-            .Include(item => item.FoodItemTags)
-                .ThenInclude(foodItemTag => foodItemTag.FoodTag)
-            .Include(item => item.Booth)
-                .ThenInclude(booth => booth.NightMarket)
-            .Include(item => item.Booth)
-                .ThenInclude(booth => booth.Zone)
-            .Where(item =>
-                item.IsAvailable
-                && !item.Category.IsDeleted
-                && item.Booth.Status == BoothStatus.Active
-                && item.Booth.NightMarket.Status == NightMarketStatus.Active
-                && item.Booth.NightMarket.ModerationStatus == ModerationStatus.Active
-                && !item.Booth.NightMarket.IsDeleted);
-
-        if (nightMarketId.HasValue)
-        {
-            query = query.Where(item => item.Booth.NightMarketId == nightMarketId.Value);
-        }
-
-        return await query
-            .OrderByDescending(item => item.IsFeatured)
-            .ThenByDescending(item => item.Booth.AverageRating)
-            .ThenBy(item => item.Id)
-            .Take(maxCandidates)
-            .AsSplitQuery()
-            .ToListAsync(cancellationToken);
-    }
-
-    public async Task<IReadOnlyCollection<FoodItem>> GetAiOrderableCandidatesAsync(
-        Guid? nightMarketId,
-        TimeOnly localTime,
-        int maxCandidates,
-        CancellationToken cancellationToken = default)
-    {
-        if (maxCandidates is < 1 or > 500)
-            throw new ArgumentOutOfRangeException(nameof(maxCandidates));
-
-        var query = ActiveQuery()
-            .AsNoTracking()
-            .Include(item => item.Category)
-            .Include(item => item.FoodPrices)
-            .Include(item => item.FoodItemTags)
-                .ThenInclude(foodItemTag => foodItemTag.FoodTag)
-            .Include(item => item.Booth)
-                .ThenInclude(booth => booth.NightMarket)
-            .Include(item => item.Booth)
-                .ThenInclude(booth => booth.Zone)
-            .Where(item =>
-                !item.Category.IsDeleted
-                && item.Booth.Status == BoothStatus.Active
-                && item.Booth.NightMarket.ModerationStatus == ModerationStatus.Active
-                && !item.Booth.NightMarket.IsDeleted)
-            .Where(IsCustomerOrderableAt(localTime));
-
-        if (nightMarketId.HasValue)
-            query = query.Where(item => item.Booth.NightMarketId == nightMarketId.Value);
-
-        return await query
-            .OrderByDescending(item => item.IsFeatured)
-            .ThenByDescending(item => item.Booth.AverageRating)
-            .ThenBy(item => item.Id)
-            .Take(maxCandidates)
-            .AsSplitQuery()
-            .ToListAsync(cancellationToken);
-    }
-
     public async Task<List<FoodItem>> GetAllFoodItemsByIdsAsync(List<Guid> foodItemIds)
     {
         return await _dbSet
@@ -301,37 +221,6 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
             .Where(item => foodItemIds.Contains(item.Id))
             .ToListAsync();
     }
-
-    public async Task<IReadOnlyCollection<FoodItem>> GetSemanticProfileBatchAsync(Guid? foodItemId, int batchSize, CancellationToken cancellationToken = default)
-    {
-        if (batchSize is < 1 or > 1000) throw new ArgumentOutOfRangeException(nameof(batchSize));
-        var query = SemanticProfileQuery();
-        if (foodItemId.HasValue) query = query.Where(x => x.Id == foodItemId.Value);
-        return await query.OrderBy(x => x.Id).Take(batchSize).ToListAsync(cancellationToken);
-    }
-
-    public async Task<IReadOnlyCollection<FoodItem>> GetAiProfileEnrichmentBatchAsync(int batchSize, bool includeFailed, CancellationToken cancellationToken = default)
-    {
-        if (batchSize is < 1 or > 50) throw new ArgumentOutOfRangeException(nameof(batchSize));
-        var statuses = includeFailed
-            ? new[] { FoodAiProfileStatus.PENDING, FoodAiProfileStatus.STALE, FoodAiProfileStatus.FAILED }
-            : new[] { FoodAiProfileStatus.PENDING, FoodAiProfileStatus.STALE };
-        return await SemanticProfileQuery()
-            .Where(x => x.AiProfile != null && statuses.Contains(x.AiProfile.Status))
-            .OrderBy(x => x.AiProfile!.LastAttemptAt == null ? 0 : 1)
-            .ThenBy(x => x.AiProfile!.LastAttemptAt)
-            .ThenBy(x => x.Id)
-            .Take(batchSize)
-            .ToListAsync(cancellationToken);
-    }
-
-    private IQueryable<FoodItem> SemanticProfileQuery()
-        => ActiveQuery().Include(x => x.Category).Include(x => x.Courses)
-            .Include(x => x.Ingredients).ThenInclude(x => x.Ingredient)
-            .Include(x => x.DietaryAttributes).ThenInclude(x => x.DietaryAttribute)
-            .Include(x => x.PreparationMethods).ThenInclude(x => x.PreparationMethod)
-            .Include(x => x.TasteProfiles).ThenInclude(x => x.TasteProfile)
-            .Include(x => x.AiProfile).AsSplitQuery();
 
     private IQueryable<FoodItem> CustomerVisibleQuery()
         => ActiveQuery().AsNoTracking().Where(item =>
@@ -418,7 +307,6 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
             .Include(item => item.Category)
             .Include(item => item.FoodPrices)
             .Include(item => item.Courses)
-            .Include(item => item.AiProfile)
             .ToListAsync(cancellationToken);
 
         IEnumerable<CustomerFoodReadModel> query = entities
@@ -427,7 +315,7 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
             .Where(item => !categoryId.HasValue || item.CategoryId == categoryId.Value)
             .Where(item => string.IsNullOrWhiteSpace(search)
                 || item.Name.Contains(search.Trim(), StringComparison.OrdinalIgnoreCase)
-                || (item.AiProfile?.SearchText.Contains(search.Trim(), StringComparison.OrdinalIgnoreCase) ?? false))
+                || (item.Description?.Contains(search.Trim(), StringComparison.OrdinalIgnoreCase) ?? false))
             .Select(item => ToCustomerReadModel(item, utcNow, includeImages: false))
             .Where(item => !minPrice.HasValue || item.EffectivePrice >= minPrice.Value)
             .Where(item => !maxPrice.HasValue || item.EffectivePrice <= maxPrice.Value)

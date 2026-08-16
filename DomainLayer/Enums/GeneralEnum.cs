@@ -418,26 +418,5 @@ namespace DomainLayer.Enums
             Active = 0,
             Inactive = 1
         }
-
-        public enum CustomerPreferenceKind
-        {
-            Like = 0,
-            Avoid = 1
-        }
-
-        public enum CustomerPreferenceSource
-        {
-            UserSelected = 0,
-            AIInferred = 1,
-            PurchaseHistory = 2,
-            ReviewHistory = 3
-        }
-
-        public enum AIRecommendationType
-        {
-            FoodDiscovery = 0,
-            DiningPlan = 1,
-            PreferenceProfile = 2
-        }
     }
 }

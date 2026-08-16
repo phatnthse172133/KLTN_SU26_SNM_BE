@@ -3,7 +3,7 @@ using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
 using ApplicationLayer.Mappings;
-using ApplicationLayer.AI.Services;
+using ApplicationLayer.Services.FoodTags;
 using AutoMapper;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
@@ -20,9 +20,7 @@ public class MenuService : IMenuService
     private readonly IFoodTagRepository _foodTags;
     private readonly IMapper _mapper;
     private readonly IFoodSemanticMetadataRepository? _semanticMetadata;
-    private readonly IFoodAiProfileGenerator? _profileGenerator;
     private readonly ILegacyFoodTagMetadataAdapter? _legacyAdapter;
-    private readonly IFoodAiProfileEnrichmentService? _profileEnrichment;
 
     public MenuService(
         IBoothRepository booths,
@@ -45,12 +43,9 @@ public class MenuService : IMenuService
         IFoodTagRepository foodTags,
         IMapper mapper,
         IFoodSemanticMetadataRepository semanticMetadata,
-        IFoodAiProfileGenerator profileGenerator,
-        ILegacyFoodTagMetadataAdapter legacyAdapter,
-        IFoodAiProfileEnrichmentService? profileEnrichment = null)
+        ILegacyFoodTagMetadataAdapter legacyAdapter)
         : this(booths, categories, foodItems, foodTags, mapper)
-        => (_semanticMetadata, _profileGenerator, _legacyAdapter, _profileEnrichment)
-            = (semanticMetadata, profileGenerator, legacyAdapter, profileEnrichment);
+        => (_semanticMetadata, _legacyAdapter) = (semanticMetadata, legacyAdapter);
 
     public async Task<ApiResponse<PaginationResp<FoodItemResponse>>> GetMyBoothMenuAsync(
         Guid ownerId,
@@ -90,14 +85,10 @@ public class MenuService : IMenuService
         foodItem.UpdatedAt = now;
         SetTags(foodItem, tags!, now);
         if (_legacyAdapter is not null)
-        {
             await _legacyAdapter.ApplySupportedAsync(foodItem, tags!, now, cancellationToken);
-            _profileGenerator!.Rebuild(foodItem, now);
-        }
 
         await _foodItems.AddAsync(foodItem);
         await _foodItems.SaveChangesAsync();
-        await TryEnrichAiProfileAsync(foodItem.Id, cancellationToken);
 
         return ApiResponse<FoodItemResponse>.SuccessResponse(_mapper.Map<FoodItemResponse>(foodItem), "Food item created successfully.");
     }
@@ -123,14 +114,10 @@ public class MenuService : IMenuService
         foodItem.UpdatedAt = DateTime.UtcNow;
         SetTags(foodItem, tags!, foodItem.UpdatedAt);
         if (_legacyAdapter is not null)
-        {
             await _legacyAdapter.ApplySupportedAsync(foodItem, tags!, foodItem.UpdatedAt, cancellationToken);
-            _profileGenerator!.Rebuild(foodItem, foodItem.UpdatedAt);
-        }
 
         _foodItems.Update(foodItem);
         await _foodItems.SaveChangesAsync();
-        await TryEnrichAiProfileAsync(foodItem.Id, cancellationToken);
 
         return ApiResponse<FoodItemResponse>.SuccessResponse(_mapper.Map<FoodItemResponse>(foodItem), "Food item updated successfully.");
     }
@@ -151,10 +138,8 @@ public class MenuService : IMenuService
             IsDeleted = false, CreatedAt = now, UpdatedAt = now
         };
         ApplyNormalizedMetadata(food, request, metadata, now);
-        _profileGenerator!.Rebuild(food, now);
         await _foodItems.AddAsync(food);
         await _foodItems.SaveChangesAsync();
-        await TryEnrichAiProfileAsync(food.Id, cancellationToken);
         return ApiResponse<FoodItemV2Response>.SuccessResponse(MapV2(food), "Food item created with normalized metadata.");
     }
 
@@ -170,10 +155,8 @@ public class MenuService : IMenuService
         food.CategoryId = category.Id; food.Category = category; food.Name = request.Name.Trim(); food.Description = request.Description?.Trim();
         food.Price = request.Price; food.ThumbnailUrl = request.ThumbnailUrl; food.IsAvailable = request.IsAvailable; food.IsFeatured = request.IsFeatured; food.UpdatedAt = now;
         ApplyNormalizedMetadata(food, request, metadata, now);
-        _profileGenerator!.Rebuild(food, now);
         _foodItems.Update(food);
         await _foodItems.SaveChangesAsync();
-        await TryEnrichAiProfileAsync(food.Id, cancellationToken);
         return ApiResponse<FoodItemV2Response>.SuccessResponse(MapV2(food), "Food item normalized metadata replaced successfully.");
     }
 
@@ -311,21 +294,8 @@ public class MenuService : IMenuService
 
     private void EnsureV2Dependencies()
     {
-        if (_semanticMetadata is null || _profileGenerator is null)
+        if (_semanticMetadata is null)
             throw new InvalidOperationException("Normalized menu dependencies are not configured.");
-    }
-
-    private async Task TryEnrichAiProfileAsync(Guid foodItemId, CancellationToken cancellationToken)
-    {
-        if (_profileEnrichment is null) return;
-        try
-        {
-            await _profileEnrichment.EnrichOneAsync(foodItemId, cancellationToken);
-        }
-        catch
-        {
-            // Food CRUD must succeed even when post-commit enrichment fails.
-        }
     }
 
     private async Task<FoodCategory> ValidateBaseV2Async(Guid boothId, CreateFoodItemV2Request request, CancellationToken ct)

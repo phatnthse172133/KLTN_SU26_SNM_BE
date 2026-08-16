@@ -117,11 +117,7 @@ builder.Services.AddRateLimiter(options =>
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     options.OnRejected = async (context, cancellationToken) =>
     {
-        var policyName = context.HttpContext.GetEndpoint()?.Metadata
-            .GetMetadata<EnableRateLimitingAttribute>()?.PolicyName;
-        var errorCode = policyName?.StartsWith("AI", StringComparison.Ordinal) == true
-            ? "AI_RATE_LIMITED"
-            : "RATE_LIMITED";
+        var errorCode = "RATE_LIMITED";
         var response = ApiResponse<ErrorResponse>.Failure(
             "Too many requests. Please try again later.",
             errorCode,
@@ -175,56 +171,6 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0
             });
     });
-    options.AddPolicy("AIApiPolicy", httpContext =>
-    {
-        var userId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
-        var endpoint = httpContext.Request.Path.Value?.ToLowerInvariant() ?? "ai";
-        return RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: $"{endpoint}:{userId}",
-            factory: _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 10,
-                Window = TimeSpan.FromMinutes(1),
-                QueueLimit = 0
-            });
-    });
-    options.AddPolicy("AIRecommendationV2Policy", httpContext =>
-    {
-        var customerId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                         ?? httpContext.User.FindFirst("sub")?.Value
-                         ?? "anonymous";
-        return RateLimitPartition.GetFixedWindowLimiter(customerId, _ => new FixedWindowRateLimiterOptions
-        {
-            PermitLimit = 6,
-            Window = TimeSpan.FromMinutes(1),
-            QueueLimit = 0,
-            AutoReplenishment = true
-        });
-    });
-    options.AddPolicy("AIMealPlanCreateV2Policy", httpContext =>
-    {
-        var customerId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
-        return RateLimitPartition.GetFixedWindowLimiter(customerId, _ => new FixedWindowRateLimiterOptions
-        {
-            PermitLimit = 4, Window = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true
-        });
-    });
-    options.AddPolicy("AIMealPlanMutationV2Policy", httpContext =>
-    {
-        var customerId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
-        return RateLimitPartition.GetFixedWindowLimiter(customerId, _ => new FixedWindowRateLimiterOptions
-        {
-            PermitLimit = 20, Window = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true
-        });
-    });
-    options.AddPolicy("AIMealPlanReadV2Policy", httpContext =>
-    {
-        var customerId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
-        return RateLimitPartition.GetFixedWindowLimiter(customerId, _ => new FixedWindowRateLimiterOptions
-        {
-            PermitLimit = 60, Window = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true
-        });
-    });
     options.AddPolicy("ChatSendPolicy", httpContext =>
     {
         var userId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
@@ -245,6 +191,18 @@ builder.Services.AddRateLimiter(options =>
             factory: _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            });
+    });
+    options.AddPolicy("AssistantApiPolicy", httpContext =>
+    {
+        var userId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: $"assistant:{userId}",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 15,
                 Window = TimeSpan.FromMinutes(1),
                 QueueLimit = 0
             });
@@ -431,7 +389,6 @@ builder.Services.AddHealthChecks()
     .AddCheck<DatabaseReadinessHealthCheck>("postgresql", tags: ["ready"]);
 builder.Services.AddSwaggerGen(options =>
 {
-    options.OperationFilter<PresentationLayer.RecommendationV2SwaggerOperationFilter>();
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Name = "Authorization",

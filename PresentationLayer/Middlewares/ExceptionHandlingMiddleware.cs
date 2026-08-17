@@ -1,5 +1,6 @@
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
+using InfrastructureLayer.Cores.Database;
 using Microsoft.EntityFrameworkCore;
 
 namespace PresentationLayer.Middlewares;
@@ -29,36 +30,50 @@ public class ExceptionHandlingMiddleware
         }
         catch (DbUpdateException exception)
         {
+            var mapped = DatabaseWriteErrorMapper.Map(exception);
+            var postgres = DatabaseWriteErrorMapper.UnwrapPostgres(exception);
             if (exception is DbUpdateConcurrencyException concurrencyException)
             {
                 _logger.LogWarning(
                     "Database concurrency conflict for entities {EntityTypes}.",
                     string.Join(",", concurrencyException.Entries.Select(entry => entry.Metadata.ClrType.Name)));
             }
-            else if (exception.InnerException is Npgsql.PostgresException postgresException)
+            else if (postgres is not null)
             {
                 _logger.LogWarning(
-                    "Database constraint conflict. SqlState={SqlState} Constraint={Constraint} Table={Table}",
-                    postgresException.SqlState,
-                    postgresException.ConstraintName,
-                    postgresException.TableName);
+                    "Database write failed. SqlState={SqlState} Constraint={Constraint} Table={Table} Column={Column} Mapped={ErrorCode}",
+                    postgres.SqlState,
+                    postgres.ConstraintName,
+                    postgres.TableName,
+                    postgres.ColumnName,
+                    mapped.ErrorCode);
             }
 
             await WriteErrorAsync(
                 context,
                 exception,
-                StatusCodes.Status409Conflict,
-                "DATABASE_CONFLICT",
-                "The request conflicts with existing data.");
+                mapped.StatusCode,
+                mapped.ErrorCode,
+                mapped.Message,
+                mapped.Details);
         }
         catch (Npgsql.PostgresException exception)
         {
+            var mapped = DatabaseWriteErrorMapper.Map(exception);
+            _logger.LogWarning(
+                "Database postgres error. SqlState={SqlState} Constraint={Constraint} Table={Table} Column={Column} Mapped={ErrorCode}",
+                exception.SqlState,
+                exception.ConstraintName,
+                exception.TableName,
+                exception.ColumnName,
+                mapped.ErrorCode);
             await WriteErrorAsync(
                 context,
                 exception,
-                StatusCodes.Status500InternalServerError,
-                "DATABASE_SCHEMA_ERROR",
-                "A database configuration issue occurred. Please contact the system administrator.");
+                mapped.StatusCode,
+                mapped.ErrorCode,
+                mapped.Message,
+                mapped.Details);
         }
         catch (Exception exception)
         {

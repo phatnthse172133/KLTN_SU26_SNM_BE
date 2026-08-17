@@ -1,4 +1,3 @@
-using static DomainLayer.Enums.GeneralEnum;
 using DomainLayer.Enums;
 
 namespace DomainLayer.Common;
@@ -64,7 +63,8 @@ public sealed record CustomerFoodReadModel(
     public decimal AverageRating { get; init; }
     public int ReviewCount { get; init; }
     public CustomerFoodSemanticReadModel SemanticMetadata { get; init; } = new();
-    public IReadOnlyCollection<CustomerFoodTagReadModel> Tags { get; init; } = [];
+    // Catalog-derived chips for Customer UI. Remaining `Tags` is NOT the removed FoodTag entity.
+    public IReadOnlyCollection<CustomerCatalogChipReadModel> Tags { get; init; } = [];
 }
 
 public sealed class CustomerFoodSemanticReadModel
@@ -82,8 +82,8 @@ public sealed record CustomerSemanticCatalogReadModel(Guid Id, string Code, stri
 public sealed record CustomerAllergenReadModel(Guid Id, string Code, string Name, AllergenDeclarationType DeclarationType, bool IsConfirmed, MetadataSource Source);
 public sealed record CustomerDietaryReadModel(Guid Id, string Code, string Name, DietarySuitabilityStatus Status, bool IsConfirmed, MetadataSource Source);
 
-public sealed record CustomerFoodTagReadModel(
+public sealed record CustomerCatalogChipReadModel(
     Guid Id,
     string Code,
     string Name,
-    FoodTagGroup TagGroup);
+    string TagGroup);

@@ -1,15 +1,10 @@
-using ApplicationLayer.AI;
-using ApplicationLayer.AI.Services;
 using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Services.CustomerDiscovery;
-using DomainLayer.InterfaceRepository;
 using InfrastructureLayer.Data;
 using InfrastructureLayer.Data.Seeders;
 using InfrastructureLayer.Repositories;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
-using Moq;
 using Npgsql;
 using static DomainLayer.Enums.GeneralEnum;
 
@@ -77,7 +72,9 @@ public class PostgresHomeDiscoveryTests
         var reduced = all.Data.Items.First(x => x.EffectivePrice < x.BasePrice);
         Assert.Equal(normal.BasePrice, (await discovery.GetFoodAsync(normal.Id)).Data!.EffectivePrice);
         Assert.True((await discovery.GetFoodAsync(reduced.Id)).Data!.EffectivePrice < reduced.BasePrice);
-        Assert.Contains(all.Data.Items, x => !x.CanOrder);
+        // CanOrder is cart-add eligibility (available + active market), not open-hours checkout eligibility.
+        Assert.All(all.Data.Items, x => Assert.True(x.IsAvailable));
+        Assert.Contains(all.Data.Items, x => x.CanOrder);
     }
 
     [Fact]
@@ -157,25 +154,17 @@ public class PostgresHomeDiscoveryTests
         var foodsByPriceDescending = await new FoodItemRepository(context).GetCustomerPagedAsync(
             marketId, null, null, null, null, null, true,
             FixtureUtcNow, FixtureLocalTime, 1, 100, "priceDesc");
-        var aiOrderableFoods = await new FoodItemRepository(context).GetAiOrderableCandidatesAsync(
-            marketId, FixtureLocalTime, 200);
         var booths = await new BoothRepository(context).GetCustomerPagedAsync(
-            marketId, null, null, FixtureLocalTime, null, 1, 100, "featured");
-        var foodTagRepository = new FoodTagRepository(context);
-        var foodTags = await foodTagRepository.GetPagedTagsAsync(null, null, 1, 100);
-        var aiHome = await CreateAiService(foodTagRepository).GetHomeAsync(null);
+            marketId, null, null, FixtureLocalTime, null, null, 1, 100, "featured");
+        var ingredients = await context.Ingredients.AsNoTracking().Take(100).ToListAsync();
 
         Assert.NotNull(markets.Items);
         Assert.NotNull(foods.Items);
         Assert.NotNull(foodsByName.Items);
         Assert.NotNull(foodsByPrice.Items);
         Assert.NotNull(foodsByPriceDescending.Items);
-        Assert.NotNull(aiOrderableFoods);
         Assert.NotNull(booths.Items);
-        Assert.NotNull(foodTags.Items);
-        Assert.NotNull(aiHome.Data);
-        Assert.NotNull(aiHome.Data!.PopularTags);
-        Assert.Equal(5, aiHome.Data.DiningStyles.Count);
+        Assert.NotNull(ingredients);
 
         if (fixture is null)
             return;
@@ -185,7 +174,6 @@ public class PostgresHomeDiscoveryTests
         Assert.Equal(fixture.FoodId, Assert.Single(foodsByName.Items).Id);
         Assert.Equal(fixture.FoodId, Assert.Single(foodsByPrice.Items).Id);
         Assert.Equal(fixture.FoodId, Assert.Single(foodsByPriceDescending.Items).Id);
-        Assert.Equal(fixture.FoodId, Assert.Single(aiOrderableFoods).Id);
         Assert.Equal(fixture.BoothId, Assert.Single(booths.Items).Id);
         Assert.Equal(1, markets.TotalCount);
         Assert.Equal(1, foods.TotalCount);
@@ -220,17 +208,6 @@ public class PostgresHomeDiscoveryTests
     private static readonly DateTime FixtureUtcNow = new(2026, 8, 4, 13, 0, 0, DateTimeKind.Utc);
     private static readonly TimeOnly FixtureLocalTime = new(20, 0);
     private sealed record HomeFixture(Guid MarketId, Guid BoothId, Guid FoodId);
-
-    private static AIRecommendationService CreateAiService(FoodTagRepository foodTags)
-        => new(
-            new Mock<IFoodItemRepository>().Object,
-            foodTags,
-            new Mock<ICustomerPreferenceRepository>().Object,
-            new Mock<IAIRecommendationLogRepository>().Object,
-            new Mock<IAIProviderService>().Object,
-            new Mock<IAICustomerContextRepository>().Object,
-            Options.Create(new AIProviderSettings { EnableExternalProvider = false }),
-            TimeProvider.System);
 
     private sealed class Phase05TimeProvider : TimeProvider
     {

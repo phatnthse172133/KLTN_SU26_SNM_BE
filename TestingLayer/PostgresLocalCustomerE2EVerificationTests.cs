@@ -1,3 +1,4 @@
+using DomainLayer.Enums;
 using InfrastructureLayer.Data;
 using InfrastructureLayer.Data.Seeders;
 using Microsoft.EntityFrameworkCore;
@@ -19,17 +20,16 @@ public sealed class PostgresLocalCustomerE2EVerificationTests
         await using var db = new SNMDbContext(options);
 
         Assert.Equal(18, await db.FoodCategories.CountAsync(category => category.IsSystem));
-        Assert.Equal(102, await db.FoodTags.CountAsync(tag => tag.IsSystem && !tag.IsDeleted));
-        Assert.True(await db.FoodItemTags.CountAsync(link =>
-            link.FoodItem.Booth.NightMarketId == IntegrationDemoDataSeeder.MarketId) >= 60);
-        foreach (var courseCode in new[]
+        Assert.True(await db.FoodItemCourses.CountAsync(link =>
+            link.FoodItem.Booth.NightMarketId == IntegrationDemoDataSeeder.MarketId) >= 20);
+        foreach (var course in new[]
                  {
-                     "COURSE_APPETIZER", "COURSE_MAIN_COURSE", "COURSE_DRINK", "COURSE_DESSERT"
+                     FoodCourse.APPETIZER, FoodCourse.MAIN_COURSE, FoodCourse.DRINK, FoodCourse.DESSERT
                  })
         {
-            Assert.True(await db.FoodItemTags.AnyAsync(link =>
+            Assert.True(await db.FoodItemCourses.AnyAsync(link =>
                 link.FoodItem.Booth.NightMarketId == IntegrationDemoDataSeeder.MarketId
-                && link.FoodTag.Code == courseCode), $"Missing applied course mapping {courseCode}.");
+                && link.Course == course), $"Missing applied course mapping {course}.");
         }
 
         var customerId = Guid.Parse("d3500000-0000-0000-0000-000000000010");

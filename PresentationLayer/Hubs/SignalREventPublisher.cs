@@ -75,7 +75,9 @@ public class SignalREventPublisher : IRealtimeEventPublisher
             }
         }
 
-        // 3. Direct user (always through NotificationHub)
+        // 3. Direct user — NotificationHub personal inbox.
+        // Chat MessageCreated is owned by SignalRChatPublisher → chat-user:{recipient}
+        // and must not be fan-out again from this publisher.
         if (evt.RecipientId.HasValue)
         {
             try

@@ -117,11 +117,7 @@ builder.Services.AddRateLimiter(options =>
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     options.OnRejected = async (context, cancellationToken) =>
     {
-        var policyName = context.HttpContext.GetEndpoint()?.Metadata
-            .GetMetadata<EnableRateLimitingAttribute>()?.PolicyName;
-        var errorCode = policyName?.StartsWith("AI", StringComparison.Ordinal) == true
-            ? "AI_RATE_LIMITED"
-            : "RATE_LIMITED";
+        var errorCode = "RATE_LIMITED";
         var response = ApiResponse<ErrorResponse>.Failure(
             "Too many requests. Please try again later.",
             errorCode,
@@ -175,56 +171,6 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0
             });
     });
-    options.AddPolicy("AIApiPolicy", httpContext =>
-    {
-        var userId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
-        var endpoint = httpContext.Request.Path.Value?.ToLowerInvariant() ?? "ai";
-        return RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: $"{endpoint}:{userId}",
-            factory: _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 10,
-                Window = TimeSpan.FromMinutes(1),
-                QueueLimit = 0
-            });
-    });
-    options.AddPolicy("AIRecommendationV2Policy", httpContext =>
-    {
-        var customerId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                         ?? httpContext.User.FindFirst("sub")?.Value
-                         ?? "anonymous";
-        return RateLimitPartition.GetFixedWindowLimiter(customerId, _ => new FixedWindowRateLimiterOptions
-        {
-            PermitLimit = 6,
-            Window = TimeSpan.FromMinutes(1),
-            QueueLimit = 0,
-            AutoReplenishment = true
-        });
-    });
-    options.AddPolicy("AIMealPlanCreateV2Policy", httpContext =>
-    {
-        var customerId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
-        return RateLimitPartition.GetFixedWindowLimiter(customerId, _ => new FixedWindowRateLimiterOptions
-        {
-            PermitLimit = 4, Window = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true
-        });
-    });
-    options.AddPolicy("AIMealPlanMutationV2Policy", httpContext =>
-    {
-        var customerId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
-        return RateLimitPartition.GetFixedWindowLimiter(customerId, _ => new FixedWindowRateLimiterOptions
-        {
-            PermitLimit = 20, Window = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true
-        });
-    });
-    options.AddPolicy("AIMealPlanReadV2Policy", httpContext =>
-    {
-        var customerId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
-        return RateLimitPartition.GetFixedWindowLimiter(customerId, _ => new FixedWindowRateLimiterOptions
-        {
-            PermitLimit = 60, Window = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true
-        });
-    });
     options.AddPolicy("ChatSendPolicy", httpContext =>
     {
         var userId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
@@ -245,6 +191,18 @@ builder.Services.AddRateLimiter(options =>
             factory: _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            });
+    });
+    options.AddPolicy("AssistantApiPolicy", httpContext =>
+    {
+        var userId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: $"assistant:{userId}",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 15,
                 Window = TimeSpan.FromMinutes(1),
                 QueueLimit = 0
             });
@@ -431,7 +389,6 @@ builder.Services.AddHealthChecks()
     .AddCheck<DatabaseReadinessHealthCheck>("postgresql", tags: ["ready"]);
 builder.Services.AddSwaggerGen(options =>
 {
-    options.OperationFilter<PresentationLayer.RecommendationV2SwaggerOperationFilter>();
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Name = "Authorization",
@@ -447,14 +404,26 @@ var app = builder.Build();
 var payOSRuntimeSettings = app.Services
     .GetRequiredService<Microsoft.Extensions.Options.IOptions<PayOSSettings>>()
     .Value;
+var openAiRuntimeSettings = app.Services
+    .GetRequiredService<Microsoft.Extensions.Options.IOptions<ApplicationLayer.Services.Assistant.OpenAiOptions>>()
+    .Value;
 app.Lifetime.ApplicationStarted.Register(() =>
+{
     app.Logger.LogInformation(
         "PayOS runtime config. ClientIdPresent={ClientIdPresent} ApiKeyPresent={ApiKeyPresent} ChecksumKeyPresent={ChecksumKeyPresent} ReturnUrlValid={ReturnUrlValid} CancelUrlValid={CancelUrlValid}",
         !string.IsNullOrWhiteSpace(payOSRuntimeSettings.ClientId),
         !string.IsNullOrWhiteSpace(payOSRuntimeSettings.ApiKey),
         !string.IsNullOrWhiteSpace(payOSRuntimeSettings.ChecksumKey),
         Uri.TryCreate(payOSRuntimeSettings.ReturnUrl, UriKind.Absolute, out _),
-        Uri.TryCreate(payOSRuntimeSettings.CancelUrl, UriKind.Absolute, out _)));
+        Uri.TryCreate(payOSRuntimeSettings.CancelUrl, UriKind.Absolute, out _));
+    app.Logger.LogInformation(
+        "OpenAI runtime config. Enabled={Enabled} ApiKeyPresent={ApiKeyPresent} Model={Model} BaseUrlHost={BaseUrlHost} TimeoutSeconds={TimeoutSeconds}",
+        openAiRuntimeSettings.Enabled,
+        !string.IsNullOrWhiteSpace(openAiRuntimeSettings.ApiKey),
+        openAiRuntimeSettings.Model,
+        Uri.TryCreate(openAiRuntimeSettings.BaseUrl, UriKind.Absolute, out var openAiBase) ? openAiBase.Host : "missing",
+        openAiRuntimeSettings.TimeoutSeconds);
+});
 if (developmentInstanceLock is not null)
 {
     app.Lifetime.ApplicationStopped.Register(developmentInstanceLock.Dispose);

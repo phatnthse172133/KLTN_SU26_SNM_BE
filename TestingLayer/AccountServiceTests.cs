@@ -432,8 +432,12 @@ namespace TestingLayer
                     It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<long>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(newUrl);
 
-            await Assert.ThrowsAsync<InvalidOperationException>(() => _accountService.UpdateAvatarAsync(
+            var exception = await Assert.ThrowsAsync<AppException>(() => _accountService.UpdateAvatarAsync(
                 user.Id, new MemoryStream(new byte[4]), "avatar.png", "image/png", 4));
+
+            Assert.Equal(503, exception.StatusCode);
+            Assert.Equal("AVATAR_UPDATE_FAILED", exception.ErrorCode);
+            Assert.IsType<InvalidOperationException>(exception.InnerException);
 
             _mockFileStorage.Verify(storage => storage.DeleteAvatarIfManagedAsync(
                 newUrl, It.IsAny<CancellationToken>()), Times.Once);

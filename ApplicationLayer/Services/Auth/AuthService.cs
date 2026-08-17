@@ -113,16 +113,21 @@ public class AuthService : IAuthService
         var identity = request.EmailOrUserName.Trim().ToLowerInvariant();
         var user = await _userRepository.FirstOrDefaultAsync(item => item.Email == identity || item.UserName.ToLower() == identity);
 
-        if (user is null || !_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
+        if (user is null)
         {
             throw AppException.Unauthorized("Email/username or password is incorrect.", AuthErrorCodes.InvalidCredentials);
         }
 
-        if (user.AuthProvider == AuthProvider.Google)
+        if (user.AuthProvider == AuthProvider.Google || string.IsNullOrEmpty(user.PasswordHash))
         {
             throw AppException.BadRequest(
                 "This account uses Google sign-in. Please continue with Google.",
                 AuthErrorCodes.GooglePasswordLoginNotAllowed);
+        }
+
+        if (!PasswordMatches(user, request.Password))
+        {
+            throw AppException.Unauthorized("Email/username or password is incorrect.", AuthErrorCodes.InvalidCredentials);
         }
 
         return await CreateSessionForActiveUserAsync(user, cancellationToken);
@@ -155,42 +160,19 @@ public class AuthService : IAuthService
                 AuthErrorCodes.InvalidGoogleToken);
         }
 
-        var user = await _userRepository.FirstOrDefaultAsync(item => item.GoogleId == googleUser.GoogleId);
-        var userWithSameEmail = user is null
-            ? await _userRepository.FirstOrDefaultAsync(item => item.Email == googleUser.Email)
-            : null;
-
-        // This public endpoint cannot prove that the caller also controls an existing local
-        // session, so it must not silently add Google as a sign-in method by matching email.
-        if (userWithSameEmail is not null)
+        if (string.IsNullOrWhiteSpace(googleUser.GoogleId))
         {
-            throw AppException.Conflict(
-                "An account with this email already exists. Sign in with its existing method before linking Google.",
-                AuthErrorCodes.GoogleAccountLinkRequired);
+            throw AppException.Unauthorized(
+                "Google token is invalid or the email has not been verified.",
+                AuthErrorCodes.InvalidGoogleToken);
         }
+
+        var email = googleUser.Email.Trim().ToLowerInvariant();
+        var user = await _userRepository.FirstOrDefaultAsync(item => item.GoogleId == googleUser.GoogleId);
 
         if (user is null)
         {
-            var customerRole = await GetOrCreateRoleAsync("Customer");
-            var now = DateTime.UtcNow;
-            user = new User
-            {
-                Id = Guid.NewGuid(),
-                RoleId = customerRole.Id,
-                Email = googleUser.Email,
-                FullName = googleUser.FullName,
-                UserName = $"google_{Guid.NewGuid():N}"[..19],
-                PasswordHash = _passwordHasher.HashPassword(_jwtService.GenerateSecureToken()),
-                AvatarUrl = googleUser.AvatarUrl,
-                GoogleId = googleUser.GoogleId,
-                AuthProvider = AuthProvider.Google,
-                Status = UserStatus.Active,
-                CreatedAt = now,
-                UpdatedAt = now
-            };
-
-            await _userRepository.AddAsync(user);
-            await _userRepository.SaveChangesAsync();
+            user = await ResolveOrCreateCustomerFromGoogleAsync(googleUser, email, cancellationToken);
         }
 
         var role = await _roleRepository.GetByIdAsync(user.RoleId);
@@ -202,6 +184,99 @@ public class AuthService : IAuthService
         }
 
         return await CreateSessionForActiveUserAsync(user, cancellationToken);
+    }
+
+    private async Task<User> ResolveOrCreateCustomerFromGoogleAsync(
+        GoogleUserInfo googleUser,
+        string email,
+        CancellationToken cancellationToken)
+    {
+        var userWithSameEmail = await _userRepository.FirstOrDefaultAsync(item => item.Email == email);
+        if (userWithSameEmail is not null)
+        {
+            if (!googleUser.EmailVerified)
+            {
+                throw AppException.Conflict(
+                    "An account with this email already exists. Sign in with its existing method before linking Google.",
+                    AuthErrorCodes.GoogleAccountLinkRequired);
+            }
+
+            var existingRole = await _roleRepository.GetByIdAsync(userWithSameEmail.RoleId);
+            if (existingRole is null || !string.Equals(existingRole.RoleName, "Customer", StringComparison.Ordinal))
+            {
+                throw AppException.Conflict(
+                    "This email is already associated with a non-customer account.",
+                    AuthErrorCodes.GoogleCustomerOnly);
+            }
+
+            userWithSameEmail.GoogleId = googleUser.GoogleId;
+            if (userWithSameEmail.AuthProvider == AuthProvider.Local)
+            {
+                userWithSameEmail.AuthProvider = AuthProvider.LocalGoogle;
+            }
+
+            if (string.IsNullOrEmpty(userWithSameEmail.AvatarUrl))
+            {
+                userWithSameEmail.AvatarUrl = TruncateAvatarUrl(googleUser.AvatarUrl);
+            }
+
+            if (userWithSameEmail.Status == UserStatus.PendingVerification)
+            {
+                userWithSameEmail.Status = UserStatus.Active;
+                userWithSameEmail.EmailVerificationTokenHash = null;
+                userWithSameEmail.EmailVerificationTokenExpiresAt = null;
+            }
+
+            userWithSameEmail.UpdatedAt = DateTime.UtcNow;
+            _userRepository.Update(userWithSameEmail);
+            await _userRepository.SaveChangesAsync();
+            return userWithSameEmail;
+        }
+
+        if (!googleUser.EmailVerified)
+        {
+            throw AppException.Unauthorized(
+                "Google token is invalid or the email has not been verified.",
+                AuthErrorCodes.InvalidGoogleToken);
+        }
+
+        var customerRole = await GetOrCreateRoleAsync("Customer");
+        var now = DateTime.UtcNow;
+        var fullName = string.IsNullOrWhiteSpace(googleUser.FullName) ? email : googleUser.FullName.Trim();
+        if (fullName.Length > 150)
+        {
+            fullName = fullName[..150];
+        }
+
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            RoleId = customerRole.Id,
+            Email = email,
+            FullName = fullName,
+            UserName = $"google_{Guid.NewGuid():N}"[..19],
+            PasswordHash = null,
+            AvatarUrl = TruncateAvatarUrl(googleUser.AvatarUrl),
+            GoogleId = googleUser.GoogleId,
+            AuthProvider = AuthProvider.Google,
+            Status = UserStatus.Active,
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+
+        await _userRepository.AddAsync(user);
+        await _userRepository.SaveChangesAsync();
+        return user;
+    }
+
+    private static string? TruncateAvatarUrl(string? avatarUrl)
+    {
+        if (string.IsNullOrWhiteSpace(avatarUrl))
+        {
+            return null;
+        }
+
+        return avatarUrl.Length <= 500 ? avatarUrl : avatarUrl[..500];
     }
 
     public async Task<ApiResponse<object>> VerifyEmailAsync(string token, CancellationToken cancellationToken = default)
@@ -367,7 +442,7 @@ public class AuthService : IAuthService
                 "This account cannot reset its password.",
                 AuthErrorCodes.PasswordResetNotAllowed);
 
-        if (_passwordHasher.VerifyPassword(request.NewPassword, user.PasswordHash))
+        if (PasswordMatches(user, request.NewPassword))
             throw AppException.BadRequest(
                 "New password must differ from the current password.",
                 AuthErrorCodes.PasswordReuseNotAllowed);
@@ -407,7 +482,7 @@ public class AuthService : IAuthService
                 "This account cannot reset its password.",
                 AuthErrorCodes.PasswordResetNotAllowed);
 
-        if (_passwordHasher.VerifyPassword(request.NewPassword, user.PasswordHash)) 
+        if (PasswordMatches(user, request.NewPassword))
             throw AppException.BadRequest(
                 "New password must differ from the current password.",
                 AuthErrorCodes.PasswordReuseNotAllowed);
@@ -438,12 +513,12 @@ public class AuthService : IAuthService
                 "This account uses Google sign-in and does not have a local password.",
                 AuthErrorCodes.PasswordResetNotAllowed);
 
-        if (!_passwordHasher.VerifyPassword(request.CurrentPassword, user.PasswordHash))
+        if (string.IsNullOrEmpty(user.PasswordHash) || !_passwordHasher.VerifyPassword(request.CurrentPassword, user.PasswordHash))
             throw AppException.BadRequest(
                 "Current password is incorrect.",
                 AuthErrorCodes.CurrentPasswordInvalid);
 
-        if (_passwordHasher.VerifyPassword(request.NewPassword, user.PasswordHash))
+        if (PasswordMatches(user, request.NewPassword))
             throw AppException.BadRequest(
                 "New password must be different from the current password.",
                 AuthErrorCodes.PasswordReuseNotAllowed);
@@ -516,6 +591,9 @@ public class AuthService : IAuthService
 
         return ApiResponse<object>.SuccessResponse(new { }, "Logged out successfully.");
     }
+
+    private bool PasswordMatches(User user, string password) =>
+        !string.IsNullOrEmpty(user.PasswordHash) && _passwordHasher.VerifyPassword(password, user.PasswordHash);
 
     private async Task<ApiResponse<AuthResponse>> CreateSessionForActiveUserAsync(User user, CancellationToken cancellationToken)
     {

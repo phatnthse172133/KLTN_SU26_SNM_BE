@@ -48,20 +48,16 @@ public static class CustomerOrderability
 
     /// <summary>
     /// Evaluation for cart add operations.
-    /// Only blocks if booth is unavailable (Inactive/Banned) or food is unavailable.
-    /// Does NOT block if booth is closed (outside operating hours) — customers can
-    /// add items to their cart while a booth is closed and checkout later.
+    /// Blocks inactive/unavailable market, booth, or food only.
+    /// Does NOT block when market or booth is outside operating hours —
+    /// customers can add items while closed and checkout later when open.
     /// </summary>
     public static CustomerOrderabilityResult EvaluateForCartAdd(FoodItem foodItem, DateTime utcNow)
     {
+        _ = utcNow;
         var (booth, market) = ValidateMarket(foodItem);
         if (market is null) return Blocked(MarketUnavailable);
         if (market.Status != NightMarketStatus.Active) return Blocked(MarketClosed);
-
-        var localTime = TimeOnly.FromDateTime(NightMarketAvailability.GetVietnamLocalTime(utcNow));
-        if (!CustomerAvailability.IsWithinInterval(
-                market.OpeningHours, market.ClosingHours, localTime))
-            return Blocked(MarketClosed);
 
         if (booth!.Status != BoothStatus.Active)
             return Blocked(BoothUnavailable);
@@ -71,6 +67,13 @@ public static class CustomerOrderability
 
         return new CustomerOrderabilityResult(true, null);
     }
+
+    /// <summary>
+    /// Cart-add / browse affordance: food is orderable into cart when entities are
+    /// active and food is available — independent of current opening hours.
+    /// </summary>
+    public static bool CanAddToCart(FoodItem foodItem, DateTime utcNow)
+        => EvaluateForCartAdd(foodItem, utcNow).CanOrder;
 
     public static string GetPublicMessage(string reasonCode)
         => reasonCode switch

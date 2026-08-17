@@ -509,7 +509,7 @@ public sealed class PostgresBusinessConcurrencyTests
             orders,
             promotions,
             new PromotionValidationService(usages, TimeProvider.System),
-            Mock.Of<IPayOSPayoutClientFactory>(),
+            Mock.Of<IPayOSPayoutServiceFactory>(),
             notifications ?? Mock.Of<IRealtimeNotificationPublisher>(),
             new FoodItemRepository(context),
             Mock.Of<ILogger<OrderService>>(),

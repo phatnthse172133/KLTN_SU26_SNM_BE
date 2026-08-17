@@ -1,0 +1,36 @@
+{
+  "type": "object",
+  "required": ["intent", "needsLocation", "hardConstraints", "structuredPreferences", "semanticPreferences", "semanticAvoidances"],
+  "properties": {
+    "intent": { "enum": ["FOOD_RECOMMENDATION", "MEAL_PLAN", "CHITCHAT", "CLARIFY"] },
+    "budgetMin": { "type": ["number", "null"] },
+    "budgetMax": { "type": ["number", "null"] },
+    "partySize": { "type": ["integer", "null"] },
+    "needsLocation": { "type": "boolean" },
+    "hardConstraints": {
+      "type": "object",
+      "properties": {
+        "allergenCodes": { "type": "array", "items": { "type": "string" } },
+        "avoidedIngredientCodes": { "type": "array", "items": { "type": "string" } },
+        "dietaryCodes": { "type": "array", "items": { "type": "string" } },
+        "maxSpiceLevel": { "enum": ["NON_SPICY", "MILD", "SPICY", "VERY_SPICY", null] },
+        "avoidedTasteCodes": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "structuredPreferences": {
+      "type": "object",
+      "properties": {
+        "preferredIngredientCodes": { "type": "array", "items": { "type": "string" } },
+        "preferredTasteCodes": { "type": "array", "items": { "type": "string" } },
+        "preferredPreparationCodes": { "type": "array", "items": { "type": "string" } },
+        "preferredCourseCodes": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "semanticPreferences": { "type": "array", "items": { "type": "string" } },
+    "semanticAvoidances": { "type": "array", "items": { "type": "string" } },
+    "diningContext": { "type": ["string", "null"] },
+    "userGoal": { "type": ["string", "null"] },
+    "additionalMeaning": { "type": ["string", "null"] },
+    "assistantReply": { "type": ["string", "null"] }
+  }
+}

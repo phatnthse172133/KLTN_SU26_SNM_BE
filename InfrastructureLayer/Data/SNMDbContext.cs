@@ -17,7 +17,6 @@ namespace InfrastructureLayer.Data
 
         // DbSets
         public virtual DbSet<BoothPayOsCredential> BoothPayOsCredentials { get; set; }
-        public virtual DbSet<AIRecommendationLog> AIRecommendationLogs { get; set; }
 
         public virtual DbSet<Ingredient> Ingredients { get; set; }
         public virtual DbSet<Allergen> Allergens { get; set; }
@@ -33,24 +32,10 @@ namespace InfrastructureLayer.Data
         public virtual DbSet<FoodItemSearchFacet> FoodItemSearchFacets { get; set; }
         public virtual DbSet<FoodItemCourse> FoodItemCourses { get; set; }
         public virtual DbSet<FoodItemDiningPurpose> FoodItemDiningPurposes { get; set; }
-        public virtual DbSet<CustomerFoodProfile> CustomerFoodProfiles { get; set; }
-        public virtual DbSet<CustomerPreferredIngredient> CustomerPreferredIngredients { get; set; }
-        public virtual DbSet<CustomerAvoidedIngredient> CustomerAvoidedIngredients { get; set; }
-        public virtual DbSet<CustomerDietaryRequirement> CustomerDietaryRequirements { get; set; }
-        public virtual DbSet<CustomerAllergenExclusion> CustomerAllergenExclusions { get; set; }
-        public virtual DbSet<CustomerPreferredPreparationMethod> CustomerPreferredPreparationMethods { get; set; }
-        public virtual DbSet<CustomerPreferredTasteProfile> CustomerPreferredTasteProfiles { get; set; }
-        public virtual DbSet<CustomerAvoidedTasteProfile> CustomerAvoidedTasteProfiles { get; set; }
-        public virtual DbSet<CustomerPreferredCourse> CustomerPreferredCourses { get; set; }
-        public virtual DbSet<CustomerPreferredDiningPurpose> CustomerPreferredDiningPurposes { get; set; }
-        public virtual DbSet<AiRecommendationSession> AiRecommendationSessions { get; set; }
-        public virtual DbSet<AiRecommendationFeedback> AiRecommendationFeedback { get; set; }
-        public virtual DbSet<AiRecommendationResult> AiRecommendationResults { get; set; }
-        public virtual DbSet<AiMealPlanSession> AiMealPlanSessions { get; set; }
-        public virtual DbSet<AiMealPlan> AiMealPlans { get; set; }
-        public virtual DbSet<AiMealPlanItem> AiMealPlanItems { get; set; }
-        public virtual DbSet<AiMealPlanCartOperation> AiMealPlanCartOperations { get; set; }
-        public virtual DbSet<FoodAiProfile> FoodAiProfiles { get; set; }
+        public virtual DbSet<AssistantConversation> AssistantConversations { get; set; }
+        public virtual DbSet<AssistantMessage> AssistantMessages { get; set; }
+        public virtual DbSet<AssistantMealPlan> AssistantMealPlans { get; set; }
+        public virtual DbSet<AssistantMealPlanItem> AssistantMealPlanItems { get; set; }
 
         public virtual DbSet<Booth> Booths { get; set; }
 
@@ -78,19 +63,13 @@ namespace InfrastructureLayer.Data
 
         public virtual DbSet<Conversation> Conversations { get; set; }
 
-        public virtual DbSet<CustomerPreference> CustomerPreferences { get; set; }
-
         public virtual DbSet<FoodCategory> FoodCategories { get; set; }
 
         public virtual DbSet<FoodImage> FoodImages { get; set; }
 
         public virtual DbSet<FoodItem> FoodItems { get; set; }
 
-        public virtual DbSet<FoodItemTag> FoodItemTags { get; set; }
-
         public virtual DbSet<FoodPrice> FoodPrices { get; set; }
-
-        public virtual DbSet<FoodTag> FoodTags { get; set; }
 
         public virtual DbSet<LayoutEdge> LayoutEdges { get; set; }
 
@@ -193,40 +172,10 @@ namespace InfrastructureLayer.Data
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
-            modelBuilder.ConfigureAiV2();
+            modelBuilder.ConfigureFoodMetadataModel();
+            modelBuilder.ConfigureAssistantModel();
             // Apply all configurations from the current assembly
             modelBuilder.HasPostgresExtension("uuid-ossp");
-
-            modelBuilder.Entity<AIRecommendationLog>(entity =>
-            {
-                entity.HasKey(e => e.Id).HasName("AIRecommendationLog_pkey");
-
-                entity.ToTable("AIRecommendationLog", tb => tb.HasComment("Log tÃ¡Â»â€˜i giÃ¡ÂºÂ£n cho cÃƒÂ¡c lÃ¡ÂºÂ§n AI recommendation Ã„â€˜Ã¡Â»Æ’ debug/demo"));
-
-                entity.HasIndex(e => e.CustomerId, "idx_airecommendationlog_customer");
-                entity.HasIndex(e => e.NightMarketId, "idx_airecommendationlog_nightmarket");
-                entity.HasIndex(e => new { e.RecommendationType, e.CreatedAt }, "idx_airecommendationlog_type_created");
-
-                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
-                entity.Property(e => e.RecommendationType)
-                    .HasConversion<string>()
-                    .HasMaxLength(30);
-                entity.Property(e => e.InputJson).HasColumnType("jsonb");
-                entity.Property(e => e.ParsedIntentJson).HasColumnType("jsonb");
-                entity.Property(e => e.ResultJson).HasColumnType("jsonb");
-                entity.Property(e => e.SelectedOptionId).HasMaxLength(100);
-                entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
-                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
-                entity.HasOne(d => d.Customer).WithMany(p => p.AIRecommendationLogs)
-                    .HasForeignKey(d => d.CustomerId)
-                    .OnDelete(DeleteBehavior.SetNull)
-                    .HasConstraintName("AIRecommendationLog_CustomerId_fkey");
-
-                entity.HasOne(d => d.NightMarket).WithMany(p => p.AIRecommendationLogs)
-                    .HasForeignKey(d => d.NightMarketId)
-                    .OnDelete(DeleteBehavior.SetNull)
-                    .HasConstraintName("AIRecommendationLog_NightMarketId_fkey");
-            });
 
             modelBuilder.Entity<Cart>(entity =>
             {
@@ -623,38 +572,6 @@ namespace InfrastructureLayer.Data
                     .HasConstraintName("Conversations_LastMessageId_fkey");
             });
 
-            modelBuilder.Entity<CustomerPreference>(entity =>
-            {
-                entity.HasKey(e => e.Id).HasName("CustomerPreference_pkey");
-
-                entity.ToTable("CustomerPreference", tb => tb.HasComment("SÃ¡Â»Å¸ thÃƒÂ­ch rÃƒÂµ rÃƒÂ ng cÃ¡Â»Â§a khÃƒÂ¡ch hÃƒÂ ng theo FoodTag: Like/Avoid"));
-
-                entity.HasIndex(e => e.CustomerId, "idx_customerpreference_customer");
-                entity.HasIndex(e => e.FoodTagId, "idx_customerpreference_foodtag");
-                entity.HasIndex(e => new { e.CustomerId, e.FoodTagId, e.PreferenceKind }, "ux_customerpreference_tag_kind")
-                    .IsUnique();
-
-                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
-                entity.Property(e => e.PreferenceKind)
-                    .HasConversion<string>()
-                    .HasMaxLength(20);
-                entity.Property(e => e.PreferenceSource)
-                    .HasConversion<string>()
-                    .HasMaxLength(30);
-                entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
-                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
-
-                entity.HasOne(d => d.Customer).WithMany(p => p.CustomerPreferences)
-                    .HasForeignKey(d => d.CustomerId)
-                    .OnDelete(DeleteBehavior.Cascade)
-                    .HasConstraintName("CustomerPreference_CustomerId_fkey");
-
-                entity.HasOne(d => d.FoodTag).WithMany(p => p.CustomerPreferences)
-                    .HasForeignKey(d => d.FoodTagId)
-                    .OnDelete(DeleteBehavior.Restrict)
-                    .HasConstraintName("CustomerPreference_FoodTagId_fkey");
-            });
-
             modelBuilder.Entity<FoodCategory>(entity =>
             {
                 entity.HasKey(e => e.Id).HasName("FoodCategories_pkey");
@@ -756,28 +673,6 @@ namespace InfrastructureLayer.Data
 
             });
 
-            modelBuilder.Entity<FoodItemTag>(entity =>
-            {
-                entity.HasKey(e => new { e.FoodItemId, e.FoodTagId })
-                    .HasName("FoodItemTag_pkey");
-
-                entity.ToTable("FoodItemTag", tb => tb.HasComment("BÃ¡ÂºÂ£ng nÃ¡Â»â€˜i gÃ¡ÂºÂ¯n tag ngÃ¡Â»Â¯ nghÃ„Â©a vÃƒÂ o mÃƒÂ³n Ã„Æ’n"));
-
-                entity.HasIndex(e => e.FoodTagId, "idx_fooditemtag_foodtag");
-
-                entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
-
-                entity.HasOne(d => d.FoodItem).WithMany(p => p.FoodItemTags)
-                    .HasForeignKey(d => d.FoodItemId)
-                    .OnDelete(DeleteBehavior.Cascade)
-                    .HasConstraintName("FoodItemTag_FoodItemId_fkey");
-
-                entity.HasOne(d => d.FoodTag).WithMany(p => p.FoodItemTags)
-                    .HasForeignKey(d => d.FoodTagId)
-                    .OnDelete(DeleteBehavior.Restrict)
-                    .HasConstraintName("FoodItemTag_FoodTagId_fkey");
-            });
-
             modelBuilder.Entity<FoodPrice>(entity =>
             {
                 entity.HasKey(e => e.Id).HasName("FoodPrice_pkey");
@@ -792,39 +687,6 @@ namespace InfrastructureLayer.Data
                 entity.HasOne(d => d.FoodItem).WithMany(p => p.FoodPrices)
                     .HasForeignKey(d => d.FoodItemId)
                     .HasConstraintName("FoodPrice_FoodItemId_fkey");
-            });
-
-            modelBuilder.Entity<FoodTag>(entity =>
-            {
-                entity.HasKey(e => e.Id).HasName("FoodTag_pkey");
-
-                entity.ToTable("FoodTag", tb => tb.HasComment("Danh sÃƒÂ¡ch tag chuÃ¡ÂºÂ©n mÃƒÂ´ tÃ¡ÂºÂ£ ngÃ¡Â»Â¯ nghÃ„Â©a mÃƒÂ³n Ã„Æ’n cho AI/recommendation"));
-
-                entity.HasIndex(e => e.Code, "ux_foodtag_code_active")
-                    .IsUnique()
-                    .HasFilter("\"IsDeleted\" = false");
-                entity.HasIndex(e => e.Name, "ux_foodtag_name_active")
-                    .IsUnique()
-                    .HasFilter("\"IsDeleted\" = false");
-
-                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
-                entity.Property(e => e.Name).HasMaxLength(100);
-                entity.Property(e => e.Code).HasMaxLength(100);
-                entity.Property(e => e.TagGroup)
-                    .HasConversion<string>()
-                    .HasMaxLength(30);
-                entity.Property(e => e.Status)
-                    .HasConversion<string>()
-                    .HasMaxLength(20)
-                    .HasDefaultValueSql("'Active'::character varying");
-                entity.Property(e => e.DisplayOrder).HasDefaultValue(0);
-                entity.Property(e => e.IsAutoAssigned).HasDefaultValue(false);
-                entity.Property(e => e.IsDeleted).HasDefaultValue(false);
-                entity.Property(e => e.IsPreferenceSelectable).HasDefaultValue(false);
-                entity.Property(e => e.IsSelectable).HasDefaultValue(true);
-                entity.Property(e => e.IsSystem).HasDefaultValue(false);
-                entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
-                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
             });
 
             modelBuilder.Entity<LayoutEdge>(entity =>
@@ -1702,6 +1564,7 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.GoogleId).HasMaxLength(100);
                 entity.Property(e => e.PasswordHash)
                     .HasMaxLength(255)
+                    .IsRequired(false)
                     .HasComment("MÃ¡ÂºÂ­t khÃ¡ÂºÂ©u Ã„â€˜ÃƒÂ£ Ã„â€˜Ã†Â°Ã¡Â»Â£c mÃƒÂ£ hÃƒÂ³a (hash), tuyÃ¡Â»â€¡t Ã„â€˜Ã¡Â»â€˜i khÃƒÂ´ng lÃ†Â°u plaintext");
                 entity.Property(e => e.MustChangePassword)
                     .HasDefaultValue(false);

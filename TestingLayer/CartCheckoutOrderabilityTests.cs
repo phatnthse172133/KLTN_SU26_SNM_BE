@@ -103,6 +103,135 @@ public sealed class CartCheckoutOrderabilityTests
         cartItems.Verify(repository => repository.SaveChangesAsync(), Times.Never);
     }
 
+    [Fact]
+    public async Task AddItem_MarketOutsideHours_StillAddsCartItem()
+    {
+        var customerId = Guid.NewGuid();
+        var food = CreateFood();
+        // 12:00 UTC = 19:00 VN; market open 20:00–23:00 VN → outside hours
+        food.Booth.NightMarket.OpeningHours = new TimeOnly(20, 0);
+        food.Booth.NightMarket.ClosingHours = new TimeOnly(23, 0);
+        var cart = new Cart { Id = Guid.NewGuid(), CustomerId = customerId };
+        var carts = new Mock<ICartRepository>();
+        var cartItems = new Mock<ICartItemRepository>();
+        var foods = new Mock<IFoodItemRepository>();
+        var mapper = new Mock<IMapper>();
+        carts.Setup(repository => repository.GetActiveByCustomerAsync(
+                customerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(cart);
+        cartItems.Setup(repository => repository.GetActiveByCartAndFoodAsync(
+                cart.Id, food.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((CartItem?)null);
+        foods.Setup(repository => repository.GetForCartAsync(
+                food.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(food);
+        mapper.Setup(service => service.Map<CartItemResponse>(It.IsAny<CartItem>()))
+            .Returns(new CartItemResponse());
+        var service = new CartService(
+            carts.Object, cartItems.Object, foods.Object, mapper.Object,
+            new FixedTimeProvider(DuringOpeningUtc));
+
+        var response = await service.AddItemAsync(customerId, new AddCartItemRequest
+        {
+            FoodItemId = food.Id,
+            Quantity = 1
+        });
+
+        Assert.True(response.Success);
+        cartItems.Verify(repository => repository.AddAsync(It.IsAny<CartItem>()), Times.Once);
+        Assert.False(CustomerOrderability.Evaluate(food, DuringOpeningUtc).CanOrder);
+        Assert.Equal(CustomerOrderability.MarketClosed,
+            CustomerOrderability.Evaluate(food, DuringOpeningUtc).ReasonCode);
+    }
+
+    [Fact]
+    public async Task AddItem_BoothOutsideHours_StillAddsCartItem()
+    {
+        var customerId = Guid.NewGuid();
+        var food = CreateFood();
+        food.Booth.OpenTime = new TimeOnly(20, 0);
+        food.Booth.CloseTime = new TimeOnly(23, 0);
+        var cart = new Cart { Id = Guid.NewGuid(), CustomerId = customerId };
+        var carts = new Mock<ICartRepository>();
+        var cartItems = new Mock<ICartItemRepository>();
+        var foods = new Mock<IFoodItemRepository>();
+        var mapper = new Mock<IMapper>();
+        carts.Setup(repository => repository.GetActiveByCustomerAsync(
+                customerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(cart);
+        cartItems.Setup(repository => repository.GetActiveByCartAndFoodAsync(
+                cart.Id, food.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((CartItem?)null);
+        foods.Setup(repository => repository.GetForCartAsync(
+                food.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(food);
+        mapper.Setup(service => service.Map<CartItemResponse>(It.IsAny<CartItem>()))
+            .Returns(new CartItemResponse());
+        var service = new CartService(
+            carts.Object, cartItems.Object, foods.Object, mapper.Object,
+            new FixedTimeProvider(DuringOpeningUtc));
+
+        var response = await service.AddItemAsync(customerId, new AddCartItemRequest
+        {
+            FoodItemId = food.Id,
+            Quantity = 1
+        });
+
+        Assert.True(response.Success);
+        Assert.False(CustomerOrderability.Evaluate(food, DuringOpeningUtc).CanOrder);
+        Assert.Equal(CustomerOrderability.BoothClosed,
+            CustomerOrderability.Evaluate(food, DuringOpeningUtc).ReasonCode);
+    }
+
+    [Fact]
+    public void CartAdd_UnavailableFood_Blocked()
+    {
+        var food = CreateFood();
+        food.IsAvailable = false;
+
+        var result = CustomerOrderability.EvaluateForCartAdd(food, DuringOpeningUtc);
+
+        Assert.False(result.CanOrder);
+        Assert.Equal(CustomerOrderability.FoodUnavailable, result.ReasonCode);
+    }
+
+    [Fact]
+    public void CartAdd_InactiveBooth_Blocked()
+    {
+        var food = CreateFood();
+        food.Booth.Status = BoothStatus.Inactive;
+
+        var result = CustomerOrderability.EvaluateForCartAdd(food, DuringOpeningUtc);
+
+        Assert.False(result.CanOrder);
+        Assert.Equal(CustomerOrderability.BoothUnavailable, result.ReasonCode);
+    }
+
+    [Fact]
+    public void CartAdd_OutsideMarketAndBoothHours_Allowed()
+    {
+        var food = CreateFood();
+        food.Booth.NightMarket.OpeningHours = new TimeOnly(20, 0);
+        food.Booth.NightMarket.ClosingHours = new TimeOnly(23, 0);
+        food.Booth.OpenTime = new TimeOnly(20, 0);
+        food.Booth.CloseTime = new TimeOnly(23, 0);
+
+        Assert.True(CustomerOrderability.EvaluateForCartAdd(food, DuringOpeningUtc).CanOrder);
+        Assert.False(CustomerOrderability.Evaluate(food, DuringOpeningUtc).CanOrder);
+    }
+
+    [Fact]
+    public void WalkInOrderability_OutsideHours_UsesCartAddRules()
+    {
+        var food = CreateFood();
+        food.Booth.OpenTime = new TimeOnly(20, 0);
+        food.Booth.CloseTime = new TimeOnly(23, 0);
+
+        Assert.True(CustomerOrderability.EvaluateForCartAdd(food, DuringOpeningUtc).CanOrder);
+        Assert.Equal(CustomerOrderability.BoothClosed,
+            CustomerOrderability.Evaluate(food, DuringOpeningUtc).ReasonCode);
+    }
+
     [Theory]
     [InlineData(NightMarketStatus.Upcoming)]
     [InlineData(NightMarketStatus.Closed)]

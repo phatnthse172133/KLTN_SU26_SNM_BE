@@ -176,9 +176,27 @@ public class MarketLayoutService : IMarketLayoutService
         if (layout.Status == MarketLayoutStatus.Active)
             throw AppException.Conflict("Deactivate the market layout before updating its dimensions.");
 
-        var nodes = await _layouts.GetNodesByLayoutIdAsync(layoutId, cancellationToken);
-        if (nodes.Any(n => n.Xcoordinate > request.Width || n.Ycoordinate > request.Height))
-            throw AppException.BadRequest("Cannot shrink layout. Existing nodes are outside the new dimensions.");
+        var nodes = (await _layouts.GetNodesByLayoutIdAsync(layoutId, cancellationToken)).ToList();
+        var outsideNodes = nodes
+            .Where(n => n.Xcoordinate > request.Width || n.Ycoordinate > request.Height)
+            .ToList();
+        if (outsideNodes.Count > 0)
+        {
+            var requiredWidth = (int)Math.Ceiling(nodes.Max(n => n.Xcoordinate));
+            var requiredHeight = (int)Math.Ceiling(nodes.Max(n => n.Ycoordinate));
+            var examples = string.Join(", ", outsideNodes
+                .Take(5)
+                .Select(n => string.IsNullOrWhiteSpace(n.SlotCode)
+                    ? (string.IsNullOrWhiteSpace(n.NodeName) ? n.Id.ToString("N")[..8] : n.NodeName)
+                    : n.SlotCode));
+            var suffix = outsideNodes.Count > 5 ? " and more" : string.Empty;
+
+            throw AppException.BadRequest(
+                $"The new layout size {request.Width} × {request.Height}px is too small for the existing map. " +
+                $"Keep at least {requiredWidth} × {requiredHeight}px, or move/regenerate the {outsideNodes.Count} node(s) outside the new boundary " +
+                $"({examples}{suffix}).",
+                "LAYOUT_DIMENSIONS_TOO_SMALL");
+        }
 
         layout.Width = request.Width;
         layout.Height = request.Height;
@@ -330,6 +348,13 @@ public class MarketLayoutService : IMarketLayoutService
             }
         }
 
+        foreach (var block in blocks)
+        {
+            var blockErrors = LayoutGeometryValidator.ValidateBlockMove(layout, block, block.X, block.Y, blocks);
+            if (blockErrors.Count > 0)
+                throw AppException.BadRequest(blockErrors[0], "LAYOUT_BLOCK_INVALID");
+        }
+
         var nodes = request.Nodes.Select(node => new LayoutNode
         {
             Id = node.Id,
@@ -371,6 +396,23 @@ public class MarketLayoutService : IMarketLayoutService
             throw AppException.BadRequest(
                 "Path distance must be greater than zero.",
                 "LAYOUT_EDGE_DISTANCE_INVALID");
+
+        var invalidRoute = edges.FirstOrDefault(edge =>
+            EdgeCrossesGeneratedBlock(edge, nodes, blocks));
+        if (invalidRoute is not null)
+        {
+            var from = nodes.First(node => node.Id == invalidRoute.FromNodeId);
+            var to = nodes.First(node => node.Id == invalidRoute.ToNodeId);
+            var crossedBlock = blocks.FirstOrDefault(block =>
+                !block.IsDeleted
+                && LayoutBlockGeometry.SegmentIntersects(
+                    (double)from.Xcoordinate, (double)from.Ycoordinate,
+                    (double)to.Xcoordinate, (double)to.Ycoordinate,
+                    new LayoutRect(block.X, block.Y, block.Width, block.Height)));
+            throw AppException.BadRequest(
+                $"Route from {from.NodeName ?? from.SlotCode ?? from.Id.ToString()[..8]} to {to.NodeName ?? to.SlotCode ?? to.Id.ToString()[..8]} crosses Zone '{crossedBlock?.Name ?? "unknown"}'. Move the route to the corridor around the Zone.",
+                "LAYOUT_EDGE_CROSSES_ZONE");
+        }
 
         await _layouts.SaveGraphTransactionalAsync(layoutId, blocks, nodes, edges, null, cancellationToken);
         var saved = await _layouts.GetActiveByIdAsync(layoutId, cancellationToken)
@@ -444,10 +486,13 @@ public class MarketLayoutService : IMarketLayoutService
             throw AppException.Conflict("Deactivate the market layout before modifying the graph.", "LAYOUT_IS_ACTIVE");
 
         var market = await EnsureNightMarketExistsAsync(layout.NightMarketId, cancellationToken);
+        if (!market.BoundaryWidthMeters.HasValue || !market.BoundaryHeightMeters.HasValue || market.BoundaryWidthMeters.Value <= 0 || market.BoundaryHeightMeters.Value <= 0)
+            throw AppException.BadRequest("Khu chợ chưa được thiết lập kích thước (chiều rộng và chiều dài). Vui lòng cập nhật kích thước khu chợ trước.", "MARKET_BOUNDARY_MISSING");
+
+        request.MarketWidthMeters = market.BoundaryWidthMeters.Value;
+        request.MarketLengthMeters = market.BoundaryHeightMeters.Value;
         request.ZoneConfigs ??= [];
         var physicalPreparation = PhysicalGridCalculator.Prepare(request);
-        if (physicalPreparation.Errors.Count > 0)
-            throw AppException.BadRequest(physicalPreparation.Errors[0], "PHYSICAL_LAYOUT_INVALID");
         var hasZoneManagement = await ValidateGenerationEntitlementAsync(market, request);
 
         var zones = await _zones.GetActiveByNightMarketIdAsync(layout.NightMarketId, cancellationToken: cancellationToken);
@@ -462,7 +507,12 @@ public class MarketLayoutService : IMarketLayoutService
         var generationResult = _generator.ComputeGeneration(
             layout, plan.EffectiveZones, existingNodes, boothLocations, plan.NormalizedRequest);
         var result = generationResult.Preview;
+        result.Errors.AddRange(physicalPreparation.Errors);
         result.Warnings.AddRange(physicalPreparation.Warnings);
+        if (physicalPreparation.Errors.Count > 0)
+        {
+            result.CanApply = false;
+        }
         result.Nodes = _mapper.Map<List<LayoutNodeResponse>>(generationResult.Nodes) ?? [];
         result.Edges = _mapper.Map<List<LayoutEdgeResponse>>(generationResult.Edges) ?? [];
         result.Blocks = _mapper.Map<List<LayoutBlockResponse>>(generationResult.Blocks) ?? [];
@@ -543,6 +593,11 @@ public class MarketLayoutService : IMarketLayoutService
                 "LAYOUT_VERSION_CONFLICT");
 
         var market = await EnsureNightMarketExistsAsync(layout.NightMarketId, cancellationToken);
+        if (!market.BoundaryWidthMeters.HasValue || !market.BoundaryHeightMeters.HasValue || market.BoundaryWidthMeters.Value <= 0 || market.BoundaryHeightMeters.Value <= 0)
+            throw AppException.BadRequest("Khu chợ chưa được thiết lập kích thước (chiều rộng và chiều dài). Vui lòng cập nhật kích thước khu chợ trước.", "MARKET_BOUNDARY_MISSING");
+
+        request.MarketWidthMeters = market.BoundaryWidthMeters.Value;
+        request.MarketLengthMeters = market.BoundaryHeightMeters.Value;
         request.ZoneConfigs ??= [];
         var physicalPreparation = PhysicalGridCalculator.Prepare(request);
         if (physicalPreparation.Errors.Count > 0)
@@ -565,9 +620,11 @@ public class MarketLayoutService : IMarketLayoutService
         // It accurately detects both reduced capacities and omitted zones that drop assigned booths.
         var result = _generator.ComputeGeneration(
             layout, plan.EffectiveZones, existingNodes, boothLocations, plan.NormalizedRequest);
-        if (!result.Preview.CanApply)
+        if (!result.Preview.CanApply || physicalPreparation.Errors.Count > 0)
         {
-            var msg = result.Preview.Errors.FirstOrDefault() ?? "Cannot apply generation due to conflicts. Check preview first.";
+            var msg = result.Preview.Errors.FirstOrDefault()
+                      ?? physicalPreparation.Errors.FirstOrDefault()
+                      ?? "Cannot apply generation due to conflicts. Check preview first.";
             if (result.Preview.ConflictingSlots.Any())
             {
                 var codes = string.Join(", ", result.Preview.ConflictingSlots.Select(c => c.SlotCode));
@@ -608,13 +665,28 @@ public class MarketLayoutService : IMarketLayoutService
         var generatedSlotNodeIds = result.Nodes
             .Where(n => n.NodeType == LayoutNodeType.BoothSlot)
             .Select(n => n.Id).ToHashSet();
+        var generatedRoutingNodeIds = result.Nodes
+            .Where(n => n.NodeType == LayoutNodeType.Junction)
+            .Select(n => n.Id).ToHashSet();
         var finalNodeIds = result.Nodes.Select(n => n.Id).ToHashSet();
         var utilityEdges = existingEdges
             .Where(e => !e.IsDeleted
                 && finalNodeIds.Contains(e.FromNodeId)
                 && finalNodeIds.Contains(e.ToNodeId)
                 && !generatedSlotNodeIds.Contains(e.FromNodeId)
-                && !generatedSlotNodeIds.Contains(e.ToNodeId))
+                && !generatedSlotNodeIds.Contains(e.ToNodeId)
+                // Junctions and slot-access edges are generated routing data.
+                // Never carry them across a regeneration: an old edge may
+                // point to an aisle from a previous zone arrangement and cut
+                // straight through a newly placed Zone block.  The generator
+                // has already rebuilt all current aisle/corridor edges above.
+                && !generatedRoutingNodeIds.Contains(e.FromNodeId)
+                && !generatedRoutingNodeIds.Contains(e.ToNodeId)
+                // Do not carry a legacy utility edge into the new graph when
+                // its straight segment crosses a regenerated Zone block.
+                // Keeping these stale edges was the main reason the same
+                // crossing errors returned after every Preview/Apply cycle.
+                && !EdgeCrossesGeneratedBlock(e, result.Nodes, result.Blocks))
             .ToList();
         // Deduplicate edges to prevent duplicate paths (e.g., auto-generated Entrance->Junction vs preserved utility edge)
         var mergedEdges = result.Edges.Concat(utilityEdges)
@@ -654,7 +726,15 @@ public class MarketLayoutService : IMarketLayoutService
         List<LayoutEdge> edges)
     {
         var entrances = nodes.Where(node => node.NodeType == LayoutNodeType.Entrance).ToList();
-        var junctions = nodes.Where(node => node.NodeType == LayoutNodeType.Junction).ToList();
+        // Auto Corridor nodes are routing waypoints, not independent aisles.
+        // The visibility graph only persists the waypoints that are actually
+        // used by a shortest path; requiring every candidate waypoint to be
+        // reachable makes every generation fail with CORRIDOR_DISCONNECTED.
+        // Only real zone junctions participate in the connectivity invariant.
+        var junctions = nodes
+            .Where(node => node.NodeType == LayoutNodeType.Junction
+                && !IsGeneratedCorridorNode(node))
+            .ToList();
         var slots = nodes.Where(node => node.NodeType == LayoutNodeType.BoothSlot).ToList();
 
         if (slots.Count == 0)
@@ -695,28 +775,29 @@ public class MarketLayoutService : IMarketLayoutService
                     (slot.LayoutBlockId.HasValue && candidate.LayoutBlockId == slot.LayoutBlockId)
                     || (slot.ZoneId.HasValue && candidate.ZoneId == slot.ZoneId))
                 .OrderBy(candidate => SquaredDistance(slot, candidate))
-                .FirstOrDefault()
-                ?? junctions.OrderBy(candidate => SquaredDistance(slot, candidate)).First();
+                .FirstOrDefault();
+
+            if (junction is null)
+                throw AppException.Conflict(
+                    $"Booth slot {slot.SlotCode ?? slot.NodeName ?? slot.Id.ToString()[..8]} is not assigned to a valid zone walkway.",
+                    "LAYOUT_SLOT_ZONE_JUNCTION_MISSING");
 
             AddConnectivityEdge(layoutId, slot, junction, edges, pairs);
         }
 
         var reachable = ReachableFromEntrances(entrances.Select(node => node.Id), edges);
 
-        // Join each disconnected zone walkway to the closest already-reachable corridor.
-        foreach (var junction in junctions.Where(node => !reachable.Contains(node.Id)).ToList())
-        {
-            var anchor = entrances.Concat(junctions)
-                .Where(node => reachable.Contains(node.Id))
-                .OrderBy(node => SquaredDistance(node, junction))
-                .FirstOrDefault();
-
-            if (anchor is null)
-                break;
-
-            AddConnectivityEdge(layoutId, anchor, junction, edges, pairs);
-            reachable = ReachableFromEntrances(entrances.Select(node => node.Id), edges);
-        }
+        // Never repair a disconnected aisle with a nearest-neighbour straight
+        // edge: that creates a path through another Zone. The obstacle-aware
+        // generator must have produced the corridor route already.
+        var unreachableJunctions = junctions
+            .Where(junction => !reachable.Contains(junction.Id))
+            .Select(junction => junction.NodeName ?? junction.Id.ToString()[..8])
+            .ToList();
+        if (unreachableJunctions.Count > 0)
+            throw AppException.Conflict(
+                $"Generated walkways cannot reach: {string.Join(", ", unreachableJunctions)}. Regenerate the layout so routes go around Zone blocks.",
+                "LAYOUT_CORRIDOR_DISCONNECTED");
 
         reachable = ReachableFromEntrances(entrances.Select(node => node.Id), edges);
         var unreachableSlots = slots
@@ -803,6 +884,42 @@ public class MarketLayoutService : IMarketLayoutService
         var deltaX = first.Xcoordinate - second.Xcoordinate;
         var deltaY = first.Ycoordinate - second.Ycoordinate;
         return deltaX * deltaX + deltaY * deltaY;
+    }
+
+    private static bool IsGeneratedCorridorNode(LayoutNode node)
+        => node.NodeType == LayoutNodeType.Junction
+           && (node.NodeName?.StartsWith("Auto Corridor ", StringComparison.OrdinalIgnoreCase) == true
+               || (!node.ZoneId.HasValue && !node.LayoutBlockId.HasValue));
+
+    private static bool EdgeCrossesGeneratedBlock(
+        LayoutEdge edge,
+        IReadOnlyCollection<LayoutNode> nodes,
+        IReadOnlyCollection<LayoutBlock> blocks)
+    {
+        var from = nodes.FirstOrDefault(node => node.Id == edge.FromNodeId);
+        var to = nodes.FirstOrDefault(node => node.Id == edge.ToNodeId);
+        if (from is null || to is null)
+            return true;
+
+        var slotToOwnJunction =
+            (from.NodeType == LayoutNodeType.BoothSlot && to.NodeType == LayoutNodeType.Junction)
+            || (to.NodeType == LayoutNodeType.BoothSlot && from.NodeType == LayoutNodeType.Junction);
+        foreach (var block in blocks.Where(block => !block.IsDeleted))
+        {
+            if (slotToOwnJunction &&
+                ((from.LayoutBlockId.HasValue && from.LayoutBlockId == block.Id)
+                 || (block.ZoneId.HasValue && from.ZoneId == block.ZoneId)) &&
+                ((to.LayoutBlockId.HasValue && to.LayoutBlockId == block.Id)
+                 || (block.ZoneId.HasValue && to.ZoneId == block.ZoneId)))
+                continue;
+
+            if (LayoutBlockGeometry.SegmentIntersects(
+                    (double)from.Xcoordinate, (double)from.Ycoordinate,
+                    (double)to.Xcoordinate, (double)to.Ycoordinate,
+                    new LayoutRect(block.X, block.Y, block.Width, block.Height)))
+                return true;
+        }
+        return false;
     }
 
     public async Task<ApiResponse<MarketLayoutValidationResponse>> ValidateAsync(
@@ -1249,7 +1366,9 @@ public class MarketLayoutService : IMarketLayoutService
                 BoothWidthMeters = config.BoothWidthMeters,
                 BoothLengthMeters = config.BoothLengthMeters,
                 HorizontalGapMeters = config.HorizontalGapMeters,
-                VerticalGapMeters = config.VerticalGapMeters
+                VerticalGapMeters = config.VerticalGapMeters,
+                CustomX = config.CustomX,
+                CustomY = config.CustomY
             });
         }
 

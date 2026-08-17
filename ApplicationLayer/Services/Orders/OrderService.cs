@@ -5,7 +5,6 @@ using ApplicationLayer.Helppers;
 using ApplicationLayer.Services.CustomerDiscovery;
 using ApplicationLayer.Services.Notifications;
 using ApplicationLayer.Services.PayOS;
-using ApplicationLayer.Services.PayOutClients;
 using ApplicationLayer.Services.Promotions;
 using DomainLayer.Common;
 using DomainLayer.Entities;
@@ -41,13 +40,13 @@ namespace ApplicationLayer.Services.Orders
         private readonly INotificationService? _notifications;
         private readonly IReviewRepository? _reviews;
         private readonly IComplaintRepository? _complaints;
-        private readonly IPayOSPayoutClientFactory _payoutClientFactory;
+        private readonly IPayOSPayoutServiceFactory _payoutServiceFactory;
 
         public OrderService(IOrderRepository orderRepo,
                             IPromotionRepository promotionRepo,
                             IPromotionValidationService validation,
                             //IPayOSPayoutService payouts,
-                            IPayOSPayoutClientFactory payoutClientFactory,
+                            IPayOSPayoutServiceFactory payoutServiceFactory,
                              IRealtimeNotificationPublisher notificationPublisher,
                              IFoodItemRepository foodItemRepo,
                              ILogger<OrderService> logger,
@@ -75,7 +74,7 @@ namespace ApplicationLayer.Services.Orders
             _notifications = notifications;
             _reviews = reviews;
             _complaints = complaints;
-            _payoutClientFactory = payoutClientFactory;
+            _payoutServiceFactory = payoutServiceFactory;
         }
 
         //DÃƒÂ nh cho customer lÃ¡ÂºÂ«n khÃƒÂ¡ch vang lai (Walk-in) Ã„â€˜Ã¡ÂºÂ·t mÃƒÂ³n, trÃ¡ÂºÂ£ vÃ¡Â»Â link thanh toÃƒÂ¡n nÃ¡ÂºÂ¿u chÃ¡Â»Ân online
@@ -203,6 +202,8 @@ namespace ApplicationLayer.Services.Orders
         {
             if (dto.Items is null || dto.Items.Count == 0)
                 throw AppException.BadRequest("The order must contain at least one item.", "ORDER_ITEMS_REQUIRED");
+            if (dto.IsCreatedByBooth && dto.CheckoutRequestId == Guid.Empty)
+                dto.CheckoutRequestId = Guid.NewGuid();
             if (dto.CheckoutRequestId == Guid.Empty)
                 throw AppException.BadRequest("CheckoutRequestId is required.", "CHECKOUT_REQUEST_ID_REQUIRED");
             if (dto.Items.Any(item => item.FoodItemId == Guid.Empty || item.Quantity <= 0))
@@ -236,19 +237,32 @@ namespace ApplicationLayer.Services.Orders
             foreach (var item in dto.Items)
             {
                 var food = foodsById[item.FoodItemId];
-                var orderability = CustomerOrderability.Evaluate(food, utcNow);
-                if (!orderability.CanOrder)
+                if (dto.IsCreatedByBooth)
                 {
-                    var boothName = food.Booth?.BoothName ?? "The booth";
-                    var message = orderability.ReasonCode == CustomerOrderability.BoothClosed && orderability.NextOpenAt.HasValue
-                        ? $"{boothName} is currently closed. It opens at {orderability.NextOpenAt.Value:HH:mm}."
-                        : CustomerOrderability.GetPublicMessage(orderability.ReasonCode!);
-                    throw AppException.Conflict(message, orderability.ReasonCode!);
+                    // Walk-in: opening hours are not enforced; entities + food availability still are.
+                    var walkInOrderability = CustomerOrderability.EvaluateForCartAdd(food, utcNow);
+                    if (!walkInOrderability.CanOrder)
+                        throw AppException.Conflict(
+                            CustomerOrderability.GetPublicMessage(walkInOrderability.ReasonCode!),
+                            walkInOrderability.ReasonCode!);
                 }
-                if (item.UnitPrice != FoodPriceResolver.GetCurrentPrice(food, utcNow))
-                    throw AppException.Conflict(
-                        $"The price of '{food.Name}' has changed. Refresh the cart.",
-                        "PRICE_CHANGED");
+                else
+                {
+                    var orderability = CustomerOrderability.Evaluate(food, utcNow);
+                    if (!orderability.CanOrder)
+                    {
+                        var boothName = food.Booth?.BoothName ?? "The booth";
+                        var message = orderability.ReasonCode == CustomerOrderability.BoothClosed && orderability.NextOpenAt.HasValue
+                            ? $"{boothName} is currently closed. It opens at {orderability.NextOpenAt.Value:HH:mm}."
+                            : CustomerOrderability.GetPublicMessage(orderability.ReasonCode!);
+                        throw AppException.Conflict(message, orderability.ReasonCode!);
+                    }
+
+                    if (item.UnitPrice != FoodPriceResolver.GetCurrentPrice(food, utcNow))
+                        throw AppException.Conflict(
+                            $"The price of '{food.Name}' has changed. Refresh the cart.",
+                            "PRICE_CHANGED");
+                }
             }
 
             var orderCode = await _orderCodeGenerator.GenerateAsync(PayOSOrderSource.Order);
@@ -1457,8 +1471,7 @@ namespace ApplicationLayer.Services.Orders
 
             try
             {
-                var payOsClient = await _payoutClientFactory.CreateClientAsync(boothId);
-                var payoutService = new PayOSPayoutService(payOsClient);
+                var payoutService = await _payoutServiceFactory.ForBoothAsync(boothId);
 
                 PayOSPayoutSnapshot? snapshot;
                 if (!string.IsNullOrWhiteSpace(payment.PayoutId))

@@ -63,6 +63,8 @@ public class MapBoothResponse
     public Guid NodeId { get; set; }
     public Guid? ZoneId { get; set; }
     public string? SlotNumber { get; set; }
+    public string? SlotCode { get; set; }
+    public string? ZoneName { get; set; }
     public decimal XCoordinate { get; set; }
     public decimal YCoordinate { get; set; }
 }
@@ -98,6 +100,8 @@ public class ShortestPathResponse
 public class RouteInstructionResponse
 {
     public string InstructionCode { get; set; } = string.Empty;
+    public string Maneuver { get; set; } = string.Empty;
+    public string Text { get; set; } = string.Empty;
     public decimal? DistanceMeters { get; set; }
     public string? ReferenceName { get; set; }
     public Guid? AtNodeId { get; set; }
@@ -107,6 +111,7 @@ public class RouteNodeSummaryResponse
 {
     public Guid NodeId { get; set; }
     public string? NodeName { get; set; }
+    public string? NodeType { get; set; }
 }
 
 public class RouteDestinationResponse
@@ -114,6 +119,8 @@ public class RouteDestinationResponse
     public Guid BoothId { get; set; }
     public string BoothName { get; set; } = string.Empty;
     public Guid NodeId { get; set; }
+    public string? SlotCode { get; set; }
+    public string? ZoneName { get; set; }
 }
 
 public class RoutePathNodeResponse

@@ -20,24 +20,6 @@ public sealed class FoodSemanticMetadataRepository(SNMDbContext db) : IFoodSeman
     public Task<IReadOnlyCollection<TasteProfile>> GetActiveTasteProfilesAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct = default)
         => Active(db.TasteProfiles, ids, ct);
 
-    public async Task<CustomerFoodProfile?> GetCustomerProfileAsync(Guid customerId, bool tracking, CancellationToken ct = default)
-    {
-        IQueryable<CustomerFoodProfile> query = db.CustomerFoodProfiles
-            .Include(x => x.PreferredIngredients).ThenInclude(x => x.Ingredient)
-            .Include(x => x.AvoidedIngredients).ThenInclude(x => x.Ingredient)
-            .Include(x => x.DietaryRequirements).ThenInclude(x => x.DietaryAttribute)
-            .Include(x => x.AllergenExclusions).ThenInclude(x => x.Allergen)
-            .Include(x => x.PreferredPreparationMethods).ThenInclude(x => x.PreparationMethod)
-            .Include(x => x.PreferredTasteProfiles).ThenInclude(x => x.TasteProfile)
-            .Include(x => x.AvoidedTasteProfiles).ThenInclude(x => x.TasteProfile)
-            .Include(x => x.PreferredCourses);
-        if (!tracking) query = query.AsNoTracking();
-        return await query.AsSplitQuery().SingleOrDefaultAsync(x => x.CustomerId == customerId, ct);
-    }
-
-    public void AddCustomerProfile(CustomerFoodProfile profile) => db.CustomerFoodProfiles.Add(profile);
-    public Task SaveChangesAsync(CancellationToken ct = default) => db.SaveChangesAsync(ct);
-
     private static async Task<IReadOnlyCollection<T>> Active<T>(DbSet<T> set, IReadOnlyCollection<Guid> ids, CancellationToken ct)
         where T : SemanticCatalogEntity
         => await set.Where(x => ids.Contains(x.Id) && x.IsActive).OrderBy(x => x.DisplayOrder).ThenBy(x => x.Code).ToListAsync(ct);

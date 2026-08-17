@@ -1,11 +1,6 @@
-using ApplicationLayer.AI;
-using ApplicationLayer.AI.Services;
-using ApplicationLayer.AI.V2.Configuration;
-using ApplicationLayer.AI.V2.Services;
 using ApplicationLayer.Configuration;
 using ApplicationLayer.Mappings;
 using ApplicationLayer.Services.Account;
-using ApplicationLayer.Services.AdminAILog;
 using ApplicationLayer.Services.AdminModeration;
 using ApplicationLayer.Services.Auth;
 using ApplicationLayer.Services.BoothDashboard;
@@ -18,6 +13,8 @@ using ApplicationLayer.Services.Carts;
 using ApplicationLayer.Services.Chats;
 using ApplicationLayer.Services.Complaints;
 using ApplicationLayer.Services.CustomerDiscovery;
+using ApplicationLayer.Services.Assistant;
+using InfrastructureLayer.Cores.Assistant;
 using ApplicationLayer.Services.Dashboard;
 using ApplicationLayer.Services.EncryptionServices;
 using ApplicationLayer.Services.FoodCategories;
@@ -50,7 +47,6 @@ using DomainLayer.InterfaceCore.JWT;
 using DomainLayer.InterfaceRepositories;
 using DomainLayer.InterfaceRepository;
 using InfrastructureLayer.Backgrounds;
-using InfrastructureLayer.Cores.AI;
 using InfrastructureLayer.Cores.Emails;
 using InfrastructureLayer.Cores.External;
 using InfrastructureLayer.Cores.Helppers;
@@ -114,10 +110,6 @@ namespace InfrastructureLayer
             services.AddScoped<IUserDeviceTokenRepository, UserDeviceTokenRepository>();
             services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<IPaymentMethodRepository, PaymentMethodRepository>();
-            services.AddScoped<IFoodTagRepository, FoodTagRepository>();
-            services.AddScoped<ICustomerPreferenceRepository, CustomerPreferenceRepository>();
-            services.AddScoped<IAIRecommendationLogRepository, AIRecommendationLogRepository>();
-            services.AddScoped<IAICustomerContextRepository, AICustomerContextRepository>();
             services.Configure<JwtSettings>(configuration.GetSection(JwtSettings.SectionName));
             services.AddScoped<IJwtService, JWTService>();
             services.AddScoped<IPasswordHasher, PasswordHasher>();
@@ -132,6 +124,7 @@ namespace InfrastructureLayer
             services.AddScoped<IBoothPayOsCredentialService, BoothPayOsCredentialService>();
             services.AddScoped<IEncryptionService, AesEncryptionService>();
             services.AddScoped<IPayOSPayoutClientFactory, PayOSPayoutClientFactory>();
+            services.AddScoped<IPayOSPayoutServiceFactory, PayOSPayoutServiceFactory>();
 
             services.AddScoped<IPayOSService, PayOSService>(sp =>
                 ActivatorUtilities.CreateInstance<PayOSService>(sp, false));
@@ -144,11 +137,7 @@ namespace InfrastructureLayer
 
             services.AddScoped<IFoodCategoryService, FoodCategoryService>();
             services.AddScoped<IMenuService, MenuService>();
-            services.AddScoped<IFoodAiProfileGenerator, FoodAiProfileGenerator>();
-            services.AddScoped<IFoodAiProfileRebuildService, FoodAiProfileRebuildService>();
-            services.AddScoped<IFoodAiProfileEnrichmentService, OpenAiFoodAiProfileEnricher>();
             services.AddScoped<IFoodMetadataCatalogService, FoodMetadataCatalogService>();
-            services.AddScoped<ILegacyFoodTagMetadataAdapter, LegacyFoodTagMetadataAdapter>();
 
             services.AddScoped<INightMarketService, NightMarketService>();
             services.AddScoped<ICustomerDiscoveryService, CustomerDiscoveryService>();
@@ -183,7 +172,6 @@ namespace InfrastructureLayer
             services.AddScoped<IBoothDashboardRepository, BoothDashboardRepository>();
             services.AddScoped<IBoothMediaService, BoothMediaService>();
             services.AddScoped<IImageUploadService, ImageUploadService>();
-            services.AddScoped<IAdminAILogService, AdminAILogService>();
             services.AddScoped<IPriceService, PriceService>();
             services.AddScoped<ICartService, CartService>();
             services.AddScoped<IPromotionService, PromotionService>();
@@ -192,44 +180,26 @@ namespace InfrastructureLayer
             services.AddScoped<IChatService, ChatService>();
             services.AddScoped<ISupportTicketService, SupportTicketService>();
             services.AddScoped<IDeviceTokenService, DeviceTokenService>();
-            services.AddScoped<IFoodTagService, FoodTagService>();
-            services.AddScoped<ICustomerPreferenceService, CustomerPreferenceService>();
-            services.AddScoped<ICustomerFoodProfileService, CustomerFoodProfileService>();
-            services.AddScoped<ILegacyCustomerPreferenceAdapter, LegacyCustomerPreferenceAdapter>();
-            services.AddScoped<IAIRecommendationService, AIRecommendationService>();
-            services.AddScoped<IAISettingsService, AISettingsService>();
-            // Legacy AIProviderV2 binds first; OpenAI section overlays for env migration.
-            services.Configure<AiProviderRuntimeOptions>(configuration.GetSection(AiProviderRuntimeOptions.LegacySectionName));
-            services.Configure<AiProviderRuntimeOptions>(configuration.GetSection(AiProviderRuntimeOptions.SectionName));
-            services.Configure<OpenAiSecretOptions>(configuration.GetSection(AiProviderRuntimeOptions.LegacySectionName));
-            services.Configure<OpenAiSecretOptions>(configuration.GetSection(AiProviderRuntimeOptions.SectionName));
-            services.Configure<RecommendationV2Options>(configuration.GetSection(RecommendationV2Options.SectionName));
-            services.Configure<MealPlanV2Options>(configuration.GetSection(MealPlanV2Options.SectionName));
-            services.AddSingleton<IFoodRecommendationFallbackParser, DeterministicFoodIntentParser>();
-            services.AddScoped<IFoodRecommendationIntentNormalizer, FoodRecommendationIntentNormalizer>();
-            services.AddSingleton<IDeterministicRecommendationReasonBuilder, DeterministicRecommendationReasonBuilder>();
-            services.AddHttpClient<OpenAiV2Client>()
-                .ConfigureHttpClient(client => client.Timeout = Timeout.InfiniteTimeSpan)
-                .RedactLoggedHeaders(_ => true)
-                .RemoveAllLoggers();
-            services.AddScoped<IAiIntentExtractor, OpenAiIntentExtractor>();
-            services.AddScoped<IAiExplanationGenerator, OpenAiExplanationGenerator>();
-            services.AddScoped<IFoodRecommendationReadRepository, FoodRecommendationReadRepository>();
-            services.AddScoped<IAiRecommendationSessionRepository, AiRecommendationSessionRepository>();
-            services.AddSingleton<IFoodSemanticMatcher, DeterministicFoodSemanticMatcher>();
-            services.AddSingleton<IFoodRecommendationRanker, FoodRecommendationRanker>();
-            services.AddSingleton<IFoodRecommendationDiversityReranker, FoodRecommendationDiversityReranker>();
-            services.AddScoped<IFoodRecommendationV2Service, FoodRecommendationV2Service>();
-            services.AddScoped<IMealPlanCandidateRepository, MealPlanCandidateRepository>();
-            services.AddScoped<IMealPlanV2Repository, MealPlanV2Repository>();
-            services.AddSingleton<IMealPlanPolicyResolver, MealPlanPolicyResolver>();
-            services.AddSingleton<IMealPlanRecalculationService, MealPlanRecalculationService>();
-            services.AddScoped<IMealPlanV2Service, MealPlanV2Service>();
-            services.AddScoped<IMealPlanCartIntegrationService, MealPlanCartIntegrationService>();
+            services.Configure<OpenAiOptions>(configuration.GetSection(OpenAiOptions.SectionName));
+            services.Configure<AssistantOptions>(configuration.GetSection(AssistantOptions.SectionName));
+            services.AddHttpClient<ILanguageModelClient, OpenAiLanguageModelClient>((sp, client) =>
+            {
+                var settings = sp.GetRequiredService<IOptions<OpenAiOptions>>().Value;
+                client.Timeout = Timeout.InfiniteTimeSpan;
+                var baseUrl = string.IsNullOrWhiteSpace(settings.BaseUrl) ? "https://api.openai.com/v1/" : settings.BaseUrl.TrimEnd('/') + "/";
+                if (Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri))
+                    client.BaseAddress = uri;
+            });
+            services.AddScoped<IAssistantConversationRepository, AssistantConversationRepository>();
+            services.AddScoped<IAssistantFoodQueryRepository, AssistantFoodQueryRepository>();
+            services.AddScoped<AssistantIntentInterpreter>();
+            services.AddScoped<AssistantSemanticMatcher>();
+            services.AddScoped<AssistantCompatibilityScorer>();
+            services.AddScoped<AssistantMealPlanValidator>();
+            services.AddScoped<AssistantMealPlanComposer>();
+            services.AddScoped<AssistantReplyComposer>();
+            services.AddScoped<IAssistantService, AssistantService>();
             services.AddSingleton<IOnlinePresenceService, OnlinePresenceService>();
-            services.Configure<AIProviderSettings>(
-                configuration.GetSection(AIProviderSettings.SectionName));
-            services.AddScoped<IAIProviderService, LocalOnlyAIProviderService>();
             services.Configure<FirebaseSettings>(
                 configuration.GetSection(FirebaseSettings.SectionName));
             services.AddHttpClient<IPushNotificationService, FirebasePushNotificationService>();
@@ -253,8 +223,6 @@ namespace InfrastructureLayer
             services.AddHostedService<EmailOutboxWorker>();
             services.AddHostedService<SubscriptionExpiryWorker>();
             services.AddHostedService<OrderCleanupBackgroundService>();
-            services.AddHostedService<AiRecommendationSessionCleanupWorker>();
-            services.AddHostedService<AiMealPlanSessionCleanupWorker>();
 
             return services;
         }

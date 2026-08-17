@@ -15,7 +15,7 @@ public partial class User
     public string UserName { get; set; } = null!;
 
     // Máº­t kháº©u Ä‘Ã£ Ä‘Æ°á»£c mÃ£ hÃ³a (hash), tuyá»‡t Ä‘á»‘i khÃ´ng lÆ°u plaintext
-    public string PasswordHash { get; set; } = null!;
+    public string? PasswordHash { get; set; }
 
     /// <summary>
     /// Indicates that the account is using a system-generated temporary password.
@@ -74,17 +74,9 @@ public partial class User
 
     public virtual ICollection<Cart> Carts { get; set; } = new List<Cart>();
 
-    public virtual ICollection<CustomerPreference> CustomerPreferences { get; set; } = new List<CustomerPreference>();
-
-    public virtual CustomerFoodProfile? CustomerFoodProfile { get; set; }
-
-    public virtual ICollection<AiRecommendationSession> AiRecommendationSessions { get; set; } = new List<AiRecommendationSession>();
-
-    public virtual ICollection<AiMealPlanSession> AiMealPlanSessions { get; set; } = new List<AiMealPlanSession>();
+    public virtual ICollection<AssistantConversation> AssistantConversations { get; set; } = new List<AssistantConversation>();
 
     public virtual ICollection<MarketSubscription> MarketSubscriptions { get; set; } = new List<MarketSubscription>();
-
-    public virtual ICollection<AIRecommendationLog> AIRecommendationLogs { get; set; } = new List<AIRecommendationLog>();
 
     public virtual ICollection<Complaint> Complaints { get; set; } = new List<Complaint>();
 

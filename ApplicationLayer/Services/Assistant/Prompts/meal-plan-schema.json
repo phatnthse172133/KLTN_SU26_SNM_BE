@@ -1,0 +1,30 @@
+{
+  "type": "object",
+  "required": ["plans"],
+  "properties": {
+    "plans": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+          "title": { "type": ["string", "null"] },
+          "strategy": { "type": ["string", "null"] },
+          "overallReason": { "type": ["string", "null"] },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["foodItemId", "quantity"],
+              "properties": {
+                "foodItemId": { "type": "string" },
+                "quantity": { "type": "integer" },
+                "course": { "type": ["string", "null"] }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

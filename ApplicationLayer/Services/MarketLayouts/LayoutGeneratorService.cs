@@ -486,7 +486,8 @@ public class LayoutGeneratorService : ILayoutGeneratorService
     {
         var index = 1;
         var points = new List<(double X, double Y)>();
-        foreach (var block in blocks.Where(block => !block.IsDeleted))
+        var liveBlocks = blocks.Where(block => !block.IsDeleted).ToList();
+        foreach (var block in liveBlocks)
         {
             var rect = new LayoutRect(block.X, block.Y, block.Width, block.Height).Inflate(CorridorClearance);
             points.AddRange([
@@ -504,6 +505,36 @@ public class LayoutGeneratorService : ILayoutGeneratorService
                 var ay = (double)anchor.Ycoordinate;
                 points.AddRange([(ax, rect.Top), (ax, rect.Bottom),
                     (rect.Left, ay), (rect.Right, ay)]);
+            }
+        }
+
+        // Always provide a guaranteed outer circulation ring.  The previous
+        // visibility graph only used local block corners; with stacked zones
+        // that can leave an entire row disconnected from the entrance.  These
+        // points sit outside the union of all Zone rectangles and therefore
+        // give every gate/aisle a safe Manhattan route around the blocks.
+        if (liveBlocks.Count > 0)
+        {
+            var minX = liveBlocks.Min(block => (double)block.X) - CorridorClearance;
+            var maxX = liveBlocks.Max(block => (double)(block.X + block.Width)) + CorridorClearance;
+            var minY = liveBlocks.Min(block => (double)block.Y) - CorridorClearance;
+            var maxY = liveBlocks.Max(block => (double)(block.Y + block.Height)) + CorridorClearance;
+            var ringLeft = Math.Clamp(minX, 2, Math.Max(2, canvasWidth - 2));
+            var ringRight = Math.Clamp(maxX, 2, Math.Max(2, canvasWidth - 2));
+            var ringTop = Math.Clamp(minY, 2, Math.Max(2, canvasHeight - 2));
+            var ringBottom = Math.Clamp(maxY, 2, Math.Max(2, canvasHeight - 2));
+            points.AddRange([
+                (ringLeft, ringTop), (ringRight, ringTop),
+                (ringLeft, ringBottom), (ringRight, ringBottom)
+            ]);
+            foreach (var anchor in anchors)
+            {
+                var ax = (double)anchor.Xcoordinate;
+                var ay = (double)anchor.Ycoordinate;
+                points.AddRange([
+                    (ax, ringTop), (ax, ringBottom),
+                    (ringLeft, ay), (ringRight, ay)
+                ]);
             }
         }
         points.AddRange([(CorridorClearance, CorridorClearance),

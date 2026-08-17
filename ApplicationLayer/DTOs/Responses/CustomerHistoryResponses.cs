@@ -81,4 +81,5 @@ public sealed class CustomerOrderPaymentResponse
     public DateTime? RefundRequestedAt { get; set; }
     public DateTime? RefundedAt { get; set; }
     public DateTime CreatedAt { get; set; }
+    public string QrCode { get; set; } = string.Empty ;
 }

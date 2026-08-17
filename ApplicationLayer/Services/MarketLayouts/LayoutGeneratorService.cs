@@ -471,7 +471,7 @@ public class LayoutGeneratorService : ILayoutGeneratorService
             return (blocks, errors, warnings);
         }
 
-        int zonesPerRow = request.ZonesPerRow ?? (int)Math.Ceiling(Math.Sqrt(configuredZones.Count));
+        int zonesPerRow = Math.Max(1, request.ZonesPerRow ?? 1);
         double curX = request.StartX;
         double curY = request.StartY;
         double rowMaxH = 0;
@@ -512,17 +512,28 @@ public class LayoutGeneratorService : ILayoutGeneratorService
                 : Math.Abs(JunctionOffsetY) + 10;
             double blockYWithAisle = curY + junctionReserve;
 
+            double blockX = config.CustomX ?? curX;
+            double blockY = config.CustomY ?? blockYWithAisle;
+
             var boundaryWidth = request.MarketWidthMeters.HasValue
                 ? request.MarketWidthMeters.Value * request.PixelsPerMeter
                 : layout.Width;
             var boundaryHeight = request.MarketLengthMeters.HasValue
                 ? request.MarketLengthMeters.Value * request.PixelsPerMeter
                 : layout.Height;
-            requiredWidth = Math.Max(requiredWidth, curX + blockW);
-            requiredHeight = Math.Max(requiredHeight, blockYWithAisle + blockH);
-            if (!request.AutoExpandCanvas && !physical
-                && (curX + blockW > boundaryWidth || blockYWithAisle + blockH > boundaryHeight))
-                errors.Add($"Zone '{zone.ZoneName}' does not fit inside the market boundary.");
+            requiredWidth = Math.Max(requiredWidth, blockX + blockW);
+            requiredHeight = Math.Max(requiredHeight, blockY + blockH);
+
+            if (blockX + blockW > boundaryWidth + 0.01)
+            {
+                var exceedW = (blockX + blockW - boundaryWidth) / (physical ? request.PixelsPerMeter : 1);
+                errors.Add($"Zone '{zone.ZoneName}' vượt boundary khu chợ {exceedW:0.##}m theo chiều rộng.");
+            }
+            if (blockY + blockH > boundaryHeight + 0.01)
+            {
+                var exceedH = (blockY + blockH - boundaryHeight) / (physical ? request.PixelsPerMeter : 1);
+                errors.Add($"Zone '{zone.ZoneName}' vượt boundary khu chợ {exceedH:0.##}m theo chiều dài.");
+            }
 
             blocks.Add(new LayoutBlock
             {
@@ -531,8 +542,8 @@ public class LayoutGeneratorService : ILayoutGeneratorService
                 ZoneId = zone.Id,
                 Type = "Zone",
                 Name = zone.ZoneName,
-                X = curX,
-                Y = blockYWithAisle,
+                X = blockX,
+                Y = blockY,
                 Width = blockW,
                 Height = blockH,
             });
@@ -552,15 +563,32 @@ public class LayoutGeneratorService : ILayoutGeneratorService
             }
         }
 
-        if (!request.AutoExpandCanvas && request.MarketWidthMeters.HasValue
-            && (requiredWidth > request.MarketWidthMeters.Value * request.PixelsPerMeter
-                || requiredHeight > request.MarketLengthMeters!.Value * request.PixelsPerMeter))
+        // Check overlap between blocks
+        for (int i = 0; i < blocks.Count; i++)
         {
-            errors.Add(
-                $"The configured zones require at least {requiredWidth / request.PixelsPerMeter:0.##} m width "
-                + $"and {requiredHeight / request.PixelsPerMeter:0.##} m length with the selected margins, "
-                + $"but the market boundary is {request.MarketWidthMeters:0.##} m x {request.MarketLengthMeters:0.##} m. "
-                + "Increase the market dimensions, reduce zone sizes or spacing, or change zones per row.");
+            for (int j = i + 1; j < blocks.Count; j++)
+            {
+                var b1 = blocks[i];
+                var b2 = blocks[j];
+                bool overlaps = !(b1.X + b1.Width <= b2.X || b2.X + b2.Width <= b1.X
+                               || b1.Y + b1.Height <= b2.Y || b2.Y + b2.Height <= b1.Y);
+                if (overlaps)
+                {
+                    errors.Add($"Zone '{b1.Name}' và Zone '{b2.Name}' đang bị chồng lấn (overlap) nhau.");
+                }
+            }
+        }
+
+        if (request.MarketWidthMeters.HasValue
+            && (requiredWidth > request.MarketWidthMeters.Value * request.PixelsPerMeter + 0.01
+                || requiredHeight > request.MarketLengthMeters!.Value * request.PixelsPerMeter + 0.01))
+        {
+            var exceedW = Math.Max(0, (requiredWidth - request.MarketWidthMeters.Value * request.PixelsPerMeter) / request.PixelsPerMeter);
+            var exceedH = Math.Max(0, (requiredHeight - request.MarketLengthMeters!.Value * request.PixelsPerMeter) / request.PixelsPerMeter);
+            if (exceedW > 0)
+                errors.Add($"Layout vượt boundary khu chợ {exceedW:0.##}m theo chiều rộng.");
+            if (exceedH > 0)
+                errors.Add($"Layout vượt boundary khu chợ {exceedH:0.##}m theo chiều dài.");
         }
 
         return (blocks, errors, warnings);

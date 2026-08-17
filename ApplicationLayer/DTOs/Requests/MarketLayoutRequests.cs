@@ -165,6 +165,10 @@ public class ZoneGenerationConfig
 
     [Range(0, 50)]
     public double? VerticalGapMeters { get; set; }
+
+    public double? CustomX { get; set; }
+
+    public double? CustomY { get; set; }
 }
 public class GenerateLayoutRequest
 {

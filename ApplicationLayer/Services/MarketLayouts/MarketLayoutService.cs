@@ -176,9 +176,27 @@ public class MarketLayoutService : IMarketLayoutService
         if (layout.Status == MarketLayoutStatus.Active)
             throw AppException.Conflict("Deactivate the market layout before updating its dimensions.");
 
-        var nodes = await _layouts.GetNodesByLayoutIdAsync(layoutId, cancellationToken);
-        if (nodes.Any(n => n.Xcoordinate > request.Width || n.Ycoordinate > request.Height))
-            throw AppException.BadRequest("Cannot shrink layout. Existing nodes are outside the new dimensions.");
+        var nodes = (await _layouts.GetNodesByLayoutIdAsync(layoutId, cancellationToken)).ToList();
+        var outsideNodes = nodes
+            .Where(n => n.Xcoordinate > request.Width || n.Ycoordinate > request.Height)
+            .ToList();
+        if (outsideNodes.Count > 0)
+        {
+            var requiredWidth = (int)Math.Ceiling(nodes.Max(n => n.Xcoordinate));
+            var requiredHeight = (int)Math.Ceiling(nodes.Max(n => n.Ycoordinate));
+            var examples = string.Join(", ", outsideNodes
+                .Take(5)
+                .Select(n => string.IsNullOrWhiteSpace(n.SlotCode)
+                    ? (string.IsNullOrWhiteSpace(n.NodeName) ? n.Id.ToString("N")[..8] : n.NodeName)
+                    : n.SlotCode));
+            var suffix = outsideNodes.Count > 5 ? " and more" : string.Empty;
+
+            throw AppException.BadRequest(
+                $"The new layout size {request.Width} × {request.Height}px is too small for the existing map. " +
+                $"Keep at least {requiredWidth} × {requiredHeight}px, or move/regenerate the {outsideNodes.Count} node(s) outside the new boundary " +
+                $"({examples}{suffix}).",
+                "LAYOUT_DIMENSIONS_TOO_SMALL");
+        }
 
         layout.Width = request.Width;
         layout.Height = request.Height;
@@ -330,6 +348,13 @@ public class MarketLayoutService : IMarketLayoutService
             }
         }
 
+        foreach (var block in blocks)
+        {
+            var blockErrors = LayoutGeometryValidator.ValidateBlockMove(layout, block, block.X, block.Y, blocks);
+            if (blockErrors.Count > 0)
+                throw AppException.BadRequest(blockErrors[0], "LAYOUT_BLOCK_INVALID");
+        }
+
         var nodes = request.Nodes.Select(node => new LayoutNode
         {
             Id = node.Id,
@@ -444,10 +469,13 @@ public class MarketLayoutService : IMarketLayoutService
             throw AppException.Conflict("Deactivate the market layout before modifying the graph.", "LAYOUT_IS_ACTIVE");
 
         var market = await EnsureNightMarketExistsAsync(layout.NightMarketId, cancellationToken);
+        if (!market.BoundaryWidthMeters.HasValue || !market.BoundaryHeightMeters.HasValue || market.BoundaryWidthMeters.Value <= 0 || market.BoundaryHeightMeters.Value <= 0)
+            throw AppException.BadRequest("Khu chợ chưa được thiết lập kích thước (chiều rộng và chiều dài). Vui lòng cập nhật kích thước khu chợ trước.", "MARKET_BOUNDARY_MISSING");
+
+        request.MarketWidthMeters = market.BoundaryWidthMeters.Value;
+        request.MarketLengthMeters = market.BoundaryHeightMeters.Value;
         request.ZoneConfigs ??= [];
         var physicalPreparation = PhysicalGridCalculator.Prepare(request);
-        if (physicalPreparation.Errors.Count > 0)
-            throw AppException.BadRequest(physicalPreparation.Errors[0], "PHYSICAL_LAYOUT_INVALID");
         var hasZoneManagement = await ValidateGenerationEntitlementAsync(market, request);
 
         var zones = await _zones.GetActiveByNightMarketIdAsync(layout.NightMarketId, cancellationToken: cancellationToken);
@@ -462,7 +490,12 @@ public class MarketLayoutService : IMarketLayoutService
         var generationResult = _generator.ComputeGeneration(
             layout, plan.EffectiveZones, existingNodes, boothLocations, plan.NormalizedRequest);
         var result = generationResult.Preview;
+        result.Errors.AddRange(physicalPreparation.Errors);
         result.Warnings.AddRange(physicalPreparation.Warnings);
+        if (physicalPreparation.Errors.Count > 0)
+        {
+            result.CanApply = false;
+        }
         result.Nodes = _mapper.Map<List<LayoutNodeResponse>>(generationResult.Nodes) ?? [];
         result.Edges = _mapper.Map<List<LayoutEdgeResponse>>(generationResult.Edges) ?? [];
         result.Blocks = _mapper.Map<List<LayoutBlockResponse>>(generationResult.Blocks) ?? [];
@@ -543,6 +576,11 @@ public class MarketLayoutService : IMarketLayoutService
                 "LAYOUT_VERSION_CONFLICT");
 
         var market = await EnsureNightMarketExistsAsync(layout.NightMarketId, cancellationToken);
+        if (!market.BoundaryWidthMeters.HasValue || !market.BoundaryHeightMeters.HasValue || market.BoundaryWidthMeters.Value <= 0 || market.BoundaryHeightMeters.Value <= 0)
+            throw AppException.BadRequest("Khu chợ chưa được thiết lập kích thước (chiều rộng và chiều dài). Vui lòng cập nhật kích thước khu chợ trước.", "MARKET_BOUNDARY_MISSING");
+
+        request.MarketWidthMeters = market.BoundaryWidthMeters.Value;
+        request.MarketLengthMeters = market.BoundaryHeightMeters.Value;
         request.ZoneConfigs ??= [];
         var physicalPreparation = PhysicalGridCalculator.Prepare(request);
         if (physicalPreparation.Errors.Count > 0)
@@ -565,9 +603,11 @@ public class MarketLayoutService : IMarketLayoutService
         // It accurately detects both reduced capacities and omitted zones that drop assigned booths.
         var result = _generator.ComputeGeneration(
             layout, plan.EffectiveZones, existingNodes, boothLocations, plan.NormalizedRequest);
-        if (!result.Preview.CanApply)
+        if (!result.Preview.CanApply || physicalPreparation.Errors.Count > 0)
         {
-            var msg = result.Preview.Errors.FirstOrDefault() ?? "Cannot apply generation due to conflicts. Check preview first.";
+            var msg = result.Preview.Errors.FirstOrDefault()
+                      ?? physicalPreparation.Errors.FirstOrDefault()
+                      ?? "Cannot apply generation due to conflicts. Check preview first.";
             if (result.Preview.ConflictingSlots.Any())
             {
                 var codes = string.Join(", ", result.Preview.ConflictingSlots.Select(c => c.SlotCode));
@@ -1249,7 +1289,9 @@ public class MarketLayoutService : IMarketLayoutService
                 BoothWidthMeters = config.BoothWidthMeters,
                 BoothLengthMeters = config.BoothLengthMeters,
                 HorizontalGapMeters = config.HorizontalGapMeters,
-                VerticalGapMeters = config.VerticalGapMeters
+                VerticalGapMeters = config.VerticalGapMeters,
+                CustomX = config.CustomX,
+                CustomY = config.CustomY
             });
         }
 

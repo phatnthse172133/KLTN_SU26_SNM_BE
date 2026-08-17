@@ -298,13 +298,7 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.UpdatedAt, o => o.Ignore())
                 .ForMember(d => d.NightMarket, o => o.Ignore())
                 .ForMember(d => d.BoothLocations, o => o.Ignore())
-                .ForMember(d => d.LayoutNodes, o => o.Ignore())
-                .ForMember(d => d.WidthMeters, o => o.Ignore())
-                .ForMember(d => d.LengthMeters, o => o.Ignore())
-                .ForMember(d => d.BoothWidthMeters, o => o.Ignore())
-                .ForMember(d => d.BoothLengthMeters, o => o.Ignore())
-                .ForMember(d => d.HorizontalGapMeters, o => o.Ignore())
-                .ForMember(d => d.VerticalGapMeters, o => o.Ignore());
+                .ForMember(d => d.LayoutNodes, o => o.Ignore());
             CreateMap<UpdateZoneRequest, Zone>().IncludeBase<CreateZoneRequest, Zone>();
             CreateMap<Zone, ZoneResponse>()
                 .ForMember(d => d.Status, o => o.MapFrom(s => s.Status.ToString()))

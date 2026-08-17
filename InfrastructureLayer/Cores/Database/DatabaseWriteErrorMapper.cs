@@ -17,13 +17,13 @@ public static class DatabaseWriteErrorMapper
 
     public static MappedWriteError Map(Exception exception)
     {
-        if (exception is DbUpdateConcurrencyException)
+        if (exception is DbUpdateConcurrencyException concurrency)
         {
             return new MappedWriteError(
                 StatusCodesConflict,
                 ConflictCode,
                 "The request conflicts with existing data.",
-                SafeDetails("concurrency", null));
+                ConcurrencyDetails(concurrency));
         }
 
         var postgres = UnwrapPostgres(exception);
@@ -67,6 +67,27 @@ public static class DatabaseWriteErrorMapper
         }
 
         return null;
+    }
+
+    private static object ConcurrencyDetails(DbUpdateConcurrencyException concurrency)
+    {
+        var entities = concurrency.Entries
+            .Select(entry => new
+            {
+                entity = entry.Metadata.ClrType.Name,
+                state = entry.State.ToString(),
+                table = entry.Metadata.GetTableName()
+            })
+            .ToArray();
+        return new
+        {
+            reason = "concurrency",
+            sqlState = (string?)null,
+            constraint = (string?)null,
+            table = entities.FirstOrDefault()?.table,
+            column = (string?)null,
+            entities
+        };
     }
 
     private static object SafeDetails(string reason, PostgresException? postgres)

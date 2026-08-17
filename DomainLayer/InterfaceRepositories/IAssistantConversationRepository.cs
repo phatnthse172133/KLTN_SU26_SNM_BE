@@ -8,5 +8,8 @@ public interface IAssistantConversationRepository
     Task<IReadOnlyList<AssistantMessage>> GetRecentMessagesAsync(Guid conversationId, int limit, CancellationToken cancellationToken = default);
     Task<AssistantMealPlan?> GetOwnedMealPlanAsync(Guid conversationId, Guid mealPlanId, Guid customerId, CancellationToken cancellationToken = default);
     void Add(AssistantConversation conversation);
+    void AddMessage(AssistantMessage message);
+    void AddMealPlan(AssistantMealPlan plan);
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
+    Task SaveTurnAsync(AssistantConversation conversation, CancellationToken cancellationToken = default);
 }

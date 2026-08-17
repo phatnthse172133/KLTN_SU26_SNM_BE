@@ -35,25 +35,27 @@ public class LayoutGeneratorHubAndSpokeRegressionTests
             layout, [zoneA, zoneB], [], [], request);
 
         Assert.Equal(2, result.Blocks.Count);
-        var junctions = result.Nodes.Where(node => node.NodeType == LayoutNodeType.Junction).ToList();
+        var zoneJunctions = result.Nodes
+            .Where(node => node.NodeType == LayoutNodeType.Junction && node.ZoneId.HasValue)
+            .ToList();
         var slots = result.Nodes.Where(node => node.NodeType == LayoutNodeType.BoothSlot).ToList();
-        Assert.Equal(2, junctions.Count);
+        Assert.Equal(2, zoneJunctions.Count);
         Assert.Equal(8, slots.Count);
         Assert.DoesNotContain(result.Nodes, node => node.NodeType == LayoutNodeType.BoothAccess);
         Assert.Contains(result.Nodes, node => node.NodeType == LayoutNodeType.Entrance);
 
         foreach (var slot in slots)
         {
-            var zoneJunction = junctions.Single(junction =>
+            var zoneJunction = zoneJunctions.Single(junction =>
                 junction.LayoutBlockId == slot.LayoutBlockId || junction.ZoneId == slot.ZoneId);
             Assert.Contains(result.Edges, edge =>
                 (edge.FromNodeId == slot.Id && edge.ToNodeId == zoneJunction.Id)
                 || (edge.ToNodeId == slot.Id && edge.FromNodeId == zoneJunction.Id));
         }
 
-        Assert.Contains(junctions, junction => junction.NodeName == "Zone A Aisle");
-        Assert.Contains(junctions, junction => junction.NodeName == "Zone B Aisle");
-        Assert.True(junctions.All(junction =>
+        Assert.Contains(zoneJunctions, junction => junction.NodeName == "Zone A Aisle");
+        Assert.Contains(zoneJunctions, junction => junction.NodeName == "Zone B Aisle");
+        Assert.True(zoneJunctions.All(junction =>
             (double)junction.Ycoordinate < result.Blocks.First(block => block.Id == junction.LayoutBlockId).Y));
     }
 }

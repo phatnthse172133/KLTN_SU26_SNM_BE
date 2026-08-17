@@ -39,18 +39,21 @@ public sealed class OpenAiLanguageModelClient : ILanguageModelClient
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(Math.Max(1, _options.TimeoutSeconds)));
 
+        var outputTokens = ResolveOutputTokens(maxOutputTokens);
+        var boundedUser = TruncateInput(userPrompt);
+
         using var request = new HttpRequestMessage(HttpMethod.Post, Combine("chat/completions"));
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.ApiKey.Trim());
         request.Content = JsonContent.Create(new
         {
             model = _options.Model,
             temperature = 0,
-            max_tokens = maxOutputTokens,
+            max_tokens = outputTokens,
             response_format = new { type = "json_object" },
             messages = new object[]
             {
                 new { role = "system", content = systemPrompt },
-                new { role = "user", content = userPrompt }
+                new { role = "user", content = boundedUser }
             }
         });
 
@@ -101,6 +104,21 @@ public sealed class OpenAiLanguageModelClient : ILanguageModelClient
                 throw AssistantErrors.ProviderUnavailable(AssistantErrors.EmptyContent);
             return content.Trim();
         }
+    }
+
+    private int ResolveOutputTokens(int requested)
+    {
+        var configured = Math.Max(1, _options.MaxOutputTokens);
+        var asked = Math.Max(1, requested);
+        return Math.Min(asked, configured);
+    }
+
+    private string TruncateInput(string value)
+    {
+        var max = Math.Max(1, _options.MaxInputCharacters);
+        if (string.IsNullOrEmpty(value) || value.Length <= max)
+            return value;
+        return value[..max];
     }
 
     private Uri Combine(string path)

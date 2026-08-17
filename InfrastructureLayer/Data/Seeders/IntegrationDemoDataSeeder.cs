@@ -178,7 +178,7 @@ public static class IntegrationDemoDataSeeder
         {
             if (!string.Equals(existing.Email, email, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException($"Demo seed ID collision for user {id}.");
-            if (normalizeConfiguredPassword && !hasher.VerifyPassword(password, existing.PasswordHash))
+            if (normalizeConfiguredPassword && !string.IsNullOrEmpty(existing.PasswordHash) && !hasher.VerifyPassword(password, existing.PasswordHash))
             {
                 existing.PasswordHash = hasher.HashPassword(password);
                 existing.UpdatedAt = now;

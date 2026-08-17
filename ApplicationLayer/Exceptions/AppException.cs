@@ -55,8 +55,9 @@ public class AppException : Exception
     public static AppException ServiceUnavailable(
         string message,
         string errorCode = "SERVICE_UNAVAILABLE",
-        Exception? innerException = null)
-        => new(message, 503, errorCode, innerException);
+        Exception? innerException = null,
+        object? details = null)
+        => new(message, 503, errorCode, innerException, details);
 
     public static AppException BadGateway(
         string message,

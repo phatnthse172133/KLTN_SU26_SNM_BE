@@ -17,6 +17,11 @@ namespace InfrastructureLayer.Cores.Helppers
 
         public bool VerifyPassword(string password, string hashedPassword)
         {
+            if (string.IsNullOrEmpty(hashedPassword))
+            {
+                return false;
+            }
+
             return BCrypt.Net.BCrypt.Verify(password, hashedPassword);
         }
     }

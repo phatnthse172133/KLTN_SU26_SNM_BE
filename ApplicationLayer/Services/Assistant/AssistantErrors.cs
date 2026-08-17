@@ -15,11 +15,30 @@ public static class AssistantErrors
             "Current location is required to continue this request.",
             "ASSISTANT_LOCATION_REQUIRED");
 
+    public const string MissingKey = "missing_key";
+    public const string Disabled = "disabled";
+    public const string Timeout = "timeout";
+    public const string HttpAuth = "http_401";
+    public const string HttpRateLimit = "http_429";
+    public const string HttpError = "http_error";
+    public const string HttpTransport = "http_transport";
+    public const string InvalidJson = "invalid_json";
+    public const string EmptyContent = "empty_content";
+    public const string HallucinatedId = "hallucinated_id";
+    public const string DuplicateId = "duplicate_id";
+    public const string IncompleteIdSet = "incomplete_id_set";
+
     public static AppException ProviderUnavailable(Exception? inner = null)
+        => ProviderUnavailable("unspecified", inner);
+
+    public static AppException ProviderUnavailable(string reason, Exception? inner = null, int? httpStatus = null)
         => AppException.ServiceUnavailable(
             "The AI assistant provider is currently unavailable.",
             "ASSISTANT_PROVIDER_UNAVAILABLE",
-            inner);
+            inner,
+            details: httpStatus is null
+                ? new { reason }
+                : new { reason, httpStatus });
 
     public static AppException MarketNotFound()
         => AppException.NotFound("Night market was not found.", "ASSISTANT_MARKET_NOT_FOUND");

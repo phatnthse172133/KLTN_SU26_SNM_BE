@@ -22,6 +22,7 @@ public sealed class AssistantOpenAiLanguageModelClientTests
         Assert.Equal(503, exception.StatusCode);
         Assert.Equal("ASSISTANT_PROVIDER_UNAVAILABLE", exception.ErrorCode);
         Assert.Equal(0, handler.Calls);
+        Assert.Equal(AssistantErrors.MissingKey, AssistantProviderFailure.Reason(exception));
     }
 
     [Fact]
@@ -35,6 +36,7 @@ public sealed class AssistantOpenAiLanguageModelClientTests
 
         Assert.Equal("ASSISTANT_PROVIDER_UNAVAILABLE", exception.ErrorCode);
         Assert.Equal(0, handler.Calls);
+        Assert.Equal(AssistantErrors.Disabled, AssistantProviderFailure.Reason(exception));
     }
 
     [Fact]
@@ -54,6 +56,29 @@ public sealed class AssistantOpenAiLanguageModelClientTests
 
         Assert.Equal("ASSISTANT_PROVIDER_UNAVAILABLE", exception.ErrorCode);
         Assert.Equal(1, handler.Calls);
+        Assert.Equal(AssistantErrors.HttpError, AssistantProviderFailure.Reason(exception));
+        Assert.Equal(503, AssistantProviderFailure.HttpStatus(exception));
+    }
+
+    [Fact]
+    public async Task CompleteJson_Unauthorized_Throws503_WithAuthReason()
+    {
+        var handler = new RecordingHandler
+        {
+            Response = new HttpResponseMessage(HttpStatusCode.Unauthorized)
+            {
+                Content = new StringContent("""{"error":"invalid_api_key"}""", Encoding.UTF8, "application/json")
+            }
+        };
+        var client = Create(handler, apiKey: "test-key");
+
+        var exception = await Assert.ThrowsAsync<AppException>(() =>
+            client.CompleteJsonAsync("sys", "user", 100, CancellationToken.None));
+
+        Assert.Equal("ASSISTANT_PROVIDER_UNAVAILABLE", exception.ErrorCode);
+        Assert.Equal(AssistantErrors.HttpAuth, AssistantProviderFailure.Reason(exception));
+        Assert.Equal(401, AssistantProviderFailure.HttpStatus(exception));
+        Assert.Equal(1, handler.Calls);
     }
 
     [Fact]
@@ -72,6 +97,7 @@ public sealed class AssistantOpenAiLanguageModelClientTests
             client.CompleteJsonAsync("sys", "user", 100, CancellationToken.None));
 
         Assert.Equal("ASSISTANT_PROVIDER_UNAVAILABLE", exception.ErrorCode);
+        Assert.Equal(AssistantErrors.InvalidJson, AssistantProviderFailure.Reason(exception));
     }
 
     [Fact]
@@ -85,6 +111,7 @@ public sealed class AssistantOpenAiLanguageModelClientTests
 
         Assert.Equal(503, exception.StatusCode);
         Assert.Equal("ASSISTANT_PROVIDER_UNAVAILABLE", exception.ErrorCode);
+        Assert.Equal(AssistantErrors.Timeout, AssistantProviderFailure.Reason(exception));
     }
 
     private static OpenAiLanguageModelClient Create(

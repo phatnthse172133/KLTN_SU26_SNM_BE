@@ -103,6 +103,7 @@ public sealed class AssistantIntentInterpreterTests
 
         Assert.Equal(503, exception.StatusCode);
         Assert.Equal("ASSISTANT_PROVIDER_UNAVAILABLE", exception.ErrorCode);
+        Assert.Equal(AssistantErrors.InvalidJson, AssistantProviderFailure.Reason(exception));
     }
 
     [Fact]

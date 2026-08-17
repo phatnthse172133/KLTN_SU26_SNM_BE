@@ -174,7 +174,9 @@ public sealed partial class AssistantService
 
     private void EnsureOpenAiConfigured()
     {
-        if (!_openAi.Enabled || string.IsNullOrWhiteSpace(_openAi.ApiKey))
-            throw AssistantErrors.ProviderUnavailable();
+        if (!_openAi.Enabled)
+            throw AssistantErrors.ProviderUnavailable(AssistantErrors.Disabled);
+        if (string.IsNullOrWhiteSpace(_openAi.ApiKey))
+            throw AssistantErrors.ProviderUnavailable(AssistantErrors.MissingKey);
     }
 }

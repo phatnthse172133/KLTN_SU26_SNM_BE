@@ -1,5 +1,7 @@
 using ApplicationLayer.DTOs.Requests;
+using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
+using ApplicationLayer.Helppers;
 using ApplicationLayer.Services.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -45,6 +47,12 @@ public class AuthController : ControllerBase
 
     [HttpPost("google-login")]
     [EnableRateLimiting("AuthAbusePolicy")]
+    [ProducesResponseType(typeof(ApiResponse<AuthResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
     public async Task<IActionResult> GoogleLogin(GoogleLoginRequest request, CancellationToken cancellationToken)
     {
         var response = await _authService.GoogleLoginAsync(request, cancellationToken);

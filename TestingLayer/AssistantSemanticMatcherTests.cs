@@ -104,6 +104,7 @@ public sealed class AssistantSemanticMatcherTests
 
         Assert.Equal(503, exception.StatusCode);
         Assert.Equal("ASSISTANT_PROVIDER_UNAVAILABLE", exception.ErrorCode);
+        Assert.Equal(AssistantErrors.HallucinatedId, AssistantProviderFailure.Reason(exception));
     }
 
     [Fact]
@@ -123,6 +124,7 @@ public sealed class AssistantSemanticMatcherTests
             AssistantSemanticMatcher.ParseBatch(raw, new HashSet<Guid> { allowed, missing }));
 
         Assert.Equal("ASSISTANT_PROVIDER_UNAVAILABLE", exception.ErrorCode);
+        Assert.Equal(AssistantErrors.IncompleteIdSet, AssistantProviderFailure.Reason(exception));
     }
 
     [Fact]
@@ -156,6 +158,7 @@ public sealed class AssistantSemanticMatcherTests
         var exception = Assert.Throws<AppException>(() => AssistantSemanticMatcher.ParseBatch("{", new HashSet<Guid>()));
         Assert.Equal(503, exception.StatusCode);
         Assert.Equal("ASSISTANT_PROVIDER_UNAVAILABLE", exception.ErrorCode);
+        Assert.Equal(AssistantErrors.InvalidJson, AssistantProviderFailure.Reason(exception));
     }
 
     [Fact]
@@ -171,6 +174,7 @@ public sealed class AssistantSemanticMatcherTests
 
         Assert.Equal(503, exception.StatusCode);
         Assert.Equal("ASSISTANT_PROVIDER_UNAVAILABLE", exception.ErrorCode);
+        Assert.Equal(AssistantErrors.Timeout, AssistantProviderFailure.Reason(exception));
     }
 
     [Fact]

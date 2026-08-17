@@ -92,11 +92,11 @@ public sealed class AssistantMealPlanComposer(
         }
         catch (JsonException exception)
         {
-            throw AssistantErrors.ProviderUnavailable(exception);
+            throw AssistantErrors.ProviderUnavailable(AssistantErrors.InvalidJson, exception);
         }
 
         if (dto.Plans is null)
-            throw AssistantErrors.ProviderUnavailable();
+            throw AssistantErrors.ProviderUnavailable(AssistantErrors.InvalidJson);
 
         var proposals = new List<AssistantMealPlanProposal>();
         foreach (var plan in dto.Plans)
@@ -105,7 +105,7 @@ public sealed class AssistantMealPlanComposer(
             foreach (var item in plan.Items ?? [])
             {
                 if (item.FoodItemId == Guid.Empty || !allowedIds.Contains(item.FoodItemId))
-                    throw AssistantErrors.ProviderUnavailable();
+                    throw AssistantErrors.ProviderUnavailable(AssistantErrors.HallucinatedId);
                 items.Add(new AssistantMealPlanProposalItem
                 {
                     FoodItemId = item.FoodItemId,
@@ -162,11 +162,11 @@ public sealed class AssistantMealPlanComposer(
         }
         catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
         {
-            throw AssistantErrors.ProviderUnavailable(exception);
+            throw AssistantErrors.ProviderUnavailable(AssistantErrors.Timeout, exception);
         }
         catch (Exception exception)
         {
-            throw AssistantErrors.ProviderUnavailable(exception);
+            throw AssistantErrors.ProviderUnavailable(AssistantErrors.HttpError, exception);
         }
     }
 

@@ -1564,6 +1564,7 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.GoogleId).HasMaxLength(100);
                 entity.Property(e => e.PasswordHash)
                     .HasMaxLength(255)
+                    .IsRequired(false)
                     .HasComment("MÃ¡ÂºÂ­t khÃ¡ÂºÂ©u Ã„â€˜ÃƒÂ£ Ã„â€˜Ã†Â°Ã¡Â»Â£c mÃƒÂ£ hÃƒÂ³a (hash), tuyÃ¡Â»â€¡t Ã„â€˜Ã¡Â»â€˜i khÃƒÂ´ng lÃ†Â°u plaintext");
                 entity.Property(e => e.MustChangePassword)
                     .HasDefaultValue(false);

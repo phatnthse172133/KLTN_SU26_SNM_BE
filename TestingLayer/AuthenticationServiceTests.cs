@@ -2,6 +2,7 @@ using System.Linq.Expressions;
 using System.ComponentModel.DataAnnotations;
 using ApplicationLayer.Common;
 using ApplicationLayer.DTOs.Requests;
+using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Services.Auth;
 using AutoMapper;
@@ -26,7 +27,7 @@ public class AuthenticationServiceTests
         var user = CreateUser(AuthProvider.Local, "customer@example.com");
         var fixture = CreateFixture(new[] { user });
         fixture.PasswordHasher
-            .Setup(hasher => hasher.VerifyPassword("wrong-password", user.PasswordHash))
+            .Setup(hasher => hasher.VerifyPassword("wrong-password", user.PasswordHash!))
             .Returns(false);
 
         var exception = await Assert.ThrowsAsync<AppException>(() => fixture.Service.ChangePasswordAsync(
@@ -51,10 +52,10 @@ public class AuthenticationServiceTests
         user.RefreshTokenExpiresAt = DateTime.UtcNow.AddDays(1);
         var fixture = CreateFixture(new[] { user });
         fixture.PasswordHasher
-            .Setup(hasher => hasher.VerifyPassword("current-password", user.PasswordHash))
+            .Setup(hasher => hasher.VerifyPassword("current-password", user.PasswordHash!))
             .Returns(true);
         fixture.PasswordHasher
-            .Setup(hasher => hasher.VerifyPassword("new-password", user.PasswordHash))
+            .Setup(hasher => hasher.VerifyPassword("new-password", user.PasswordHash!))
             .Returns(false);
         fixture.PasswordHasher
             .Setup(hasher => hasher.HashPassword("new-password"))
@@ -103,7 +104,7 @@ public class AuthenticationServiceTests
     {
         var user = CreateUser(AuthProvider.Local, "customer@example.com");
         var fixture = CreateFixture(new[] { user });
-        fixture.PasswordHasher.Setup(hasher => hasher.VerifyPassword("wrong-password", user.PasswordHash))
+        fixture.PasswordHasher.Setup(hasher => hasher.VerifyPassword("wrong-password", user.PasswordHash!))
             .Returns(false);
 
         var exception = await Assert.ThrowsAsync<AppException>(() => fixture.Service.LoginAsync(
@@ -122,7 +123,7 @@ public class AuthenticationServiceTests
         var user = CreateUser(AuthProvider.Local, "customer@example.com");
         user.Status = status;
         var fixture = CreateFixture(new[] { user });
-        fixture.PasswordHasher.Setup(hasher => hasher.VerifyPassword("correct-password", user.PasswordHash))
+        fixture.PasswordHasher.Setup(hasher => hasher.VerifyPassword("correct-password", user.PasswordHash!))
             .Returns(true);
 
         var exception = await Assert.ThrowsAsync<AppException>(() => fixture.Service.LoginAsync(
@@ -171,20 +172,89 @@ public class AuthenticationServiceTests
     }
 
     [Fact]
-    public async Task GoogleLogin_ExistingLocalEmail_DoesNotAutoLinkAccount()
+    public async Task GoogleLogin_NewVerifiedGoogleUser_CreatesCustomerWithoutPasswordAndIssuesSnMSession()
+    {
+        var fixture = CreateFixture(Array.Empty<User>());
+        var customerRole = new Role { Id = Guid.NewGuid(), RoleName = "Customer" };
+        fixture.Roles
+            .Setup(repository => repository.FirstOrDefaultAsync(It.IsAny<Expression<Func<Role, bool>>>()))
+            .ReturnsAsync(customerRole);
+        fixture.Google
+            .Setup(service => service.ValidateAsync("valid-token", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new GoogleUserInfo("google-subject", "new.customer@example.com", "Google User", "https://example.com/a.png", true));
+
+        var response = await fixture.Service.GoogleLoginAsync(new GoogleLoginRequest { IdToken = "valid-token" });
+
+        Assert.True(response.Success);
+        Assert.Equal("access-token", response.Data!.AccessToken);
+        Assert.Equal("refresh-token", response.Data.RefreshToken);
+        Assert.Equal("Customer", response.Data.Role);
+        fixture.Users.Verify(repository => repository.AddAsync(It.Is<User>(user =>
+            user.GoogleId == "google-subject" &&
+            user.Email == "new.customer@example.com" &&
+            user.FullName == "Google User" &&
+            user.AvatarUrl == "https://example.com/a.png" &&
+            user.PasswordHash == null &&
+            user.AuthProvider == AuthProvider.Google &&
+            user.Status == UserStatus.Active &&
+            user.RoleId == customerRole.Id)), Times.Once);
+    }
+
+    [Fact]
+    public async Task GoogleLogin_ExistingLinkedCustomer_ReturnsSessionWithoutCreatingDuplicate()
+    {
+        var googleUser = CreateUser(AuthProvider.Google, "customer@example.com", "google-subject");
+        googleUser.PasswordHash = null;
+        var fixture = CreateFixture(new[] { googleUser });
+        fixture.Google
+            .Setup(service => service.ValidateAsync("valid-token", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new GoogleUserInfo("google-subject", googleUser.Email, googleUser.FullName, null, true));
+
+        var response = await fixture.Service.GoogleLoginAsync(new GoogleLoginRequest { IdToken = "valid-token" });
+
+        Assert.True(response.Success);
+        Assert.Equal("access-token", response.Data!.AccessToken);
+        fixture.Users.Verify(repository => repository.AddAsync(It.IsAny<User>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GoogleLogin_ExistingVerifiedCustomerEmail_SafelyLinksGoogleSubject()
     {
         var localUser = CreateUser(AuthProvider.Local, "customer@example.com");
         var fixture = CreateFixture(new[] { localUser });
-        fixture.Google.Setup(service => service.ValidateAsync("valid-token", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new GoogleUserInfo("google-subject", localUser.Email, localUser.FullName, null));
+        fixture.Google
+            .Setup(service => service.ValidateAsync("valid-token", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new GoogleUserInfo("google-subject", localUser.Email, localUser.FullName, "https://example.com/new.png", true));
+
+        var response = await fixture.Service.GoogleLoginAsync(new GoogleLoginRequest { IdToken = "valid-token" });
+
+        Assert.True(response.Success);
+        Assert.Equal("google-subject", localUser.GoogleId);
+        Assert.Equal(AuthProvider.LocalGoogle, localUser.AuthProvider);
+        Assert.Equal("hash", localUser.PasswordHash);
+        fixture.Users.Verify(repository => repository.AddAsync(It.IsAny<User>()), Times.Never);
+        fixture.Users.Verify(repository => repository.Update(localUser), Times.AtLeastOnce);
+    }
+
+    [Fact]
+    public async Task GoogleLogin_NonCustomerEmail_ReturnsConflict()
+    {
+        var adminUser = CreateUser(AuthProvider.Local, "admin@example.com");
+        var fixture = CreateFixture(new[] { adminUser });
+        fixture.Roles
+            .Setup(repository => repository.GetByIdAsync(adminUser.RoleId))
+            .ReturnsAsync(new Role { Id = adminUser.RoleId, RoleName = "Admin" });
+        fixture.Google
+            .Setup(service => service.ValidateAsync("valid-token", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new GoogleUserInfo("google-subject", adminUser.Email, adminUser.FullName, null, true));
 
         var exception = await Assert.ThrowsAsync<AppException>(() => fixture.Service.GoogleLoginAsync(
             new GoogleLoginRequest { IdToken = "valid-token" }));
 
         Assert.Equal(409, exception.StatusCode);
-        Assert.Equal(AuthErrorCodes.GoogleAccountLinkRequired, exception.ErrorCode);
-        Assert.Null(localUser.GoogleId);
-        fixture.Users.Verify(repository => repository.Update(It.IsAny<User>()), Times.Never);
+        Assert.Equal(AuthErrorCodes.GoogleCustomerOnly, exception.ErrorCode);
+        Assert.Null(adminUser.GoogleId);
+        fixture.Users.Verify(repository => repository.AddAsync(It.IsAny<User>()), Times.Never);
     }
 
     [Fact]
@@ -192,9 +262,11 @@ public class AuthenticationServiceTests
     {
         var googleUser = CreateUser(AuthProvider.Google, "admin@example.com", "google-subject");
         var fixture = CreateFixture(new[] { googleUser });
-        fixture.Google.Setup(service => service.ValidateAsync("valid-token", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new GoogleUserInfo("google-subject", googleUser.Email, googleUser.FullName, null));
-        fixture.Roles.Setup(repository => repository.GetByIdAsync(googleUser.RoleId))
+        fixture.Google
+            .Setup(service => service.ValidateAsync("valid-token", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new GoogleUserInfo("google-subject", googleUser.Email, googleUser.FullName, null, true));
+        fixture.Roles
+            .Setup(repository => repository.GetByIdAsync(googleUser.RoleId))
             .ReturnsAsync(new Role { Id = googleUser.RoleId, RoleName = "Admin" });
 
         var exception = await Assert.ThrowsAsync<AppException>(() => fixture.Service.GoogleLoginAsync(
@@ -202,17 +274,58 @@ public class AuthenticationServiceTests
 
         Assert.Equal(403, exception.StatusCode);
         Assert.Equal(AuthErrorCodes.GoogleCustomerOnly, exception.ErrorCode);
+        fixture.Users.Verify(repository => repository.AddAsync(It.IsAny<User>()), Times.Never);
     }
 
     [Fact]
-    public async Task GoogleLogin_InvalidCredential_IsUnauthorized()
+    public async Task GoogleLogin_UnverifiedEmailNewUser_IsUnauthorized()
     {
         var fixture = CreateFixture(Array.Empty<User>());
-        fixture.Google.Setup(service => service.ValidateAsync("invalid-token", It.IsAny<CancellationToken>()))
+        fixture.Google
+            .Setup(service => service.ValidateAsync("unverified-token", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new GoogleUserInfo("google-subject", "new.customer@example.com", "Google User", null, false));
+
+        var exception = await Assert.ThrowsAsync<AppException>(() => fixture.Service.GoogleLoginAsync(
+            new GoogleLoginRequest { IdToken = "unverified-token" }));
+
+        Assert.Equal(401, exception.StatusCode);
+        Assert.Equal(AuthErrorCodes.InvalidGoogleToken, exception.ErrorCode);
+        fixture.Users.Verify(repository => repository.AddAsync(It.IsAny<User>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData(UserStatus.Inactive)]
+    [InlineData(UserStatus.Banned)]
+    public async Task GoogleLogin_InactiveOrBannedCustomer_IsForbidden(UserStatus status)
+    {
+        var googleUser = CreateUser(AuthProvider.Google, "customer@example.com", "google-subject");
+        googleUser.Status = status;
+        var fixture = CreateFixture(new[] { googleUser });
+        fixture.Google
+            .Setup(service => service.ValidateAsync("valid-token", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new GoogleUserInfo("google-subject", googleUser.Email, googleUser.FullName, null, true));
+
+        var exception = await Assert.ThrowsAsync<AppException>(() => fixture.Service.GoogleLoginAsync(
+            new GoogleLoginRequest { IdToken = "valid-token" }));
+
+        Assert.Equal(403, exception.StatusCode);
+        Assert.Equal(AuthErrorCodes.AccountNotActive, exception.ErrorCode);
+    }
+
+    [Theory]
+    [InlineData("invalid-token")]
+    [InlineData("expired-token")]
+    [InlineData("wrong-audience-token")]
+    [InlineData("wrong-issuer-token")]
+    public async Task GoogleLogin_RejectedIdToken_IsUnauthorized(string idToken)
+    {
+        var fixture = CreateFixture(Array.Empty<User>());
+        fixture.Google
+            .Setup(service => service.ValidateAsync(idToken, It.IsAny<CancellationToken>()))
             .ReturnsAsync((GoogleUserInfo?)null);
 
         var exception = await Assert.ThrowsAsync<AppException>(() => fixture.Service.GoogleLoginAsync(
-            new GoogleLoginRequest { IdToken = "invalid-token" }));
+            new GoogleLoginRequest { IdToken = idToken }));
 
         Assert.Equal(401, exception.StatusCode);
         Assert.Equal(AuthErrorCodes.InvalidGoogleToken, exception.ErrorCode);
@@ -228,7 +341,7 @@ public class AuthenticationServiceTests
         user.PasswordResetOtpExpiresAt = expired ? DateTime.UtcNow.AddMinutes(-1) : null;
         var fixture = CreateFixture(new[] { user });
         fixture.Jwt.Setup(service => service.HashToken("123456")).Returns("otp-hash");
-        fixture.PasswordHasher.Setup(hasher => hasher.VerifyPassword("new-password", user.PasswordHash))
+        fixture.PasswordHasher.Setup(hasher => hasher.VerifyPassword("new-password", user.PasswordHash!))
             .Returns(false);
 
         var exception = await Assert.ThrowsAsync<AppException>(() => fixture.Service.ResetPasswordAsync(
@@ -522,26 +635,51 @@ public class AuthenticationServiceTests
 
     private static AuthFixture CreateFixture(IReadOnlyCollection<User> users)
     {
+        var liveUsers = users.ToList();
         var userRepository = new Mock<IGenericRepository<User>>();
         userRepository
             .Setup(repository => repository.FirstOrDefaultAsync(It.IsAny<Expression<Func<User, bool>>>() ))
-            .ReturnsAsync((Expression<Func<User, bool>> predicate) => users.SingleOrDefault(predicate.Compile()));
+            .ReturnsAsync((Expression<Func<User, bool>> predicate) => liveUsers.SingleOrDefault(predicate.Compile()));
         userRepository
             .Setup(repository => repository.AnyAsync(It.IsAny<Expression<Func<User, bool>>>() ))
-            .ReturnsAsync((Expression<Func<User, bool>> predicate) => users.Any(predicate.Compile()));
+            .ReturnsAsync((Expression<Func<User, bool>> predicate) => liveUsers.Any(predicate.Compile()));
         userRepository
             .Setup(repository => repository.GetByIdAsync(It.IsAny<Guid>()))
-            .ReturnsAsync((Guid id) => users.SingleOrDefault(user => user.Id == id));
+            .ReturnsAsync((Guid id) => liveUsers.SingleOrDefault(user => user.Id == id));
+        userRepository
+            .Setup(repository => repository.AddAsync(It.IsAny<User>()))
+            .Callback<User>(liveUsers.Add)
+            .Returns(Task.CompletedTask);
 
         var roleRepository = new Mock<IGenericRepository<Role>>();
+        roleRepository
+            .Setup(repository => repository.GetByIdAsync(It.IsAny<Guid>()))
+            .ReturnsAsync((Guid id) => new Role { Id = id, RoleName = "Customer" });
         var passwordHasher = new Mock<IPasswordHasher>();
         var jwtService = new Mock<IJwtService>();
+        jwtService.Setup(service => service.GenerateSecureToken()).Returns("refresh-token");
+        jwtService.Setup(service => service.HashToken(It.IsAny<string>())).Returns((string token) => $"hash:{token}");
+        jwtService
+            .Setup(service => service.GenerateAccessToken(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Returns("access-token");
+        jwtService.Setup(service => service.GetAccessTokenExpiry()).Returns(DateTime.UtcNow.AddMinutes(60));
         var emailService = new Mock<IEmailService>();
         emailService.Setup(service => service.CanSendVerificationEmail()).Returns(true);
         emailService.Setup(service => service.CanSendPasswordResetEmail()).Returns(true);
         var googleValidator = new Mock<IGoogleTokenValidator>();
         var deviceTokens = new Mock<IUserDeviceTokenRepository>();
         var mapper = new Mock<IMapper>();
+        mapper
+            .Setup(service => service.Map<UserResponse>(It.IsAny<User>()))
+            .Returns((User user) => new UserResponse
+            {
+                Id = user.Id,
+                UserName = user.UserName,
+                FullName = user.FullName,
+                Email = user.Email,
+                AvatarUrl = user.AvatarUrl,
+                Status = user.Status.ToString()
+            });
 
         var service = new AuthService(
             userRepository.Object,

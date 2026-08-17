@@ -36,11 +36,11 @@ public sealed class AssistantIntentInterpreter(
         }
         catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
         {
-            throw AssistantErrors.ProviderUnavailable(exception);
+            throw AssistantErrors.ProviderUnavailable(AssistantErrors.Timeout, exception);
         }
         catch (Exception exception)
         {
-            throw AssistantErrors.ProviderUnavailable(exception);
+            throw AssistantErrors.ProviderUnavailable(AssistantErrors.HttpError, exception);
         }
 
         ParsedAssistantIntent parsed;
@@ -51,7 +51,7 @@ public sealed class AssistantIntentInterpreter(
         }
         catch (JsonException exception)
         {
-            throw AssistantErrors.ProviderUnavailable(exception);
+            throw AssistantErrors.ProviderUnavailable(AssistantErrors.InvalidJson, exception);
         }
 
         return ApplyExplicitPlanningContext(Sanitize(parsed, catalogs), context);

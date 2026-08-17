@@ -8,9 +8,11 @@ using DomainLayer.Common;
 using DomainLayer.Entities;
 using DomainLayer.Enums;
 using DomainLayer.InterfaceRepository;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
+using Npgsql;
 using static DomainLayer.Enums.GeneralEnum;
 
 namespace TestingLayer;
@@ -100,8 +102,23 @@ public sealed class AssistantServiceTests
         Assert.True(result.Success);
         Assert.Equal(AssistantIntentKind.CHITCHAT, result.Data!.Intent);
         Assert.Empty(result.Data.Recommendations);
+        var user = _conversation.Messages.Single(item => item.Role == AssistantMessageRole.User);
+        var assistant = _conversation.Messages.Single(item => item.Role == AssistantMessageRole.Assistant);
+        Assert.Equal("Xin chào", user.Content);
+        Assert.False(string.IsNullOrWhiteSpace(assistant.Content));
+        Assert.NotEqual(Guid.Empty, user.Id);
+        Assert.NotEqual(Guid.Empty, assistant.Id);
+        Assert.NotEqual(default, user.CreatedAt);
+        Assert.NotEqual(default, assistant.CreatedAt);
+        Assert.Equal(user.CreatedAt, assistant.CreatedAt);
+        var ordered = _conversation.Messages
+            .OrderBy(item => item.CreatedAt)
+            .ThenBy(item => item.Id)
+            .ToArray();
+        Assert.Equal(2, ordered.Length);
+        Assert.True(ordered[0].Id.CompareTo(ordered[1].Id) < 0);
+        _conversations.Verify(repository => repository.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
         _foods.Verify(repository => repository.GetEligibleFoodsAsync(It.IsAny<AssistantFoodQueryCriteria>(), It.IsAny<CancellationToken>()), Times.Never);
-        _llm.Verify(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -202,6 +219,9 @@ public sealed class AssistantServiceTests
 
         Assert.Equal(503, exception.StatusCode);
         Assert.Equal("ASSISTANT_PROVIDER_UNAVAILABLE", exception.ErrorCode);
+        Assert.Equal(AssistantErrors.Timeout, AssistantProviderFailure.Reason(exception));
+        Assert.Empty(_conversation.Messages);
+        _conversations.Verify(repository => repository.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
         _foods.Verify(repository => repository.GetEligibleFoodsAsync(It.IsAny<AssistantFoodQueryCriteria>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
@@ -223,8 +243,30 @@ public sealed class AssistantServiceTests
             service.SendMessageAsync(_conversation.CustomerId, _conversation.Id, new SendAssistantMessageRequest { Message = "hi" }));
 
         Assert.Equal("ASSISTANT_PROVIDER_UNAVAILABLE", exception.ErrorCode);
+        Assert.Equal(AssistantErrors.MissingKey, AssistantProviderFailure.Reason(exception));
         _llm.Verify(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+        _conversations.Verify(repository => repository.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
         _foods.Verify(repository => repository.GetEligibleFoodsAsync(It.IsAny<AssistantFoodQueryCriteria>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SendMessage_SaveChangesConflict_IsDatabaseException_NotProviderUnavailable()
+    {
+        SetupIntent("""
+            { "intent": "CHITCHAT", "needsLocation": false, "assistantReply": "Chào bạn.",
+              "hardConstraints": {}, "structuredPreferences": {},
+              "semanticPreferences": [], "semanticAvoidances": [] }
+            """);
+        _conversations.Setup(repository => repository.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new DbUpdateException(
+                "could not update",
+                new PostgresException("duplicate key", "ERROR", "ERROR", "23505")));
+
+        var exception = await Assert.ThrowsAsync<DbUpdateException>(() => Send("Xin chào"));
+
+        Assert.IsNotType<AppException>(exception);
+        Assert.Equal("23505", (exception.InnerException as PostgresException)?.SqlState);
+        Assert.Equal(2, _conversation.Messages.Count);
     }
 
     [Fact]
@@ -427,6 +469,7 @@ public sealed class AssistantServiceTests
 
         Assert.Equal(503, exception.StatusCode);
         Assert.Equal("ASSISTANT_PROVIDER_UNAVAILABLE", exception.ErrorCode);
+        Assert.Equal(AssistantErrors.HallucinatedId, AssistantProviderFailure.Reason(exception));
     }
 
     [Fact]

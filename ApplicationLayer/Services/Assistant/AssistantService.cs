@@ -98,8 +98,10 @@ public sealed partial class AssistantService(
         else if (marketId.HasValue && !await markets.CustomerVisibleExistsAsync(marketId.Value, cancellationToken))
             throw AssistantErrors.MarketNotFound();
 
-        if (!_openAi.Enabled || string.IsNullOrWhiteSpace(_openAi.ApiKey))
-            throw AssistantErrors.ProviderUnavailable();
+        if (!_openAi.Enabled)
+            throw AssistantErrors.ProviderUnavailable(AssistantErrors.Disabled);
+        if (string.IsNullOrWhiteSpace(_openAi.ApiKey))
+            throw AssistantErrors.ProviderUnavailable(AssistantErrors.MissingKey);
 
         var started = Stopwatch.StartNew();
         var catalogs = await metadata.GetActiveCatalogsAsync(cancellationToken);
@@ -141,33 +143,26 @@ public sealed partial class AssistantService(
         }
 
         conversation.Status = AssistantConversationStatus.Active;
-        conversation.PendingUserMessage = null;
-        conversation.PendingParsedIntentJson = null;
-
-        var now = timeProvider.GetUtcNow().UtcDateTime;
-        conversation.Messages.Add(new AssistantMessage
-        {
-            Id = Guid.NewGuid(),
-            ConversationId = conversation.Id,
-            Role = AssistantMessageRole.User,
-            Content = message,
-            CreatedAt = now
-        });
+        if (conversation.PendingUserMessage is not null)
+            conversation.PendingUserMessage = null;
+        if (conversation.PendingParsedIntentJson is not null)
+            conversation.PendingParsedIntentJson = null;
 
         IReadOnlyList<AssistantScoredFood> ranked = [];
         IReadOnlyList<AssistantMealPlanDraft> mealDrafts = [];
         IReadOnlyList<AssistantEligibleFood> eligible = [];
         AssistantSemanticMatchResult semantic = new();
+        var queryAt = timeProvider.GetUtcNow().UtcDateTime;
 
         var skipSearch = intent.Intent is AssistantIntentKind.CHITCHAT or AssistantIntentKind.CLARIFY;
         if (!skipSearch)
         {
-            var criteria = BuildCriteria(intent, catalogs, marketId, request, now);
+            var criteria = BuildCriteria(intent, catalogs, marketId, request, queryAt);
             eligible = await foods.GetEligibleFoodsAsync(criteria, cancellationToken);
             if (eligible.Count > 0)
             {
                 semantic = await semanticMatcher.ScoreAsync(message, intent, eligible, cancellationToken);
-                ranked = scorer.Score(eligible, intent, semantic, now);
+                ranked = scorer.Score(eligible, intent, semantic, queryAt);
                 if (intent.Intent == AssistantIntentKind.MEAL_PLAN)
                     mealDrafts = await mealPlanComposer.ComposeAsync(message, intent, ranked, cancellationToken);
             }
@@ -175,6 +170,7 @@ public sealed partial class AssistantService(
 
         var recommendations = ranked.Take(_options.MaxRecommendations).ToArray();
         var persistedPlans = new List<(AssistantMealPlan Plan, AssistantMealPlanDraft Draft)>(mealDrafts.Count);
+        var now = timeProvider.GetUtcNow().UtcDateTime;
         foreach (var draft in mealDrafts)
         {
             var plan = PersistMealPlan(conversation, customerId, draft, now);
@@ -183,6 +179,14 @@ public sealed partial class AssistantService(
         }
 
         var reply = replyComposer.Compose(intent, recommendations, mealDrafts);
+        conversation.Messages.Add(new AssistantMessage
+        {
+            Id = Guid.NewGuid(),
+            ConversationId = conversation.Id,
+            Role = AssistantMessageRole.User,
+            Content = message,
+            CreatedAt = now
+        });
         conversation.Messages.Add(new AssistantMessage
         {
             Id = Guid.NewGuid(),

@@ -31,8 +31,10 @@ public sealed class OpenAiLanguageModelClient : ILanguageModelClient
         int maxOutputTokens,
         CancellationToken cancellationToken = default)
     {
-        if (!_options.Enabled || string.IsNullOrWhiteSpace(_options.ApiKey))
-            throw AssistantErrors.ProviderUnavailable();
+        if (!_options.Enabled)
+            throw AssistantErrors.ProviderUnavailable(AssistantErrors.Disabled);
+        if (string.IsNullOrWhiteSpace(_options.ApiKey))
+            throw AssistantErrors.ProviderUnavailable(AssistantErrors.MissingKey);
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(Math.Max(1, _options.TimeoutSeconds)));
@@ -60,12 +62,12 @@ public sealed class OpenAiLanguageModelClient : ILanguageModelClient
         catch (OperationCanceledException exception)
         {
             _logger.LogWarning(exception, "OpenAI request timed out or was canceled.");
-            throw AssistantErrors.ProviderUnavailable(exception);
+            throw AssistantErrors.ProviderUnavailable(AssistantErrors.Timeout, exception);
         }
         catch (HttpRequestException exception)
         {
             _logger.LogWarning(exception, "OpenAI HTTP request failed.");
-            throw AssistantErrors.ProviderUnavailable(exception);
+            throw AssistantErrors.ProviderUnavailable(AssistantErrors.HttpTransport, exception);
         }
 
         using (response)
@@ -74,7 +76,14 @@ public sealed class OpenAiLanguageModelClient : ILanguageModelClient
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogWarning("OpenAI returned {Status}: {Body}", (int)response.StatusCode, Truncate(body));
-                throw AssistantErrors.ProviderUnavailable();
+                var status = (int)response.StatusCode;
+                var reason = status switch
+                {
+                    401 or 403 => AssistantErrors.HttpAuth,
+                    429 => AssistantErrors.HttpRateLimit,
+                    _ => AssistantErrors.HttpError
+                };
+                throw AssistantErrors.ProviderUnavailable(reason, httpStatus: status);
             }
 
             OpenAiChatResponse? parsed;
@@ -84,12 +93,12 @@ public sealed class OpenAiLanguageModelClient : ILanguageModelClient
             }
             catch (JsonException exception)
             {
-                throw AssistantErrors.ProviderUnavailable(exception);
+                throw AssistantErrors.ProviderUnavailable(AssistantErrors.InvalidJson, exception);
             }
 
             var content = parsed?.Choices?.FirstOrDefault()?.Message?.Content;
             if (string.IsNullOrWhiteSpace(content))
-                throw AssistantErrors.ProviderUnavailable();
+                throw AssistantErrors.ProviderUnavailable(AssistantErrors.EmptyContent);
             return content.Trim();
         }
     }

@@ -58,7 +58,7 @@ public sealed class AssistantSemanticMatcher(
         }
 
         if (scores.Count != eligible.Count || idsSent.Any(id => !scores.ContainsKey(id)))
-            throw AssistantErrors.ProviderUnavailable();
+            throw AssistantErrors.ProviderUnavailable(AssistantErrors.IncompleteIdSet);
 
         return new AssistantSemanticMatchResult
         {
@@ -205,11 +205,11 @@ public sealed class AssistantSemanticMatcher(
         }
         catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
         {
-            throw AssistantErrors.ProviderUnavailable(exception);
+            throw AssistantErrors.ProviderUnavailable(AssistantErrors.Timeout, exception);
         }
         catch (Exception exception)
         {
-            throw AssistantErrors.ProviderUnavailable(exception);
+            throw AssistantErrors.ProviderUnavailable(AssistantErrors.HttpError, exception);
         }
     }
 
@@ -223,20 +223,20 @@ public sealed class AssistantSemanticMatcher(
         }
         catch (JsonException exception)
         {
-            throw AssistantErrors.ProviderUnavailable(exception);
+            throw AssistantErrors.ProviderUnavailable(AssistantErrors.InvalidJson, exception);
         }
 
         if (dto.Scores is null)
-            throw AssistantErrors.ProviderUnavailable();
+            throw AssistantErrors.ProviderUnavailable(AssistantErrors.InvalidJson);
 
         var result = new List<AssistantSemanticScore>();
         var seen = new HashSet<Guid>();
         foreach (var item in dto.Scores)
         {
             if (item.FoodItemId == Guid.Empty || !allowedIds.Contains(item.FoodItemId))
-                throw AssistantErrors.ProviderUnavailable();
+                throw AssistantErrors.ProviderUnavailable(AssistantErrors.HallucinatedId);
             if (!seen.Add(item.FoodItemId))
-                throw AssistantErrors.ProviderUnavailable();
+                throw AssistantErrors.ProviderUnavailable(AssistantErrors.DuplicateId);
 
             result.Add(new AssistantSemanticScore
             {
@@ -249,7 +249,7 @@ public sealed class AssistantSemanticMatcher(
         }
 
         if (result.Count != allowedIds.Count)
-            throw AssistantErrors.ProviderUnavailable();
+            throw AssistantErrors.ProviderUnavailable(AssistantErrors.IncompleteIdSet);
 
         return result;
     }

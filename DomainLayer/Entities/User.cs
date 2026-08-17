@@ -15,7 +15,7 @@ public partial class User
     public string UserName { get; set; } = null!;
 
     // Máº­t kháº©u Ä‘Ã£ Ä‘Æ°á»£c mÃ£ hÃ³a (hash), tuyá»‡t Ä‘á»‘i khÃ´ng lÆ°u plaintext
-    public string PasswordHash { get; set; } = null!;
+    public string? PasswordHash { get; set; }
 
     /// <summary>
     /// Indicates that the account is using a system-generated temporary password.

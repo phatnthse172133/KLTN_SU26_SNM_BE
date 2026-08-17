@@ -44,6 +44,24 @@ public class CreateZoneRequest
     [Range(5, 200)]
     public double DefaultGap { get; set; } = 20;
 
+    [Range(1, 1000)]
+    public double? WidthMeters { get; set; }
+
+    [Range(1, 1000)]
+    public double? LengthMeters { get; set; }
+
+    [Range(0.5, 100)]
+    public double? BoothWidthMeters { get; set; }
+
+    [Range(0.5, 100)]
+    public double? BoothLengthMeters { get; set; }
+
+    [Range(0, 50)]
+    public double? HorizontalGapMeters { get; set; }
+
+    [Range(0, 50)]
+    public double? VerticalGapMeters { get; set; }
+
     public ZoneStatus Status { get; set; } = ZoneStatus.Active;
 }
 

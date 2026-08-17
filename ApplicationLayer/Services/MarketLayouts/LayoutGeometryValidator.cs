@@ -69,6 +69,39 @@ public static class LayoutGeometryValidator
         return errors;
     }
 
+    public static IReadOnlyList<string> ValidateBlockMove(
+        MarketLayout layout,
+        LayoutBlock block,
+        double x,
+        double y,
+        IReadOnlyCollection<LayoutBlock> otherBlocks)
+    {
+        var errors = new List<string>();
+        if (x < -0.01 || y < -0.01 || x + block.Width > (double)layout.Width + 0.01 || y + block.Height > (double)layout.Height + 0.01)
+        {
+            errors.Add($"Zone '{block.Name}' phải nằm hoàn toàn bên trong boundary khu chợ.");
+        }
+
+        var blockRight = x + block.Width;
+        var blockBottom = y + block.Height;
+
+        foreach (var other in otherBlocks.Where(b => b.Id != block.Id && !b.IsDeleted))
+        {
+            var otherRight = other.X + other.Width;
+            var otherBottom = other.Y + other.Height;
+
+            bool overlaps = !(blockRight <= other.X || x >= otherRight
+                           || blockBottom <= other.Y || y >= otherBottom);
+            if (overlaps)
+            {
+                errors.Add($"Zone '{block.Name}' bị chồng lấn với Zone '{other.Name}'.");
+                break;
+            }
+        }
+
+        return errors;
+    }
+
     private static double GetConfigNumber(string? json, string property, double fallback)
     {
         if (string.IsNullOrWhiteSpace(json))

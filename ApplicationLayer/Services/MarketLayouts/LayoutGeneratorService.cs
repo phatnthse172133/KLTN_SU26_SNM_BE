@@ -245,9 +245,20 @@ public class LayoutGeneratorService : ILayoutGeneratorService
                     && assignedNodeIds.Contains(existingSlot.Id) && slot.HasAssignedBooth)
                 {
                     // Keep the existing node with updated coordinates
+                    // Rebind the preserved node to the zone/block generated in
+                    // this run.  Assigned slots keep their IDs so BoothLocation
+                    // rows remain valid, but their zone metadata must follow a
+                    // regenerated layout; otherwise C/D slots can remain tied
+                    // to an old aisle and validation reports a crossing edge.
+                    existingSlot.ZoneId = entityZoneId;
                     existingSlot.Xcoordinate = (decimal)(slot.X + slot.Width / 2);
                     existingSlot.Ycoordinate = (decimal)(slot.Y + slot.Height / 2);
                     existingSlot.LayoutBlockId = blockId;
+                    existingSlot.NodeType = LayoutNodeType.BoothSlot;
+                    existingSlot.NodeName = slot.SlotCode;
+                    existingSlot.SlotCode = slot.SlotCode;
+                    existingSlot.IsAccessible = true;
+                    existingSlot.IsDeleted = false;
                     existingSlot.RowIndex = slot.RowIndex;
                     existingSlot.ColumnIndex = slot.ColumnIndex;
                     existingSlot.UpdatedAt = now;
@@ -292,10 +303,7 @@ public class LayoutGeneratorService : ILayoutGeneratorService
                 // Corridor waypoints are regenerated from the current blocks.
                 // Keeping old auto-waypoints is what caused stale cross-zone
                 // edges to survive a second generation.
-                && !(n.NodeType == LayoutNodeType.Junction
-                     && n.ZoneId == null
-                     && n.NodeName != null
-                     && n.NodeName.StartsWith("Auto Corridor ", StringComparison.OrdinalIgnoreCase))
+                && !IsGeneratedCorridorNode(n)
                 // Zone aisles are generated routing nodes as well.  Keeping a
                 // stale aisle from an older zone arrangement is what can leave
                 // edges such as C-05 -> Nước uống Aisle in the persisted graph.
@@ -602,6 +610,14 @@ public class LayoutGeneratorService : ILayoutGeneratorService
                 (double)from.Xcoordinate, (double)from.Ycoordinate,
                 (double)to.Xcoordinate, (double)to.Ycoordinate,
                 new LayoutRect(block.X, block.Y, block.Width, block.Height).Inflate(1)));
+
+    private static bool IsGeneratedCorridorNode(LayoutNode node)
+        => node.NodeType == LayoutNodeType.Junction
+           && (node.NodeName?.StartsWith("Auto Corridor ", StringComparison.OrdinalIgnoreCase) == true
+               // Older generator versions did not persist a name on some
+               // corridor waypoints. They have no Zone/Block ownership and
+               // must be regenerated, never carried into the next graph.
+               || (!node.ZoneId.HasValue && !node.LayoutBlockId.HasValue));
 
     private static void AddUniqueEdge(
         Guid layoutId,

@@ -733,7 +733,7 @@ public class MarketLayoutService : IMarketLayoutService
         // Only real zone junctions participate in the connectivity invariant.
         var junctions = nodes
             .Where(node => node.NodeType == LayoutNodeType.Junction
-                && !(node.NodeName?.StartsWith("Auto Corridor ", StringComparison.OrdinalIgnoreCase) ?? false))
+                && !IsGeneratedCorridorNode(node))
             .ToList();
         var slots = nodes.Where(node => node.NodeType == LayoutNodeType.BoothSlot).ToList();
 
@@ -885,6 +885,11 @@ public class MarketLayoutService : IMarketLayoutService
         var deltaY = first.Ycoordinate - second.Ycoordinate;
         return deltaX * deltaX + deltaY * deltaY;
     }
+
+    private static bool IsGeneratedCorridorNode(LayoutNode node)
+        => node.NodeType == LayoutNodeType.Junction
+           && (node.NodeName?.StartsWith("Auto Corridor ", StringComparison.OrdinalIgnoreCase) == true
+               || (!node.ZoneId.HasValue && !node.LayoutBlockId.HasValue));
 
     private static bool EdgeCrossesGeneratedBlock(
         LayoutEdge edge,

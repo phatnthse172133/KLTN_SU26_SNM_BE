@@ -25,6 +25,7 @@ public class LayoutGeneratorService : ILayoutGeneratorService
     private const double JunctionOffsetY = -30.0; // Junction sits above the Zone block
     private const double PhysicalJunctionReserveMeters = 4.0;
     private const double AutoFitFacilityReserveMeters = 7.0;
+    private const double CorridorClearance = 12.0;
 
     public GenerationPreviewResponse ComputePreview(
         MarketLayout layout,
@@ -288,6 +289,22 @@ public class LayoutGeneratorService : ILayoutGeneratorService
         var preservedNodes = existingNodes
             .Where(n => !n.IsDeleted
                 && n.NodeType != LayoutNodeType.BoothSlot
+                // Corridor waypoints are regenerated from the current blocks.
+                // Keeping old auto-waypoints is what caused stale cross-zone
+                // edges to survive a second generation.
+                && !(n.NodeType == LayoutNodeType.Junction
+                     && n.ZoneId == null
+                     && n.NodeName != null
+                     && n.NodeName.StartsWith("Auto Corridor ", StringComparison.OrdinalIgnoreCase))
+                // Zone aisles are generated routing nodes as well.  Keeping a
+                // stale aisle from an older zone arrangement is what can leave
+                // edges such as C-05 -> Nước uống Aisle in the persisted graph.
+                // The current zone aisles are already present in newNodes with
+                // their fresh LayoutBlockId, so old generated aisles must not
+                // enter the preservation set.
+                && !(n.NodeType == LayoutNodeType.Junction
+                     && (n.ZoneId.HasValue
+                         || (n.NodeName?.EndsWith(" Aisle", StringComparison.OrdinalIgnoreCase) ?? false)))
                 && !generatedNodeIds.Contains(n.Id))
             .Select(n => { n.UpdatedAt = now; return n; })
             .ToList();
@@ -356,18 +373,20 @@ public class LayoutGeneratorService : ILayoutGeneratorService
         {
             // Build a grid-like mesh of junction edges so every zone is reachable
             // with shorter, more natural paths than a single linear chain.
-            ConnectJunctionsAsGrid(layout.Id, junctions, newNodes, newEdges, now);
-
-            // Connect each Entrance/Exit to its closest Junction
-            foreach (var utilityNode in entrances.Concat(newNodes.Where(n => n.NodeType == LayoutNodeType.Exit)))
-            {
-                var closestJunction = junctions
-                    .OrderBy(j => (j.Xcoordinate - utilityNode.Xcoordinate) * (j.Xcoordinate - utilityNode.Xcoordinate)
-                                + (j.Ycoordinate - utilityNode.Ycoordinate) * (j.Ycoordinate - utilityNode.Ycoordinate))
-                    .First();
-
-                newEdges.Add(MakeEdge(layout.Id, utilityNode.Id, closestJunction.Id, utilityNode, newNodes, now));
-            }
+            // Route all zone junctions and gates through free corridor space.
+            // A nearest-neighbour straight edge is deliberately not used: it
+            // can cut through another Zone block when zones are in multiple rows.
+            ReanchorGatesOutsideBlocks(newNodes, layoutBlocks, preview.CanvasWidth, preview.CanvasHeight);
+            ConnectJunctionsAroundBlocks(
+                layout.Id,
+                junctions,
+                entrances.Concat(newNodes.Where(n => n.NodeType == LayoutNodeType.Exit)).ToList(),
+                layoutBlocks,
+                preview.CanvasWidth,
+                preview.CanvasHeight,
+                newNodes,
+                newEdges,
+                now);
         }
 
         return new GenerationResult(layoutBlocks, newNodes, newEdges, preview.CanvasWidth, preview.CanvasHeight, preview);
@@ -375,79 +394,228 @@ public class LayoutGeneratorService : ILayoutGeneratorService
 
     // ── Private helpers ──────────────────────────────────────────────────────
 
-    private static void ConnectJunctionsAsGrid(
+    private static void ConnectJunctionsAroundBlocks(
         Guid layoutId,
         List<LayoutNode> junctions,
+        List<LayoutNode> gates,
+        IReadOnlyCollection<LayoutBlock> blocks,
+        int canvasWidth,
+        int canvasHeight,
+        List<LayoutNode> allNodes,
+        List<LayoutEdge> edges,
+        DateTime now)
+    {
+        var anchors = gates
+            .Concat(junctions)
+            .GroupBy(node => node.Id)
+            .Select(group => group.First())
+            .ToList();
+        if (anchors.Count <= 1)
+            return;
+
+        var routeNodes = new List<LayoutNode>(anchors);
+        AddCorridorWaypoints(layoutId, blocks, canvasWidth, canvasHeight, anchors, routeNodes, allNodes, now);
+        var adjacency = BuildVisibilityGraph(routeNodes, blocks);
+
+        // One primary entrance is enough to make every aisle reachable. Using
+        // shortest obstacle-free paths keeps the graph compact and avoids the
+        // diagonal/vertical lines that previously crossed Zone rectangles.
+        var primary = anchors.FirstOrDefault(node => node.NodeType == LayoutNodeType.Entrance)
+                      ?? anchors[0];
+        var primaryIndex = routeNodes.FindIndex(node => node.Id == primary.Id);
+        if (primaryIndex < 0)
+            return;
+
+        foreach (var target in anchors.Where(node => node.Id != primary.Id))
+        {
+            var targetIndex = routeNodes.FindIndex(node => node.Id == target.Id);
+            if (targetIndex < 0)
+                continue;
+            var path = FindShortestPath(primaryIndex, targetIndex, adjacency);
+            for (var i = 0; i + 1 < path.Count; i++)
+            {
+                var from = routeNodes[path[i]];
+                var to = routeNodes[path[i + 1]];
+                if (!RouteSegmentIsClear(from, to, blocks))
+                    continue;
+                AddUniqueEdge(layoutId, from, to, allNodes, edges, now);
+            }
+        }
+    }
+
+    private static void ReanchorGatesOutsideBlocks(
+        IEnumerable<LayoutNode> nodes,
+        IReadOnlyCollection<LayoutBlock> blocks,
+        int canvasWidth,
+        int canvasHeight)
+    {
+        var gates = nodes.Where(node => node.NodeType is LayoutNodeType.Entrance or LayoutNodeType.Exit);
+        foreach (var gate in gates)
+        {
+            if (!blocks.Any(block => new LayoutRect(block.X, block.Y, block.Width, block.Height)
+                    .Inflate(CorridorClearance).Contains((double)gate.Xcoordinate, (double)gate.Ycoordinate)))
+                continue;
+
+            var x = Math.Clamp((double)gate.Xcoordinate, CorridorClearance, Math.Max(CorridorClearance, canvasWidth - CorridorClearance));
+            var y = gate.NodeType == LayoutNodeType.Exit
+                ? Math.Max(CorridorClearance, canvasHeight - CorridorClearance)
+                : CorridorClearance;
+            gate.Xcoordinate = (decimal)x;
+            gate.Ycoordinate = (decimal)y;
+            gate.UpdatedAt = DateTime.UtcNow;
+        }
+    }
+
+    private static void AddCorridorWaypoints(
+        Guid layoutId,
+        IReadOnlyCollection<LayoutBlock> blocks,
+        int canvasWidth,
+        int canvasHeight,
+        IReadOnlyCollection<LayoutNode> anchors,
+        List<LayoutNode> routeNodes,
+        List<LayoutNode> allNodes,
+        DateTime now)
+    {
+        var index = 1;
+        var points = new List<(double X, double Y)>();
+        foreach (var block in blocks.Where(block => !block.IsDeleted))
+        {
+            var rect = new LayoutRect(block.X, block.Y, block.Width, block.Height).Inflate(CorridorClearance);
+            points.AddRange([
+                (rect.Left, rect.Top), (rect.CenterX, rect.Top), (rect.Right, rect.Top),
+                (rect.Left, rect.CenterY), (rect.Right, rect.CenterY),
+                (rect.Left, rect.Bottom), (rect.CenterX, rect.Bottom), (rect.Right, rect.Bottom)
+            ]);
+
+            // Projection points let the visibility graph form orthogonal
+            // routes from an arbitrary gate/aisle coordinate to a safe side
+            // of this block instead of drawing a diagonal across the map.
+            foreach (var anchor in anchors)
+            {
+                var ax = (double)anchor.Xcoordinate;
+                var ay = (double)anchor.Ycoordinate;
+                points.AddRange([(ax, rect.Top), (ax, rect.Bottom),
+                    (rect.Left, ay), (rect.Right, ay)]);
+            }
+        }
+        points.AddRange([(CorridorClearance, CorridorClearance),
+            (Math.Max(CorridorClearance, canvasWidth - CorridorClearance), CorridorClearance),
+            (CorridorClearance, Math.Max(CorridorClearance, canvasHeight - CorridorClearance)),
+            (Math.Max(CorridorClearance, canvasWidth - CorridorClearance), Math.Max(CorridorClearance, canvasHeight - CorridorClearance))]);
+
+        // Add the two possible Manhattan bends for every pair of anchors. The
+        // obstacle filter below removes bends that fall inside a Zone, while
+        // the remaining points allow a clean L-shaped route between rows.
+        var anchorList = anchors.ToList();
+        for (var i = 0; i < anchorList.Count; i++)
+        for (var j = i + 1; j < anchorList.Count; j++)
+        {
+            points.Add(((double)anchorList[i].Xcoordinate, (double)anchorList[j].Ycoordinate));
+            points.Add(((double)anchorList[j].Xcoordinate, (double)anchorList[i].Ycoordinate));
+        }
+
+        foreach (var (rawX, rawY) in points)
+        {
+            var x = Math.Clamp(rawX, 2, Math.Max(2, canvasWidth - 2));
+            var y = Math.Clamp(rawY, 2, Math.Max(2, canvasHeight - 2));
+            if (blocks.Any(block => new LayoutRect(block.X, block.Y, block.Width, block.Height)
+                    .Inflate(2).Contains(x, y)))
+                continue;
+            if (routeNodes.Any(node => Math.Abs((double)node.Xcoordinate - x) < 1
+                                      && Math.Abs((double)node.Ycoordinate - y) < 1))
+                continue;
+
+            var waypoint = new LayoutNode
+            {
+                Id = Guid.NewGuid(),
+                LayoutId = layoutId,
+                NodeType = LayoutNodeType.Junction,
+                NodeName = $"Auto Corridor {index++}",
+                Xcoordinate = (decimal)x,
+                Ycoordinate = (decimal)y,
+                IsAccessible = true,
+                IsStartingPoint = false,
+                IsDeleted = false,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+            routeNodes.Add(waypoint);
+            allNodes.Add(waypoint);
+        }
+    }
+
+    private static List<(int To, double Cost)>[] BuildVisibilityGraph(
+        IReadOnlyList<LayoutNode> routeNodes,
+        IReadOnlyCollection<LayoutBlock> blocks)
+    {
+        var graph = Enumerable.Range(0, routeNodes.Count)
+            .Select(_ => new List<(int To, double Cost)>())
+            .ToArray();
+        for (var i = 0; i < routeNodes.Count; i++)
+        for (var j = i + 1; j < routeNodes.Count; j++)
+        {
+            var dx = (double)(routeNodes[i].Xcoordinate - routeNodes[j].Xcoordinate);
+            var dy = (double)(routeNodes[i].Ycoordinate - routeNodes[j].Ycoordinate);
+            // Keep generated walkways horizontal/vertical, like a real market
+            // corridor. A bend is represented by an Auto Corridor waypoint.
+            if (Math.Abs(dx) > 0.5 && Math.Abs(dy) > 0.5)
+                continue;
+            if (!RouteSegmentIsClear(routeNodes[i], routeNodes[j], blocks))
+                continue;
+            var distance = Math.Sqrt(dx * dx + dy * dy);
+            graph[i].Add((j, distance));
+            graph[j].Add((i, distance));
+        }
+        return graph;
+    }
+
+    private static List<int> FindShortestPath(int start, int target, IReadOnlyList<List<(int To, double Cost)>> graph)
+    {
+        var distances = Enumerable.Repeat(double.PositiveInfinity, graph.Count).ToArray();
+        var previous = Enumerable.Repeat(-1, graph.Count).ToArray();
+        var used = new bool[graph.Count];
+        distances[start] = 0;
+        for (var step = 0; step < graph.Count; step++)
+        {
+            var current = -1;
+            var best = double.PositiveInfinity;
+            for (var i = 0; i < graph.Count; i++)
+                if (!used[i] && distances[i] < best) { best = distances[i]; current = i; }
+            if (current < 0) break;
+            used[current] = true;
+            if (current == target) break;
+            foreach (var (next, cost) in graph[current])
+                if (distances[next] > distances[current] + cost)
+                { distances[next] = distances[current] + cost; previous[next] = current; }
+        }
+        if (double.IsPositiveInfinity(distances[target]))
+            return [];
+        var path = new List<int>();
+        for (var current = target; current >= 0; current = previous[current]) path.Add(current);
+        path.Reverse();
+        return path;
+    }
+
+    private static bool RouteSegmentIsClear(LayoutNode from, LayoutNode to, IReadOnlyCollection<LayoutBlock> blocks)
+        => !blocks.Where(block => !block.IsDeleted)
+            .Any(block => LayoutBlockGeometry.SegmentIntersects(
+                (double)from.Xcoordinate, (double)from.Ycoordinate,
+                (double)to.Xcoordinate, (double)to.Ycoordinate,
+                new LayoutRect(block.X, block.Y, block.Width, block.Height).Inflate(1)));
+
+    private static void AddUniqueEdge(
+        Guid layoutId,
+        LayoutNode from,
+        LayoutNode to,
         IReadOnlyList<LayoutNode> allNodes,
         List<LayoutEdge> edges,
         DateTime now)
     {
-        if (junctions.Count <= 1)
+        if (from.Id == to.Id || edges.Any(edge =>
+                (edge.FromNodeId == from.Id && edge.ToNodeId == to.Id)
+                || (edge.FromNodeId == to.Id && edge.ToNodeId == from.Id)))
             return;
-
-        // Group junctions into rows by Y proximity.  A tolerance of 20% of the
-        // average junction spacing avoids splitting a row when the generator
-        // places junctions at slightly different Y values within the same row.
-        var sortedByY = junctions.OrderBy(j => j.Ycoordinate).ThenBy(j => j.Xcoordinate).ToList();
-        var yTolerance = Math.Max(10.0, (double)(sortedByY[^1].Ycoordinate - sortedByY[0].Ycoordinate) / Math.Max(1, sortedByY.Count) * 0.3);
-
-        var rows = new List<List<LayoutNode>>();
-        foreach (var junction in sortedByY)
-        {
-            if (rows.Count > 0 && Math.Abs((double)(junction.Ycoordinate - rows[^1][0].Ycoordinate)) <= yTolerance)
-                rows[^1].Add(junction);
-            else
-                rows.Add([junction]);
-        }
-
-        // Ensure each row is sorted by X for horizontal chaining
-        foreach (var row in rows)
-            row.Sort((a, b) => a.Xcoordinate.CompareTo(b.Xcoordinate));
-
-        // Horizontal edges: connect adjacent junctions within each row
-        foreach (var row in rows)
-        {
-            for (int i = 0; i < row.Count - 1; i++)
-            {
-                edges.Add(MakeEdge(layoutId, row[i].Id, row[i + 1].Id, row[i], allNodes, now));
-            }
-        }
-
-        // Vertical edges: connect junctions in the same column across consecutive rows
-        for (int r = 0; r < rows.Count - 1; r++)
-        {
-            var upperRow = rows[r];
-            var lowerRow = rows[r + 1];
-
-            // For each junction in the upper row, connect to the closest
-            // junction in the lower row that hasn't been connected yet.
-            var lowerUsed = new HashSet<Guid>();
-            foreach (var upper in upperRow)
-            {
-                var bestLower = lowerRow
-                    .Where(l => !lowerUsed.Contains(l.Id))
-                    .OrderBy(l => Math.Abs(l.Xcoordinate - upper.Xcoordinate))
-                    .ThenBy(l => Math.Abs(l.Ycoordinate - upper.Ycoordinate))
-                    .FirstOrDefault();
-
-                if (bestLower != null)
-                {
-                    lowerUsed.Add(bestLower.Id);
-                    edges.Add(MakeEdge(layoutId, upper.Id, bestLower.Id, upper, allNodes, now));
-                }
-            }
-
-            // Connect any remaining unconnected lower-row junctions to their
-            // closest upper-row junction so no zone is left disconnected.
-            foreach (var lower in lowerRow.Where(l => !lowerUsed.Contains(l.Id)))
-            {
-                var closestUpper = upperRow
-                    .OrderBy(u => Math.Abs(u.Xcoordinate - lower.Xcoordinate))
-                    .ThenBy(u => Math.Abs(u.Ycoordinate - lower.Ycoordinate))
-                    .First();
-                edges.Add(MakeEdge(layoutId, closestUpper.Id, lower.Id, closestUpper, allNodes, now));
-            }
-        }
+        edges.Add(MakeEdge(layoutId, from.Id, to.Id, from, allNodes, now));
     }
 
     private static (List<LayoutBlock> blocks, List<string> errors, List<string> warnings)

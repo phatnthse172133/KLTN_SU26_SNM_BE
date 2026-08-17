@@ -39,4 +39,12 @@ public static class AssistantErrors
         => AppException.Conflict(
             "A meal plan item price or promotion changed. Refresh the plan and try again.",
             "ASSISTANT_MEAL_PLAN_PRICE_CHANGED");
+
+    public static AppException MealPlanItemNotFound()
+        => AppException.NotFound("Meal plan item was not found.", "ASSISTANT_MEAL_PLAN_ITEM_NOT_FOUND");
+
+    public static AppException PlanChanged()
+        => AppException.Conflict(
+            "The meal plan or replacement pool has changed. Refresh the plan and try again.",
+            "PLAN_CHANGED");
 }

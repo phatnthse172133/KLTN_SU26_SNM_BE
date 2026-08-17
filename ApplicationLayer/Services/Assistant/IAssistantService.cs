@@ -22,4 +22,34 @@ public interface IAssistantService
         Guid conversationId,
         Guid mealPlanId,
         CancellationToken cancellationToken = default);
+
+    Task<ApiResponse<AssistantMealPlanResponse>> UpdateMealPlanItemQuantityAsync(
+        Guid customerId,
+        Guid conversationId,
+        Guid mealPlanId,
+        Guid itemId,
+        UpdateAssistantMealPlanItemQuantityRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<ApiResponse<AssistantMealPlanResponse>> RemoveMealPlanItemAsync(
+        Guid customerId,
+        Guid conversationId,
+        Guid mealPlanId,
+        Guid itemId,
+        CancellationToken cancellationToken = default);
+
+    Task<ApiResponse<AssistantMealPlanReplacementsResponse>> GetMealPlanItemReplacementsAsync(
+        Guid customerId,
+        Guid conversationId,
+        Guid mealPlanId,
+        Guid itemId,
+        CancellationToken cancellationToken = default);
+
+    Task<ApiResponse<AssistantMealPlanResponse>> ReplaceMealPlanItemAsync(
+        Guid customerId,
+        Guid conversationId,
+        Guid mealPlanId,
+        Guid itemId,
+        ReplaceAssistantMealPlanItemRequest request,
+        CancellationToken cancellationToken = default);
 }

@@ -1,4 +1,3 @@
-using ApplicationLayer.Services.FoodTags;
 using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.Mappings;
 using ApplicationLayer.Services.Menus;
@@ -27,38 +26,17 @@ public sealed class SystemFoodTaxonomyTests
         var second = await SystemFoodTaxonomySeeder.SeedAsync(provider);
 
         Assert.Equal(18, first.CategoriesInserted);
-        Assert.Equal(102, first.TagsInserted);
-        Assert.Equal(0, second.CategoriesInserted + second.CategoriesUpdated + second.TagsInserted + second.TagsUpdated);
+        Assert.Equal(0, second.CategoriesInserted + second.CategoriesUpdated);
         Assert.Equal(18, second.CategoriesSkipped);
-        Assert.Equal(102, second.TagsSkipped);
 
         await using var scope = provider.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SNMDbContext>();
         Assert.Equal(18, await db.FoodCategories.CountAsync(category => category.IsSystem));
-        Assert.Equal(102, await db.FoodTags.CountAsync(tag => tag.IsSystem));
         Assert.False(await db.FoodCategories.GroupBy(category => category.Code).AnyAsync(group => group.Count() > 1));
-        Assert.False(await db.FoodTags.GroupBy(tag => tag.Code).AnyAsync(group => group.Count() > 1));
-
-        var systemTags = await db.FoodTags.Where(tag => tag.IsSystem).ToListAsync();
-        var counts = systemTags.GroupBy(tag => tag.TagGroup).ToDictionary(group => group.Key, group => group.Count());
-        Assert.Equal(10, counts[FoodTagGroup.Taste]);
-        Assert.Equal(3, counts[FoodTagGroup.Temperature]);
-        Assert.Equal(10, counts[FoodTagGroup.MealPurpose]);
-        Assert.Equal(15, counts[FoodTagGroup.CookingMethod]);
-        Assert.Equal(30, counts[FoodTagGroup.Ingredient]);
-        Assert.Equal(13, counts[FoodTagGroup.Dietary]);
-        Assert.Equal(5, counts[FoodTagGroup.Budget]);
-        Assert.Equal(16, counts[FoodTagGroup.Other]);
-        Assert.Equal(8, await db.FoodTags.CountAsync(tag => tag.Code.StartsWith("COURSE_") && tag.IsSystem));
-        Assert.All(await db.FoodTags.Where(tag => tag.TagGroup == FoodTagGroup.Budget).ToListAsync(), tag =>
-        {
-            Assert.True(tag.IsAutoAssigned);
-            Assert.False(tag.IsSelectable);
-        });
     }
 
     [Fact]
-    public async Task MenuCreateAndUpdate_PersistValidatedSystemCategoryAndTags()
+    public async Task MenuCreateAndUpdate_PersistValidatedSystemCategory()
     {
         await using var provider = Provider();
         await SystemFoodTaxonomySeeder.SeedAsync(provider);
@@ -67,46 +45,28 @@ public sealed class SystemFoodTaxonomyTests
         var ownerId = Guid.NewGuid();
         var booth = new Booth { Id = Guid.NewGuid(), BoothOwnerId = ownerId, BoothName = "Test", Status = BoothStatus.Active };
         var category = await db.FoodCategories.SingleAsync(item => item.Code == "GRILLED_FOOD");
-        var grilled = await db.FoodTags.SingleAsync(item => item.Code == "METHOD_GRILLED");
-        var spicy = await db.FoodTags.SingleAsync(item => item.Code == "TASTE_SPICY");
-        var sweet = await db.FoodTags.SingleAsync(item => item.Code == "TASTE_SWEET");
 
         var booths = new Mock<IBoothRepository>();
         booths.Setup(repository => repository.GetOwnedBoothAsync(ownerId, booth.Id)).ReturnsAsync(booth);
         var mapper = new MapperConfiguration(config => config.AddProfile<MappingProfile>(), NullLoggerFactory.Instance).CreateMapper();
-        var service = new MenuService(booths.Object, new FoodCategoryRepository(db), new FoodItemRepository(db),
-            new FoodTagRepository(db), mapper);
+        var service = new MenuService(booths.Object, new FoodCategoryRepository(db), new FoodItemRepository(db), mapper);
 
         var created = await service.CreateFoodItemAsync(ownerId, booth.Id, new CreateFoodItemRequest
         {
-            CategoryId = category.Id, Name = "Món thử", Price = 50_000, TagIds = [grilled.Id, spicy.Id]
+            CategoryId = category.Id, Name = "Món thử", Price = 50_000
         });
         var foodId = created.Data!.Id;
-        Assert.Equal(2, await db.FoodItemTags.CountAsync(item => item.FoodItemId == foodId));
+        Assert.Equal("Món thử", created.Data.Name);
 
         var updated = await service.UpdateFoodItemAsync(ownerId, booth.Id, foodId, new UpdateFoodItemRequest
         {
-            CategoryId = category.Id, Name = "Món thử cập nhật", Price = 60_000, TagIds = [grilled.Id, sweet.Id]
+            CategoryId = category.Id, Name = "Món thử cập nhật", Price = 60_000
         });
-        var expectedIds = new[] { grilled.Id, sweet.Id }.Order().ToArray();
-        Assert.Equal(expectedIds, updated.Data!.TagIds.Order().ToArray());
-        var savedIds = await db.FoodItemTags.Where(item => item.FoodItemId == foodId)
-            .Select(item => item.FoodTagId).ToListAsync();
-        Assert.Equal(expectedIds, savedIds.Order().ToArray());
+        Assert.Equal("Món thử cập nhật", updated.Data!.Name);
+        Assert.Equal(60_000, updated.Data.Price);
+        var saved = await db.FoodItems.SingleAsync(item => item.Id == foodId);
+        Assert.Equal("Món thử cập nhật", saved.Name);
     }
-
-    [Fact]
-    public void SelectionPolicy_RejectsAutoAssignedAndConflictingSpiceTags()
-    {
-        Assert.Throws<ApplicationLayer.Exceptions.AppException>(() => FoodTagSelectionPolicy.Validate(
-            [Tag("BUDGET_UNDER_30000", FoodTagGroup.Budget, selectable: false, auto: true)]));
-        Assert.Throws<ApplicationLayer.Exceptions.AppException>(() => FoodTagSelectionPolicy.Validate(
-            [Tag("TASTE_MILD_SPICY", FoodTagGroup.Taste), Tag("TASTE_SPICY", FoodTagGroup.Taste)]));
-    }
-
-    private static FoodTag Tag(string code, FoodTagGroup group, bool selectable = true, bool auto = false)
-        => new() { Id = Guid.NewGuid(), Code = code, Name = code, TagGroup = group, Status = FoodTagStatus.Active,
-            IsSelectable = selectable, IsAutoAssigned = auto };
 
     private static ServiceProvider Provider()
     {

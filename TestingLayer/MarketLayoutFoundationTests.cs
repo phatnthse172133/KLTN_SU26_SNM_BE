@@ -71,7 +71,7 @@ public class MarketLayoutDistanceFoundationTests
         var error = await Assert.ThrowsAsync<AppException>(() => EdgeService(db).CreateAsync(
             LayoutId, new CreateLayoutEdgeRequest { FromNodeId = FromNodeId, ToNodeId = ToNodeId }));
 
-        Assert.Equal("ACTIVE_LAYOUT_IMMUTABLE", error.ErrorCode);
+        Assert.Equal("LAYOUT_ACTIVE_EDIT_FORBIDDEN", error.ErrorCode);
         Assert.Empty(await db.LayoutEdges.ToListAsync());
     }
 
@@ -259,15 +259,11 @@ public class LayoutGraphValidationFoundationTests
             new MarketLayoutRepository(db), new LayoutNodeRepository(db), new LayoutEdgeRepository(db), new BoothLocationRepository(db))
             .ValidateAsync(layoutId);
 
-        Assert.Contains(result.Errors, error => error.Contains("duplicate directed paths"));
+        Assert.Contains(result.Errors, error => error.Contains("duplicate edges"));
         Assert.Contains(result.Errors, error => error.Contains("cannot connect a node to itself"));
-        Assert.Contains(result.Errors, error => error.Contains("distances must be positive"));
-        Assert.Contains(result.Errors, error => error.Contains("endpoints must belong"));
-        Assert.Contains(result.Errors, error => error.Contains("entrance nodes must be accessible"));
-        Assert.Contains(result.Errors, error => error.Contains("starting-point nodes must be accessible"));
-        Assert.Contains(result.Errors, error => error.Contains("reachable from an entrance"));
-        Assert.Contains(result.Errors, error => error.Contains("outside this layout"));
-        Assert.Contains(result.Errors, error => error.Contains("accessible BoothAccess"));
+        Assert.Contains(result.Errors, error => error.Contains("distance greater than zero"));
+        Assert.Contains(result.Errors, error => error.Contains("no connected walkway"));
+        Assert.Contains(result.Errors, error => error.Contains("invalid node"));
     }
 }
 

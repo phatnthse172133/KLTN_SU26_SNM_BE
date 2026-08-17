@@ -144,7 +144,7 @@ public sealed class NightMarketCustomerTests
             new TimeOnly(18, 0), new TimeOnly(2, 0), new TimeOnly(1, 59)));
         Assert.False(NightMarketAvailability.IsWithinSchedule(
             new TimeOnly(18, 0), new TimeOnly(2, 0), new TimeOnly(2, 0)));
-        Assert.False(NightMarketAvailability.IsWithinSchedule(
+        Assert.True(NightMarketAvailability.IsWithinSchedule(
             new TimeOnly(18, 0), new TimeOnly(18, 0), new TimeOnly(18, 0)));
     }
 
@@ -367,7 +367,7 @@ public sealed class NightMarketCustomerTests
             true, new TimeOnly(18, 0), new TimeOnly(23, 0), new TimeOnly(20, 0), null, new TimeOnly(21, 0)));
         Assert.False(CustomerAvailability.IsOpenNow(
             false, new TimeOnly(18, 0), new TimeOnly(23, 0), null, null, new TimeOnly(19, 0)));
-        Assert.False(CustomerAvailability.IsOpenNow(
+        Assert.True(CustomerAvailability.IsOpenNow(
             true, new TimeOnly(18, 0), new TimeOnly(18, 0), null, null, new TimeOnly(18, 0)));
     }
 

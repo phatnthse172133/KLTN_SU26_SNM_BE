@@ -28,26 +28,17 @@ public sealed class AssistantCompatibilityScorer(IOptions<AssistantOptions> opti
     public IReadOnlyList<AssistantScoredFood> Score(
         IReadOnlyList<AssistantEligibleFood> eligible,
         ParsedAssistantIntent intent,
-        CustomerFoodProfile? profile,
         AssistantSemanticMatchResult semantic,
         DateTime utcNow)
     {
         var hasGps = eligible.Any(item => item.DistanceMeters.HasValue);
         var weights = hasGps ? CurrentWeights() : RedistributeWithoutDistance();
-        var preferredIngredients = Union(
-            profile?.PreferredIngredients.Select(item => item.Ingredient.Code),
-            intent.StructuredPreferences.PreferredIngredientCodes);
-        var preferredTastes = Union(
-            profile?.PreferredTasteProfiles.Select(item => item.TasteProfile.Code),
-            intent.StructuredPreferences.PreferredTasteCodes);
-        var preferredPrep = Union(
-            profile?.PreferredPreparationMethods.Select(item => item.PreparationMethod.Code),
-            intent.StructuredPreferences.PreferredPreparationCodes);
-        var preferredCourses = Union(
-            profile?.PreferredCourses.Select(item => item.Course.ToString()),
-            intent.StructuredPreferences.PreferredCourseCodes);
-        var budgetMin = intent.BudgetMin ?? profile?.PreferredPriceMin;
-        var budgetMax = intent.BudgetMax ?? profile?.PreferredPriceMax;
+        var preferredIngredients = Union(intent.StructuredPreferences.PreferredIngredientCodes);
+        var preferredTastes = Union(intent.StructuredPreferences.PreferredTasteCodes);
+        var preferredPrep = Union(intent.StructuredPreferences.PreferredPreparationCodes);
+        var preferredCourses = Union(intent.StructuredPreferences.PreferredCourseCodes);
+        var budgetMin = intent.BudgetMin;
+        var budgetMax = intent.BudgetMax;
         var localTime = TimeOnly.FromDateTime(NightMarketAvailability.GetVietnamLocalTime(utcNow));
 
         var scored = new List<AssistantScoredFood>(eligible.Count);
@@ -171,7 +162,7 @@ public sealed class AssistantCompatibilityScorer(IOptions<AssistantOptions> opti
             food.Booth.CloseTime,
             localTime);
 
-    private static HashSet<string> Union(IEnumerable<string>? left, IEnumerable<string>? right)
-        => (left ?? []).Concat(right ?? []).Where(value => !string.IsNullOrWhiteSpace(value))
+    private static HashSet<string> Union(IEnumerable<string>? values)
+        => (values ?? []).Where(value => !string.IsNullOrWhiteSpace(value))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 }

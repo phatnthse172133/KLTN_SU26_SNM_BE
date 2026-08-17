@@ -94,6 +94,9 @@ public sealed class AssistantMealPlanValidator(IOptions<AssistantOptions> option
             : null;
     }
 
+    public static FoodCourse ResolveCourseFromToken(string? course)
+        => ParseCourse(course) ?? FoodCourse.EXTRA;
+
     public static IReadOnlyList<FoodCourse> SectionOrder(IEnumerable<FoodCourse> present)
     {
         var extra = present
@@ -184,7 +187,10 @@ public sealed class AssistantMealPlanValidator(IOptions<AssistantOptions> option
                 FoodItem = line.Food,
                 Quantity = line.Quantity,
                 UnitPrice = line.UnitPrice,
-                Course = line.Course
+                Course = line.Course,
+                CompatibilityScore = line.Scored.FinalScore,
+                Reasons = line.Scored.Reasons,
+                DistanceMeters = line.Scored.Eligible.DistanceMeters
             }).ToArray()
         };
     }

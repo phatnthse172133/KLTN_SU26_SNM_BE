@@ -5,7 +5,6 @@ using ApplicationLayer.Helppers;
 using ApplicationLayer.Services.CustomerDiscovery;
 using ApplicationLayer.Services.Notifications;
 using ApplicationLayer.Services.PayOS;
-using ApplicationLayer.Services.PayOutClients;
 using ApplicationLayer.Services.Promotions;
 using DomainLayer.Common;
 using DomainLayer.Entities;
@@ -41,13 +40,13 @@ namespace ApplicationLayer.Services.Orders
         private readonly INotificationService? _notifications;
         private readonly IReviewRepository? _reviews;
         private readonly IComplaintRepository? _complaints;
-        private readonly IPayOSPayoutClientFactory _payoutClientFactory;
+        private readonly IPayOSPayoutServiceFactory _payoutServiceFactory;
 
         public OrderService(IOrderRepository orderRepo,
                             IPromotionRepository promotionRepo,
                             IPromotionValidationService validation,
                             //IPayOSPayoutService payouts,
-                            IPayOSPayoutClientFactory payoutClientFactory,
+                            IPayOSPayoutServiceFactory payoutServiceFactory,
                              IRealtimeNotificationPublisher notificationPublisher,
                              IFoodItemRepository foodItemRepo,
                              ILogger<OrderService> logger,
@@ -75,7 +74,7 @@ namespace ApplicationLayer.Services.Orders
             _notifications = notifications;
             _reviews = reviews;
             _complaints = complaints;
-            _payoutClientFactory = payoutClientFactory;
+            _payoutServiceFactory = payoutServiceFactory;
         }
 
         //DÃƒÂ nh cho customer lÃ¡ÂºÂ«n khÃƒÂ¡ch vang lai (Walk-in) Ã„â€˜Ã¡ÂºÂ·t mÃƒÂ³n, trÃ¡ÂºÂ£ vÃ¡Â»Â link thanh toÃƒÂ¡n nÃ¡ÂºÂ¿u chÃ¡Â»Ân online
@@ -1471,8 +1470,7 @@ namespace ApplicationLayer.Services.Orders
 
             try
             {
-                var payOsClient = await _payoutClientFactory.CreateClientAsync(boothId);
-                var payoutService = new PayOSPayoutService(payOsClient);
+                var payoutService = await _payoutServiceFactory.ForBoothAsync(boothId);
 
                 PayOSPayoutSnapshot? snapshot;
                 if (!string.IsNullOrWhiteSpace(payment.PayoutId))

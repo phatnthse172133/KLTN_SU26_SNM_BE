@@ -400,23 +400,5 @@ namespace DomainLayer.Enums
         //    Refunded = 3,
         //    Failed = 4
         //}
-
-        public enum FoodTagGroup
-        {
-            Taste = 0,
-            Temperature = 1,
-            MealPurpose = 2,
-            CookingMethod = 3,
-            Ingredient = 4,
-            Dietary = 5,
-            Budget = 6,
-            Other = 7
-        }
-
-        public enum FoodTagStatus
-        {
-            Active = 0,
-            Inactive = 1
-        }
     }
 }

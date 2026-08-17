@@ -27,31 +27,9 @@ namespace ApplicationLayer.Services.PayOS
 
         public async Task<long> GenerateAsync(PayOSOrderSource source)
         {
-            //var prefix = (int)source;
-            //var seqValue = await _sequenceRepo.NextPayOSOrderCodeAsync();
-
-            //var code = checked(
-            //    (long)prefix * 100_000_000_000_000L
-            //    + seqValue);
-
             var prefix = (int)source;
-
-            var timestampStr = DateTime.UtcNow.ToString("yyMMddHHmmss");
-            var randomSuffix = Random.Shared.Next(10, 99).ToString();
-            var combinedStr = $"{prefix}{timestampStr}{randomSuffix}";
-            var code = long.Parse(combinedStr);
-            //var seqValue = await _sequenceRepo.NextPayOSOrderCodeAsync();
-
-            //if(seqValue < 600)
-            //{
-            //    seqValue += 600;
-            //}
-
-            //var code = checked(
-            //    (long)prefix * 100_000_000_000_000L
-            //    + seqValue);
-
-            return code;
+            var seqValue = await _sequenceRepo.NextPayOSOrderCodeAsync();
+            return checked((long)prefix * 100_000_000_000_000L + seqValue);
         }
 
         public PayOSOrderSource? GetSource(long orderCode)

@@ -97,10 +97,14 @@ public sealed class AssistantMealPlanResponse
     public Guid NightMarketId { get; set; }
     public string NightMarketName { get; set; } = string.Empty;
     public int PartySize { get; set; }
+    public decimal? Budget { get; set; }
     public decimal? BudgetMax { get; set; }
     public decimal TotalPrice { get; set; }
     public decimal EstimatedTotal { get; set; }
     public decimal? RemainingBudget { get; set; }
+    public decimal OverBudgetAmount { get; set; }
+    public double? DistanceMeters { get; set; }
+    public double? PlanCompatibility { get; set; }
     public string? OverallPlanReason { get; set; }
     public IReadOnlyList<string> Warnings { get; set; } = [];
     public IReadOnlyList<string> UnknownData { get; set; } = [];
@@ -116,11 +120,25 @@ public sealed class AssistantMealPlanSectionResponse
 
 public sealed class AssistantMealPlanItemResponse
 {
+    public Guid PlanItemId { get; set; }
     public Guid FoodItemId { get; set; }
+    public string FoodName { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string? ThumbnailUrl { get; set; }
     public string? Course { get; set; }
     public int Quantity { get; set; }
     public decimal UnitPrice { get; set; }
     public decimal LineTotal { get; set; }
+    public Guid BoothId { get; set; }
+    public string BoothName { get; set; } = string.Empty;
+    public Guid NightMarketId { get; set; }
+    public string NightMarketName { get; set; } = string.Empty;
+    public double? CompatibilityScore { get; set; }
+    public IReadOnlyList<string> Reasons { get; set; } = [];
+    public double? DistanceMeters { get; set; }
+}
+
+public sealed class AssistantMealPlanReplacementsResponse
+{
+    public IReadOnlyList<AssistantRecommendationResponse> Replacements { get; set; } = [];
 }

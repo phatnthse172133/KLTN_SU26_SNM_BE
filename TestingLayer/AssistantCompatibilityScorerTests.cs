@@ -30,7 +30,6 @@ public sealed class AssistantCompatibilityScorerTests
         var ranked = Create().Score(
             [food],
             new ParsedAssistantIntent { Intent = AssistantIntentKind.FOOD_RECOMMENDATION },
-            null,
             semantic,
             DateTime.UtcNow);
 
@@ -59,7 +58,6 @@ public sealed class AssistantCompatibilityScorerTests
         var ranked = scorer.Score(
             [food],
             new ParsedAssistantIntent { Intent = AssistantIntentKind.FOOD_RECOMMENDATION },
-            null,
             new AssistantSemanticMatchResult(),
             DateTime.UtcNow);
 
@@ -113,7 +111,6 @@ public sealed class AssistantCompatibilityScorerTests
                 Intent = AssistantIntentKind.FOOD_RECOMMENDATION,
                 StructuredPreferences = new AssistantStructuredPreferences { PreferredIngredientCodes = ["PORK"] }
             },
-            null,
             semantic,
             DateTime.UtcNow);
 
@@ -143,7 +140,6 @@ public sealed class AssistantCompatibilityScorerTests
         var ranked = scorer.Score(
             [food],
             new ParsedAssistantIntent { Intent = AssistantIntentKind.FOOD_RECOMMENDATION },
-            null,
             new AssistantSemanticMatchResult(),
             DateTime.UtcNow);
 

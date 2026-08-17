@@ -22,4 +22,21 @@ public sealed class SendAssistantMessageRequest
 
     [Range(1, 100_000)]
     public int? MaxDistanceMeters { get; set; }
+
+    [Range(1, 100)]
+    public int? PartySize { get; set; }
+
+    [Range(typeof(decimal), "0.01", "1000000000")]
+    public decimal? Budget { get; set; }
+}
+
+public sealed class UpdateAssistantMealPlanItemQuantityRequest
+{
+    [Range(1, int.MaxValue)]
+    public int Quantity { get; set; }
+}
+
+public sealed class ReplaceAssistantMealPlanItemRequest
+{
+    public Guid ReplacementFoodItemId { get; set; }
 }

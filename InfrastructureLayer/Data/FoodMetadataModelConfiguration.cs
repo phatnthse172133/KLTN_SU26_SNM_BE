@@ -18,7 +18,6 @@ internal static class FoodMetadataModelConfiguration
         ConfigureCatalog(modelBuilder.Entity<FoodSearchFacet>(), "FoodSearchFacet");
 
         ConfigureFoodMetadata(modelBuilder);
-        ConfigureCustomerProfiles(modelBuilder);
     }
 
     private static void ConfigureCatalog<T>(EntityTypeBuilder<T> entity, string tableName)
@@ -118,66 +117,6 @@ internal static class FoodMetadataModelConfiguration
             entity.Property(value => value.CreatedAt).HasDefaultValueSql("now()");
             entity.HasOne(value => value.FoodItem).WithMany(value => value.DiningPurposes).HasForeignKey(value => value.FoodItemId).OnDelete(DeleteBehavior.Cascade);
         });
-    }
-
-    private static void ConfigureCustomerProfiles(ModelBuilder modelBuilder)
-    {
-        modelBuilder.Entity<CustomerFoodProfile>(entity =>
-        {
-            entity.ToTable("CustomerFoodProfile", table =>
-            {
-                table.HasCheckConstraint("ck_customerfoodprofile_price_range", "\"PreferredPriceMin\" IS NULL OR \"PreferredPriceMax\" IS NULL OR \"PreferredPriceMin\" <= \"PreferredPriceMax\"");
-                table.HasCheckConstraint("ck_customerfoodprofile_distance", "\"DefaultMaxDistanceMeters\" IS NULL OR \"DefaultMaxDistanceMeters\" > 0");
-            });
-            entity.HasKey(value => value.CustomerId);
-            EnumString(entity.Property(value => value.PreferredSpiceLevel), 20);
-            entity.Property(value => value.PreferredPriceMin).HasPrecision(12, 2);
-            entity.Property(value => value.PreferredPriceMax).HasPrecision(12, 2);
-            entity.Property(value => value.CreatedAt).HasDefaultValueSql("now()");
-            entity.Property(value => value.UpdatedAt).HasDefaultValueSql("now()");
-            entity.HasOne(value => value.Customer).WithOne(value => value.CustomerFoodProfile).HasForeignKey<CustomerFoodProfile>(value => value.CustomerId).OnDelete(DeleteBehavior.Cascade);
-        });
-
-        ConfigureCustomerCatalogJoin<CustomerPreferredIngredient, Ingredient>(modelBuilder, "CustomerPreferredIngredient", "IngredientId", value => value.PreferredIngredients);
-        ConfigureCustomerCatalogJoin<CustomerAvoidedIngredient, Ingredient>(modelBuilder, "CustomerAvoidedIngredient", "IngredientId", value => value.AvoidedIngredients);
-        ConfigureCustomerCatalogJoin<CustomerDietaryRequirement, DietaryAttribute>(modelBuilder, "CustomerDietaryRequirement", "DietaryAttributeId", value => value.DietaryRequirements);
-        ConfigureCustomerCatalogJoin<CustomerAllergenExclusion, Allergen>(modelBuilder, "CustomerAllergenExclusion", "AllergenId", value => value.AllergenExclusions);
-        ConfigureCustomerCatalogJoin<CustomerPreferredPreparationMethod, PreparationMethod>(modelBuilder, "CustomerPreferredPreparationMethod", "PreparationMethodId", value => value.PreferredPreparationMethods);
-        ConfigureCustomerCatalogJoin<CustomerPreferredTasteProfile, TasteProfile>(modelBuilder, "CustomerPreferredTasteProfile", "TasteProfileId", value => value.PreferredTasteProfiles);
-        ConfigureCustomerCatalogJoin<CustomerAvoidedTasteProfile, TasteProfile>(modelBuilder, "CustomerAvoidedTasteProfile", "TasteProfileId", value => value.AvoidedTasteProfiles);
-
-        modelBuilder.Entity<CustomerPreferredCourse>(entity =>
-        {
-            entity.ToTable("CustomerPreferredCourse");
-            entity.HasKey(value => new { value.CustomerId, value.Course });
-            EnumString(entity.Property(value => value.Course), 30);
-            entity.Property(value => value.CreatedAt).HasDefaultValueSql("now()");
-            entity.HasOne(value => value.CustomerFoodProfile).WithMany(value => value.PreferredCourses).HasForeignKey(value => value.CustomerId).OnDelete(DeleteBehavior.Cascade);
-        });
-        modelBuilder.Entity<CustomerPreferredDiningPurpose>(entity =>
-        {
-            entity.ToTable("CustomerPreferredDiningPurpose");
-            entity.HasKey(value => new { value.CustomerId, value.Purpose });
-            EnumString(entity.Property(value => value.Purpose), 30);
-            entity.Property(value => value.CreatedAt).HasDefaultValueSql("now()");
-            entity.HasOne(value => value.CustomerFoodProfile).WithMany(value => value.PreferredDiningPurposes).HasForeignKey(value => value.CustomerId).OnDelete(DeleteBehavior.Cascade);
-        });
-    }
-
-    private static void ConfigureCustomerCatalogJoin<TJoin, TCatalog>(
-        ModelBuilder modelBuilder,
-        string tableName,
-        string catalogKey,
-        System.Linq.Expressions.Expression<Func<CustomerFoodProfile, IEnumerable<TJoin>?>> navigation)
-        where TJoin : class
-        where TCatalog : SemanticCatalogEntity
-    {
-        var entity = modelBuilder.Entity<TJoin>();
-        entity.ToTable(tableName);
-        entity.HasKey("CustomerId", catalogKey);
-        entity.Property<DateTime>("CreatedAt").HasDefaultValueSql("now()");
-        entity.HasOne<CustomerFoodProfile>("CustomerFoodProfile").WithMany(navigation).HasForeignKey("CustomerId").OnDelete(DeleteBehavior.Cascade);
-        entity.HasOne<TCatalog>(typeof(TCatalog).Name).WithMany().HasForeignKey(catalogKey).OnDelete(DeleteBehavior.Restrict);
     }
 
     private static void EnumString<TEnum>(PropertyBuilder<TEnum> property, int maxLength) where TEnum : struct, Enum

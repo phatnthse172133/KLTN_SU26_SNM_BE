@@ -59,7 +59,6 @@ public sealed class CustomerProfileContractTests
             .Where(type =>
                 type.IsPublic &&
                 (type.Namespace == "ApplicationLayer.DTOs.Admin" ||
-                 type.Name.Contains("CustomerFoodProfile", StringComparison.Ordinal) ||
                  type.Name.Contains("Notification", StringComparison.Ordinal) ||
                  type == typeof(ConversationUserResponse) ||
                  type == typeof(ReviewResponse) ||

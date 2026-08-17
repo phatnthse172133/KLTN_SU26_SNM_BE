@@ -6,6 +6,7 @@ using ApplicationLayer.Mappings;
 using AutoMapper;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
+using ApplicationLayer.Services.MarketLayouts;
 using ApplicationLayer.Services.Subscriptions;
 
 namespace ApplicationLayer.Services.LayoutEdges;
@@ -40,7 +41,8 @@ public class LayoutEdgeService : ILayoutEdgeService
     public async Task<ApiResponse<LayoutEdgeResponse>> CreateAsync(Guid layoutId, CreateLayoutEdgeRequest request, CancellationToken cancellationToken = default, Guid? actorId = null)
     {
         var edge = await BuildAsync(layoutId, request, null, cancellationToken, actorId);
-        await _edges.AddAsync(edge); await _edges.SaveChangesAsync();
+        await _edges.AddAsync(edge);
+        await BumpGraphRevisionAndSaveAsync(layoutId, cancellationToken);
         return ApiResponse<LayoutEdgeResponse>.SuccessResponse(_mapper.Map<LayoutEdgeResponse>(edge), "Layout edge created successfully.");
     }
 
@@ -51,7 +53,8 @@ public class LayoutEdgeService : ILayoutEdgeService
         foreach (var request in requests) edges.Add(await BuildAsync(layoutId, request, null, cancellationToken, actorId));
         if (edges.GroupBy(x => new { A = x.FromNodeId, B = x.ToNodeId }).Any(x => x.Count() > 1))
             throw AppException.Conflict("The batch contains duplicate edges.");
-        await _edges.AddRangeAsync(edges); await _edges.SaveChangesAsync();
+        await _edges.AddRangeAsync(edges);
+        await BumpGraphRevisionAndSaveAsync(layoutId, cancellationToken);
         return ApiResponse<IReadOnlyCollection<LayoutEdgeResponse>>.SuccessResponse(_mapper.Map<List<LayoutEdgeResponse>>(edges), "Layout edges created successfully.");
     }
 
@@ -63,7 +66,8 @@ public class LayoutEdgeService : ILayoutEdgeService
         var replacement = await BuildAsync(edge.LayoutId, request, id, cancellationToken);
         edge.FromNodeId = replacement.FromNodeId; edge.ToNodeId = replacement.ToNodeId; edge.Distance = replacement.Distance;
         edge.IsBidirectional = request.IsBidirectional; edge.IsAccessible = request.IsAccessible; edge.UpdatedAt = DateTime.UtcNow;
-        _edges.Update(edge); await _edges.SaveChangesAsync();
+        _edges.Update(edge);
+        await BumpGraphRevisionAndSaveAsync(edge.LayoutId, cancellationToken);
         return ApiResponse<LayoutEdgeResponse>.SuccessResponse(_mapper.Map<LayoutEdgeResponse>(edge), "Layout edge updated successfully.");
     }
 
@@ -73,7 +77,8 @@ public class LayoutEdgeService : ILayoutEdgeService
         await EnsureLayoutEditableAsync(edge.LayoutId, cancellationToken);
         await EnsureLayoutOwnershipAsync(edge.LayoutId, actorId, cancellationToken);
         edge.IsAccessible = request.IsAccessible; edge.UpdatedAt = DateTime.UtcNow;
-        _edges.Update(edge); await _edges.SaveChangesAsync();
+        _edges.Update(edge);
+        await BumpGraphRevisionAndSaveAsync(edge.LayoutId, cancellationToken);
         return ApiResponse<LayoutEdgeResponse>.SuccessResponse(_mapper.Map<LayoutEdgeResponse>(edge), "Edge accessibility updated successfully.");
     }
 
@@ -82,7 +87,8 @@ public class LayoutEdgeService : ILayoutEdgeService
         var edge = await GetEdgeAsync(id, cancellationToken);
         await EnsureLayoutEditableAsync(edge.LayoutId, cancellationToken);
         await EnsureLayoutOwnershipAsync(edge.LayoutId, actorId, cancellationToken);
-        edge.UpdatedAt = DateTime.UtcNow; _edges.Delete(edge); await _edges.SaveChangesAsync();
+        edge.UpdatedAt = DateTime.UtcNow; _edges.Delete(edge);
+        await BumpGraphRevisionAndSaveAsync(edge.LayoutId, cancellationToken);
         return ApiResponse<object>.SuccessResponse(new { edge.Id }, "Layout edge deleted successfully.");
     }
 
@@ -103,7 +109,24 @@ public class LayoutEdgeService : ILayoutEdgeService
         if (await _edges.ExistsAsync(layoutId, from.Id, to.Id, excludeId, token))
             throw AppException.Conflict("This edge already exists.");
 
-        var distance = request.Distance ?? (decimal)Math.Sqrt(Math.Pow((double)(from.Xcoordinate - to.Xcoordinate), 2) + Math.Pow((double)(from.Ycoordinate - to.Ycoordinate), 2));
+        var requestedMetres = request.DistanceMeters ?? request.Distance;
+        decimal distance;
+        if (requestedMetres.HasValue)
+        {
+            distance = requestedMetres.Value;
+        }
+        else
+        {
+            var layout = await _layouts.GetActiveByIdAsync(layoutId, token)
+                ?? throw AppException.NotFound("Market layout was not found.");
+            var market = await _nightMarkets.GetActiveByIdAsync(layout.NightMarketId, token);
+            var scale = LayoutPhysicalCalibration.TryResolve(layout, market);
+            if (scale is null)
+                throw AppException.BadRequest(
+                    "Layout distance is not calibrated. Provide a physical distance in metres or calibrate the layout first.",
+                    "LAYOUT_DISTANCE_UNCALIBRATED");
+            distance = LayoutDistance.Between(from, to, scale);
+        }
         if (distance <= 0)
             throw AppException.BadRequest("Edge distance must be greater than zero.");
 
@@ -148,6 +171,16 @@ public class LayoutEdgeService : ILayoutEdgeService
         if (!hasSubscription)
             throw AppException.Forbidden("An active Market subscription is required to perform this action.", "MARKET_SUBSCRIPTION_REQUIRED");
     }
+    private async Task BumpGraphRevisionAndSaveAsync(Guid layoutId, CancellationToken token)
+    {
+        var layout = await _layouts.GetActiveByIdAsync(layoutId, token)
+            ?? throw AppException.NotFound("Market layout was not found.");
+        layout.GraphRevision = checked(layout.GraphRevision + 1);
+        layout.UpdatedAt = DateTime.UtcNow;
+        _layouts.Update(layout);
+        await _edges.SaveChangesAsync();
+    }
+
     private async Task<LayoutEdge> GetEdgeAsync(Guid id, CancellationToken token)
         => await _edges.GetActiveByIdAsync(id, token) ?? throw AppException.NotFound("Layout edge was not found.");
 }

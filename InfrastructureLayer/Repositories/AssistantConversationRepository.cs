@@ -29,6 +29,7 @@ public sealed class AssistantConversationRepository(SNMDbContext db) : IAssistan
 
     public Task<AssistantMealPlan?> GetOwnedMealPlanAsync(Guid conversationId, Guid mealPlanId, Guid customerId, CancellationToken cancellationToken = default)
         => db.AssistantMealPlans
+            .Include(item => item.NightMarket)
             .Include(item => item.Items)
             .FirstOrDefaultAsync(
                 item => item.Id == mealPlanId && item.ConversationId == conversationId && item.CustomerId == customerId,

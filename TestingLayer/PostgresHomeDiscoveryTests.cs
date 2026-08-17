@@ -156,8 +156,7 @@ public class PostgresHomeDiscoveryTests
             FixtureUtcNow, FixtureLocalTime, 1, 100, "priceDesc");
         var booths = await new BoothRepository(context).GetCustomerPagedAsync(
             marketId, null, null, FixtureLocalTime, null, null, 1, 100, "featured");
-        var foodTagRepository = new FoodTagRepository(context);
-        var foodTags = await foodTagRepository.GetPagedTagsAsync(null, null, 1, 100);
+        var ingredients = await context.Ingredients.AsNoTracking().Take(100).ToListAsync();
 
         Assert.NotNull(markets.Items);
         Assert.NotNull(foods.Items);
@@ -165,7 +164,7 @@ public class PostgresHomeDiscoveryTests
         Assert.NotNull(foodsByPrice.Items);
         Assert.NotNull(foodsByPriceDescending.Items);
         Assert.NotNull(booths.Items);
-        Assert.NotNull(foodTags.Items);
+        Assert.NotNull(ingredients);
 
         if (fixture is null)
             return;

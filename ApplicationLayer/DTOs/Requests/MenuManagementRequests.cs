@@ -21,8 +21,6 @@ public class CreateFoodItemRequest
     public bool IsAvailable { get; set; } = true;
 
     public bool IsFeatured { get; set; }
-
-    public IReadOnlyCollection<Guid> TagIds { get; set; } = [];
 }
 
 public class UpdateFoodItemRequest : CreateFoodItemRequest { }

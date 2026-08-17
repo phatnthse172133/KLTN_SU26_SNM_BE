@@ -3,6 +3,7 @@ using System;
 using InfrastructureLayer.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace InfrastructureLayer.Migrations
 {
     [DbContext(typeof(SNMDbContext))]
-    partial class SNMDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260817055534_RemoveCustomerFoodProfile")]
+    partial class RemoveCustomerFoodProfile
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1580,6 +1583,30 @@ namespace InfrastructureLayer.Migrations
                     b.ToTable("FoodItemSearchFacet", (string)null);
                 });
 
+            modelBuilder.Entity("DomainLayer.Entities.FoodItemTag", b =>
+                {
+                    b.Property<Guid>("FoodItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("FoodTagId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("FoodItemId", "FoodTagId")
+                        .HasName("FoodItemTag_pkey");
+
+                    b.HasIndex(new[] { "FoodTagId" }, "idx_fooditemtag_foodtag");
+
+                    b.ToTable("FoodItemTag", null, t =>
+                        {
+                            t.HasComment("BÃ¡ÂºÂ£ng nÃ¡Â»â€˜i gÃ¡ÂºÂ¯n tag ngÃ¡Â»Â¯ nghÃ„Â©a vÃƒÂ o mÃƒÂ³n Ã„Æ’n");
+                        });
+                });
+
             modelBuilder.Entity("DomainLayer.Entities.FoodItemTasteProfile", b =>
                 {
                     b.Property<Guid>("FoodItemId")
@@ -1771,6 +1798,95 @@ namespace InfrastructureLayer.Migrations
                     b.ToTable("FoodSearchFacet", null, t =>
                         {
                             t.HasCheckConstraint("ck_foodsearchfacet_code_normalized", "\"Code\" = upper(btrim(\"Code\"))");
+                        });
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.FoodTag", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("uuid_generate_v4()");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<int>("DisplayOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<bool>("IsAutoAssigned")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsPreferenceSelectable")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsSelectable")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsSystem")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValueSql("'Active'::character varying");
+
+                    b.Property<string>("TagGroup")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("Id")
+                        .HasName("FoodTag_pkey");
+
+                    b.HasIndex(new[] { "Code" }, "ux_foodtag_code_active")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
+
+                    b.HasIndex(new[] { "Name" }, "ux_foodtag_name_active")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
+
+                    b.ToTable("FoodTag", null, t =>
+                        {
+                            t.HasComment("Danh sách tag chuẩn mô tả ngữ nghĩa món ăn");
                         });
                 });
 
@@ -4907,6 +5023,27 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("FoodSearchFacet");
                 });
 
+            modelBuilder.Entity("DomainLayer.Entities.FoodItemTag", b =>
+                {
+                    b.HasOne("DomainLayer.Entities.FoodItem", "FoodItem")
+                        .WithMany("FoodItemTags")
+                        .HasForeignKey("FoodItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("FoodItemTag_FoodItemId_fkey");
+
+                    b.HasOne("DomainLayer.Entities.FoodTag", "FoodTag")
+                        .WithMany("FoodItemTags")
+                        .HasForeignKey("FoodTagId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("FoodItemTag_FoodTagId_fkey");
+
+                    b.Navigation("FoodItem");
+
+                    b.Navigation("FoodTag");
+                });
+
             modelBuilder.Entity("DomainLayer.Entities.FoodItemTasteProfile", b =>
                 {
                     b.HasOne("DomainLayer.Entities.FoodItem", "FoodItem")
@@ -5661,6 +5798,8 @@ namespace InfrastructureLayer.Migrations
 
                     b.Navigation("FoodImages");
 
+                    b.Navigation("FoodItemTags");
+
                     b.Navigation("FoodPrices");
 
                     b.Navigation("FoodReviews");
@@ -5681,6 +5820,11 @@ namespace InfrastructureLayer.Migrations
             modelBuilder.Entity("DomainLayer.Entities.FoodSearchFacet", b =>
                 {
                     b.Navigation("FoodItems");
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.FoodTag", b =>
+                {
+                    b.Navigation("FoodItemTags");
                 });
 
             modelBuilder.Entity("DomainLayer.Entities.Ingredient", b =>

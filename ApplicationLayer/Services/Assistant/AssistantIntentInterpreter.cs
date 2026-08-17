@@ -16,12 +16,11 @@ public sealed class AssistantIntentInterpreter(
     public async Task<ParsedAssistantIntent> InterpretAsync(
         string message,
         IReadOnlyList<AssistantMessage> history,
-        CustomerFoodProfile? profile,
         FoodSemanticCatalogSet catalogs,
         AssistantStageAContext context,
         CancellationToken cancellationToken)
     {
-        var userPrompt = BuildUserPrompt(message, history, profile, catalogs, context);
+        var userPrompt = BuildUserPrompt(message, history, catalogs, context);
         string raw;
         try
         {
@@ -55,7 +54,18 @@ public sealed class AssistantIntentInterpreter(
             throw AssistantErrors.ProviderUnavailable(exception);
         }
 
-        return Sanitize(parsed, catalogs);
+        return ApplyExplicitPlanningContext(Sanitize(parsed, catalogs), context);
+    }
+
+    public static ParsedAssistantIntent ApplyExplicitPlanningContext(
+        ParsedAssistantIntent intent,
+        AssistantStageAContext context)
+    {
+        if (context.PartySize is >= 1)
+            intent.PartySize = context.PartySize;
+        if (context.Budget is > 0)
+            intent.BudgetMax = context.Budget;
+        return intent;
     }
 
     public static ParsedAssistantIntent Sanitize(ParsedAssistantIntent parsed, FoodSemanticCatalogSet catalogs)
@@ -127,7 +137,6 @@ public sealed class AssistantIntentInterpreter(
     private static string BuildUserPrompt(
         string message,
         IReadOnlyList<AssistantMessage> history,
-        CustomerFoodProfile? profile,
         FoodSemanticCatalogSet catalogs,
         AssistantStageAContext context)
     {
@@ -141,24 +150,11 @@ public sealed class AssistantIntentInterpreter(
                 locationProvided = hasLocation,
                 latitude = hasLocation ? context.Latitude : null,
                 longitude = hasLocation ? context.Longitude : null,
-                maxDistanceMeters = context.MaxDistanceMeters
+                maxDistanceMeters = context.MaxDistanceMeters,
+                partySize = context.PartySize,
+                budget = context.Budget
             },
             conversationHistory = history.Select(item => new { role = item.Role.ToString(), content = item.Content }).ToArray(),
-            customerFoodProfile = profile is null ? null : new
-            {
-                preferredSpiceLevel = profile.PreferredSpiceLevel?.ToString(),
-                preferredPriceMin = profile.PreferredPriceMin,
-                preferredPriceMax = profile.PreferredPriceMax,
-                defaultMaxDistanceMeters = profile.DefaultMaxDistanceMeters,
-                preferredIngredientCodes = profile.PreferredIngredients.Select(item => item.Ingredient.Code).ToArray(),
-                avoidedIngredientCodes = profile.AvoidedIngredients.Select(item => item.Ingredient.Code).ToArray(),
-                allergenExclusionCodes = profile.AllergenExclusions.Select(item => item.Allergen.Code).ToArray(),
-                dietaryRequirementCodes = profile.DietaryRequirements.Select(item => item.DietaryAttribute.Code).ToArray(),
-                preferredTasteCodes = profile.PreferredTasteProfiles.Select(item => item.TasteProfile.Code).ToArray(),
-                avoidedTasteCodes = profile.AvoidedTasteProfiles.Select(item => item.TasteProfile.Code).ToArray(),
-                preferredPreparationCodes = profile.PreferredPreparationMethods.Select(item => item.PreparationMethod.Code).ToArray(),
-                preferredCourses = profile.PreferredCourses.Select(item => item.Course.ToString()).ToArray()
-            },
             activeCatalogs = new
             {
                 ingredients = catalogs.Ingredients.Select(Compact).ToArray(),

@@ -71,8 +71,6 @@ public partial class FoodItem : ISoftDelete
 
     public virtual ICollection<FoodImage> FoodImages { get; set; } = new List<FoodImage>();
 
-    public virtual ICollection<FoodItemTag> FoodItemTags { get; set; } = new List<FoodItemTag>();
-
     public virtual ICollection<FoodPrice> FoodPrices { get; set; } = new List<FoodPrice>();
 
     public virtual ICollection<FoodItemIngredient> Ingredients { get; set; } = new List<FoodItemIngredient>();

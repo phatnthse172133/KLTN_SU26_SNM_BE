@@ -3,18 +3,11 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using static DomainLayer.Enums.GeneralEnum;
 
 namespace InfrastructureLayer.Data.Seeders;
 
 public static class SystemFoodTaxonomySeeder
 {
-    private static readonly string[] LegacyTagCodes =
-    [
-        "SPICY", "MILD", "GRILLED", "FRIED", "SOUP", "HOT", "FULLMEAL", "SNACK", "DRINK", "DESSERT",
-        "SHAREABLE", "CHICKEN", "BEEF", "PORK", "SEAFOOD", "NOODLE", "RICE", "BUDGETFRIENDLY", "MIDRANGE", "VIETNAMESE"
-    ];
-
     public static async Task<SeedResult> SeedAsync(IServiceProvider services, CancellationToken cancellationToken = default)
     {
         await using var scope = services.CreateAsyncScope();
@@ -30,9 +23,8 @@ public static class SystemFoodTaxonomySeeder
             if (transaction is not null)
                 await transaction.CommitAsync(cancellationToken);
             logger.LogInformation(
-                "System food taxonomy seed completed. Categories inserted={CategoryInserted}, updated={CategoryUpdated}, skipped={CategorySkipped}; tags inserted={TagInserted}, updated={TagUpdated}, skipped={TagSkipped}; legacy tags deactivated={LegacyDeactivated}.",
-                result.CategoriesInserted, result.CategoriesUpdated, result.CategoriesSkipped,
-                result.TagsInserted, result.TagsUpdated, result.TagsSkipped, result.LegacyTagsDeactivated);
+                "System food taxonomy seed completed. Categories inserted={CategoryInserted}, updated={CategoryUpdated}, skipped={CategorySkipped}.",
+                result.CategoriesInserted, result.CategoriesUpdated, result.CategoriesSkipped);
             return result;
         }
         catch
@@ -71,39 +63,8 @@ public static class SystemFoodTaxonomySeeder
             else if (Apply(entity, definition, now)) cu++; else cs++;
         }
 
-        var tagCodes = SystemFoodTaxonomyCatalog.Tags.Select(item => item.Code).ToArray();
-        var tags = await db.FoodTags.IgnoreQueryFilters()
-            .Where(item => tagCodes.Contains(item.Code)).ToDictionaryAsync(item => item.Code, cancellationToken);
-        var ti = 0; var tu = 0; var ts = 0;
-        foreach (var definition in SystemFoodTaxonomyCatalog.Tags)
-        {
-            if (!tags.TryGetValue(definition.Code, out var entity))
-            {
-                db.FoodTags.Add(new FoodTag
-                {
-                    Id = definition.Id, Code = definition.Code, Name = definition.Name, Description = definition.Name,
-                    TagGroup = definition.Group, Status = FoodTagStatus.Active, IsSystem = true,
-                    DisplayOrder = definition.DisplayOrder, IsSelectable = definition.IsSelectable,
-                    IsPreferenceSelectable = definition.IsPreferenceSelectable, IsAutoAssigned = definition.IsAutoAssigned,
-                    IsDeleted = false, CreatedAt = now, UpdatedAt = now
-                });
-                ti++;
-            }
-            else if (Apply(entity, definition, now)) tu++; else ts++;
-        }
-
-        var legacy = await db.FoodTags.Where(tag => LegacyTagCodes.Contains(tag.Code) && tag.Status == FoodTagStatus.Active)
-            .ToListAsync(cancellationToken);
-        foreach (var tag in legacy)
-        {
-            tag.Status = FoodTagStatus.Inactive;
-            tag.IsSelectable = false;
-            tag.IsPreferenceSelectable = false;
-            tag.UpdatedAt = now;
-        }
-
         await db.SaveChangesAsync(cancellationToken);
-        return new SeedResult(ci, cu, cs, ti, tu, ts, legacy.Count);
+        return new SeedResult(ci, cu, cs);
     }
 
     private static bool Apply(FoodCategory entity, FoodCategoryDefinition value, DateTime now)
@@ -115,21 +76,6 @@ public static class SystemFoodTaxonomySeeder
         entity.IsSelectable = true; entity.DisplayOrder = value.DisplayOrder; entity.IsDeleted = false; entity.UpdatedAt = now;
         return true;
     }
-
-    private static bool Apply(FoodTag entity, FoodTagDefinition value, DateTime now)
-    {
-        var changed = entity.Name != value.Name || entity.Description != value.Name || entity.TagGroup != value.Group
-            || entity.Status != FoodTagStatus.Active || !entity.IsSystem || entity.DisplayOrder != value.DisplayOrder
-            || entity.IsSelectable != value.IsSelectable || entity.IsPreferenceSelectable != value.IsPreferenceSelectable
-            || entity.IsAutoAssigned != value.IsAutoAssigned || entity.IsDeleted;
-        if (!changed) return false;
-        entity.Name = value.Name; entity.Description = value.Name; entity.TagGroup = value.Group;
-        entity.Status = FoodTagStatus.Active; entity.IsSystem = true; entity.DisplayOrder = value.DisplayOrder;
-        entity.IsSelectable = value.IsSelectable; entity.IsPreferenceSelectable = value.IsPreferenceSelectable;
-        entity.IsAutoAssigned = value.IsAutoAssigned; entity.IsDeleted = false; entity.UpdatedAt = now;
-        return true;
-    }
 }
 
-public sealed record SeedResult(int CategoriesInserted, int CategoriesUpdated, int CategoriesSkipped,
-    int TagsInserted, int TagsUpdated, int TagsSkipped, int LegacyTagsDeactivated);
+public sealed record SeedResult(int CategoriesInserted, int CategoriesUpdated, int CategoriesSkipped);

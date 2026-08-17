@@ -108,11 +108,14 @@ public class OrderRefundLifecycleTests
 
     private static OrderService Service(IOrderRepository repository, IPayOSPayoutService payouts)
     {
+        var factory = new Mock<IPayOSPayoutServiceFactory>();
+        factory.Setup(value => value.ForBoothAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(payouts);
         return new OrderService(
             repository,
             Mock.Of<IPromotionRepository>(),
             Mock.Of<ApplicationLayer.Services.Promotions.IPromotionValidationService>(),
-            Mock.Of<ApplicationLayer.Services.PayOutClients.IPayOSPayoutClientFactory>(),
+            factory.Object,
             Mock.Of<IRealtimeNotificationPublisher>(),
             Mock.Of<IFoodItemRepository>(),
             Mock.Of<ILogger<OrderService>>(),

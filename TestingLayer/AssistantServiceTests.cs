@@ -1,3 +1,4 @@
+using System.Text.Json;
 using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
@@ -41,8 +42,6 @@ public sealed class AssistantServiceTests
             .ReturnsAsync([]);
         _conversations.Setup(repository => repository.SaveChangesAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
         _metadata.Setup(repository => repository.GetActiveCatalogsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Catalog());
-        _metadata.Setup(repository => repository.GetCustomerProfileAsync(It.IsAny<Guid>(), false, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((CustomerFoodProfile?)null);
         _foods.Setup(repository => repository.GetEligibleFoodsAsync(It.IsAny<AssistantFoodQueryCriteria>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
         _foods.Setup(repository => repository.CountNotDeletedFoodItemsAsync(It.IsAny<CancellationToken>()))
@@ -141,29 +140,56 @@ public sealed class AssistantServiceTests
     }
 
     [Fact]
-    public async Task SendMessage_ProfileAllergy_NotOverriddenByIntent()
+    public async Task SendMessage_UsesStructuredPartySizeAndBudget_WithoutRewritingPrompt()
     {
-        var allergenId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
-        var profile = new CustomerFoodProfile
-        {
-            CustomerId = _conversation.CustomerId,
-            AllergenExclusions = { new CustomerAllergenExclusion { AllergenId = allergenId, Allergen = new Allergen { Id = allergenId, Code = "CRUSTACEAN", Name = "Crustacean" } } }
-        };
-        _metadata.Setup(repository => repository.GetCustomerProfileAsync(_conversation.CustomerId, false, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(profile);
+        string? captured = null;
+        _llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .Callback<string, string, int, CancellationToken>((_, user, _, _) => captured = user)
+            .ReturnsAsync("""
+                { "intent": "MEAL_PLAN", "needsLocation": false, "partySize": 9, "budgetMax": 10000,
+                  "hardConstraints": {}, "structuredPreferences": {},
+                  "semanticPreferences": [], "semanticAvoidances": [] }
+                """);
+
+        var result = await _service.SendMessageAsync(
+            _conversation.CustomerId,
+            _conversation.Id,
+            new SendAssistantMessageRequest
+            {
+                Message = "Ăn tối bình dân, món dễ chia sẻ",
+                PartySize = 4,
+                Budget = 300_000m
+            });
+
+        Assert.True(result.Success);
+        Assert.Equal(4, result.Data!.Diagnostics!.ParsedIntent!.PartySize);
+        Assert.Equal(300_000m, result.Data.Diagnostics.ParsedIntent.BudgetMax);
+        Assert.Equal("Ăn tối bình dân, món dễ chia sẻ", _conversation.Messages.First(item => item.Role == AssistantMessageRole.User).Content);
+        Assert.NotNull(captured);
+        using var payload = JsonDocument.Parse(captured);
+        Assert.Equal("Ăn tối bình dân, món dễ chia sẻ", payload.RootElement.GetProperty("originalMessage").GetString());
+        Assert.DoesNotContain("4 người", captured, StringComparison.Ordinal);
+        Assert.DoesNotContain("300k", captured, StringComparison.OrdinalIgnoreCase);
+        var explicitContext = payload.RootElement.GetProperty("explicitContext");
+        Assert.Equal(4, explicitContext.GetProperty("partySize").GetInt32());
+        Assert.Equal(300000m, explicitContext.GetProperty("budget").GetDecimal());
+        Assert.False(payload.RootElement.TryGetProperty("customerFoodProfile", out _));
+    }
+
+    [Fact]
+    public async Task SendMessage_MealPlanWithoutPartySize_Throws()
+    {
         SetupIntent("""
-            { "intent": "FOOD_RECOMMENDATION", "needsLocation": false,
-              "hardConstraints": { "allergenCodes": [] }, "structuredPreferences": {},
-              "semanticPreferences": ["thích hải sản"], "semanticAvoidances": [] }
+            { "intent": "MEAL_PLAN", "needsLocation": false, "budgetMax": 200000,
+              "hardConstraints": {}, "structuredPreferences": {},
+              "semanticPreferences": [], "semanticAvoidances": [] }
             """);
-        AssistantFoodQueryCriteria? captured = null;
-        _foods.Setup(repository => repository.GetEligibleFoodsAsync(It.IsAny<AssistantFoodQueryCriteria>(), It.IsAny<CancellationToken>()))
-            .Callback<AssistantFoodQueryCriteria, CancellationToken>((criteria, _) => captured = criteria)
-            .ReturnsAsync([]);
 
-        await Send("Gợi ý món ngon, mình thích hải sản");
+        var exception = await Assert.ThrowsAsync<AppException>(() => Send("Lên thực đơn"));
 
-        Assert.Contains(allergenId, captured!.AllergenExclusionIds);
+        Assert.Equal(400, exception.StatusCode);
+        Assert.Equal("ASSISTANT_INVALID_REQUEST", exception.ErrorCode);
+        _foods.Verify(repository => repository.GetEligibleFoodsAsync(It.IsAny<AssistantFoodQueryCriteria>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -285,6 +311,160 @@ public sealed class AssistantServiceTests
         _carts.Verify(service => service.AddItemsAsync(It.IsAny<Guid>(), It.IsAny<AddCartItemsRequest>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    [Fact]
+    public void Assistant_DoesNotIntroduceSecondCartEntity()
+    {
+        var names = typeof(Cart).Assembly.GetTypes().Select(type => type.Name).ToArray();
+        Assert.Contains(nameof(Cart), names);
+        Assert.Contains(nameof(CartItem), names);
+        Assert.DoesNotContain(names, name => name.Contains("AiCart", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(names, name => name.Equals("AssistantCart", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(names, name => name.Contains("CustomerFoodProfile", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task UpdateMealPlanItemQuantity_RecalculatesTotals_AllowsOverBudget()
+    {
+        var foodId = Guid.NewGuid();
+        var itemId = Guid.NewGuid();
+        var plan = MutationPlan(foodId, itemId, quantity: 1, snapshotPrice: 40_000m, partySize: 2, budget: 50_000m);
+        _foods.Setup(repository => repository.GetCurrentByIdAsync(foodId, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CartFood(foodId, available: true, price: 40_000m));
+
+        var result = await _service.UpdateMealPlanItemQuantityAsync(
+            _conversation.CustomerId,
+            _conversation.Id,
+            plan.Id,
+            itemId,
+            new UpdateAssistantMealPlanItemQuantityRequest { Quantity = 3 });
+
+        Assert.True(result.Success);
+        Assert.Equal(3, plan.Items.Single().Quantity);
+        Assert.Equal(120_000m, result.Data!.TotalPrice);
+        Assert.Equal(70_000m, result.Data.OverBudgetAmount);
+        Assert.Equal(-70_000m, result.Data.RemainingBudget);
+        Assert.Contains("OVER_BUDGET", result.Data.Warnings);
+        Assert.Equal(itemId, result.Data.Items.Single().PlanItemId);
+        Assert.Equal(3, result.Data.Items.Single().Quantity);
+    }
+
+    [Fact]
+    public async Task RemoveMealPlanItem_DoesNotAutoAddFoods_AndWarnsWhenServingsInsufficient()
+    {
+        var keepId = Guid.NewGuid();
+        var removeId = Guid.NewGuid();
+        var keepItemId = Guid.NewGuid();
+        var removeItemId = Guid.NewGuid();
+        var plan = new AssistantMealPlan
+        {
+            Id = Guid.NewGuid(),
+            ConversationId = _conversation.Id,
+            CustomerId = _conversation.CustomerId,
+            NightMarketId = Guid.NewGuid(),
+            PartySize = 4,
+            BudgetMax = 400_000m,
+            Items =
+            {
+                new AssistantMealPlanItem { Id = keepItemId, FoodItemId = keepId, Quantity = 1, DisplayOrder = 0, UnitPriceSnapshot = 30_000m },
+                new AssistantMealPlanItem { Id = removeItemId, FoodItemId = removeId, Quantity = 1, DisplayOrder = 1, UnitPriceSnapshot = 30_000m }
+            }
+        };
+        _conversations.Setup(repository => repository.GetOwnedMealPlanAsync(_conversation.Id, plan.Id, _conversation.CustomerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(plan);
+        _foods.Setup(repository => repository.GetCurrentByIdAsync(keepId, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CartFood(keepId, available: true, price: 30_000m, servings: 1));
+
+        var result = await _service.RemoveMealPlanItemAsync(_conversation.CustomerId, _conversation.Id, plan.Id, removeItemId);
+
+        Assert.True(result.Success);
+        Assert.Single(plan.Items);
+        Assert.Equal(keepItemId, plan.Items.Single().Id);
+        Assert.Contains("SERVINGS_INSUFFICIENT", result.Data!.Warnings);
+        _foods.Verify(repository => repository.GetCurrentByIdAsync(removeId, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ReplaceMealPlanItem_RejectsIdOutsideBackendPool()
+    {
+        var currentId = Guid.NewGuid();
+        var allowedId = Guid.NewGuid();
+        var outsiderId = Guid.NewGuid();
+        var itemId = Guid.NewGuid();
+        var plan = MutationPlan(currentId, itemId, quantity: 1, snapshotPrice: 35_000m, partySize: 2, budget: 200_000m);
+        var allowed = CartFood(allowedId, available: true, price: 32_000m);
+        _foods.Setup(repository => repository.GetEligibleFoodsAsync(It.IsAny<AssistantFoodQueryCriteria>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([CartFood(currentId, available: true, price: 35_000m), allowed]);
+        _llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync($$"""{ "scores": [ { "foodItemId": "{{allowedId}}", "semanticCompatibility": 1, "reasons": ["khớp yêu cầu"] } ] }""");
+
+        var exception = await Assert.ThrowsAsync<AppException>(() =>
+            _service.ReplaceMealPlanItemAsync(
+                _conversation.CustomerId,
+                _conversation.Id,
+                plan.Id,
+                itemId,
+                new ReplaceAssistantMealPlanItemRequest { ReplacementFoodItemId = outsiderId }));
+
+        Assert.Equal("PLAN_CHANGED", exception.ErrorCode);
+        Assert.Equal(currentId, plan.Items.Single().FoodItemId);
+    }
+
+    [Fact]
+    public async Task GetMealPlanItemReplacements_HallucinatedId_Throws503()
+    {
+        var currentId = Guid.NewGuid();
+        var allowedId = Guid.NewGuid();
+        var fakeId = Guid.NewGuid();
+        var itemId = Guid.NewGuid();
+        var plan = MutationPlan(currentId, itemId, quantity: 1, snapshotPrice: 35_000m, partySize: 2, budget: 200_000m);
+        _foods.Setup(repository => repository.GetEligibleFoodsAsync(It.IsAny<AssistantFoodQueryCriteria>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([CartFood(allowedId, available: true, price: 32_000m)]);
+        _llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync($$"""{ "scores": [ { "foodItemId": "{{fakeId}}", "semanticCompatibility": 1, "reasons": ["bịa"] } ] }""");
+
+        var exception = await Assert.ThrowsAsync<AppException>(() =>
+            _service.GetMealPlanItemReplacementsAsync(_conversation.CustomerId, _conversation.Id, plan.Id, itemId));
+
+        Assert.Equal(503, exception.StatusCode);
+        Assert.Equal("ASSISTANT_PROVIDER_UNAVAILABLE", exception.ErrorCode);
+    }
+
+    [Fact]
+    public async Task AddMealPlanToCart_AllValid_AddsEveryItemViaCartService()
+    {
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+        var planId = Guid.NewGuid();
+        _conversations.Setup(repository => repository.GetOwnedMealPlanAsync(_conversation.Id, planId, _conversation.CustomerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AssistantMealPlan
+            {
+                Id = planId,
+                ConversationId = _conversation.Id,
+                CustomerId = _conversation.CustomerId,
+                Items =
+                {
+                    new AssistantMealPlanItem { FoodItemId = first, Quantity = 1, DisplayOrder = 0, UnitPriceSnapshot = 20_000m },
+                    new AssistantMealPlanItem { FoodItemId = second, Quantity = 2, DisplayOrder = 1, UnitPriceSnapshot = 30_000m }
+                }
+            });
+        _foods.Setup(repository => repository.GetCurrentByIdAsync(first, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CartFood(first, available: true, price: 20_000m));
+        _foods.Setup(repository => repository.GetCurrentByIdAsync(second, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CartFood(second, available: true, price: 30_000m));
+        _carts.Setup(service => service.AddItemsAsync(_conversation.CustomerId, It.IsAny<AddCartItemsRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ApiResponse<ApplicationLayer.DTOs.Responses.CartBatchAddResponse>.SuccessResponse(new()));
+
+        await _service.AddMealPlanToCartAsync(_conversation.CustomerId, _conversation.Id, planId);
+
+        _carts.Verify(service => service.AddItemsAsync(
+            _conversation.CustomerId,
+            It.Is<AddCartItemsRequest>(request =>
+                request.Items.Count == 2
+                && request.Items.Any(item => item.FoodItemId == first && item.Quantity == 1)
+                && request.Items.Any(item => item.FoodItemId == second && item.Quantity == 2)),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
     private Task<ApiResponse<ApplicationLayer.DTOs.Responses.AssistantTurnResponse>> Send(string message)
         => _service.SendMessageAsync(_conversation.CustomerId, _conversation.Id, new SendAssistantMessageRequest { Message = message });
 
@@ -313,14 +493,33 @@ public sealed class AssistantServiceTests
         return planId;
     }
 
-    private static AssistantEligibleFood CartFood(Guid foodId, bool available, decimal price)
+    private AssistantMealPlan MutationPlan(Guid foodId, Guid itemId, int quantity, decimal snapshotPrice, int partySize, decimal budget)
+    {
+        var plan = new AssistantMealPlan
+        {
+            Id = Guid.NewGuid(),
+            ConversationId = _conversation.Id,
+            CustomerId = _conversation.CustomerId,
+            NightMarketId = Guid.NewGuid(),
+            PartySize = partySize,
+            BudgetMax = budget,
+            Items = { new AssistantMealPlanItem { Id = itemId, FoodItemId = foodId, Quantity = quantity, DisplayOrder = 0, UnitPriceSnapshot = snapshotPrice } }
+        };
+        _conversations.Setup(repository => repository.GetOwnedMealPlanAsync(_conversation.Id, plan.Id, _conversation.CustomerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(plan);
+        return plan;
+    }
+
+    private static AssistantEligibleFood CartFood(Guid foodId, bool available, decimal price, int? servings = null)
     {
         var market = new NightMarket
         {
             Id = Guid.NewGuid(),
             Name = "Chợ",
             Status = NightMarketStatus.Active,
-            ModerationStatus = ModerationStatus.Active
+            ModerationStatus = ModerationStatus.Active,
+            OpeningHours = new TimeOnly(0, 0),
+            ClosingHours = new TimeOnly(0, 0)
         };
         var booth = new Booth { Id = Guid.NewGuid(), BoothName = "Quầy", NightMarket = market, NightMarketId = market.Id, Status = BoothStatus.Active };
         var food = new FoodItem
@@ -331,7 +530,8 @@ public sealed class AssistantServiceTests
             IsAvailable = available,
             Booth = booth,
             BoothId = booth.Id,
-            Category = new FoodCategory { Id = Guid.NewGuid(), Name = "Món", Code = "MAIN" }
+            Category = new FoodCategory { Id = Guid.NewGuid(), Name = "Món", Code = "MAIN" },
+            EstimatedServingCount = servings
         };
         return new AssistantEligibleFood { FoodItem = food, EffectivePrice = price };
     }

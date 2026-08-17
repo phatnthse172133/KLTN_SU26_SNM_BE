@@ -14,7 +14,7 @@ using Microsoft.Extensions.Options;
 
 namespace ApplicationLayer.Services.Assistant;
 
-public sealed class AssistantService(
+public sealed partial class AssistantService(
     IAssistantConversationRepository conversations,
     IAssistantFoodQueryRepository foods,
     IFoodSemanticMetadataRepository metadata,
@@ -103,24 +103,33 @@ public sealed class AssistantService(
 
         var started = Stopwatch.StartNew();
         var catalogs = await metadata.GetActiveCatalogsAsync(cancellationToken);
-        var profile = await metadata.GetCustomerProfileAsync(customerId, false, cancellationToken);
         var history = await conversations.GetRecentMessagesAsync(conversationId, _options.ConversationHistoryLimit, cancellationToken);
         var totalFoodCount = await foods.CountNotDeletedFoodItemsAsync(cancellationToken);
+        var stageA = new AssistantStageAContext
+        {
+            MarketId = marketId,
+            Latitude = request.Latitude,
+            Longitude = request.Longitude,
+            MaxDistanceMeters = request.MaxDistanceMeters,
+            PartySize = request.PartySize,
+            Budget = request.Budget
+        };
 
-        var intent = TryReusePendingIntent(conversation, incoming, hasGps, marketId, catalogs)
+        var intent = TryReusePendingIntent(conversation, incoming, hasGps, marketId, catalogs, stageA)
             ?? await interpreter.InterpretAsync(
                 message,
                 history,
-                profile,
                 catalogs,
-                new AssistantStageAContext
-                {
-                    MarketId = marketId,
-                    Latitude = request.Latitude,
-                    Longitude = request.Longitude,
-                    MaxDistanceMeters = request.MaxDistanceMeters
-                },
+                stageA,
                 cancellationToken);
+        intent = AssistantIntentInterpreter.ApplyExplicitPlanningContext(intent, stageA);
+        if (intent.Intent == AssistantIntentKind.MEAL_PLAN)
+        {
+            if (intent.PartySize is not >= 1)
+                throw AssistantErrors.InvalidRequest("PartySize is required for meal-plan requests.");
+            if (intent.BudgetMax is not > 0)
+                throw AssistantErrors.InvalidRequest("Budget is required for meal-plan requests.");
+        }
         if (intent.NeedsLocation && !hasGps && marketId is null)
         {
             conversation.Status = AssistantConversationStatus.LocationPending;
@@ -153,12 +162,12 @@ public sealed class AssistantService(
         var skipSearch = intent.Intent is AssistantIntentKind.CHITCHAT or AssistantIntentKind.CLARIFY;
         if (!skipSearch)
         {
-            var criteria = BuildCriteria(intent, profile, catalogs, marketId, request, now);
+            var criteria = BuildCriteria(intent, catalogs, marketId, request, now);
             eligible = await foods.GetEligibleFoodsAsync(criteria, cancellationToken);
             if (eligible.Count > 0)
             {
                 semantic = await semanticMatcher.ScoreAsync(message, intent, eligible, cancellationToken);
-                ranked = scorer.Score(eligible, intent, profile, semantic, now);
+                ranked = scorer.Score(eligible, intent, semantic, now);
                 if (intent.Intent == AssistantIntentKind.MEAL_PLAN)
                     mealDrafts = await mealPlanComposer.ComposeAsync(message, intent, ranked, cancellationToken);
             }
@@ -254,44 +263,29 @@ public sealed class AssistantService(
 
     private AssistantFoodQueryCriteria BuildCriteria(
         ParsedAssistantIntent intent,
-        CustomerFoodProfile? profile,
         FoodSemanticCatalogSet catalogs,
         Guid? marketId,
         SendAssistantMessageRequest request,
         DateTime utcNow)
     {
-        var allergenIds = Ids(catalogs.Allergens, intent.HardConstraints.AllergenCodes)
-            .Concat(profile?.AllergenExclusions.Select(item => item.AllergenId) ?? [])
-            .Distinct()
-            .ToArray();
-        var avoidedIngredients = Ids(catalogs.Ingredients, intent.HardConstraints.AvoidedIngredientCodes)
-            .Concat(profile?.AvoidedIngredients.Select(item => item.IngredientId) ?? [])
-            .Distinct()
-            .ToArray();
-        var dietary = Ids(catalogs.DietaryAttributes, intent.HardConstraints.DietaryCodes)
-            .Concat(profile?.DietaryRequirements.Select(item => item.DietaryAttributeId) ?? [])
-            .Distinct()
-            .ToArray();
-        var avoidedTastes = Ids(catalogs.TasteProfiles, intent.HardConstraints.AvoidedTasteCodes)
-            .Concat(profile?.AvoidedTasteProfiles.Select(item => item.TasteProfileId) ?? [])
-            .Distinct()
-            .ToArray();
+        var allergenIds = Ids(catalogs.Allergens, intent.HardConstraints.AllergenCodes).Distinct().ToArray();
+        var avoidedIngredients = Ids(catalogs.Ingredients, intent.HardConstraints.AvoidedIngredientCodes).Distinct().ToArray();
+        var dietary = Ids(catalogs.DietaryAttributes, intent.HardConstraints.DietaryCodes).Distinct().ToArray();
+        var avoidedTastes = Ids(catalogs.TasteProfiles, intent.HardConstraints.AvoidedTasteCodes).Distinct().ToArray();
 
         return new AssistantFoodQueryCriteria
         {
             MarketId = marketId,
             Latitude = request.Latitude,
             Longitude = request.Longitude,
-            MaxDistanceMeters = request.MaxDistanceMeters
-                ?? profile?.DefaultMaxDistanceMeters
-                ?? _options.DefaultMaxDistanceMeters,
-            BudgetMin = intent.BudgetMin ?? profile?.PreferredPriceMin,
-            BudgetMax = intent.BudgetMax ?? profile?.PreferredPriceMax,
+            MaxDistanceMeters = request.MaxDistanceMeters ?? _options.DefaultMaxDistanceMeters,
+            BudgetMin = intent.BudgetMin,
+            BudgetMax = intent.BudgetMax,
             AllergenExclusionIds = allergenIds,
             AvoidedIngredientIds = avoidedIngredients,
             DietaryRequirementIds = dietary,
             AvoidedTasteProfileIds = avoidedTastes,
-            MaxSpiceLevel = intent.HardConstraints.MaxSpiceLevel ?? profile?.PreferredSpiceLevel,
+            MaxSpiceLevel = intent.HardConstraints.MaxSpiceLevel,
             TreatMayContainAsHard = _options.TreatMayContainAsHard,
             UtcNow = utcNow
         };
@@ -312,7 +306,8 @@ public sealed class AssistantService(
         string incoming,
         bool hasGps,
         Guid? marketId,
-        FoodSemanticCatalogSet catalogs)
+        FoodSemanticCatalogSet catalogs,
+        AssistantStageAContext context)
     {
         if (conversation.Status != AssistantConversationStatus.LocationPending)
             return null;
@@ -331,7 +326,9 @@ public sealed class AssistantService(
             if (parsed is null)
                 return null;
             logger.LogInformation("Assistant conversation {ConversationId} resumed pending intent without Stage A.", conversation.Id);
-            return AssistantIntentInterpreter.Sanitize(parsed, catalogs);
+            return AssistantIntentInterpreter.ApplyExplicitPlanningContext(
+                AssistantIntentInterpreter.Sanitize(parsed, catalogs),
+                context);
         }
         catch (JsonException)
         {
@@ -444,45 +441,132 @@ public sealed class AssistantService(
 
     private static AssistantMealPlanResponse MapMealPlan(AssistantMealPlan plan, AssistantMealPlanDraft draft)
     {
-        var items = draft.Items.Select(MapMealPlanItem).ToArray();
-        var grouped = draft.Items
-            .GroupBy(item => item.Course)
-            .ToDictionary(group => group.Key, group => group.Select(MapMealPlanItem).ToArray());
+        var persisted = plan.Items.OrderBy(item => item.DisplayOrder).ThenBy(item => item.Id).ToArray();
+        var items = new List<AssistantMealPlanItemResponse>(draft.Items.Count);
+        for (var index = 0; index < draft.Items.Count; index++)
+        {
+            var planItemId = index < persisted.Length ? persisted[index].Id : Guid.Empty;
+            items.Add(MapMealPlanItem(planItemId, draft.Items[index]));
+        }
+
+        var warnings = draft.Warnings.ToList();
+        if (ServingsInsufficient(draft.Items.Select(item => (item.FoodItem, item.Quantity)), plan.PartySize))
+            warnings.Add("SERVINGS_INSUFFICIENT");
+        return ComposePlanResponse(
+            plan,
+            draft.Title,
+            draft.NightMarketName,
+            draft.OverallPlanReason,
+            warnings,
+            draft.UnknownDataFacets,
+            items);
+    }
+
+    private static AssistantMealPlanItemResponse MapMealPlanItem(Guid planItemId, AssistantMealPlanDraftItem item)
+        => MapMealPlanItem(
+            planItemId,
+            item.FoodItem,
+            item.Quantity,
+            item.UnitPrice,
+            item.Course,
+            item.CompatibilityScore,
+            item.Reasons,
+            item.DistanceMeters);
+
+    private static AssistantMealPlanItemResponse MapMealPlanItem(
+        Guid planItemId,
+        FoodItem food,
+        int quantity,
+        decimal unitPrice,
+        FoodCourse course,
+        double? compatibilityScore,
+        IReadOnlyList<string> reasons,
+        double? distanceMeters)
+        => new()
+        {
+            PlanItemId = planItemId,
+            FoodItemId = food.Id,
+            FoodName = food.Name,
+            Name = food.Name,
+            ThumbnailUrl = food.ThumbnailUrl,
+            Course = course.ToString(),
+            Quantity = quantity,
+            UnitPrice = unitPrice,
+            LineTotal = unitPrice * quantity,
+            BoothId = food.BoothId,
+            BoothName = food.Booth.BoothName,
+            NightMarketId = food.Booth.NightMarketId,
+            NightMarketName = food.Booth.NightMarket.Name,
+            CompatibilityScore = compatibilityScore,
+            Reasons = reasons,
+            DistanceMeters = distanceMeters
+        };
+
+    private static AssistantMealPlanResponse ComposePlanResponse(
+        AssistantMealPlan plan,
+        string? title,
+        string nightMarketName,
+        string? overallPlanReason,
+        IReadOnlyList<string> warnings,
+        IReadOnlyList<string> unknownData,
+        IReadOnlyList<AssistantMealPlanItemResponse> items)
+    {
+        var total = items.Sum(item => item.LineTotal);
+        var remaining = plan.BudgetMax is null ? (decimal?)null : plan.BudgetMax.Value - total;
+        var over = plan.BudgetMax is null ? 0m : Math.Max(0m, total - plan.BudgetMax.Value);
+        var uniqueWarnings = warnings
+            .Concat(over > 0 ? ["OVER_BUDGET"] : [])
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var scores = items.Where(item => item.CompatibilityScore.HasValue).Select(item => item.CompatibilityScore!.Value).ToArray();
+        var distances = items.Where(item => item.DistanceMeters.HasValue).Select(item => item.DistanceMeters!.Value).ToArray();
+        var grouped = items
+            .GroupBy(item => AssistantMealPlanValidator.ResolveCourseFromToken(item.Course))
+            .ToDictionary(group => group.Key, group => group.ToArray());
         var courses = AssistantMealPlanValidator.SectionOrder(grouped.Keys);
         return new AssistantMealPlanResponse
         {
             Id = plan.Id,
-            Title = draft.Title,
+            Title = title,
             NightMarketId = plan.NightMarketId,
-            NightMarketName = draft.NightMarketName,
+            NightMarketName = string.IsNullOrWhiteSpace(nightMarketName)
+                ? items.FirstOrDefault()?.NightMarketName ?? string.Empty
+                : nightMarketName,
             PartySize = plan.PartySize,
+            Budget = plan.BudgetMax,
             BudgetMax = plan.BudgetMax,
-            TotalPrice = plan.EstimatedTotal,
-            EstimatedTotal = plan.EstimatedTotal,
-            RemainingBudget = draft.RemainingBudget,
-            OverallPlanReason = draft.OverallPlanReason,
-            Warnings = draft.Warnings,
-            UnknownData = draft.UnknownDataFacets,
-            Sections = courses.Select(course => new AssistantMealPlanSectionResponse
-            {
-                Course = course.ToString(),
-                Items = grouped.TryGetValue(course, out var sectionItems) ? sectionItems : []
-            }).ToArray(),
-            Items = items
+            TotalPrice = total,
+            EstimatedTotal = total,
+            RemainingBudget = remaining,
+            OverBudgetAmount = over,
+            DistanceMeters = distances.Length == 0 ? null : distances.Min(),
+            PlanCompatibility = scores.Length == 0 ? null : Math.Round(scores.Average(), 4),
+            OverallPlanReason = overallPlanReason,
+            Warnings = uniqueWarnings,
+            UnknownData = unknownData,
+            Sections = courses
+                .Where(course => grouped.ContainsKey(course) && grouped[course].Length > 0)
+                .Select(course => new AssistantMealPlanSectionResponse
+                {
+                    Course = course.ToString(),
+                    Items = grouped[course]
+                })
+                .ToArray(),
+            Items = items.ToArray()
         };
     }
 
-    private static AssistantMealPlanItemResponse MapMealPlanItem(AssistantMealPlanDraftItem item)
-        => new()
+    private static bool ServingsInsufficient(IEnumerable<(FoodItem Food, int Quantity)> lines, int partySize)
+    {
+        if (partySize <= 0)
+            return false;
+        var servings = lines.Sum(line =>
         {
-            FoodItemId = item.FoodItem.Id,
-            Name = item.FoodItem.Name,
-            ThumbnailUrl = item.FoodItem.ThumbnailUrl,
-            Course = item.Course.ToString(),
-            Quantity = item.Quantity,
-            UnitPrice = item.UnitPrice,
-            LineTotal = item.UnitPrice * item.Quantity
-        };
+            var perItem = line.Food.EstimatedServingCount is > 0 ? line.Food.EstimatedServingCount.Value : 1;
+            return perItem * line.Quantity;
+        });
+        return servings < partySize;
+    }
 
     private static AssistantPreferenceSummaryResponse MapSummary(
         ParsedAssistantIntent intent,

@@ -22,7 +22,12 @@ Quy tắc:
 - diningContext: bối cảnh ăn uống tự do (ăn tối, đi nhóm, no muộn, bạn bè...) hoặc null. Không invent enum.
 - userGoal: mục tiêu tự do của khách (thử món mới, no bụng, tiết kiệm, chia sẻ gia đình...) hoặc null. Không invent enum catalog.
 - additionalMeaning: nghĩa còn lại không thuộc preference / avoidance / diningContext / userGoal, hoặc null. Không invent enum, không map keyword C#.
-- PartySize / BudgetMin / BudgetMax: chỉ điền từ originalMessage, history, hoặc preferredPrice trong customerFoodProfile. Không suy từ location/marketId.
-- explicitContext (marketId, GPS) do backend cung cấp. Nếu locationProvided = true hoặc đã có marketId thì needsLocation = false trừ khi khách muốn món GẦN họ mà chưa có GPS.
+- PartySize / BudgetMin / BudgetMax:
+  - Nếu explicitContext.partySize được cung cấp (không null), PHẢI dùng đúng số đó làm PartySize. KHÔNG đoán lại, KHÔNG lấy từ originalMessage.
+  - Nếu explicitContext.budget được cung cấp (không null), PHẢI dùng đúng số đó làm BudgetMax. KHÔNG đoán lại, KHÔNG parse từ originalMessage.
+  - Chỉ suy PartySize / Budget từ originalMessage hoặc history khi explicitContext KHÔNG có giá trị tương ứng.
+  - Không suy từ location/marketId.
+- explicitContext (marketId, GPS, partySize, budget) do backend cung cấp. Nếu locationProvided = true hoặc đã có marketId thì needsLocation = false trừ khi khách muốn món GẦN họ mà chưa có GPS.
+- KHÔNG nối party/budget vào originalMessage. originalMessage là nguyên văn khách gõ.
 - assistantReply: bắt buộc khi intent là CHITCHAT hoặc CLARIFY. Tiếng Việt, ngắn, hữu ích. Null với FOOD_RECOMMENDATION / MEAL_PLAN.
 - KHÔNG trả về foodIds. Mọi foodId bị bịa phải bị bỏ.

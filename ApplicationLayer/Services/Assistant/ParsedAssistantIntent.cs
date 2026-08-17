@@ -28,6 +28,8 @@ public sealed class AssistantStageAContext
     public double? Latitude { get; init; }
     public double? Longitude { get; init; }
     public int? MaxDistanceMeters { get; init; }
+    public int? PartySize { get; init; }
+    public decimal? Budget { get; init; }
 }
 
 public sealed class AssistantHardConstraints

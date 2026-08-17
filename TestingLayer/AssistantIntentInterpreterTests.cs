@@ -45,7 +45,7 @@ public sealed class AssistantIntentInterpreterTests
                 """);
 
         var interpreter = new AssistantIntentInterpreter(llm.Object, Options.Create(new OpenAiOptions { Enabled = true, ApiKey = "test" }));
-        var result = await interpreter.InterpretAsync(message, [], null, Catalog(), new AssistantStageAContext(), CancellationToken.None);
+        var result = await interpreter.InterpretAsync(message, [], Catalog(), new AssistantStageAContext(), CancellationToken.None);
 
         Assert.Equal(AssistantIntentKind.FOOD_RECOMMENDATION, result.Intent);
         Assert.Equal(150000m, result.BudgetMax);
@@ -61,6 +61,36 @@ public sealed class AssistantIntentInterpreterTests
     }
 
     [Fact]
+    public async Task Interpret_ExplicitPartyAndBudget_OverrideLlmGuess()
+    {
+        var llm = new Mock<ILanguageModelClient>();
+        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("""
+                {
+                  "intent": "MEAL_PLAN",
+                  "partySize": 9,
+                  "budgetMax": 10000,
+                  "needsLocation": false,
+                  "hardConstraints": {},
+                  "structuredPreferences": {},
+                  "semanticPreferences": [],
+                  "semanticAvoidances": []
+                }
+                """);
+        var interpreter = new AssistantIntentInterpreter(llm.Object, Options.Create(new OpenAiOptions { Enabled = true, ApiKey = "test" }));
+
+        var result = await interpreter.InterpretAsync(
+            "Ăn tối bình dân",
+            [],
+            Catalog(),
+            new AssistantStageAContext { PartySize = 4, Budget = 300_000m },
+            CancellationToken.None);
+
+        Assert.Equal(4, result.PartySize);
+        Assert.Equal(300_000m, result.BudgetMax);
+    }
+
+    [Fact]
     public async Task Interpret_InvalidJson_ThrowsProviderUnavailable()
     {
         var llm = new Mock<ILanguageModelClient>();
@@ -69,7 +99,7 @@ public sealed class AssistantIntentInterpreterTests
         var interpreter = new AssistantIntentInterpreter(llm.Object, Options.Create(new OpenAiOptions { ApiKey = "test" }));
 
         var exception = await Assert.ThrowsAsync<ApplicationLayer.Exceptions.AppException>(() =>
-            interpreter.InterpretAsync("hello", [], null, Catalog(), new AssistantStageAContext(), CancellationToken.None));
+            interpreter.InterpretAsync("hello", [], Catalog(), new AssistantStageAContext(), CancellationToken.None));
 
         Assert.Equal(503, exception.StatusCode);
         Assert.Equal("ASSISTANT_PROVIDER_UNAVAILABLE", exception.ErrorCode);
@@ -141,7 +171,6 @@ public sealed class AssistantIntentInterpreterTests
         var result = await interpreter.InterpretAsync(
             message,
             [],
-            null,
             Catalog(),
             new AssistantStageAContext
             {

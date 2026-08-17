@@ -28,6 +28,9 @@ public sealed class AssistantMealPlanDraftItem
     public int Quantity { get; init; }
     public decimal UnitPrice { get; init; }
     public FoodCourse Course { get; init; }
+    public double? CompatibilityScore { get; init; }
+    public IReadOnlyList<string> Reasons { get; init; } = [];
+    public double? DistanceMeters { get; init; }
 }
 
 public sealed class AssistantMealPlanProposal

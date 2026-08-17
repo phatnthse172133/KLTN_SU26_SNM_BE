@@ -89,9 +89,9 @@ public sealed class CustomerDiscoveryService : ICustomerDiscoveryService
             BoothId = listItem.BoothId, BoothName = listItem.BoothName,
             MarketId = listItem.MarketId, MarketName = listItem.MarketName, IsFeatured = listItem.IsFeatured,
             Description = food.Description, ImageUrls = BuildImages(food.ThumbnailUrl, food.ImageUrls),
-            Tags = food.Tags.Select(tag => new CustomerFoodTagResponse
+            Tags = food.Tags.Select(tag => new CustomerCatalogChipResponse
             {
-                Id = tag.Id, Code = tag.Code, Name = tag.Name, TagGroup = tag.TagGroup.ToString()
+                Id = tag.Id, Code = tag.Code, Name = tag.Name, TagGroup = tag.TagGroup
             }).ToList(),
             SemanticMetadata = new()
             {

@@ -206,7 +206,7 @@ public class MarketLayoutRepository : GenericRepository<MarketLayout>, IMarketLa
             PixelsPerMeter = source.PixelsPerMeter,
             CoordinateUnit = source.CoordinateUnit, MetersPerLayoutUnit = source.MetersPerLayoutUnit,
             DistanceCalibrationStatus = source.DistanceCalibrationStatus,
-            GraphRevision = 1, Status = MarketLayoutStatus.Inactive, IsDeleted = false,
+            GraphRevision = 1, Status = MarketLayoutStatus.Draft, IsDeleted = false,
             CreatedAt = createdAt, UpdatedAt = createdAt
         };
         var sourceBlocks = await _context.Set<LayoutBlock>().AsNoTracking()

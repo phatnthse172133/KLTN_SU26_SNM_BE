@@ -3,7 +3,6 @@ using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
 using ApplicationLayer.Mappings;
-using ApplicationLayer.Services.FoodTags;
 using AutoMapper;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
@@ -17,22 +16,18 @@ public class MenuService : IMenuService
     private readonly IBoothRepository _booths;
     private readonly IFoodCategoryRepository _categories;
     private readonly IFoodItemRepository _foodItems;
-    private readonly IFoodTagRepository _foodTags;
     private readonly IMapper _mapper;
     private readonly IFoodSemanticMetadataRepository? _semanticMetadata;
-    private readonly ILegacyFoodTagMetadataAdapter? _legacyAdapter;
 
     public MenuService(
         IBoothRepository booths,
         IFoodCategoryRepository categories,
         IFoodItemRepository foodItems,
-        IFoodTagRepository foodTags,
         IMapper mapper)
     {
         _booths = booths;
         _categories = categories;
         _foodItems = foodItems;
-        _foodTags = foodTags;
         _mapper = mapper;
     }
 
@@ -40,12 +35,10 @@ public class MenuService : IMenuService
         IBoothRepository booths,
         IFoodCategoryRepository categories,
         IFoodItemRepository foodItems,
-        IFoodTagRepository foodTags,
         IMapper mapper,
-        IFoodSemanticMetadataRepository semanticMetadata,
-        ILegacyFoodTagMetadataAdapter legacyAdapter)
-        : this(booths, categories, foodItems, foodTags, mapper)
-        => (_semanticMetadata, _legacyAdapter) = (semanticMetadata, legacyAdapter);
+        IFoodSemanticMetadataRepository semanticMetadata)
+        : this(booths, categories, foodItems, mapper)
+        => _semanticMetadata = semanticMetadata;
 
     public async Task<ApiResponse<PaginationResp<FoodItemResponse>>> GetMyBoothMenuAsync(
         Guid ownerId,
@@ -69,7 +62,7 @@ public class MenuService : IMenuService
         if (managementError is not null)
             throw ToBoothAccessException(managementError);
 
-        var (validationError, category, tags) = await ValidateFoodItemRequestAsync(boothId, request, cancellationToken);
+        var (validationError, category) = await ValidateFoodItemRequestAsync(boothId, request, cancellationToken);
         if (validationError is not null)
             throw validationError.Contains("not found", StringComparison.OrdinalIgnoreCase)
                 ? AppException.NotFound(validationError)
@@ -83,9 +76,6 @@ public class MenuService : IMenuService
         foodItem.IsDeleted = false;
         foodItem.CreatedAt = now;
         foodItem.UpdatedAt = now;
-        SetTags(foodItem, tags!, now);
-        if (_legacyAdapter is not null)
-            await _legacyAdapter.ApplySupportedAsync(foodItem, tags!, now, cancellationToken);
 
         await _foodItems.AddAsync(foodItem);
         await _foodItems.SaveChangesAsync();
@@ -103,7 +93,7 @@ public class MenuService : IMenuService
         if (foodItem is null)
             throw AppException.NotFound("Food item was not found.");
 
-        var (validationError, category, tags) = await ValidateFoodItemRequestAsync(boothId, request, cancellationToken);
+        var (validationError, category) = await ValidateFoodItemRequestAsync(boothId, request, cancellationToken);
         if (validationError is not null)
             throw validationError.Contains("not found", StringComparison.OrdinalIgnoreCase)
                 ? AppException.NotFound(validationError)
@@ -112,9 +102,6 @@ public class MenuService : IMenuService
         _mapper.Map(request, foodItem);
         foodItem.Category = category!;
         foodItem.UpdatedAt = DateTime.UtcNow;
-        SetTags(foodItem, tags!, foodItem.UpdatedAt);
-        if (_legacyAdapter is not null)
-            await _legacyAdapter.ApplySupportedAsync(foodItem, tags!, foodItem.UpdatedAt, cancellationToken);
 
         _foodItems.Update(foodItem);
         await _foodItems.SaveChangesAsync();
@@ -241,48 +228,20 @@ public class MenuService : IMenuService
         return null;
     }
 
-    private async Task<(string? Error, FoodCategory? Category, IReadOnlyCollection<FoodTag>? Tags)> ValidateFoodItemRequestAsync(
+    private async Task<(string? Error, FoodCategory? Category)> ValidateFoodItemRequestAsync(
         Guid boothId, CreateFoodItemRequest request, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.Name))
-            return ("Food item name is required.", null, null);
+            return ("Food item name is required.", null);
 
         if (request.Price <= 0)
-            return ("Food item price must be greater than zero.", null, null);
+            return ("Food item price must be greater than zero.", null);
 
         var category = await _categories.GetActiveByBoothAsync(boothId, request.CategoryId);
         if (category is null)
-            return ("Food category was not found or is not selectable.", null, null);
+            return ("Food category was not found or is not selectable.", null);
 
-        if (request.TagIds.Count != request.TagIds.Distinct().Count())
-            return ("Food tag IDs must not contain duplicates.", null, null);
-
-        var tagIds = request.TagIds.ToList();
-        var tags = await _foodTags.GetActiveByIdsAsync(tagIds, cancellationToken);
-        if (tags.Count != tagIds.Count)
-            return ("One or more food tags are invalid or inactive.", null, null);
-
-        FoodTagSelectionPolicy.Validate(tags);
-
-        return (null, category, tags);
-    }
-
-    private static void SetTags(FoodItem foodItem, IReadOnlyCollection<FoodTag> tags, DateTime now)
-    {
-        var requestedIds = tags.Select(tag => tag.Id).ToHashSet();
-        foreach (var existing in foodItem.FoodItemTags.Where(item => !requestedIds.Contains(item.FoodTagId)).ToList())
-            foodItem.FoodItemTags.Remove(existing);
-
-        var existingIds = foodItem.FoodItemTags.Select(item => item.FoodTagId).ToHashSet();
-        foreach (var tag in tags.Where(tag => !existingIds.Contains(tag.Id)))
-        {
-            foodItem.FoodItemTags.Add(new FoodItemTag
-            {
-                FoodItemId = foodItem.Id,
-                FoodTagId = tag.Id,
-                CreatedAt = now
-            });
-        }
+        return (null, category);
     }
 
     private static AppException ToBoothAccessException(string message)
@@ -369,7 +328,7 @@ public class MenuService : IMenuService
     {
         Id = food.Id, BoothId = food.BoothId, CategoryId = food.CategoryId, CategoryName = food.Category.Name, Name = food.Name,
         Description = food.Description, Price = food.Price, ThumbnailUrl = food.ThumbnailUrl, IsAvailable = food.IsAvailable, IsFeatured = food.IsFeatured,
-        TagIds = food.FoodItemTags.Select(x => x.FoodTagId).ToArray(), CreatedAt = food.CreatedAt, UpdatedAt = food.UpdatedAt,
+        CreatedAt = food.CreatedAt, UpdatedAt = food.UpdatedAt,
         SemanticMetadata = new()
         {
             PrimaryCourse = food.Courses.SingleOrDefault(x => x.IsPrimary)?.Course,

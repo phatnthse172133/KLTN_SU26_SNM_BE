@@ -140,6 +140,7 @@ public sealed class AssistantFoodQueryRepository(SNMDbContext db) : IAssistantFo
             .Include(food => food.Booth).ThenInclude(booth => booth.Promotions)
             .Include(food => food.Category)
             .Include(food => food.FoodPrices)
+            .Include(food => food.Courses)
             .Include(food => food.PromotionFoodItems).ThenInclude(promo => promo.Promotion)
             .AsSplitQuery()
             .FirstOrDefaultAsync(food => food.Id == foodItemId, cancellationToken);

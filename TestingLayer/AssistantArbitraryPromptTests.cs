@@ -43,8 +43,6 @@ public sealed class AssistantArbitraryPromptTests
             .ReturnsAsync([]);
         _conversations.Setup(repository => repository.SaveChangesAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
         _metadata.Setup(repository => repository.GetActiveCatalogsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Catalog());
-        _metadata.Setup(repository => repository.GetCustomerProfileAsync(It.IsAny<Guid>(), false, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((CustomerFoodProfile?)null);
         _foods.Setup(repository => repository.CountNotDeletedFoodItemsAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(14);
 
@@ -156,7 +154,7 @@ public sealed class AssistantArbitraryPromptTests
         Assert.Equal(235_000m, plan.RemainingBudget);
         Assert.Null(plan.Title);
         Assert.Contains(plan.Sections, section => section.Course == "SHARED_DISH" && section.Items.Count == 1);
-        Assert.Contains(plan.Sections, section => section.Course == "DESSERT" && section.Items.Count == 0);
+        Assert.DoesNotContain(plan.Sections, section => section.Course == "DESSERT");
         Assert.DoesNotContain("Ưu tiên đa dạng", result.Data.Reply, StringComparison.Ordinal);
     }
 
@@ -310,8 +308,7 @@ public sealed class AssistantArbitraryPromptTests
         var result = await Send("Thực đơn đầy đủ các món.");
 
         var plan = Assert.Single(result.Data!.MealPlans);
-        var dessert = Assert.Single(plan.Sections, section => section.Course == "DESSERT");
-        Assert.Empty(dessert.Items);
+        Assert.DoesNotContain(plan.Sections, section => section.Course == "DESSERT");
         Assert.DoesNotContain(plan.Items, item => item.Course == "DESSERT");
         Assert.Contains(plan.Items, item => item.FoodItemId == main.FoodItem.Id && item.Course == "MAIN_COURSE");
     }

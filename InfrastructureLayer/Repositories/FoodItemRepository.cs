@@ -148,7 +148,6 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
     {
         var query = _dbSet
             .Include(item => item.Category)
-            .Include(item => item.FoodItemTags)
             .Include(item => item.Courses)
             .Include(item => item.Ingredients).ThenInclude(item => item.Ingredient)
             .Include(item => item.Allergens).ThenInclude(item => item.Allergen)
@@ -172,7 +171,6 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
     public async Task<FoodItem?> GetByBoothAsync(Guid boothId, Guid foodItemId)
         => await _dbSet
             .Include(item => item.Category)
-            .Include(item => item.FoodItemTags)
             .Include(item => item.Courses)
             .Include(item => item.Ingredients).ThenInclude(item => item.Ingredient)
             .Include(item => item.Allergens).ThenInclude(item => item.Allergen)
@@ -191,14 +189,6 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
                 .ThenInclude(booth => booth.NightMarket)
             .Include(item => item.Category)
             .Include(item => item.FoodPrices)
-            .FirstOrDefaultAsync(item => item.Id == foodItemId, cancellationToken);
-
-    public Task<FoodItem?> GetWithTagsAsync(
-        Guid foodItemId,
-        CancellationToken cancellationToken = default)
-        => ActiveQuery()
-            .Include(item => item.Booth)
-            .Include(item => item.FoodItemTags)
             .FirstOrDefaultAsync(item => item.Id == foodItemId, cancellationToken);
 
     public async Task<IReadOnlyCollection<FoodItem>> GetActiveByIdsAndBoothAsync(
@@ -384,16 +374,17 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
                 Preparations = item.PreparationMethods.OrderBy(x => x.PreparationMethod.Code).Select(x => new CustomerSemanticCatalogReadModel(x.PreparationMethodId, x.PreparationMethod.Code, x.PreparationMethod.Name)).ToArray(),
                 Tastes = item.TasteProfiles.OrderBy(x => x.TasteProfile.Code).Select(x => new CustomerSemanticCatalogReadModel(x.TasteProfileId, x.TasteProfile.Code, x.TasteProfile.Name)).ToArray()
             },
-            Tags = BuildDeprecatedTags(item)
+            Tags = BuildCatalogChips(item)
         };
 
-    private static IReadOnlyCollection<CustomerFoodTagReadModel> BuildDeprecatedTags(FoodItem item)
+    // Customer detail `Tags` are catalog-derived chips, not the removed FoodTag entity/table.
+    private static IReadOnlyCollection<CustomerCatalogChipReadModel> BuildCatalogChips(FoodItem item)
     {
-        var tags = new List<CustomerFoodTagReadModel>();
-        tags.AddRange(item.Ingredients.Select(x => new CustomerFoodTagReadModel(x.IngredientId, x.Ingredient.Code, x.Ingredient.Name, FoodTagGroup.Ingredient)));
-        tags.AddRange(item.DietaryAttributes.Select(x => new CustomerFoodTagReadModel(x.DietaryAttributeId, x.DietaryAttribute.Code, x.DietaryAttribute.Name, FoodTagGroup.Dietary)));
-        tags.AddRange(item.PreparationMethods.Select(x => new CustomerFoodTagReadModel(x.PreparationMethodId, x.PreparationMethod.Code, x.PreparationMethod.Name, FoodTagGroup.CookingMethod)));
-        tags.AddRange(item.TasteProfiles.Select(x => new CustomerFoodTagReadModel(x.TasteProfileId, x.TasteProfile.Code, x.TasteProfile.Name, FoodTagGroup.Taste)));
+        var tags = new List<CustomerCatalogChipReadModel>();
+        tags.AddRange(item.Ingredients.Select(x => new CustomerCatalogChipReadModel(x.IngredientId, x.Ingredient.Code, x.Ingredient.Name, "Ingredient")));
+        tags.AddRange(item.DietaryAttributes.Select(x => new CustomerCatalogChipReadModel(x.DietaryAttributeId, x.DietaryAttribute.Code, x.DietaryAttribute.Name, "Dietary")));
+        tags.AddRange(item.PreparationMethods.Select(x => new CustomerCatalogChipReadModel(x.PreparationMethodId, x.PreparationMethod.Code, x.PreparationMethod.Name, "CookingMethod")));
+        tags.AddRange(item.TasteProfiles.Select(x => new CustomerCatalogChipReadModel(x.TasteProfileId, x.TasteProfile.Code, x.TasteProfile.Name, "Taste")));
         return tags.OrderBy(x => x.Code, StringComparer.Ordinal).ToArray();
     }
 }

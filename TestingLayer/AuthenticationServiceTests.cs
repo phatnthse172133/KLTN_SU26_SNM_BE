@@ -1,5 +1,6 @@
 using System.Linq.Expressions;
 using System.ComponentModel.DataAnnotations;
+using ApplicationLayer.Common;
 using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Services.Auth;
@@ -289,8 +290,10 @@ public class AuthenticationServiceTests
             var policy = Assert.Single(property!.GetCustomAttributes(typeof(StringLengthAttribute), inherit: true))
                 as StringLengthAttribute;
             Assert.NotNull(policy);
-            Assert.Equal(8, policy.MinimumLength);
-            Assert.Equal(128, policy.MaximumLength);
+            Assert.Equal(6, PasswordPolicy.MinLength);
+            Assert.Equal(128, PasswordPolicy.MaxLength);
+            Assert.Equal(PasswordPolicy.MinLength, policy.MinimumLength);
+            Assert.Equal(PasswordPolicy.MaxLength, policy.MaximumLength);
         }
     }
 

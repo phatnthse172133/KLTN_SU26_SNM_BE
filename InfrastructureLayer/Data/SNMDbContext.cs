@@ -32,20 +32,10 @@ namespace InfrastructureLayer.Data
         public virtual DbSet<FoodItemSearchFacet> FoodItemSearchFacets { get; set; }
         public virtual DbSet<FoodItemCourse> FoodItemCourses { get; set; }
         public virtual DbSet<FoodItemDiningPurpose> FoodItemDiningPurposes { get; set; }
-        public virtual DbSet<CustomerFoodProfile> CustomerFoodProfiles { get; set; }
         public virtual DbSet<AssistantConversation> AssistantConversations { get; set; }
         public virtual DbSet<AssistantMessage> AssistantMessages { get; set; }
         public virtual DbSet<AssistantMealPlan> AssistantMealPlans { get; set; }
         public virtual DbSet<AssistantMealPlanItem> AssistantMealPlanItems { get; set; }
-        public virtual DbSet<CustomerPreferredIngredient> CustomerPreferredIngredients { get; set; }
-        public virtual DbSet<CustomerAvoidedIngredient> CustomerAvoidedIngredients { get; set; }
-        public virtual DbSet<CustomerDietaryRequirement> CustomerDietaryRequirements { get; set; }
-        public virtual DbSet<CustomerAllergenExclusion> CustomerAllergenExclusions { get; set; }
-        public virtual DbSet<CustomerPreferredPreparationMethod> CustomerPreferredPreparationMethods { get; set; }
-        public virtual DbSet<CustomerPreferredTasteProfile> CustomerPreferredTasteProfiles { get; set; }
-        public virtual DbSet<CustomerAvoidedTasteProfile> CustomerAvoidedTasteProfiles { get; set; }
-        public virtual DbSet<CustomerPreferredCourse> CustomerPreferredCourses { get; set; }
-        public virtual DbSet<CustomerPreferredDiningPurpose> CustomerPreferredDiningPurposes { get; set; }
 
         public virtual DbSet<Booth> Booths { get; set; }
 
@@ -79,11 +69,7 @@ namespace InfrastructureLayer.Data
 
         public virtual DbSet<FoodItem> FoodItems { get; set; }
 
-        public virtual DbSet<FoodItemTag> FoodItemTags { get; set; }
-
         public virtual DbSet<FoodPrice> FoodPrices { get; set; }
-
-        public virtual DbSet<FoodTag> FoodTags { get; set; }
 
         public virtual DbSet<LayoutEdge> LayoutEdges { get; set; }
 
@@ -687,28 +673,6 @@ namespace InfrastructureLayer.Data
 
             });
 
-            modelBuilder.Entity<FoodItemTag>(entity =>
-            {
-                entity.HasKey(e => new { e.FoodItemId, e.FoodTagId })
-                    .HasName("FoodItemTag_pkey");
-
-                entity.ToTable("FoodItemTag", tb => tb.HasComment("BÃ¡ÂºÂ£ng nÃ¡Â»â€˜i gÃ¡ÂºÂ¯n tag ngÃ¡Â»Â¯ nghÃ„Â©a vÃƒÂ o mÃƒÂ³n Ã„Æ’n"));
-
-                entity.HasIndex(e => e.FoodTagId, "idx_fooditemtag_foodtag");
-
-                entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
-
-                entity.HasOne(d => d.FoodItem).WithMany(p => p.FoodItemTags)
-                    .HasForeignKey(d => d.FoodItemId)
-                    .OnDelete(DeleteBehavior.Cascade)
-                    .HasConstraintName("FoodItemTag_FoodItemId_fkey");
-
-                entity.HasOne(d => d.FoodTag).WithMany(p => p.FoodItemTags)
-                    .HasForeignKey(d => d.FoodTagId)
-                    .OnDelete(DeleteBehavior.Restrict)
-                    .HasConstraintName("FoodItemTag_FoodTagId_fkey");
-            });
-
             modelBuilder.Entity<FoodPrice>(entity =>
             {
                 entity.HasKey(e => e.Id).HasName("FoodPrice_pkey");
@@ -723,39 +687,6 @@ namespace InfrastructureLayer.Data
                 entity.HasOne(d => d.FoodItem).WithMany(p => p.FoodPrices)
                     .HasForeignKey(d => d.FoodItemId)
                     .HasConstraintName("FoodPrice_FoodItemId_fkey");
-            });
-
-            modelBuilder.Entity<FoodTag>(entity =>
-            {
-                entity.HasKey(e => e.Id).HasName("FoodTag_pkey");
-
-                entity.ToTable("FoodTag", tb => tb.HasComment("Danh sách tag chuẩn mô tả ngữ nghĩa món ăn"));
-
-                entity.HasIndex(e => e.Code, "ux_foodtag_code_active")
-                    .IsUnique()
-                    .HasFilter("\"IsDeleted\" = false");
-                entity.HasIndex(e => e.Name, "ux_foodtag_name_active")
-                    .IsUnique()
-                    .HasFilter("\"IsDeleted\" = false");
-
-                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
-                entity.Property(e => e.Name).HasMaxLength(100);
-                entity.Property(e => e.Code).HasMaxLength(100);
-                entity.Property(e => e.TagGroup)
-                    .HasConversion<string>()
-                    .HasMaxLength(30);
-                entity.Property(e => e.Status)
-                    .HasConversion<string>()
-                    .HasMaxLength(20)
-                    .HasDefaultValueSql("'Active'::character varying");
-                entity.Property(e => e.DisplayOrder).HasDefaultValue(0);
-                entity.Property(e => e.IsAutoAssigned).HasDefaultValue(false);
-                entity.Property(e => e.IsDeleted).HasDefaultValue(false);
-                entity.Property(e => e.IsPreferenceSelectable).HasDefaultValue(false);
-                entity.Property(e => e.IsSelectable).HasDefaultValue(true);
-                entity.Property(e => e.IsSystem).HasDefaultValue(false);
-                entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
-                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
             });
 
             modelBuilder.Entity<LayoutEdge>(entity =>

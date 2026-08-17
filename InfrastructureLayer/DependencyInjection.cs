@@ -14,12 +14,10 @@ using ApplicationLayer.Services.Chats;
 using ApplicationLayer.Services.Complaints;
 using ApplicationLayer.Services.CustomerDiscovery;
 using ApplicationLayer.Services.Assistant;
-using ApplicationLayer.Services.CustomerFoodProfiles;
 using InfrastructureLayer.Cores.Assistant;
 using ApplicationLayer.Services.Dashboard;
 using ApplicationLayer.Services.EncryptionServices;
 using ApplicationLayer.Services.FoodCategories;
-using ApplicationLayer.Services.FoodTags;
 using ApplicationLayer.Services.IndoorPositioning;
 using ApplicationLayer.Services.LayoutEdges;
 using ApplicationLayer.Services.LayoutNodes;
@@ -112,7 +110,6 @@ namespace InfrastructureLayer
             services.AddScoped<IUserDeviceTokenRepository, UserDeviceTokenRepository>();
             services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<IPaymentMethodRepository, PaymentMethodRepository>();
-            services.AddScoped<IFoodTagRepository, FoodTagRepository>();
             services.Configure<JwtSettings>(configuration.GetSection(JwtSettings.SectionName));
             services.AddScoped<IJwtService, JWTService>();
             services.AddScoped<IPasswordHasher, PasswordHasher>();
@@ -127,6 +124,7 @@ namespace InfrastructureLayer
             services.AddScoped<IBoothPayOsCredentialService, BoothPayOsCredentialService>();
             services.AddScoped<IEncryptionService, AesEncryptionService>();
             services.AddScoped<IPayOSPayoutClientFactory, PayOSPayoutClientFactory>();
+            services.AddScoped<IPayOSPayoutServiceFactory, PayOSPayoutServiceFactory>();
 
             services.AddScoped<IPayOSService, PayOSService>(sp =>
                 ActivatorUtilities.CreateInstance<PayOSService>(sp, false));
@@ -140,7 +138,6 @@ namespace InfrastructureLayer
             services.AddScoped<IFoodCategoryService, FoodCategoryService>();
             services.AddScoped<IMenuService, MenuService>();
             services.AddScoped<IFoodMetadataCatalogService, FoodMetadataCatalogService>();
-            services.AddScoped<ILegacyFoodTagMetadataAdapter, LegacyFoodTagMetadataAdapter>();
 
             services.AddScoped<INightMarketService, NightMarketService>();
             services.AddScoped<ICustomerDiscoveryService, CustomerDiscoveryService>();
@@ -183,8 +180,6 @@ namespace InfrastructureLayer
             services.AddScoped<IChatService, ChatService>();
             services.AddScoped<ISupportTicketService, SupportTicketService>();
             services.AddScoped<IDeviceTokenService, DeviceTokenService>();
-            services.AddScoped<IFoodTagService, FoodTagService>();
-            services.AddScoped<ICustomerFoodProfileService, CustomerFoodProfileService>();
             services.Configure<OpenAiOptions>(configuration.GetSection(OpenAiOptions.SectionName));
             services.Configure<AssistantOptions>(configuration.GetSection(AssistantOptions.SectionName));
             services.AddHttpClient<ILanguageModelClient, OpenAiLanguageModelClient>((sp, client) =>

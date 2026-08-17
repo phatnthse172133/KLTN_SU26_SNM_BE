@@ -38,13 +38,10 @@ public interface IFoodItemRepository : IGenericRepository<FoodItem>
     Task<FoodItem?> GetForCartAsync(
         Guid foodItemId,
         CancellationToken cancellationToken = default);
-    Task<FoodItem?> GetWithTagsAsync(
-        Guid foodItemId,
+    Task<IReadOnlyCollection<FoodItem>> GetActiveByIdsAndBoothAsync(
+        Guid boothId,
+        IReadOnlyCollection<Guid> foodItemIds,
         CancellationToken cancellationToken = default);
-        Task<IReadOnlyCollection<FoodItem>> GetActiveByIdsAndBoothAsync(
-            Guid boothId,
-            IReadOnlyCollection<Guid> foodItemIds,
-            CancellationToken cancellationToken = default);
 
-        Task<List<FoodItem>> GetAllFoodItemsByIdsAsync(List<Guid> foodItemIds);
+    Task<List<FoodItem>> GetAllFoodItemsByIdsAsync(List<Guid> foodItemIds);
 }

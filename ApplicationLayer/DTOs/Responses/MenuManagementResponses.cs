@@ -12,7 +12,6 @@ public class FoodItemResponse
     public string? ThumbnailUrl { get; set; }
     public bool IsAvailable { get; set; }
     public bool IsFeatured { get; set; }
-    public IReadOnlyCollection<Guid> TagIds { get; set; } = [];
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }

@@ -326,52 +326,26 @@ public static class IntegrationDemoDataSeeder
         }
         await db.SaveChangesAsync(ct);
 
-        await EnsureDemoFoodTagsAsync(db, now, ct);
+        await EnsureDemoCatalogMetadataAsync(db, now, ct);
 
         await AddIfMissingAsync(db.FoodPrices, PriceId(1), () => new FoodPrice { Id = PriceId(1), FoodItemId = FoodId(1, 1), Price = 59000, StartDate = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc), EndDate = new DateTime(2035, 1, 1, 0, 0, 0, DateTimeKind.Utc), CreatedAt = now, UpdatedAt = now });
         await db.SaveChangesAsync(ct);
     }
 
-    private static async Task EnsureDemoFoodTagsAsync(SNMDbContext db, DateTime now, CancellationToken ct)
+    private static async Task EnsureDemoCatalogMetadataAsync(SNMDbContext db, DateTime now, CancellationToken ct)
     {
-        var tagIdsByCode = await db.FoodTags
-            .Where(tag => tag.IsSystem && !tag.IsDeleted && tag.Status == FoodTagStatus.Active)
-            .ToDictionaryAsync(tag => tag.Code, tag => tag.Id, ct);
-        if (tagIdsByCode.Count == 0) return;
-
         for (var boothIndex = 1; boothIndex <= Booths.Length; boothIndex++)
         {
             for (var foodIndex = 1; foodIndex <= Menus[boothIndex - 1].Length; foodIndex++)
             {
                 var foodId = FoodId(boothIndex, foodIndex);
-                var price = Menus[boothIndex - 1][foodIndex - 1].Price;
                 var courseCodes = GetDemoCourseCodes(boothIndex, foodIndex);
                 var isDrink = courseCodes.Contains("COURSE_DRINK");
                 var isDessert = courseCodes.Contains("COURSE_DESSERT");
-                var codes = new List<string>(courseCodes)
-                {
-                    isDrink || isDessert ? "TEMP_COLD" : "TEMP_HOT",
-                    isDrink ? "PURPOSE_REFRESHMENT"
-                        : isDessert ? "PURPOSE_DESSERT"
-                        : courseCodes.Contains("COURSE_MAIN_COURSE") ? "PURPOSE_FULL_MEAL"
-                        : "PURPOSE_SNACKING",
-                    price < 30_000 ? "BUDGET_UNDER_30000"
-                        : price < 50_000 ? "BUDGET_30000_50000"
-                        : price < 100_000 ? "BUDGET_50000_100000"
-                        : price < 200_000 ? "BUDGET_100000_200000"
-                        : "BUDGET_FROM_200000"
-                };
-                if (foodIndex == 1) codes.Add("OTHER_BEST_SELLER");
-
-                var managedCodes = tagIdsByCode.Keys.Where(code =>
-                    code.StartsWith("COURSE_", StringComparison.Ordinal)
-                    || code.StartsWith("PURPOSE_", StringComparison.Ordinal)
-                    || code.StartsWith("TEMP_", StringComparison.Ordinal)).ToHashSet(StringComparer.Ordinal);
-                var staleLinks = await db.FoodItemTags
-                    .Where(link => link.FoodItemId == foodId && managedCodes.Contains(link.FoodTag.Code)
-                        && !codes.Contains(link.FoodTag.Code))
-                    .ToListAsync(ct);
-                db.FoodItemTags.RemoveRange(staleLinks);
+                var purposeCode = isDrink ? "PURPOSE_REFRESHMENT"
+                    : isDessert ? "PURPOSE_DESSERT"
+                    : courseCodes.Contains("COURSE_MAIN_COURSE") ? "PURPOSE_FULL_MEAL"
+                    : "PURPOSE_SNACKING";
 
                 var normalizedCourses = courseCodes
                     .Select(code => Enum.Parse<FoodCourse>(code.Replace("COURSE_", "", StringComparison.Ordinal)))
@@ -393,7 +367,6 @@ public static class IntegrationDemoDataSeeder
                         CreatedAt = now
                     });
 
-                var purposeCode = codes.Single(code => code.StartsWith("PURPOSE_", StringComparison.Ordinal));
                 var purpose = Enum.Parse<DiningPurpose>(purposeCode.Replace("PURPOSE_", "", StringComparison.Ordinal));
                 if (!await db.FoodItemDiningPurposes.AnyAsync(link => link.FoodItemId == foodId && link.Purpose == purpose, ct))
                     db.FoodItemDiningPurposes.Add(new FoodItemDiningPurpose { FoodItemId = foodId, Purpose = purpose, CreatedAt = now });
@@ -402,18 +375,6 @@ public static class IntegrationDemoDataSeeder
                 food.ServingTemperature = isDrink || isDessert ? ServingTemperature.COLD : ServingTemperature.HOT;
                 food.SemanticProfileVersion = Math.Max(food.SemanticProfileVersion, 1);
                 food.SemanticProfileUpdatedAt = now;
-
-                foreach (var code in codes)
-                {
-                    if (!tagIdsByCode.TryGetValue(code, out var tagId)) continue;
-                    if (!await db.FoodItemTags.AnyAsync(link => link.FoodItemId == foodId && link.FoodTagId == tagId, ct))
-                    {
-                        db.FoodItemTags.Add(new FoodItemTag
-                        {
-                            FoodItemId = foodId, FoodTagId = tagId, CreatedAt = now
-                        });
-                    }
-                }
             }
         }
 

@@ -154,7 +154,7 @@ public sealed class OrderPaymentWebhookTests
             orders.Object,
             Mock.Of<IPromotionRepository>(),
             Mock.Of<IPromotionValidationService>(),
-            Mock.Of<IPayOSPayoutClientFactory>(),
+            Mock.Of<IPayOSPayoutServiceFactory>(),
             Mock.Of<IRealtimeNotificationPublisher>(),
             Mock.Of<IFoodItemRepository>(),
             Mock.Of<ILogger<OrderService>>(),

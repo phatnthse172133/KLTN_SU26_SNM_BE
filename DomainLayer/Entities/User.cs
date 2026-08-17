@@ -74,8 +74,6 @@ public partial class User
 
     public virtual ICollection<Cart> Carts { get; set; } = new List<Cart>();
 
-    public virtual CustomerFoodProfile? CustomerFoodProfile { get; set; }
-
     public virtual ICollection<AssistantConversation> AssistantConversations { get; set; } = new List<AssistantConversation>();
 
     public virtual ICollection<MarketSubscription> MarketSubscriptions { get; set; } = new List<MarketSubscription>();

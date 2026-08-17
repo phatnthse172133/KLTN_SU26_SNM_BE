@@ -176,9 +176,27 @@ public class MarketLayoutService : IMarketLayoutService
         if (layout.Status == MarketLayoutStatus.Active)
             throw AppException.Conflict("Deactivate the market layout before updating its dimensions.");
 
-        var nodes = await _layouts.GetNodesByLayoutIdAsync(layoutId, cancellationToken);
-        if (nodes.Any(n => n.Xcoordinate > request.Width || n.Ycoordinate > request.Height))
-            throw AppException.BadRequest("Cannot shrink layout. Existing nodes are outside the new dimensions.");
+        var nodes = (await _layouts.GetNodesByLayoutIdAsync(layoutId, cancellationToken)).ToList();
+        var outsideNodes = nodes
+            .Where(n => n.Xcoordinate > request.Width || n.Ycoordinate > request.Height)
+            .ToList();
+        if (outsideNodes.Count > 0)
+        {
+            var requiredWidth = (int)Math.Ceiling(nodes.Max(n => n.Xcoordinate));
+            var requiredHeight = (int)Math.Ceiling(nodes.Max(n => n.Ycoordinate));
+            var examples = string.Join(", ", outsideNodes
+                .Take(5)
+                .Select(n => string.IsNullOrWhiteSpace(n.SlotCode)
+                    ? (string.IsNullOrWhiteSpace(n.NodeName) ? n.Id.ToString("N")[..8] : n.NodeName)
+                    : n.SlotCode));
+            var suffix = outsideNodes.Count > 5 ? " and more" : string.Empty;
+
+            throw AppException.BadRequest(
+                $"The new layout size {request.Width} × {request.Height}px is too small for the existing map. " +
+                $"Keep at least {requiredWidth} × {requiredHeight}px, or move/regenerate the {outsideNodes.Count} node(s) outside the new boundary " +
+                $"({examples}{suffix}).",
+                "LAYOUT_DIMENSIONS_TOO_SMALL");
+        }
 
         layout.Width = request.Width;
         layout.Height = request.Height;

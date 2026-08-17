@@ -54,6 +54,7 @@ public sealed class CustomerPaymentReadModel
     public DateTime? RefundRequestedAt { get; set; }
     public DateTime? RefundedAt { get; set; }
     public DateTime CreatedAt { get; set; }
+    public string QrCode { get; set; } = string.Empty;
 }
 
 public sealed class CustomerPromotionReadModel

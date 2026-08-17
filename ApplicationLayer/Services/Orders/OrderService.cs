@@ -184,7 +184,8 @@ namespace ApplicationLayer.Services.Orders
                     PaidAt = payment.PaidAt,
                     RefundRequestedAt = payment.RefundRequestedAt,
                     RefundedAt = payment.RefundedAt,
-                    CreatedAt = payment.CreatedAt
+                    CreatedAt = payment.CreatedAt,
+                    QrCode = payment.QrCode
                 }).ToList(),
                 CreatedAt = order.CreatedAt,
                 UpdatedAt = order.UpdatedAt,

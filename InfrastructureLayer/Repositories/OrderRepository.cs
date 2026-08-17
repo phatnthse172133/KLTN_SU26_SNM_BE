@@ -92,7 +92,8 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
                         PaidAt = payment.PaidAt,
                         RefundRequestedAt = payment.RefundRequestedAt,
                         RefundedAt = payment.RefundedAt,
-                        CreatedAt = payment.CreatedAt
+                        CreatedAt = payment.CreatedAt,
+                        QrCode = payment.QrCode
                     }).ToList(),
                 Promotion = order.PromotionUsages.Where(usage => usage.Status != PromotionUsageStatus.Released)
                     .OrderByDescending(usage => usage.AppliedAt)

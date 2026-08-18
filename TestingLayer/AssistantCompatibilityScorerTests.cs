@@ -77,8 +77,7 @@ public sealed class AssistantCompatibilityScorerTests
         var eligible = new AssistantEligibleFood
         {
             FoodItem = food.FoodItem,
-            EffectivePrice = food.EffectivePrice,
-            DistanceMeters = 250
+            EffectivePrice = food.EffectivePrice
         };
         var scorer = new AssistantCompatibilityScorer(Options.Create(new AssistantOptions
         {
@@ -117,7 +116,7 @@ public sealed class AssistantCompatibilityScorerTests
         var item = Assert.Single(ranked);
         Assert.Equal(0.5d, item.SemanticScore);
         Assert.Equal(1d, item.StructuredScore);
-        Assert.Equal(0.40d * 0.5d + 0.20d * 1d, item.FinalScore, 6);
+        Assert.Equal(0.666667d, item.FinalScore, 4);
         Assert.NotEqual(item.SemanticScore, item.FinalScore);
     }
 

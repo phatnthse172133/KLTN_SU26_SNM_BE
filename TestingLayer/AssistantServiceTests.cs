@@ -50,7 +50,7 @@ public sealed class AssistantServiceTests
             .Callback<AssistantMealPlan>(plan => _conversation.MealPlans.Add(plan));
         _metadata.Setup(repository => repository.GetActiveCatalogsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Catalog());
         _foods.Setup(repository => repository.GetEligibleFoodsAsync(It.IsAny<AssistantFoodQueryCriteria>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync([]);
+            .ReturnsAsync(new AssistantFoodQueryResult());
         _foods.Setup(repository => repository.CountNotDeletedFoodItemsAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(0);
 
@@ -132,7 +132,7 @@ public sealed class AssistantServiceTests
     {
         SetupIntent(FoodIntent());
         _foods.Setup(repository => repository.GetEligibleFoodsAsync(It.IsAny<AssistantFoodQueryCriteria>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync([]);
+            .ReturnsAsync(new AssistantFoodQueryResult());
 
         var result = await Send("Món cay");
 
@@ -154,7 +154,7 @@ public sealed class AssistantServiceTests
         AssistantFoodQueryCriteria? captured = null;
         _foods.Setup(repository => repository.GetEligibleFoodsAsync(It.IsAny<AssistantFoodQueryCriteria>(), It.IsAny<CancellationToken>()))
             .Callback<AssistantFoodQueryCriteria, CancellationToken>((criteria, _) => captured = criteria)
-            .ReturnsAsync([]);
+            .ReturnsAsync(new AssistantFoodQueryResult());
 
         await Send("Dưới 70k");
 
@@ -443,7 +443,7 @@ public sealed class AssistantServiceTests
         var plan = MutationPlan(currentId, itemId, quantity: 1, snapshotPrice: 35_000m, partySize: 2, budget: 200_000m);
         var allowed = CartFood(allowedId, available: true, price: 32_000m);
         _foods.Setup(repository => repository.GetEligibleFoodsAsync(It.IsAny<AssistantFoodQueryCriteria>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync([CartFood(currentId, available: true, price: 35_000m), allowed]);
+            .ReturnsAsync(QueryResult(CartFood(currentId, available: true, price: 35_000m), allowed));
         _llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync($$"""{ "scores": [ { "foodItemId": "{{allowedId}}", "semanticCompatibility": 1, "reasons": ["khớp yêu cầu"] } ] }""");
 
@@ -468,7 +468,7 @@ public sealed class AssistantServiceTests
         var itemId = Guid.NewGuid();
         var plan = MutationPlan(currentId, itemId, quantity: 1, snapshotPrice: 35_000m, partySize: 2, budget: 200_000m);
         _foods.Setup(repository => repository.GetEligibleFoodsAsync(It.IsAny<AssistantFoodQueryCriteria>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync([CartFood(allowedId, available: true, price: 32_000m)]);
+            .ReturnsAsync(QueryResult(CartFood(allowedId, available: true, price: 32_000m)));
         _llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync($$"""{ "scores": [ { "foodItemId": "{{fakeId}}", "semanticCompatibility": 1, "reasons": ["bịa"] } ] }""");
 
@@ -586,6 +586,58 @@ public sealed class AssistantServiceTests
         };
         return new AssistantEligibleFood { FoodItem = food, EffectivePrice = price };
     }
+
+    [Fact]
+    public async Task SendMessage_ConversationMarketId_DoesNotScopeDiscoveryCriteria()
+    {
+        var conversationMarketId = Guid.NewGuid();
+        _conversation.MarketId = conversationMarketId;
+        _markets.Setup(repository => repository.CustomerVisibleExistsAsync(conversationMarketId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        SetupIntent(FoodIntent());
+        AssistantFoodQueryCriteria? captured = null;
+        _foods.Setup(repository => repository.GetEligibleFoodsAsync(It.IsAny<AssistantFoodQueryCriteria>(), It.IsAny<CancellationToken>()))
+            .Callback<AssistantFoodQueryCriteria, CancellationToken>((criteria, _) => captured = criteria)
+            .ReturnsAsync(new AssistantFoodQueryResult());
+
+        await Send("Bánh tráng ngon");
+
+        Assert.NotNull(captured);
+        Assert.Null(captured!.MarketId);
+        Assert.Null(captured.MaxDistanceMeters);
+    }
+
+    [Fact]
+    public async Task SendMessage_ExplicitRequestMarketId_ScopesDiscoveryCriteria()
+    {
+        var explicitMarketId = Guid.NewGuid();
+        _markets.Setup(repository => repository.CustomerVisibleExistsAsync(explicitMarketId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        SetupIntent(FoodIntent());
+        AssistantFoodQueryCriteria? captured = null;
+        _foods.Setup(repository => repository.GetEligibleFoodsAsync(It.IsAny<AssistantFoodQueryCriteria>(), It.IsAny<CancellationToken>()))
+            .Callback<AssistantFoodQueryCriteria, CancellationToken>((criteria, _) => captured = criteria)
+            .ReturnsAsync(new AssistantFoodQueryResult());
+
+        await _service.SendMessageAsync(
+            _conversation.CustomerId,
+            _conversation.Id,
+            new SendAssistantMessageRequest
+            {
+                Message = "Bánh tráng ngon",
+                MarketId = explicitMarketId
+            });
+
+        Assert.NotNull(captured);
+        Assert.Equal(explicitMarketId, captured!.MarketId);
+    }
+
+    private static AssistantFoodQueryResult QueryResult(params AssistantEligibleFood[] foods)
+        => new()
+        {
+            Foods = foods,
+            Pipeline = new AssistantFoodQueryPipelineDiagnostics { AfterHardConstraints = foods.Length }
+        };
 
     private static FoodSemanticCatalogSet Catalog()
         => new(

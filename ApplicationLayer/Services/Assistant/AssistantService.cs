@@ -151,14 +151,17 @@ public sealed partial class AssistantService(
         IReadOnlyList<AssistantScoredFood> ranked = [];
         IReadOnlyList<AssistantMealPlanDraft> mealDrafts = [];
         IReadOnlyList<AssistantEligibleFood> eligible = [];
+        AssistantFoodQueryPipelineDiagnostics pipeline = new();
         AssistantSemanticMatchResult semantic = new();
         var queryAt = timeProvider.GetUtcNow().UtcDateTime;
 
         var skipSearch = intent.Intent is AssistantIntentKind.CHITCHAT or AssistantIntentKind.CLARIFY;
         if (!skipSearch)
         {
-            var criteria = BuildCriteria(intent, catalogs, marketId, request, queryAt);
-            eligible = await foods.GetEligibleFoodsAsync(criteria, cancellationToken);
+            var criteria = BuildCriteria(intent, catalogs, request, queryAt);
+            var queryResult = await foods.GetEligibleFoodsAsync(criteria, cancellationToken);
+            eligible = queryResult.Foods;
+            pipeline = queryResult.Pipeline;
             if (eligible.Count > 0)
             {
                 semantic = await semanticMatcher.ScoreAsync(message, intent, eligible, cancellationToken);
@@ -201,7 +204,7 @@ public sealed partial class AssistantService(
         await conversations.SaveTurnAsync(conversation, cancellationToken);
 
         started.Stop();
-        var diagnostics = BuildDiagnostics(intent, totalFoodCount, eligible, semantic, started.ElapsedMilliseconds);
+        var diagnostics = BuildDiagnostics(intent, totalFoodCount, pipeline, eligible, semantic, recommendations.Length, started.ElapsedMilliseconds);
         logger.LogInformation(
             "Assistant turn {ConversationId} eligible={EligibleCount} totalFoods={TotalFoodCount} batches={BatchCount} idsSent={IdsSent} idsEvaluated={IdsEvaluated} latencyMs={LatencyMs} intent={Intent}",
             conversation.Id,
@@ -270,7 +273,6 @@ public sealed partial class AssistantService(
     private AssistantFoodQueryCriteria BuildCriteria(
         ParsedAssistantIntent intent,
         FoodSemanticCatalogSet catalogs,
-        Guid? marketId,
         SendAssistantMessageRequest request,
         DateTime utcNow)
     {
@@ -278,13 +280,14 @@ public sealed partial class AssistantService(
         var avoidedIngredients = Ids(catalogs.Ingredients, intent.HardConstraints.AvoidedIngredientCodes).Distinct().ToArray();
         var dietary = Ids(catalogs.DietaryAttributes, intent.HardConstraints.DietaryCodes).Distinct().ToArray();
         var avoidedTastes = Ids(catalogs.TasteProfiles, intent.HardConstraints.AvoidedTasteCodes).Distinct().ToArray();
+        var explicitMarketId = request.MarketId is { } marketId && marketId != Guid.Empty ? marketId : (Guid?)null;
 
         return new AssistantFoodQueryCriteria
         {
-            MarketId = marketId,
+            MarketId = explicitMarketId,
             Latitude = request.Latitude,
             Longitude = request.Longitude,
-            MaxDistanceMeters = request.MaxDistanceMeters ?? _options.DefaultMaxDistanceMeters,
+            MaxDistanceMeters = request.MaxDistanceMeters,
             BudgetMin = intent.BudgetMin,
             BudgetMax = intent.BudgetMax,
             AllergenExclusionIds = allergenIds,
@@ -345,8 +348,10 @@ public sealed partial class AssistantService(
     private static AssistantTurnDiagnostics BuildDiagnostics(
         ParsedAssistantIntent intent,
         int totalFoodCount,
+        AssistantFoodQueryPipelineDiagnostics pipeline,
         IReadOnlyList<AssistantEligibleFood> eligible,
         AssistantSemanticMatchResult semantic,
+        int recommendationCount,
         long latencyMs)
     {
         var idsSent = semantic.IdsSent.Count > 0
@@ -360,7 +365,13 @@ public sealed partial class AssistantService(
         {
             EligibleCount = eligible.Count,
             TotalFoodCount = totalFoodCount,
+            AfterMarketActive = pipeline.AfterMarketActive,
+            AfterBoothActive = pipeline.AfterBoothActive,
+            AfterFoodVisible = pipeline.AfterFoodVisible,
+            AfterHardConstraints = pipeline.AfterHardConstraints,
+            AfterOpenNow = pipeline.AfterOpenNow,
             BatchCount = semantic.BatchCount,
+            RecommendationCount = recommendationCount,
             IdsSent = idsSent,
             IdsEvaluated = idsEvaluated,
             LatencyMs = latencyMs,

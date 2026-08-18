@@ -1,3 +1,4 @@
+using ApplicationLayer.Services.CustomerDiscovery;
 using ApplicationLayer.Services.NightMarkets;
 using DomainLayer.Common;
 using DomainLayer.Entities;
@@ -11,10 +12,12 @@ namespace InfrastructureLayer.Repositories;
 
 public sealed class AssistantFoodQueryRepository(SNMDbContext db) : IAssistantFoodQueryRepository
 {
-    public async Task<IReadOnlyList<AssistantEligibleFood>> GetEligibleFoodsAsync(
+    public async Task<AssistantFoodQueryResult> GetEligibleFoodsAsync(
         AssistantFoodQueryCriteria criteria,
         CancellationToken cancellationToken = default)
     {
+        var pipeline = await CountPipelineStagesAsync(cancellationToken);
+
         var query = CustomerVisibleQuery();
         if (criteria.MarketId.HasValue)
             query = query.Where(item => item.Booth.NightMarketId == criteria.MarketId.Value);
@@ -91,8 +94,10 @@ public sealed class AssistantFoodQueryRepository(SNMDbContext db) : IAssistantFo
             .ToListAsync(cancellationToken);
 
         var utcNow = criteria.UtcNow;
+        var localTime = TimeOnly.FromDateTime(NightMarketAvailability.GetVietnamLocalTime(utcNow));
         var sales = await LoadSalesFactsAsync(entities.Select(item => item.Id).ToArray(), utcNow, cancellationToken);
         var result = new List<AssistantEligibleFood>(entities.Count);
+        var openNowCount = 0;
         foreach (var item in entities)
         {
             var price = FoodPriceResolver.GetCurrentPrice(item, utcNow);
@@ -107,9 +112,12 @@ public sealed class AssistantFoodQueryRepository(SNMDbContext db) : IAssistantFo
                     criteria.Longitude!.Value,
                     (double)item.Booth.NightMarket.Latitude.Value,
                     (double)item.Booth.NightMarket.Longitude.Value);
-                if (criteria.MaxDistanceMeters.HasValue && distance > criteria.MaxDistanceMeters.Value)
+                if (criteria.MaxDistanceMeters is > 0 && distance > criteria.MaxDistanceMeters.Value)
                     continue;
             }
+
+            if (IsOpenNow(item, localTime))
+                openNowCount++;
 
             sales.TryGetValue(item.Id, out var fact);
             result.Add(new AssistantEligibleFood
@@ -123,7 +131,18 @@ public sealed class AssistantFoodQueryRepository(SNMDbContext db) : IAssistantFo
             });
         }
 
-        return result;
+        return new AssistantFoodQueryResult
+        {
+            Foods = result,
+            Pipeline = new AssistantFoodQueryPipelineDiagnostics
+            {
+                AfterMarketActive = pipeline.AfterMarketActive,
+                AfterBoothActive = pipeline.AfterBoothActive,
+                AfterFoodVisible = pipeline.AfterFoodVisible,
+                AfterHardConstraints = result.Count,
+                AfterOpenNow = openNowCount
+            }
+        };
     }
 
     public Task<int> CountNotDeletedFoodItemsAsync(CancellationToken cancellationToken = default)
@@ -152,6 +171,33 @@ public sealed class AssistantFoodQueryRepository(SNMDbContext db) : IAssistantFo
             FoodItem = item,
             EffectivePrice = FoodPriceResolver.GetCurrentPrice(item, utcNow),
             HasActivePromotion = HasActivePromotion(item, utcNow)
+        };
+    }
+
+    private async Task<AssistantFoodQueryPipelineDiagnostics> CountPipelineStagesAsync(CancellationToken cancellationToken)
+    {
+        var afterMarketActive = await db.FoodItems.CountAsync(item =>
+            !item.IsDeleted
+            && !item.Booth.NightMarket.IsDeleted
+            && item.Booth.NightMarket.ModerationStatus == ModerationStatus.Active
+            && item.Booth.NightMarket.Status == NightMarketStatus.Active,
+            cancellationToken);
+
+        var afterBoothActive = await db.FoodItems.CountAsync(item =>
+            !item.IsDeleted
+            && !item.Booth.NightMarket.IsDeleted
+            && item.Booth.NightMarket.ModerationStatus == ModerationStatus.Active
+            && item.Booth.NightMarket.Status == NightMarketStatus.Active
+            && item.Booth.Status == BoothStatus.Active,
+            cancellationToken);
+
+        var afterFoodVisible = await CustomerVisibleQuery().CountAsync(cancellationToken);
+
+        return new AssistantFoodQueryPipelineDiagnostics
+        {
+            AfterMarketActive = afterMarketActive,
+            AfterBoothActive = afterBoothActive,
+            AfterFoodVisible = afterFoodVisible
         };
     }
 
@@ -200,6 +246,15 @@ public sealed class AssistantFoodQueryRepository(SNMDbContext db) : IAssistantFo
 
     private static bool HasGps(AssistantFoodQueryCriteria criteria)
         => criteria.Latitude is >= -90 and <= 90 && criteria.Longitude is >= -180 and <= 180;
+
+    private static bool IsOpenNow(FoodItem food, TimeOnly localTime)
+        => CustomerAvailability.IsOpenNow(
+            food.Booth.NightMarket.Status == NightMarketStatus.Active,
+            food.Booth.NightMarket.OpeningHours,
+            food.Booth.NightMarket.ClosingHours,
+            food.Booth.OpenTime,
+            food.Booth.CloseTime,
+            localTime);
 
     private static bool HasActivePromotion(FoodItem food, DateTime utcNow)
     {

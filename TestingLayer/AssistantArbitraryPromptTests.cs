@@ -328,7 +328,7 @@ public sealed class AssistantArbitraryPromptTests
         string? stageC = null)
     {
         _foods.Setup(repository => repository.GetEligibleFoodsAsync(It.IsAny<AssistantFoodQueryCriteria>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(eligible.ToArray());
+            .ReturnsAsync(new AssistantFoodQueryResult { Foods = eligible.ToArray(), Pipeline = new AssistantFoodQueryPipelineDiagnostics { AfterHardConstraints = eligible.Count } });
         _llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .Returns((string system, string user, int _, CancellationToken _) =>
             {

@@ -4,7 +4,7 @@ namespace DomainLayer.InterfaceRepository;
 
 public interface IAssistantFoodQueryRepository
 {
-    Task<IReadOnlyList<AssistantEligibleFood>> GetEligibleFoodsAsync(
+    Task<AssistantFoodQueryResult> GetEligibleFoodsAsync(
         AssistantFoodQueryCriteria criteria,
         CancellationToken cancellationToken = default);
 

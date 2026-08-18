@@ -159,7 +159,7 @@ public sealed class AssistantTurnPersistenceTests
         var foods = new Mock<IAssistantFoodQueryRepository>();
         foods.Setup(repository => repository.CountNotDeletedFoodItemsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(0);
         foods.Setup(repository => repository.GetEligibleFoodsAsync(It.IsAny<AssistantFoodQueryCriteria>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync([]);
+            .ReturnsAsync(new AssistantFoodQueryResult());
         var metadata = new Mock<IFoodSemanticMetadataRepository>();
         metadata.Setup(repository => repository.GetActiveCatalogsAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(new FoodSemanticCatalogSet([], [], [], [], []));

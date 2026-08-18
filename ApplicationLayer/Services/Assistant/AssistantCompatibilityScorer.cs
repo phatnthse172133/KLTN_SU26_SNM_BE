@@ -32,7 +32,7 @@ public sealed class AssistantCompatibilityScorer(IOptions<AssistantOptions> opti
         DateTime utcNow)
     {
         var hasGps = eligible.Any(item => item.DistanceMeters.HasValue);
-        var weights = hasGps ? CurrentWeights() : RedistributeWithoutDistance();
+        var weights = CompatibilityWeights();
         var preferredIngredients = Union(intent.StructuredPreferences.PreferredIngredientCodes);
         var preferredTastes = Union(intent.StructuredPreferences.PreferredTasteCodes);
         var preferredPrep = Union(intent.StructuredPreferences.PreferredPreparationCodes);
@@ -49,7 +49,6 @@ public sealed class AssistantCompatibilityScorer(IOptions<AssistantOptions> opti
             var structured = StructuredOverlap(item.FoodItem, preferredIngredients, preferredTastes, preferredPrep, preferredCourses);
             var price = PriceFit(item.EffectivePrice, budgetMin, budgetMax);
             var rating = item.FoodItem.ReviewCount <= 0 ? 0d : (double)item.FoodItem.AverageRating / 5d;
-            var distance = DistanceFit(item.DistanceMeters, _options.DefaultMaxDistanceMeters);
             var openNow = IsOpenNow(item.FoodItem, localTime);
             var featured = item.FoodItem.IsFeatured ? 1d : 0d;
             var promo = item.HasActivePromotion ? 1d : 0d;
@@ -58,9 +57,7 @@ public sealed class AssistantCompatibilityScorer(IOptions<AssistantOptions> opti
                 + weights.Structured * structured
                 + weights.Price * price
                 + weights.Rating * rating
-                + weights.Distance * distance
                 + weights.Featured * featured
-                + weights.OpenNow * (openNow ? 1d : 0d)
                 + weights.Promo * promo;
 
             var reasons = new List<string>(match?.Reasons ?? []);
@@ -79,38 +76,48 @@ public sealed class AssistantCompatibilityScorer(IOptions<AssistantOptions> opti
                 StructuredScore = structured,
                 PriceScore = price,
                 RatingScore = rating,
-                DistanceScore = distance,
+                DistanceScore = 0d,
                 IsOpenNow = openNow,
                 Reasons = reasons,
                 UnknownDataFacets = match?.UnknownDataFacets ?? []
             });
         }
 
+        return OrderResults(
+            scored.Where(item => item.FinalScore >= _options.MinimumCompatibilityScore).ToList(),
+            hasGps);
+    }
+
+    private static IReadOnlyList<AssistantScoredFood> OrderResults(IReadOnlyList<AssistantScoredFood> scored, bool hasGps)
+    {
+        if (hasGps)
+        {
+            return scored
+                .OrderBy(item => item.Eligible.DistanceMeters ?? double.MaxValue)
+                .ThenByDescending(item => item.FinalScore)
+                .ThenByDescending(item => item.Eligible.FoodItem.AverageRating)
+                .ThenBy(item => item.Eligible.FoodItem.Id)
+                .ToArray();
+        }
+
         return scored
-            .Where(item => item.FinalScore >= _options.MinimumCompatibilityScore)
             .OrderByDescending(item => item.FinalScore)
-            .ThenBy(item => item.Eligible.FoodItem.Name)
+            .ThenByDescending(item => item.Eligible.FoodItem.AverageRating)
             .ThenBy(item => item.Eligible.FoodItem.Id)
             .ToArray();
     }
 
-    private (double Semantic, double Structured, double Price, double Rating, double Distance, double Featured, double OpenNow, double Promo) CurrentWeights()
-        => (_options.SemanticWeight, _options.StructuredPreferenceWeight, _options.PriceWeight, _options.RatingWeight,
-            _options.DistanceWeight, _options.FeaturedWeight, _options.OpenNowWeight, _options.PromoWeight);
-
-    private (double Semantic, double Structured, double Price, double Rating, double Distance, double Featured, double OpenNow, double Promo) RedistributeWithoutDistance()
+    private (double Semantic, double Structured, double Price, double Rating, double Featured, double Promo) CompatibilityWeights()
     {
-        var rest = _options.SemanticWeight + _options.StructuredPreferenceWeight + _options.PriceWeight + _options.RatingWeight
-            + _options.FeaturedWeight + _options.OpenNowWeight + _options.PromoWeight;
-        var scale = rest <= 0 ? 1d : 1d / rest;
+        var total = _options.SemanticWeight + _options.StructuredPreferenceWeight + _options.PriceWeight + _options.RatingWeight
+            + _options.FeaturedWeight + _options.PromoWeight;
+        var scale = total <= 0 ? 1d : 1d / total;
         return (
             _options.SemanticWeight * scale,
             _options.StructuredPreferenceWeight * scale,
             _options.PriceWeight * scale,
             _options.RatingWeight * scale,
-            0d,
             _options.FeaturedWeight * scale,
-            _options.OpenNowWeight * scale,
             _options.PromoWeight * scale);
     }
 
@@ -145,12 +152,6 @@ public sealed class AssistantCompatibilityScorer(IOptions<AssistantOptions> opti
         var span = high - low;
         var distance = Math.Abs(price - mid);
         return Math.Clamp(1d - (double)(distance / span), 0d, 1d);
-    }
-
-    private static double DistanceFit(double? meters, int maxDistance)
-    {
-        if (!meters.HasValue || maxDistance <= 0) return 0d;
-        return Math.Clamp(1d - meters.Value / maxDistance, 0d, 1d);
     }
 
     private static bool IsOpenNow(FoodItem food, TimeOnly localTime)

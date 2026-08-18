@@ -29,3 +29,18 @@ public sealed class AssistantEligibleFood
     public int SoldToday { get; init; }
     public int OrderCount { get; init; }
 }
+
+public sealed class AssistantFoodQueryPipelineDiagnostics
+{
+    public int AfterMarketActive { get; init; }
+    public int AfterBoothActive { get; init; }
+    public int AfterFoodVisible { get; init; }
+    public int AfterHardConstraints { get; init; }
+    public int AfterOpenNow { get; init; }
+}
+
+public sealed class AssistantFoodQueryResult
+{
+    public IReadOnlyList<AssistantEligibleFood> Foods { get; init; } = [];
+    public AssistantFoodQueryPipelineDiagnostics Pipeline { get; init; } = new();
+}

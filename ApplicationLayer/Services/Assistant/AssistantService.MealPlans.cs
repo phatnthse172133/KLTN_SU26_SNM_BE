@@ -115,10 +115,9 @@ public sealed partial class AssistantService
             MarketId = plan.NightMarketId,
             BudgetMax = plan.BudgetMax,
             TreatMayContainAsHard = _options.TreatMayContainAsHard,
-            MaxDistanceMeters = _options.DefaultMaxDistanceMeters,
             UtcNow = now
         }, cancellationToken);
-        var remaining = eligible
+        var remaining = eligible.Foods
             .Where(item => item.FoodItem.Id != excludeFoodItemId)
             .Take(Math.Max(1, _options.MaxMealPlanCandidates))
             .ToArray();

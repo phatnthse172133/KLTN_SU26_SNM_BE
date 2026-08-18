@@ -31,7 +31,13 @@ public sealed class AssistantTurnDiagnostics
 {
     public int EligibleCount { get; set; }
     public int TotalFoodCount { get; set; }
+    public int AfterMarketActive { get; set; }
+    public int AfterBoothActive { get; set; }
+    public int AfterFoodVisible { get; set; }
+    public int AfterHardConstraints { get; set; }
+    public int AfterOpenNow { get; set; }
     public int BatchCount { get; set; }
+    public int RecommendationCount { get; set; }
     public IReadOnlyList<Guid> IdsSent { get; set; } = [];
     public IReadOnlyList<Guid> IdsEvaluated { get; set; } = [];
     public long LatencyMs { get; set; }

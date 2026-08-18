@@ -407,6 +407,9 @@ var payOSRuntimeSettings = app.Services
 var openAiRuntimeSettings = app.Services
     .GetRequiredService<Microsoft.Extensions.Options.IOptions<ApplicationLayer.Services.Assistant.OpenAiOptions>>()
     .Value;
+var assistantRuntimeSettings = app.Services
+    .GetRequiredService<Microsoft.Extensions.Options.IOptions<ApplicationLayer.Services.Assistant.AssistantOptions>>()
+    .Value;
 app.Lifetime.ApplicationStarted.Register(() =>
 {
     app.Logger.LogInformation(
@@ -417,12 +420,17 @@ app.Lifetime.ApplicationStarted.Register(() =>
         Uri.TryCreate(payOSRuntimeSettings.ReturnUrl, UriKind.Absolute, out _),
         Uri.TryCreate(payOSRuntimeSettings.CancelUrl, UriKind.Absolute, out _));
     app.Logger.LogInformation(
-        "OpenAI runtime config. Enabled={Enabled} ApiKeyPresent={ApiKeyPresent} Model={Model} BaseUrlHost={BaseUrlHost} TimeoutSeconds={TimeoutSeconds}",
-        openAiRuntimeSettings.Enabled,
-        !string.IsNullOrWhiteSpace(openAiRuntimeSettings.ApiKey),
+        "OpenAI runtime config. Provider={Provider} Model={Model} TimeoutSeconds={TimeoutSeconds} MaxInputCharacters={MaxInputCharacters} MaxOutputTokens={MaxOutputTokens} RetryCount={RetryCount} CandidateBatchSize={CandidateBatchSize} SemanticBatchMaxConcurrency={SemanticBatchMaxConcurrency} Enabled={Enabled} ApiKeyPresent={ApiKeyPresent}",
+        openAiRuntimeSettings.Provider,
         openAiRuntimeSettings.Model,
-        Uri.TryCreate(openAiRuntimeSettings.BaseUrl, UriKind.Absolute, out var openAiBase) ? openAiBase.Host : "missing",
-        openAiRuntimeSettings.TimeoutSeconds);
+        openAiRuntimeSettings.TimeoutSeconds,
+        openAiRuntimeSettings.MaxInputCharacters,
+        openAiRuntimeSettings.MaxOutputTokens,
+        openAiRuntimeSettings.RetryCount,
+        assistantRuntimeSettings.CandidateBatchSize,
+        assistantRuntimeSettings.SemanticBatchMaxConcurrency,
+        openAiRuntimeSettings.Enabled,
+        !string.IsNullOrWhiteSpace(openAiRuntimeSettings.ApiKey));
 });
 if (developmentInstanceLock is not null)
 {

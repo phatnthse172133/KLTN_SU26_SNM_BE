@@ -174,29 +174,31 @@ public sealed partial class AssistantService(
         foreach (var draft in mealDrafts)
         {
             var plan = PersistMealPlan(conversation, customerId, draft, now);
-            conversation.MealPlans.Add(plan);
+            conversations.AddMealPlan(plan);
             persistedPlans.Add((plan, draft));
         }
 
         var reply = replyComposer.Compose(intent, recommendations, mealDrafts);
-        conversation.Messages.Add(new AssistantMessage
+        var userMessage = new AssistantMessage
         {
             Id = Guid.NewGuid(),
             ConversationId = conversation.Id,
             Role = AssistantMessageRole.User,
             Content = message,
             CreatedAt = now
-        });
-        conversation.Messages.Add(new AssistantMessage
+        };
+        var assistantMessage = new AssistantMessage
         {
             Id = Guid.NewGuid(),
             ConversationId = conversation.Id,
             Role = AssistantMessageRole.Assistant,
             Content = reply,
             CreatedAt = now
-        });
+        };
+        conversations.AddMessage(userMessage);
+        conversations.AddMessage(assistantMessage);
         conversation.UpdatedAt = now;
-        await conversations.SaveChangesAsync(cancellationToken);
+        await conversations.SaveTurnAsync(conversation, cancellationToken);
 
         started.Stop();
         var diagnostics = BuildDiagnostics(intent, totalFoodCount, eligible, semantic, started.ElapsedMilliseconds);

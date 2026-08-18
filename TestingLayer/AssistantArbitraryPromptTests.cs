@@ -42,6 +42,11 @@ public sealed class AssistantArbitraryPromptTests
         _conversations.Setup(repository => repository.GetRecentMessagesAsync(_conversation.Id, It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
         _conversations.Setup(repository => repository.SaveChangesAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        _conversations.Setup(repository => repository.SaveTurnAsync(It.IsAny<AssistantConversation>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        _conversations.Setup(repository => repository.AddMessage(It.IsAny<AssistantMessage>()))
+            .Callback<AssistantMessage>(message => _conversation.Messages.Add(message));
+        _conversations.Setup(repository => repository.AddMealPlan(It.IsAny<AssistantMealPlan>()))
+            .Callback<AssistantMealPlan>(plan => _conversation.MealPlans.Add(plan));
         _metadata.Setup(repository => repository.GetActiveCatalogsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Catalog());
         _foods.Setup(repository => repository.CountNotDeletedFoodItemsAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(14);

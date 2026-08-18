@@ -1,8 +1,11 @@
 using System.Text.Json;
 using ApplicationLayer.Exceptions;
+using DomainLayer.Entities;
+using DomainLayer.Enums;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using InfrastructureLayer.Cores.Database;
+using InfrastructureLayer.Data;
 
 namespace TestingLayer;
 
@@ -68,6 +71,46 @@ public sealed class DatabaseWriteErrorMapperTests
 
         Assert.Equal(500, mapped.StatusCode);
         Assert.Equal(DatabaseWriteErrorMapper.WriteCode, mapped.ErrorCode);
+    }
+
+    [Fact]
+    public async Task Concurrency_IncludesEntityTable_WithoutSqlState()
+    {
+        var name = Guid.NewGuid().ToString("N");
+        var options = new DbContextOptionsBuilder<SNMDbContext>()
+            .UseInMemoryDatabase(name)
+            .Options;
+        var createdAt = new DateTime(2026, 8, 18, 3, 0, 0, DateTimeKind.Utc);
+        await using (var seed = new SNMDbContext(options))
+        {
+            seed.AssistantConversations.Add(new AssistantConversation
+            {
+                Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                CustomerId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+                Status = AssistantConversationStatus.Active,
+                CreatedAt = createdAt,
+                UpdatedAt = createdAt
+            });
+            await seed.SaveChangesAsync();
+        }
+
+        await using var updater = new SNMDbContext(options);
+        var conversation = await updater.AssistantConversations.SingleAsync();
+        await using (var deleter = new SNMDbContext(options))
+        {
+            deleter.AssistantConversations.Remove(await deleter.AssistantConversations.SingleAsync());
+            await deleter.SaveChangesAsync();
+        }
+
+        conversation.UpdatedAt = createdAt.AddSeconds(1);
+        var exception = await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => updater.SaveChangesAsync());
+        var mapped = DatabaseWriteErrorMapper.Map(exception);
+
+        Assert.Equal(409, mapped.StatusCode);
+        Assert.Equal(DatabaseWriteErrorMapper.ConflictCode, mapped.ErrorCode);
+        Assert.Equal("concurrency", Reason(mapped.Details));
+        Assert.Null(SqlState(mapped.Details));
+        Assert.Equal("AssistantConversation", Read(mapped.Details, "table"));
     }
 
     private static PostgresException Postgres(string sqlState)

@@ -43,6 +43,11 @@ public sealed class AssistantServiceTests
         _conversations.Setup(repository => repository.GetRecentMessagesAsync(_conversation.Id, It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
         _conversations.Setup(repository => repository.SaveChangesAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        _conversations.Setup(repository => repository.SaveTurnAsync(It.IsAny<AssistantConversation>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        _conversations.Setup(repository => repository.AddMessage(It.IsAny<AssistantMessage>()))
+            .Callback<AssistantMessage>(message => _conversation.Messages.Add(message));
+        _conversations.Setup(repository => repository.AddMealPlan(It.IsAny<AssistantMealPlan>()))
+            .Callback<AssistantMealPlan>(plan => _conversation.MealPlans.Add(plan));
         _metadata.Setup(repository => repository.GetActiveCatalogsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Catalog());
         _foods.Setup(repository => repository.GetEligibleFoodsAsync(It.IsAny<AssistantFoodQueryCriteria>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
@@ -117,7 +122,8 @@ public sealed class AssistantServiceTests
             .ToArray();
         Assert.Equal(2, ordered.Length);
         Assert.True(ordered[0].Id.CompareTo(ordered[1].Id) < 0);
-        _conversations.Verify(repository => repository.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        _conversations.Verify(repository => repository.SaveTurnAsync(_conversation, It.IsAny<CancellationToken>()), Times.Once);
+        _conversations.Verify(repository => repository.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
         _foods.Verify(repository => repository.GetEligibleFoodsAsync(It.IsAny<AssistantFoodQueryCriteria>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
@@ -222,6 +228,7 @@ public sealed class AssistantServiceTests
         Assert.Equal(AssistantErrors.Timeout, AssistantProviderFailure.Reason(exception));
         Assert.Empty(_conversation.Messages);
         _conversations.Verify(repository => repository.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+        _conversations.Verify(repository => repository.SaveTurnAsync(It.IsAny<AssistantConversation>(), It.IsAny<CancellationToken>()), Times.Never);
         _foods.Verify(repository => repository.GetEligibleFoodsAsync(It.IsAny<AssistantFoodQueryCriteria>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
@@ -246,6 +253,7 @@ public sealed class AssistantServiceTests
         Assert.Equal(AssistantErrors.MissingKey, AssistantProviderFailure.Reason(exception));
         _llm.Verify(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
         _conversations.Verify(repository => repository.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+        _conversations.Verify(repository => repository.SaveTurnAsync(It.IsAny<AssistantConversation>(), It.IsAny<CancellationToken>()), Times.Never);
         _foods.Verify(repository => repository.GetEligibleFoodsAsync(It.IsAny<AssistantFoodQueryCriteria>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
@@ -257,7 +265,7 @@ public sealed class AssistantServiceTests
               "hardConstraints": {}, "structuredPreferences": {},
               "semanticPreferences": [], "semanticAvoidances": [] }
             """);
-        _conversations.Setup(repository => repository.SaveChangesAsync(It.IsAny<CancellationToken>()))
+        _conversations.Setup(repository => repository.SaveTurnAsync(It.IsAny<AssistantConversation>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new DbUpdateException(
                 "could not update",
                 new PostgresException("duplicate key", "ERROR", "ERROR", "23505")));

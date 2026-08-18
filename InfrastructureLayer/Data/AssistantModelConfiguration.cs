@@ -22,10 +22,6 @@ internal static class AssistantModelConfiguration
                 .WithMany(value => value.AssistantConversations)
                 .HasForeignKey(value => value.CustomerId)
                 .OnDelete(DeleteBehavior.Cascade);
-            entity.HasOne(value => value.Market)
-                .WithMany()
-                .HasForeignKey(value => value.MarketId)
-                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<AssistantMessage>(entity =>

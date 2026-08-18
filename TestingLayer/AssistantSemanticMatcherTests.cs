@@ -39,7 +39,7 @@ public sealed class AssistantSemanticMatcherTests
                 var ids = CandidateIds(user);
                 batchSizes.Add(ids.Count);
                 sentIds.AddRange(ids);
-                return Task.FromResult(ScoresJson(ids));
+                return Task.FromResult<LanguageModelJsonCompletion>(ScoresJson(ids));
             });
         var matcher = Create(llm.Object, 30);
         var eligible = Enumerable.Range(0, 97).Select(index => Eligible($"Món {index}")).ToArray();
@@ -74,7 +74,7 @@ public sealed class AssistantSemanticMatcherTests
                 });
                 await Task.Delay(40);
                 Interlocked.Decrement(ref current);
-                return ScoresJson(CandidateIds(user));
+                return (LanguageModelJsonCompletion)ScoresJson(CandidateIds(user));
             });
         var matcher = Create(llm.Object, batchSize: 10, concurrency: 3);
         var eligible = Enumerable.Range(0, 40).Select(index => Eligible($"Món {index}")).ToArray();
@@ -159,6 +159,71 @@ public sealed class AssistantSemanticMatcherTests
         Assert.Equal(503, exception.StatusCode);
         Assert.Equal("ASSISTANT_PROVIDER_UNAVAILABLE", exception.ErrorCode);
         Assert.Equal(AssistantErrors.InvalidJson, AssistantProviderFailure.Reason(exception));
+        Assert.Equal(AssistantJsonParseClassifier.OutputTruncated, AssistantProviderFailure.ParseFailureCategory(exception));
+        Assert.Equal(AssistantLlmStages.Semantic, AssistantProviderFailure.Stage(exception));
+    }
+
+    [Fact]
+    public void ParseBatch_TruncatedWithFinishLength_HasTokenDiagnostics()
+    {
+        var truncated = """{"scores":[{"foodItemId":"11111111-1111-1111-1111-111111111111","semanticCompatibility":0.9,"reasons":["khớp vị""";
+        var completion = new LanguageModelJsonCompletion
+        {
+            Content = truncated,
+            Model = "gpt-4o-mini",
+            FinishReason = "length",
+            ConfiguredMaxOutputTokens = 400,
+            OutputTokenCount = 400,
+            ResponseCharacterCount = truncated.Length
+        };
+
+        var exception = Assert.Throws<AppException>(() =>
+            AssistantSemanticMatcher.ParseBatch(completion, new HashSet<Guid> { Guid.Parse("11111111-1111-1111-1111-111111111111") }));
+
+        Assert.Equal(AssistantErrors.InvalidJson, AssistantProviderFailure.Reason(exception));
+        Assert.Equal(AssistantJsonParseClassifier.OutputTruncated, AssistantProviderFailure.ParseFailureCategory(exception));
+        Assert.Equal(400, AssistantProviderFailure.ConfiguredMaxOutputTokens(exception));
+        Assert.Equal(400, AssistantProviderFailure.OutputTokenCount(exception));
+        Assert.Equal(truncated.Length, AssistantProviderFailure.ResponseCharacterCount(exception));
+        Assert.Equal("length", AssistantProviderFailure.FinishReason(exception));
+    }
+
+    [Fact]
+    public void ParseBatch_SchemaMismatch_ThrowsInvalidJson()
+    {
+        var exception = Assert.Throws<AppException>(() =>
+            AssistantSemanticMatcher.ParseBatch("""{"scores":{"foodItemId":"x"}}""", new HashSet<Guid>()));
+
+        Assert.Equal(AssistantErrors.InvalidJson, AssistantProviderFailure.Reason(exception));
+        Assert.Equal(AssistantJsonParseClassifier.SchemaMismatch, AssistantProviderFailure.ParseFailureCategory(exception));
+    }
+
+    [Fact]
+    public void ParseBatch_Malformed_DoesNotInventScores()
+    {
+        var exception = Assert.Throws<AppException>(() =>
+            AssistantSemanticMatcher.ParseBatch("not-json{{{", new HashSet<Guid> { Guid.NewGuid() }));
+
+        Assert.Equal(AssistantErrors.InvalidJson, AssistantProviderFailure.Reason(exception));
+        Assert.Equal(AssistantJsonParseClassifier.MalformedJson, AssistantProviderFailure.ParseFailureCategory(exception));
+    }
+
+    [Fact]
+    public async Task Score_RequestsSemanticTokenBudget()
+    {
+        var llm = new Mock<ILanguageModelClient>();
+        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .Returns((string _, string user, int _, CancellationToken _) =>
+                Task.FromResult<LanguageModelJsonCompletion>(ScoresJson(CandidateIds(user))));
+        var matcher = Create(llm.Object, 30);
+
+        await matcher.ScoreAsync("gợi ý", Intent(), [Eligible("A")], CancellationToken.None);
+
+        llm.Verify(client => client.CompleteJsonAsync(
+            It.IsAny<string>(),
+            It.IsAny<string>(),
+            2500,
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]

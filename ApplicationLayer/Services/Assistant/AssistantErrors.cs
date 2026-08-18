@@ -1,4 +1,5 @@
 using ApplicationLayer.Exceptions;
+using Microsoft.Extensions.Logging;
 
 namespace ApplicationLayer.Services.Assistant;
 
@@ -32,13 +33,84 @@ public static class AssistantErrors
         => ProviderUnavailable("unspecified", inner);
 
     public static AppException ProviderUnavailable(string reason, Exception? inner = null, int? httpStatus = null)
-        => AppException.ServiceUnavailable(
+        => ProviderUnavailable(reason, inner, httpStatus, diagnostics: null);
+
+    public static AppException InvalidProviderJson(
+        string stage,
+        LanguageModelJsonCompletion? completion,
+        string parseFailureCategory,
+        Exception? inner = null,
+        ILogger? logger = null)
+    {
+        var diagnostics = AssistantProviderDiagnostics.From(stage, completion, parseFailureCategory);
+        LogInvalidJson(logger, diagnostics, inner);
+        return ProviderUnavailable(InvalidJson, inner, httpStatus: null, diagnostics);
+    }
+
+    public static AppException ProviderUnavailable(
+        string reason,
+        Exception? inner,
+        int? httpStatus,
+        AssistantProviderDiagnostics? diagnostics)
+    {
+        object details;
+        if (diagnostics is null)
+        {
+            details = httpStatus is null
+                ? new { reason }
+                : new { reason, httpStatus };
+        }
+        else
+        {
+            details = httpStatus is null
+                ? new
+                {
+                    reason,
+                    stage = diagnostics.Stage,
+                    finishReason = diagnostics.FinishReason,
+                    parseFailureCategory = diagnostics.ParseFailureCategory,
+                    configuredMaxOutputTokens = diagnostics.ConfiguredMaxOutputTokens,
+                    outputTokenCount = diagnostics.OutputTokenCount,
+                    responseCharacterCount = diagnostics.ResponseCharacterCount
+                }
+                : new
+                {
+                    reason,
+                    httpStatus,
+                    stage = diagnostics.Stage,
+                    finishReason = diagnostics.FinishReason,
+                    parseFailureCategory = diagnostics.ParseFailureCategory,
+                    configuredMaxOutputTokens = diagnostics.ConfiguredMaxOutputTokens,
+                    outputTokenCount = diagnostics.OutputTokenCount,
+                    responseCharacterCount = diagnostics.ResponseCharacterCount
+                };
+        }
+
+        return AppException.ServiceUnavailable(
             "The AI assistant provider is currently unavailable.",
             "ASSISTANT_PROVIDER_UNAVAILABLE",
             inner,
-            details: httpStatus is null
-                ? new { reason }
-                : new { reason, httpStatus });
+            details);
+    }
+
+    private static void LogInvalidJson(ILogger? logger, AssistantProviderDiagnostics diagnostics, Exception? inner)
+    {
+        if (logger is null)
+            return;
+
+        logger.LogWarning(
+            inner,
+            "Assistant JSON parse failed. Stage={Stage} Model={Model} FinishReason={FinishReason} ConfiguredMaxOutputTokens={ConfiguredMaxOutputTokens} OutputTokenCount={OutputTokenCount} ResponseCharacterCount={ResponseCharacterCount} ParseFailureCategory={ParseFailureCategory} RequestId={RequestId} JsonPrefix={JsonPrefix}",
+            diagnostics.Stage,
+            diagnostics.Model,
+            diagnostics.FinishReason,
+            diagnostics.ConfiguredMaxOutputTokens,
+            diagnostics.OutputTokenCount,
+            diagnostics.ResponseCharacterCount,
+            diagnostics.ParseFailureCategory,
+            diagnostics.RequestId,
+            diagnostics.JsonPrefix);
+    }
 
     public static AppException MarketNotFound()
         => AppException.NotFound("Night market was not found.", "ASSISTANT_MARKET_NOT_FOUND");

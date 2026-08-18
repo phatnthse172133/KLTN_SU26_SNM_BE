@@ -24,7 +24,6 @@ public sealed class ParsedAssistantIntent
 
 public sealed class AssistantStageAContext
 {
-    public Guid? MarketId { get; init; }
     public double? Latitude { get; init; }
     public double? Longitude { get; init; }
     public int? MaxDistanceMeters { get; init; }

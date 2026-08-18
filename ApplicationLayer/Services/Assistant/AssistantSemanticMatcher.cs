@@ -2,6 +2,7 @@ using System.Text.Json;
 using ApplicationLayer.Exceptions;
 using DomainLayer.Common;
 using DomainLayer.Enums;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace ApplicationLayer.Services.Assistant;
@@ -9,7 +10,8 @@ namespace ApplicationLayer.Services.Assistant;
 public sealed class AssistantSemanticMatcher(
     ILanguageModelClient languageModel,
     IOptions<AssistantOptions> assistantOptions,
-    IOptions<OpenAiOptions> openAiOptions)
+    IOptions<OpenAiOptions> openAiOptions,
+    ILogger<AssistantSemanticMatcher>? logger = null)
 {
     private readonly AssistantOptions _assistant = assistantOptions.Value;
     private readonly OpenAiOptions _openAi = openAiOptions.Value;
@@ -174,11 +176,11 @@ public sealed class AssistantSemanticMatcher(
     {
         var compact = batch.Select(item => Project(item, _assistant.CompactCandidateProjection)).ToArray();
         var allowed = compact.Select(item => item.FoodItemId).ToHashSet();
-        var raw = await CompleteBatchAsync(originalMessage, intent, compact, cancellationToken);
-        return ParseBatch(raw, allowed);
+        var completion = await CompleteBatchAsync(originalMessage, intent, compact, cancellationToken);
+        return ParseBatch(completion, allowed, logger);
     }
 
-    private async Task<string> CompleteBatchAsync(
+    private async Task<LanguageModelJsonCompletion> CompleteBatchAsync(
         string originalMessage,
         ParsedAssistantIntent intent,
         IReadOnlyList<CompactAssistantFoodCandidate> batch,
@@ -214,20 +216,26 @@ public sealed class AssistantSemanticMatcher(
     }
 
     public static IReadOnlyList<AssistantSemanticScore> ParseBatch(string raw, ISet<Guid> allowedIds)
+        => ParseBatch(LanguageModelJsonCompletion.FromContent(raw), allowedIds);
+
+    public static IReadOnlyList<AssistantSemanticScore> ParseBatch(
+        LanguageModelJsonCompletion completion,
+        ISet<Guid> allowedIds,
+        ILogger? logger = null)
     {
-        SemanticBatchDto dto;
-        try
-        {
-            dto = JsonSerializer.Deserialize<SemanticBatchDto>(raw, AssistantJson.Options)
-                ?? throw new JsonException("Semantic payload was null.");
-        }
-        catch (JsonException exception)
-        {
-            throw AssistantErrors.ProviderUnavailable(AssistantErrors.InvalidJson, exception);
-        }
+        var dto = AssistantJsonParseClassifier.DeserializeOrThrow<SemanticBatchDto>(
+            completion,
+            AssistantLlmStages.Semantic,
+            logger);
 
         if (dto.Scores is null)
-            throw AssistantErrors.ProviderUnavailable(AssistantErrors.InvalidJson);
+        {
+            throw AssistantErrors.InvalidProviderJson(
+                AssistantLlmStages.Semantic,
+                completion,
+                AssistantJsonParseClassifier.MissingRequiredField,
+                logger: logger);
+        }
 
         var result = new List<AssistantSemanticScore>();
         var seen = new HashSet<Guid>();

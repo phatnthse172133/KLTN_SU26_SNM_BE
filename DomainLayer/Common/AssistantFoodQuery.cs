@@ -5,7 +5,6 @@ namespace DomainLayer.Common;
 
 public sealed class AssistantFoodQueryCriteria
 {
-    public Guid? MarketId { get; init; }
     public double? Latitude { get; init; }
     public double? Longitude { get; init; }
     public int? MaxDistanceMeters { get; init; }

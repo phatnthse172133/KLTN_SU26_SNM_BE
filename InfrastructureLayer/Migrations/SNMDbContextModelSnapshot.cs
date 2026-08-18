@@ -92,9 +92,6 @@ namespace InfrastructureLayer.Migrations
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid?>("MarketId")
-                        .HasColumnType("uuid");
-
                     b.Property<string>("PendingParsedIntentJson")
                         .HasColumnType("jsonb");
 
@@ -113,8 +110,6 @@ namespace InfrastructureLayer.Migrations
                         .HasDefaultValueSql("now()");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("MarketId");
 
                     b.HasIndex(new[] { "CustomerId", "CreatedAt" }, "idx_assistantconversation_customer");
 
@@ -4463,14 +4458,7 @@ namespace InfrastructureLayer.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("DomainLayer.Entities.NightMarket", "Market")
-                        .WithMany()
-                        .HasForeignKey("MarketId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.Navigation("Customer");
-
-                    b.Navigation("Market");
                 });
 
             modelBuilder.Entity("DomainLayer.Entities.AssistantMealPlan", b =>

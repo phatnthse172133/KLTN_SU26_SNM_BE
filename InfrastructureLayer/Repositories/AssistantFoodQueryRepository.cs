@@ -19,8 +19,6 @@ public sealed class AssistantFoodQueryRepository(SNMDbContext db) : IAssistantFo
         var pipeline = await CountPipelineStagesAsync(cancellationToken);
 
         var query = CustomerVisibleQuery();
-        if (criteria.MarketId.HasValue)
-            query = query.Where(item => item.Booth.NightMarketId == criteria.MarketId.Value);
 
         if (HasGps(criteria) && criteria.MaxDistanceMeters is > 0)
         {

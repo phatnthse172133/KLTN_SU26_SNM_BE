@@ -146,4 +146,31 @@ internal static class AssistantProviderFailure
             ? status.GetInt32()
             : null;
     }
+
+    public static string? Stage(AppException exception) => Read(exception, "stage");
+    public static string? FinishReason(AppException exception) => Read(exception, "finishReason");
+    public static string? ParseFailureCategory(AppException exception) => Read(exception, "parseFailureCategory");
+    public static int? ConfiguredMaxOutputTokens(AppException exception) => ReadInt(exception, "configuredMaxOutputTokens");
+    public static int? OutputTokenCount(AppException exception) => ReadInt(exception, "outputTokenCount");
+    public static int? ResponseCharacterCount(AppException exception) => ReadInt(exception, "responseCharacterCount");
+
+    private static string? Read(AppException exception, string name)
+    {
+        if (exception.Details is null)
+            return null;
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(exception.Details));
+        return document.RootElement.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
+    }
+
+    private static int? ReadInt(AppException exception, string name)
+    {
+        if (exception.Details is null)
+            return null;
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(exception.Details));
+        return document.RootElement.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number
+            ? value.GetInt32()
+            : null;
+    }
 }

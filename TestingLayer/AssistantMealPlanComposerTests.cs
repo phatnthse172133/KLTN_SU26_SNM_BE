@@ -62,6 +62,38 @@ public sealed class AssistantMealPlanComposerTests
 
         Assert.Equal(503, exception.StatusCode);
         Assert.Equal("ASSISTANT_PROVIDER_UNAVAILABLE", exception.ErrorCode);
+        Assert.Equal(AssistantErrors.HallucinatedId, AssistantProviderFailure.Reason(exception));
+        Assert.Null(AssistantProviderFailure.ParseFailureCategory(exception));
+    }
+
+    [Fact]
+    public void ParseProposals_TruncatedJson_ThrowsInvalidJson()
+    {
+        var exception = Assert.Throws<AppException>(() =>
+            AssistantMealPlanComposer.ParseProposals(
+                new LanguageModelJsonCompletion
+                {
+                    Content = """{"plans":[{"title":"Tối nay","items":[""",
+                    FinishReason = "length",
+                    ConfiguredMaxOutputTokens = 400,
+                    OutputTokenCount = 400,
+                    ResponseCharacterCount = 40
+                },
+                new HashSet<Guid> { Guid.NewGuid() }));
+
+        Assert.Equal(AssistantErrors.InvalidJson, AssistantProviderFailure.Reason(exception));
+        Assert.Equal(AssistantJsonParseClassifier.OutputTruncated, AssistantProviderFailure.ParseFailureCategory(exception));
+        Assert.Equal(AssistantLlmStages.MealPlan, AssistantProviderFailure.Stage(exception));
+    }
+
+    [Fact]
+    public void ParseProposals_Malformed_DoesNotInventPlan()
+    {
+        var exception = Assert.Throws<AppException>(() =>
+            AssistantMealPlanComposer.ParseProposals("nope", new HashSet<Guid> { Guid.NewGuid() }));
+
+        Assert.Equal(AssistantErrors.InvalidJson, AssistantProviderFailure.Reason(exception));
+        Assert.Equal(AssistantJsonParseClassifier.MalformedJson, AssistantProviderFailure.ParseFailureCategory(exception));
     }
 
     [Fact]

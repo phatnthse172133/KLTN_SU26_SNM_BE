@@ -9,6 +9,10 @@ public sealed class OpenAiOptions
     public string Model { get; set; } = "gpt-4o-mini";
     public int TimeoutSeconds { get; set; } = 60;
     public int MaxInputCharacters { get; set; } = 1000;
+    /// <summary>
+    /// Fallback budget used only when a caller passes a non-positive stage token count.
+    /// This is not a global ceiling over MaxOutputTokensIntent/Semantic/MealPlan.
+    /// </summary>
     public int MaxOutputTokens { get; set; } = 400;
     public int RetryCount { get; set; } = 1;
     public string ReasoningEffort { get; set; } = "low";

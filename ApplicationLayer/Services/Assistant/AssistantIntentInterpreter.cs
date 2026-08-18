@@ -3,13 +3,15 @@ using ApplicationLayer.Exceptions;
 using DomainLayer.Entities;
 using DomainLayer.Enums;
 using DomainLayer.InterfaceRepository;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace ApplicationLayer.Services.Assistant;
 
 public sealed class AssistantIntentInterpreter(
     ILanguageModelClient languageModel,
-    IOptions<OpenAiOptions> openAiOptions)
+    IOptions<OpenAiOptions> openAiOptions,
+    ILogger<AssistantIntentInterpreter>? logger = null)
 {
     private readonly OpenAiOptions _openAi = openAiOptions.Value;
 
@@ -21,10 +23,10 @@ public sealed class AssistantIntentInterpreter(
         CancellationToken cancellationToken)
     {
         var userPrompt = BuildUserPrompt(message, history, catalogs, context);
-        string raw;
+        LanguageModelJsonCompletion completion;
         try
         {
-            raw = await languageModel.CompleteJsonAsync(
+            completion = await languageModel.CompleteJsonAsync(
                 AssistantPromptCatalog.IntentSystem + "\nJSON schema:\n" + AssistantPromptCatalog.IntentSchema,
                 userPrompt,
                 _openAi.MaxOutputTokensIntent,
@@ -43,17 +45,10 @@ public sealed class AssistantIntentInterpreter(
             throw AssistantErrors.ProviderUnavailable(AssistantErrors.HttpError, exception);
         }
 
-        ParsedAssistantIntent parsed;
-        try
-        {
-            parsed = JsonSerializer.Deserialize<ParsedAssistantIntent>(raw, AssistantJson.Options)
-                ?? throw new JsonException("Intent payload was null.");
-        }
-        catch (JsonException exception)
-        {
-            throw AssistantErrors.ProviderUnavailable(AssistantErrors.InvalidJson, exception);
-        }
-
+        var parsed = AssistantJsonParseClassifier.DeserializeOrThrow<ParsedAssistantIntent>(
+            completion,
+            AssistantLlmStages.Intent,
+            logger);
         return ApplyExplicitPlanningContext(Sanitize(parsed, catalogs), context);
     }
 
@@ -146,7 +141,6 @@ public sealed class AssistantIntentInterpreter(
             originalMessage = message,
             explicitContext = new
             {
-                marketId = context.MarketId,
                 locationProvided = hasLocation,
                 latitude = hasLocation ? context.Latitude : null,
                 longitude = hasLocation ? context.Longitude : null,

@@ -163,7 +163,6 @@ public sealed class AssistantTurnPersistenceTests
         var metadata = new Mock<IFoodSemanticMetadataRepository>();
         metadata.Setup(repository => repository.GetActiveCatalogsAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(new FoodSemanticCatalogSet([], [], [], [], []));
-        var markets = new Mock<INightMarketRepository>();
         var carts = new Mock<ICartService>();
         var assistantOptions = Options.Create(new AssistantOptions { CandidateBatchSize = 30, SemanticBatchMaxConcurrency = 3 });
         var openAi = Options.Create(new OpenAiOptions { Enabled = true, ApiKey = "test-key", TimeoutSeconds = 60 });
@@ -172,7 +171,6 @@ public sealed class AssistantTurnPersistenceTests
             repo,
             foods.Object,
             metadata.Object,
-            markets.Object,
             carts.Object,
             new AssistantIntentInterpreter(llm.Object, openAi),
             new AssistantSemanticMatcher(llm.Object, assistantOptions, openAi),

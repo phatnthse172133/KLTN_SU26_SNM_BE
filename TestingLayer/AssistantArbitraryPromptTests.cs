@@ -21,7 +21,6 @@ public sealed class AssistantArbitraryPromptTests
     private readonly Mock<IAssistantConversationRepository> _conversations = new();
     private readonly Mock<IAssistantFoodQueryRepository> _foods = new();
     private readonly Mock<IFoodSemanticMetadataRepository> _metadata = new();
-    private readonly Mock<INightMarketRepository> _markets = new();
     private readonly Mock<ICartService> _carts = new();
     private readonly AssistantConversation _conversation;
     private readonly AssistantOptions _options;
@@ -66,7 +65,6 @@ public sealed class AssistantArbitraryPromptTests
             _conversations.Object,
             _foods.Object,
             _metadata.Object,
-            _markets.Object,
             _carts.Object,
             new AssistantIntentInterpreter(_llm.Object, openAi),
             new AssistantSemanticMatcher(_llm.Object, assistantOptions, openAi),
@@ -333,16 +331,16 @@ public sealed class AssistantArbitraryPromptTests
             .Returns((string system, string user, int _, CancellationToken _) =>
             {
                 if (system.Contains("STAGE A", StringComparison.Ordinal))
-                    return Task.FromResult(stageA);
+                    return Task.FromResult<LanguageModelJsonCompletion>(stageA);
 
                 if (system.Contains("STAGE B", StringComparison.Ordinal))
                 {
                     var ids = CandidateIds(user);
-                    return Task.FromResult(stageB?.Invoke(ids, user) ?? ScoresJson(ids, 0.8, reasons: ["khớp"], unknown: []));
+                    return Task.FromResult<LanguageModelJsonCompletion>(stageB?.Invoke(ids, user) ?? ScoresJson(ids, 0.8, reasons: ["khớp"], unknown: []));
                 }
 
                 if (system.Contains("STAGE C", StringComparison.Ordinal))
-                    return Task.FromResult(stageC ?? """{ "plans": [] }""");
+                    return Task.FromResult<LanguageModelJsonCompletion>(stageC ?? """{ "plans": [] }""");
 
                 throw new InvalidOperationException(system);
             });

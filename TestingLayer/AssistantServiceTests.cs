@@ -23,7 +23,6 @@ public sealed class AssistantServiceTests
     private readonly Mock<IAssistantConversationRepository> _conversations = new();
     private readonly Mock<IAssistantFoodQueryRepository> _foods = new();
     private readonly Mock<IFoodSemanticMetadataRepository> _metadata = new();
-    private readonly Mock<INightMarketRepository> _markets = new();
     private readonly Mock<ICartService> _carts = new();
     private readonly AssistantService _service;
     private readonly AssistantConversation _conversation;
@@ -60,7 +59,6 @@ public sealed class AssistantServiceTests
             _conversations.Object,
             _foods.Object,
             _metadata.Object,
-            _markets.Object,
             _carts.Object,
             new AssistantIntentInterpreter(_llm.Object, openAi),
             new AssistantSemanticMatcher(_llm.Object, assistantOptions, openAi),
@@ -238,7 +236,7 @@ public sealed class AssistantServiceTests
         var assistantOptions = Options.Create(new AssistantOptions());
         var openAi = Options.Create(new OpenAiOptions { Enabled = true, ApiKey = "" });
         var service = new AssistantService(
-            _conversations.Object, _foods.Object, _metadata.Object, _markets.Object, _carts.Object,
+            _conversations.Object, _foods.Object, _metadata.Object, _carts.Object,
             new AssistantIntentInterpreter(_llm.Object, openAi),
             new AssistantSemanticMatcher(_llm.Object, assistantOptions, openAi),
             new AssistantCompatibilityScorer(assistantOptions),
@@ -441,9 +439,9 @@ public sealed class AssistantServiceTests
         var outsiderId = Guid.NewGuid();
         var itemId = Guid.NewGuid();
         var plan = MutationPlan(currentId, itemId, quantity: 1, snapshotPrice: 35_000m, partySize: 2, budget: 200_000m);
-        var allowed = CartFood(allowedId, available: true, price: 32_000m);
+        var allowed = CartFood(allowedId, available: true, price: 32_000m, nightMarketId: plan.NightMarketId);
         _foods.Setup(repository => repository.GetEligibleFoodsAsync(It.IsAny<AssistantFoodQueryCriteria>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(QueryResult(CartFood(currentId, available: true, price: 35_000m), allowed));
+            .ReturnsAsync(QueryResult(CartFood(currentId, available: true, price: 35_000m, nightMarketId: plan.NightMarketId), allowed));
         _llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync($$"""{ "scores": [ { "foodItemId": "{{allowedId}}", "semanticCompatibility": 1, "reasons": ["khớp yêu cầu"] } ] }""");
 
@@ -468,7 +466,7 @@ public sealed class AssistantServiceTests
         var itemId = Guid.NewGuid();
         var plan = MutationPlan(currentId, itemId, quantity: 1, snapshotPrice: 35_000m, partySize: 2, budget: 200_000m);
         _foods.Setup(repository => repository.GetEligibleFoodsAsync(It.IsAny<AssistantFoodQueryCriteria>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(QueryResult(CartFood(allowedId, available: true, price: 32_000m)));
+            .ReturnsAsync(QueryResult(CartFood(allowedId, available: true, price: 32_000m, nightMarketId: plan.NightMarketId)));
         _llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync($$"""{ "scores": [ { "foodItemId": "{{fakeId}}", "semanticCompatibility": 1, "reasons": ["bịa"] } ] }""");
 
@@ -561,11 +559,11 @@ public sealed class AssistantServiceTests
         return plan;
     }
 
-    private static AssistantEligibleFood CartFood(Guid foodId, bool available, decimal price, int? servings = null)
+    private static AssistantEligibleFood CartFood(Guid foodId, bool available, decimal price, int? servings = null, Guid? nightMarketId = null)
     {
         var market = new NightMarket
         {
-            Id = Guid.NewGuid(),
+            Id = nightMarketId ?? Guid.NewGuid(),
             Name = "Chợ",
             Status = NightMarketStatus.Active,
             ModerationStatus = ModerationStatus.Active,
@@ -588,12 +586,27 @@ public sealed class AssistantServiceTests
     }
 
     [Fact]
-    public async Task SendMessage_ConversationMarketId_DoesNotScopeDiscoveryCriteria()
+    public async Task CreateConversation_WithoutMarketId_Succeeds()
     {
-        var conversationMarketId = Guid.NewGuid();
-        _conversation.MarketId = conversationMarketId;
-        _markets.Setup(repository => repository.CustomerVisibleExistsAsync(conversationMarketId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
+        AssistantConversation? captured = null;
+        _conversations.Setup(repository => repository.Add(It.IsAny<AssistantConversation>()))
+            .Callback<AssistantConversation>(conversation => captured = conversation);
+
+        var result = await _service.CreateConversationAsync(
+            _conversation.CustomerId,
+            new CreateAssistantConversationRequest());
+
+        Assert.True(result.Success);
+        Assert.NotNull(captured);
+        Assert.Equal(_conversation.CustomerId, captured!.CustomerId);
+        Assert.Equal(AssistantConversationStatus.Active, captured.Status);
+        Assert.NotEqual(Guid.Empty, captured.Id);
+        Assert.Equal(captured.Id, result.Data!.Id);
+    }
+
+    [Fact]
+    public async Task SendMessage_DoesNotScopeDiscoveryByMarketId_AndHasNoDefaultRadius()
+    {
         SetupIntent(FoodIntent());
         AssistantFoodQueryCriteria? captured = null;
         _foods.Setup(repository => repository.GetEligibleFoodsAsync(It.IsAny<AssistantFoodQueryCriteria>(), It.IsAny<CancellationToken>()))
@@ -603,16 +616,14 @@ public sealed class AssistantServiceTests
         await Send("Bánh tráng ngon");
 
         Assert.NotNull(captured);
-        Assert.Null(captured!.MarketId);
-        Assert.Null(captured.MaxDistanceMeters);
+        Assert.Null(captured!.MaxDistanceMeters);
+        Assert.Null(captured.Latitude);
+        Assert.Null(captured.Longitude);
     }
 
     [Fact]
-    public async Task SendMessage_ExplicitRequestMarketId_ScopesDiscoveryCriteria()
+    public async Task SendMessage_PassesGpsToCriteria_WithoutDefaultMaxDistance()
     {
-        var explicitMarketId = Guid.NewGuid();
-        _markets.Setup(repository => repository.CustomerVisibleExistsAsync(explicitMarketId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
         SetupIntent(FoodIntent());
         AssistantFoodQueryCriteria? captured = null;
         _foods.Setup(repository => repository.GetEligibleFoodsAsync(It.IsAny<AssistantFoodQueryCriteria>(), It.IsAny<CancellationToken>()))
@@ -625,11 +636,46 @@ public sealed class AssistantServiceTests
             new SendAssistantMessageRequest
             {
                 Message = "Bánh tráng ngon",
-                MarketId = explicitMarketId
+                Latitude = 10.7701,
+                Longitude = 106.6902
             });
 
         Assert.NotNull(captured);
-        Assert.Equal(explicitMarketId, captured!.MarketId);
+        Assert.Equal(10.7701, captured!.Latitude);
+        Assert.Equal(106.6902, captured.Longitude);
+        Assert.Null(captured.MaxDistanceMeters);
+    }
+
+    [Fact]
+    public async Task SendMessage_MealPlan_QueriesGlobalCandidatesWithoutMarketOrRadius()
+    {
+        SetupIntent("""
+            { "intent": "MEAL_PLAN", "needsLocation": false, "partySize": 2, "budgetMax": 300000,
+              "hardConstraints": {}, "structuredPreferences": {},
+              "semanticPreferences": [], "semanticAvoidances": [] }
+            """);
+        AssistantFoodQueryCriteria? captured = null;
+        _foods.Setup(repository => repository.GetEligibleFoodsAsync(It.IsAny<AssistantFoodQueryCriteria>(), It.IsAny<CancellationToken>()))
+            .Callback<AssistantFoodQueryCriteria, CancellationToken>((criteria, _) => captured = criteria)
+            .ReturnsAsync(new AssistantFoodQueryResult());
+
+        await _service.SendMessageAsync(
+            _conversation.CustomerId,
+            _conversation.Id,
+            new SendAssistantMessageRequest
+            {
+                Message = "Lên thực đơn tối nay",
+                Latitude = 10.77,
+                Longitude = 106.69,
+                PartySize = 2,
+                Budget = 300_000m
+            });
+
+        Assert.NotNull(captured);
+        Assert.Equal(10.77, captured!.Latitude);
+        Assert.Equal(106.69, captured.Longitude);
+        Assert.Null(captured.MaxDistanceMeters);
+        Assert.Equal(300_000m, captured.BudgetMax);
     }
 
     private static AssistantFoodQueryResult QueryResult(params AssistantEligibleFood[] foods)

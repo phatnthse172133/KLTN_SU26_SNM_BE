@@ -112,13 +112,13 @@ public sealed partial class AssistantService
         };
         var eligible = await foods.GetEligibleFoodsAsync(new AssistantFoodQueryCriteria
         {
-            MarketId = plan.NightMarketId,
             BudgetMax = plan.BudgetMax,
             TreatMayContainAsHard = _options.TreatMayContainAsHard,
             UtcNow = now
         }, cancellationToken);
         var remaining = eligible.Foods
-            .Where(item => item.FoodItem.Id != excludeFoodItemId)
+            .Where(item => item.FoodItem.Id != excludeFoodItemId
+                && item.FoodItem.Booth.NightMarketId == plan.NightMarketId)
             .Take(Math.Max(1, _options.MaxMealPlanCandidates))
             .ToArray();
         if (remaining.Length == 0)

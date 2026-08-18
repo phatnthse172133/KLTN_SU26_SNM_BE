@@ -131,33 +131,39 @@ public sealed class AssistantDiscoveryEligibilityTests
     }
 
     [Fact]
-    public async Task GetEligibleFoods_ConversationMarketIdIgnored_UnlessExplicitRequest()
+    public async Task GetEligibleFoods_UsesNightMarketGps_NearestMarketIsCloser()
     {
         await using var db = CreateContext();
-        var marketAFood = await SeedFoodAsync(db, marketName: "Chợ A", lat: 10.77m, lng: 106.69m);
-        await SeedFoodAsync(db, marketName: "Chợ B", lat: 10.80m, lng: 106.72m);
+        var near = await SeedFoodAsync(db, marketName: "Chợ gần", lat: 10.770m, lng: 106.690m);
+        var far = await SeedFoodAsync(db, marketName: "Chợ xa", lat: 10.900m, lng: 106.900m);
 
         var repository = new AssistantFoodQueryRepository(db);
-        var scoped = await repository.GetEligibleFoodsAsync(new AssistantFoodQueryCriteria
+        var result = await repository.GetEligibleFoodsAsync(new AssistantFoodQueryCriteria
         {
-            MarketId = marketAFood.Booth.NightMarketId,
+            Latitude = 10.770,
+            Longitude = 106.690,
             UtcNow = ClosedHoursUtc
         });
 
-        Assert.Single(scoped.Foods);
-        Assert.Equal(marketAFood.Id, scoped.Foods[0].FoodItem.Id);
+        Assert.Equal(2, result.Foods.Count);
+        var nearItem = Assert.Single(result.Foods, item => item.FoodItem.Id == near.Id);
+        var farItem = Assert.Single(result.Foods, item => item.FoodItem.Id == far.Id);
+        Assert.NotNull(nearItem.DistanceMeters);
+        Assert.NotNull(farItem.DistanceMeters);
+        Assert.True(nearItem.DistanceMeters < 50);
+        Assert.True(farItem.DistanceMeters > nearItem.DistanceMeters);
     }
 
     [Fact]
-    public void Score_WithGps_NearestRanksBeforeFartherEvenWhenLowerCompatibility()
+    public void Score_WithGps_Nearer75RanksBeforeFarther98()
     {
-        var near = Eligible("Gần", 30_000m, distanceMeters: 800, semantic: 0.7);
+        var near = Eligible("Gần", 30_000m, distanceMeters: 800, semantic: 0.75);
         var far = Eligible("Xa", 30_000m, distanceMeters: 2000, semantic: 0.98);
         var semantic = new AssistantSemanticMatchResult
         {
             Scores = new Dictionary<Guid, AssistantSemanticScore>
             {
-                [near.FoodItem.Id] = new() { FoodItemId = near.FoodItem.Id, SemanticCompatibility = 0.7 },
+                [near.FoodItem.Id] = new() { FoodItemId = near.FoodItem.Id, SemanticCompatibility = 0.75 },
                 [far.FoodItem.Id] = new() { FoodItemId = far.FoodItem.Id, SemanticCompatibility = 0.98 }
             }
         };

@@ -106,7 +106,6 @@ public sealed class AssistantConversationRepository(SNMDbContext db) : IAssistan
         var updatedAt = conversation.UpdatedAt;
         var pendingMessage = conversation.PendingUserMessage;
         var pendingIntent = conversation.PendingParsedIntentJson;
-        var marketId = conversation.MarketId;
         await header.ReloadAsync(cancellationToken);
         if (header.State is EntityState.Detached)
             return false;
@@ -115,7 +114,6 @@ public sealed class AssistantConversationRepository(SNMDbContext db) : IAssistan
         conversation.UpdatedAt = updatedAt;
         conversation.PendingUserMessage = pendingMessage;
         conversation.PendingParsedIntentJson = pendingIntent;
-        conversation.MarketId = marketId;
         EnsureTrackedHeader(conversation);
         return true;
     }

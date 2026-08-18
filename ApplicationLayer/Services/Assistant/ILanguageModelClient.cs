@@ -2,7 +2,7 @@ namespace ApplicationLayer.Services.Assistant;
 
 public interface ILanguageModelClient
 {
-    Task<string> CompleteJsonAsync(
+    Task<LanguageModelJsonCompletion> CompleteJsonAsync(
         string systemPrompt,
         string userPrompt,
         int maxOutputTokens,

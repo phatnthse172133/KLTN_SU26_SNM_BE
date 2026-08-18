@@ -2,6 +2,7 @@ using System.Text.Json;
 using ApplicationLayer.Exceptions;
 using DomainLayer.Entities;
 using DomainLayer.Enums;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace ApplicationLayer.Services.Assistant;
@@ -52,7 +53,8 @@ public sealed class AssistantMealPlanComposer(
     ILanguageModelClient languageModel,
     AssistantMealPlanValidator validator,
     IOptions<AssistantOptions> assistantOptions,
-    IOptions<OpenAiOptions> openAiOptions)
+    IOptions<OpenAiOptions> openAiOptions,
+    ILogger<AssistantMealPlanComposer>? logger = null)
 {
     private readonly AssistantOptions _assistant = assistantOptions.Value;
     private readonly OpenAiOptions _openAi = openAiOptions.Value;
@@ -68,9 +70,9 @@ public sealed class AssistantMealPlanComposer(
 
         var cap = Math.Max(1, _assistant.MaxMealPlanCandidates);
         var candidates = ranked.Take(cap).ToArray();
-        var raw = await CompleteAsync(originalMessage, intent, candidates, cancellationToken);
+        var completion = await CompleteAsync(originalMessage, intent, candidates, cancellationToken);
         var allowed = candidates.Select(item => item.Eligible.FoodItem.Id).ToHashSet();
-        var proposals = ParseProposals(raw, allowed);
+        var proposals = ParseProposals(completion, allowed, logger);
         return validator.Validate(proposals, candidates, intent);
     }
 
@@ -83,20 +85,26 @@ public sealed class AssistantMealPlanComposer(
     }
 
     public static IReadOnlyList<AssistantMealPlanProposal> ParseProposals(string raw, ISet<Guid> allowedIds)
+        => ParseProposals(LanguageModelJsonCompletion.FromContent(raw), allowedIds);
+
+    public static IReadOnlyList<AssistantMealPlanProposal> ParseProposals(
+        LanguageModelJsonCompletion completion,
+        ISet<Guid> allowedIds,
+        ILogger? logger = null)
     {
-        MealPlanBatchDto dto;
-        try
-        {
-            dto = JsonSerializer.Deserialize<MealPlanBatchDto>(raw, AssistantJson.Options)
-                ?? throw new JsonException("Meal plan payload was null.");
-        }
-        catch (JsonException exception)
-        {
-            throw AssistantErrors.ProviderUnavailable(AssistantErrors.InvalidJson, exception);
-        }
+        var dto = AssistantJsonParseClassifier.DeserializeOrThrow<MealPlanBatchDto>(
+            completion,
+            AssistantLlmStages.MealPlan,
+            logger);
 
         if (dto.Plans is null)
-            throw AssistantErrors.ProviderUnavailable(AssistantErrors.InvalidJson);
+        {
+            throw AssistantErrors.InvalidProviderJson(
+                AssistantLlmStages.MealPlan,
+                completion,
+                AssistantJsonParseClassifier.MissingRequiredField,
+                logger: logger);
+        }
 
         var proposals = new List<AssistantMealPlanProposal>();
         foreach (var plan in dto.Plans)
@@ -126,7 +134,7 @@ public sealed class AssistantMealPlanComposer(
         return proposals;
     }
 
-    private async Task<string> CompleteAsync(
+    private async Task<LanguageModelJsonCompletion> CompleteAsync(
         string originalMessage,
         ParsedAssistantIntent intent,
         IReadOnlyList<AssistantScoredFood> ranked,

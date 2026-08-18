@@ -18,7 +18,6 @@ public sealed partial class AssistantService(
     IAssistantConversationRepository conversations,
     IAssistantFoodQueryRepository foods,
     IFoodSemanticMetadataRepository metadata,
-    INightMarketRepository markets,
     ICartService carts,
     AssistantIntentInterpreter interpreter,
     AssistantSemanticMatcher semanticMatcher,
@@ -38,20 +37,12 @@ public sealed partial class AssistantService(
         CreateAssistantConversationRequest request,
         CancellationToken cancellationToken = default)
     {
-        Guid? marketId = null;
-        if (request.MarketId.HasValue && request.MarketId.Value != Guid.Empty)
-        {
-            if (!await markets.CustomerVisibleExistsAsync(request.MarketId.Value, cancellationToken))
-                throw AssistantErrors.MarketNotFound();
-            marketId = request.MarketId;
-        }
-
+        _ = request;
         var now = timeProvider.GetUtcNow().UtcDateTime;
         var conversation = new AssistantConversation
         {
             Id = Guid.NewGuid(),
             CustomerId = customerId,
-            MarketId = marketId,
             Status = AssistantConversationStatus.Active,
             CreatedAt = now,
             UpdatedAt = now
@@ -86,17 +77,7 @@ public sealed partial class AssistantService(
         if (string.IsNullOrWhiteSpace(message))
             throw AssistantErrors.InvalidRequest("Message is required.");
 
-        var marketId = request.MarketId ?? conversation.MarketId;
         var hasGps = HasValidCoordinates(request.Latitude, request.Longitude);
-        if (request.MarketId.HasValue && request.MarketId.Value != Guid.Empty)
-        {
-            if (!await markets.CustomerVisibleExistsAsync(request.MarketId.Value, cancellationToken))
-                throw AssistantErrors.MarketNotFound();
-            conversation.MarketId = request.MarketId;
-            marketId = request.MarketId;
-        }
-        else if (marketId.HasValue && !await markets.CustomerVisibleExistsAsync(marketId.Value, cancellationToken))
-            throw AssistantErrors.MarketNotFound();
 
         if (!_openAi.Enabled)
             throw AssistantErrors.ProviderUnavailable(AssistantErrors.Disabled);
@@ -109,7 +90,6 @@ public sealed partial class AssistantService(
         var totalFoodCount = await foods.CountNotDeletedFoodItemsAsync(cancellationToken);
         var stageA = new AssistantStageAContext
         {
-            MarketId = marketId,
             Latitude = request.Latitude,
             Longitude = request.Longitude,
             MaxDistanceMeters = request.MaxDistanceMeters,
@@ -117,7 +97,7 @@ public sealed partial class AssistantService(
             Budget = request.Budget
         };
 
-        var intent = TryReusePendingIntent(conversation, incoming, hasGps, marketId, catalogs, stageA)
+        var intent = TryReusePendingIntent(conversation, incoming, hasGps, catalogs, stageA)
             ?? await interpreter.InterpretAsync(
                 message,
                 history,
@@ -132,7 +112,7 @@ public sealed partial class AssistantService(
             if (intent.BudgetMax is not > 0)
                 throw AssistantErrors.InvalidRequest("Budget is required for meal-plan requests.");
         }
-        if (intent.NeedsLocation && !hasGps && marketId is null)
+        if (intent.NeedsLocation && !hasGps)
         {
             conversation.Status = AssistantConversationStatus.LocationPending;
             conversation.PendingUserMessage = message;
@@ -280,11 +260,9 @@ public sealed partial class AssistantService(
         var avoidedIngredients = Ids(catalogs.Ingredients, intent.HardConstraints.AvoidedIngredientCodes).Distinct().ToArray();
         var dietary = Ids(catalogs.DietaryAttributes, intent.HardConstraints.DietaryCodes).Distinct().ToArray();
         var avoidedTastes = Ids(catalogs.TasteProfiles, intent.HardConstraints.AvoidedTasteCodes).Distinct().ToArray();
-        var explicitMarketId = request.MarketId is { } marketId && marketId != Guid.Empty ? marketId : (Guid?)null;
 
         return new AssistantFoodQueryCriteria
         {
-            MarketId = explicitMarketId,
             Latitude = request.Latitude,
             Longitude = request.Longitude,
             MaxDistanceMeters = request.MaxDistanceMeters,
@@ -314,7 +292,6 @@ public sealed partial class AssistantService(
         AssistantConversation conversation,
         string incoming,
         bool hasGps,
-        Guid? marketId,
         FoodSemanticCatalogSet catalogs,
         AssistantStageAContext context)
     {
@@ -322,7 +299,7 @@ public sealed partial class AssistantService(
             return null;
         if (string.IsNullOrWhiteSpace(conversation.PendingParsedIntentJson))
             return null;
-        if (!hasGps && marketId is null)
+        if (!hasGps)
             return null;
         if (!string.IsNullOrWhiteSpace(incoming)
             && !string.Equals(incoming, conversation.PendingUserMessage, StringComparison.Ordinal))

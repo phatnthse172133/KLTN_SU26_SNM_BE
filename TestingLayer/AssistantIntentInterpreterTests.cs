@@ -104,6 +104,90 @@ public sealed class AssistantIntentInterpreterTests
         Assert.Equal(503, exception.StatusCode);
         Assert.Equal("ASSISTANT_PROVIDER_UNAVAILABLE", exception.ErrorCode);
         Assert.Equal(AssistantErrors.InvalidJson, AssistantProviderFailure.Reason(exception));
+        Assert.Equal(AssistantLlmStages.Intent, AssistantProviderFailure.Stage(exception));
+        Assert.Equal(AssistantJsonParseClassifier.MalformedJson, AssistantProviderFailure.ParseFailureCategory(exception));
+    }
+
+    [Fact]
+    public async Task Interpret_TruncatedJson_ThrowsInvalidJson_WithOutputTruncatedDiagnostics()
+    {
+        var llm = new Mock<ILanguageModelClient>();
+        var truncated = """{"intent":"FOOD_RECOMMENDATION","needsLocation":false,"hardConstraints":{""";
+        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new LanguageModelJsonCompletion
+            {
+                Content = truncated,
+                Model = "gpt-4o-mini",
+                FinishReason = "length",
+                ConfiguredMaxOutputTokens = 400,
+                OutputTokenCount = 400,
+                ResponseCharacterCount = truncated.Length
+            });
+        var interpreter = new AssistantIntentInterpreter(llm.Object, Options.Create(new OpenAiOptions { ApiKey = "test" }));
+
+        var exception = await Assert.ThrowsAsync<ApplicationLayer.Exceptions.AppException>(() =>
+            interpreter.InterpretAsync("hello", [], Catalog(), new AssistantStageAContext(), CancellationToken.None));
+
+        Assert.Equal(AssistantErrors.InvalidJson, AssistantProviderFailure.Reason(exception));
+        Assert.Equal(AssistantJsonParseClassifier.OutputTruncated, AssistantProviderFailure.ParseFailureCategory(exception));
+        Assert.Equal(AssistantLlmStages.Intent, AssistantProviderFailure.Stage(exception));
+        Assert.Equal("length", AssistantProviderFailure.FinishReason(exception));
+        Assert.Equal(400, AssistantProviderFailure.ConfiguredMaxOutputTokens(exception));
+        Assert.Equal(400, AssistantProviderFailure.OutputTokenCount(exception));
+        Assert.Equal(truncated.Length, AssistantProviderFailure.ResponseCharacterCount(exception));
+    }
+
+    [Fact]
+    public async Task Interpret_InvalidEnum_ThrowsInvalidJson_NotFakeIntent()
+    {
+        var llm = new Mock<ILanguageModelClient>();
+        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("""
+                {
+                  "intent": "BANANA",
+                  "needsLocation": false,
+                  "hardConstraints": {},
+                  "structuredPreferences": {},
+                  "semanticPreferences": [],
+                  "semanticAvoidances": []
+                }
+                """);
+        var interpreter = new AssistantIntentInterpreter(llm.Object, Options.Create(new OpenAiOptions { ApiKey = "test" }));
+
+        var exception = await Assert.ThrowsAsync<ApplicationLayer.Exceptions.AppException>(() =>
+            interpreter.InterpretAsync("hello", [], Catalog(), new AssistantStageAContext(), CancellationToken.None));
+
+        Assert.Equal(AssistantErrors.InvalidJson, AssistantProviderFailure.Reason(exception));
+        Assert.Equal(AssistantJsonParseClassifier.InvalidEnum, AssistantProviderFailure.ParseFailureCategory(exception));
+    }
+
+    [Fact]
+    public async Task Interpret_RequestsIntentTokenBudget()
+    {
+        var llm = new Mock<ILanguageModelClient>();
+        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("""
+                {
+                  "intent": "CHITCHAT",
+                  "needsLocation": false,
+                  "hardConstraints": {},
+                  "structuredPreferences": {},
+                  "semanticPreferences": [],
+                  "semanticAvoidances": [],
+                  "assistantReply": "Chào bạn."
+                }
+                """);
+        var interpreter = new AssistantIntentInterpreter(
+            llm.Object,
+            Options.Create(new OpenAiOptions { ApiKey = "test", MaxOutputTokens = 400, MaxOutputTokensIntent = 900 }));
+
+        await interpreter.InterpretAsync("hello", [], Catalog(), new AssistantStageAContext(), CancellationToken.None);
+
+        llm.Verify(client => client.CompleteJsonAsync(
+            It.IsAny<string>(),
+            It.IsAny<string>(),
+            900,
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -168,14 +252,12 @@ public sealed class AssistantIntentInterpreterTests
 
         var message = "Tìm 1 món ngon ngon cho hôm nay.";
         var interpreter = new AssistantIntentInterpreter(llm.Object, Options.Create(new OpenAiOptions { Enabled = true, ApiKey = "test" }));
-        var marketId = Guid.Parse("11111111-1111-1111-1111-111111111111");
         var result = await interpreter.InterpretAsync(
             message,
             [],
             Catalog(),
             new AssistantStageAContext
             {
-                MarketId = marketId,
                 Latitude = 10.77,
                 Longitude = 106.69,
                 MaxDistanceMeters = 2000
@@ -187,7 +269,7 @@ public sealed class AssistantIntentInterpreterTests
         Assert.Equal(message, payload.RootElement.GetProperty("originalMessage").GetString());
         var explicitContext = payload.RootElement.GetProperty("explicitContext");
         Assert.True(explicitContext.GetProperty("locationProvided").GetBoolean());
-        Assert.Equal(marketId, explicitContext.GetProperty("marketId").GetGuid());
+        Assert.False(explicitContext.TryGetProperty("marketId", out _));
         Assert.Equal(10.77, explicitContext.GetProperty("latitude").GetDouble());
         Assert.Equal(106.69, explicitContext.GetProperty("longitude").GetDouble());
         Assert.Equal(2000, explicitContext.GetProperty("maxDistanceMeters").GetInt32());

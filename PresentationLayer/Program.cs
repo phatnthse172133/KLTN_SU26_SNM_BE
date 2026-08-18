@@ -420,12 +420,15 @@ app.Lifetime.ApplicationStarted.Register(() =>
         Uri.TryCreate(payOSRuntimeSettings.ReturnUrl, UriKind.Absolute, out _),
         Uri.TryCreate(payOSRuntimeSettings.CancelUrl, UriKind.Absolute, out _));
     app.Logger.LogInformation(
-        "OpenAI runtime config. Provider={Provider} Model={Model} TimeoutSeconds={TimeoutSeconds} MaxInputCharacters={MaxInputCharacters} MaxOutputTokens={MaxOutputTokens} RetryCount={RetryCount} CandidateBatchSize={CandidateBatchSize} SemanticBatchMaxConcurrency={SemanticBatchMaxConcurrency} Enabled={Enabled} ApiKeyPresent={ApiKeyPresent}",
+        "OpenAI runtime config. Provider={Provider} Model={Model} TimeoutSeconds={TimeoutSeconds} MaxInputCharacters={MaxInputCharacters} MaxOutputTokens={MaxOutputTokens} MaxOutputTokensIntent={MaxOutputTokensIntent} MaxOutputTokensSemantic={MaxOutputTokensSemantic} MaxOutputTokensMealPlan={MaxOutputTokensMealPlan} RetryCount={RetryCount} CandidateBatchSize={CandidateBatchSize} SemanticBatchMaxConcurrency={SemanticBatchMaxConcurrency} Enabled={Enabled} ApiKeyPresent={ApiKeyPresent}",
         openAiRuntimeSettings.Provider,
         openAiRuntimeSettings.Model,
         openAiRuntimeSettings.TimeoutSeconds,
         openAiRuntimeSettings.MaxInputCharacters,
         openAiRuntimeSettings.MaxOutputTokens,
+        openAiRuntimeSettings.MaxOutputTokensIntent,
+        openAiRuntimeSettings.MaxOutputTokensSemantic,
+        openAiRuntimeSettings.MaxOutputTokensMealPlan,
         openAiRuntimeSettings.RetryCount,
         assistantRuntimeSettings.CandidateBatchSize,
         assistantRuntimeSettings.SemanticBatchMaxConcurrency,

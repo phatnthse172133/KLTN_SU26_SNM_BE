@@ -664,7 +664,10 @@ public class BoothService : IBoothService
                 Status = DomainLayer.Enums.GeneralEnum.BoothStatus.Active,
                 CreatedAt = now,
                 UpdatedAt = now,
-                ZoneId = node.ZoneId
+                ZoneId = node.ZoneId,
+                SlotNumber = node.SlotCode ?? node.NodeName,
+                MapPositionX = node.Xcoordinate,
+                MapPositionY = node.Ycoordinate
             };
             var boothLocation = new BoothLocation
             {
@@ -789,6 +792,9 @@ public class BoothService : IBoothService
 
             booth.Status = DomainLayer.Enums.GeneralEnum.BoothStatus.Active;
             booth.ZoneId = node.ZoneId;
+            booth.SlotNumber = newLocation.SlotNumber;
+            booth.MapPositionX = newLocation.Xcoordinate;
+            booth.MapPositionY = newLocation.Ycoordinate;
             booth.UpdatedAt = now;
             _booths.Update(booth);
 
@@ -894,6 +900,9 @@ public class BoothService : IBoothService
 
             booth.Status = DomainLayer.Enums.GeneralEnum.BoothStatus.Inactive;
             booth.ZoneId = null;
+            booth.SlotNumber = null;
+            booth.MapPositionX = null;
+            booth.MapPositionY = null;
             booth.UpdatedAt = now;
             _booths.Update(booth);
 

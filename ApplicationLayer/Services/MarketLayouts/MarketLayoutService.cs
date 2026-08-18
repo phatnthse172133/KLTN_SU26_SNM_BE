@@ -1428,9 +1428,12 @@ public class MarketLayoutService : IMarketLayoutService
 
     private static string? GetZoneColorPreset(string? zoneType) => zoneType?.Trim().ToLowerInvariant() switch
     {
-        "food" => "#F59E0B",
-        "drink" => "#3B82F6",
-        "dessert" => "#EC4899",
+        "food" or "food_zone" => "#F59E0B",
+        "bbq_grilled" or "bbq" or "grilled" => "#EF4444",
+        "beverage" or "drink" or "drinks" => "#3B82F6",
+        "snack_dessert" or "snack" or "dessert" => "#EC4899",
+        "mixed" or "mix" => "#8B5CF6",
+        "other" or "retail" or "handicraft" or "entertainment" or "services" or "seating" => "#64748B",
         _ => null
     };
 

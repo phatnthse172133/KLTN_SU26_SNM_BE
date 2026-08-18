@@ -62,6 +62,7 @@ public class BoothService : IBoothService
         var market = await _nightMarkets.GetByIdAsync(booth.NightMarketId);
         response.MarketOpeningHours = market?.OpeningHours;
         response.MarketClosingHours = market?.ClosingHours;
+        await EnrichCurrentLocationAsync(booth, response, cancellationToken);
         if (booth.Status == BoothStatus.Banned)
         {
             var bannedStatus = BoothStatus.Banned.ToString();
@@ -101,7 +102,38 @@ public class BoothService : IBoothService
         var updatedResponse = _mapper.Map<BoothResponse>(booth);
         updatedResponse.MarketOpeningHours = market?.OpeningHours;
         updatedResponse.MarketClosingHours = market?.ClosingHours;
+        await EnrichCurrentLocationAsync(booth, updatedResponse, cancellationToken);
         return ApiResponse<BoothResponse>.SuccessResponse(updatedResponse, "Booth updated successfully.");
+    }
+
+    /// <summary>
+    /// Assignment data is stored in BoothLocation as the source of truth. Older
+    /// booth rows (and assignments created before the denormalized fields were
+    /// introduced) can have null SlotNumber/MapPosition values, so hydrate the
+    /// response from the current location before it reaches the Booth Owner UI.
+    /// </summary>
+    private async Task EnrichCurrentLocationAsync(
+        Booth booth,
+        BoothResponse response,
+        CancellationToken cancellationToken)
+    {
+        var location = await _locations.GetCurrentByBoothAsync(booth.Id, cancellationToken);
+        if (location is null) return;
+
+        // Assignment requests identify a slot by LayoutNodeId.  SlotNumber is
+        // optional in the persisted location, so resolve the node as a fallback
+        // instead of exposing an empty slot to the Booth Owner profile.
+        var node = await _layoutNodes.GetByIdAsync(location.LayoutNodeId);
+        response.ZoneId = location.ZoneId ?? node?.ZoneId ?? response.ZoneId;
+        response.SlotNumber = location.SlotNumber ?? node?.SlotCode ?? node?.NodeName ?? response.SlotNumber;
+        response.MapPositionX = location.Xcoordinate;
+        response.MapPositionY = location.Ycoordinate;
+
+        if (response.ZoneId.HasValue && string.IsNullOrWhiteSpace(response.ZoneName))
+        {
+            var zone = await _zones.GetByIdAsync(response.ZoneId.Value);
+            response.ZoneName = zone?.ZoneName;
+        }
     }
 
     public async Task<ApiResponse<BoothResponse>> TogglePauseMyBoothAsync(Guid ownerId, CancellationToken cancellationToken = default)

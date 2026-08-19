@@ -343,27 +343,10 @@ public class LayoutGeneratorService : ILayoutGeneratorService
             });
         }
 
-        // Physical/auto-fit layouts own explicit facility corridors. Re-anchor
-        // the primary Gate on every generation so it cannot be left inside a
-        // Zone after dimensions change. Existing Exit nodes are retained as
-        // legacy Gates, but new layouts use only the unified Gate concept.
-        if ((request.AutoFitZones || request.MarketWidthMeters.HasValue) && layoutBlocks.Count > 0)
-        {
-            var zoneTop = layoutBlocks.Min(block => block.Y);
-            var centerX = (decimal)Math.Max(24, preview.CanvasWidth / 2);
-            var entranceY = (decimal)Math.Max(16, zoneTop / 2);
-
-            var primaryEntrance = newNodes
-                .Where(n => n.NodeType == LayoutNodeType.Entrance)
-                .OrderBy(n => n.CreatedAt)
-                .First();
-            primaryEntrance.Xcoordinate = centerX;
-            primaryEntrance.Ycoordinate = entranceY;
-            primaryEntrance.NodeName = "Main Entrance";
-            primaryEntrance.IsStartingPoint = true;
-            primaryEntrance.UpdatedAt = now;
-
-        }
+        // Gate coordinates belong to the market owner.  Do not re-anchor an
+        // existing Entrance/Exit when dimensions or zones are regenerated:
+        // the editor lets the owner drag gates to the real-world position and
+        // silently moving them here makes the map disagree with the editor.
 
         // Utility edges are preserved by MarketLayoutService.ApplyGenerationAsync,
         // which merges them with the generated edges before persisting.
@@ -384,7 +367,11 @@ public class LayoutGeneratorService : ILayoutGeneratorService
             // Route all zone junctions and gates through free corridor space.
             // A nearest-neighbour straight edge is deliberately not used: it
             // can cut through another Zone block when zones are in multiple rows.
-            ReanchorGatesOutsideBlocks(newNodes, layoutBlocks, preview.CanvasWidth, preview.CanvasHeight);
+            // Preserve the owner's gate position.  A gate is an editable map
+            // object, not a generated constraint; moving it during every
+            // regeneration made the editor appear to ignore drag-and-drop.
+            // The obstacle-aware router simply omits unsafe persisted segments
+            // and customer navigation can build a transient corridor later.
             ConnectJunctionsAroundBlocks(
                 layout.Id,
                 junctions,

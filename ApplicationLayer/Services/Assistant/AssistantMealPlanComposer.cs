@@ -162,7 +162,8 @@ public sealed class AssistantMealPlanComposer(
                 AssistantPromptCatalog.MealPlanSystem + "\nJSON schema:\n" + AssistantPromptCatalog.MealPlanSchema,
                 payload,
                 _openAi.MaxOutputTokensMealPlan,
-                cancellationToken);
+                cancellationToken,
+                null);
         }
         catch (AppException)
         {

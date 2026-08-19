@@ -60,13 +60,7 @@ public sealed class AssistantCompatibilityScorer(IOptions<AssistantOptions> opti
                 + weights.Featured * featured
                 + weights.Promo * promo;
 
-            var reasons = new List<string>(match?.Reasons ?? []);
-            foreach (var facet in match?.UnknownDataFacets ?? [])
-            {
-                if (!reasons.Any(reason => reason.Contains(facet, StringComparison.OrdinalIgnoreCase)
-                    || reason.Contains("MISSING_DB_FIELD", StringComparison.OrdinalIgnoreCase)))
-                    reasons.Add($"MISSING_DB_FIELD:{facet}");
-            }
+            var reasons = ComposeReasons(item, match);
 
             scored.Add(new AssistantScoredFood
             {
@@ -83,16 +77,23 @@ public sealed class AssistantCompatibilityScorer(IOptions<AssistantOptions> opti
             });
         }
 
-        return OrderResults(
-            scored.Where(item => item.FinalScore >= _options.MinimumCompatibilityScore).ToList(),
-            hasGps);
+        var relevant = AssistantSemanticRelevanceGate.Filter(scored, _options);
+        var qualified = relevant
+            .Where(item => item.FinalScore >= _options.MinimumCompatibilityScore)
+            .ToArray();
+        return OrderRelevantResults(qualified, hasGps);
     }
 
-    private static IReadOnlyList<AssistantScoredFood> OrderResults(IReadOnlyList<AssistantScoredFood> scored, bool hasGps)
+    /// <summary>
+    /// Rank only semantically relevant candidates: distance, then compatibility, then rating.
+    /// </summary>
+    private static IReadOnlyList<AssistantScoredFood> OrderRelevantResults(
+        IReadOnlyList<AssistantScoredFood> relevant,
+        bool hasGps)
     {
         if (hasGps)
         {
-            return scored
+            return relevant
                 .OrderBy(item => item.Eligible.DistanceMeters ?? double.MaxValue)
                 .ThenByDescending(item => item.FinalScore)
                 .ThenByDescending(item => item.Eligible.FoodItem.AverageRating)
@@ -100,7 +101,7 @@ public sealed class AssistantCompatibilityScorer(IOptions<AssistantOptions> opti
                 .ToArray();
         }
 
-        return scored
+        return relevant
             .OrderByDescending(item => item.FinalScore)
             .ThenByDescending(item => item.Eligible.FoodItem.AverageRating)
             .ThenBy(item => item.Eligible.FoodItem.Id)
@@ -166,4 +167,22 @@ public sealed class AssistantCompatibilityScorer(IOptions<AssistantOptions> opti
     private static HashSet<string> Union(IEnumerable<string>? values)
         => (values ?? []).Where(value => !string.IsNullOrWhiteSpace(value))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    private static IReadOnlyList<string> ComposeReasons(AssistantEligibleFood eligible, AssistantSemanticScore? match)
+    {
+        if (match?.Reasons is { Count: > 0 })
+            return match.Reasons;
+
+        var food = eligible.FoodItem;
+        var parts = new List<string>(3);
+        if (food.ReviewCount > 0 && food.AverageRating >= 4m)
+            parts.Add($"⭐ {food.AverageRating:0.0}");
+        if (eligible.HasActivePromotion)
+            parts.Add("đang khuyến mãi");
+        if (food.IsFeatured)
+            parts.Add("món nổi bật");
+        if (parts.Count == 0 && match is not null && match.SemanticCompatibility >= 0.7d)
+            parts.Add("phù hợp sở thích");
+        return parts;
+    }
 }

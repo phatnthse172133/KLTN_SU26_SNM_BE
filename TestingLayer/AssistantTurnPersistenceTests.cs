@@ -150,7 +150,7 @@ public sealed class AssistantTurnPersistenceTests
         db.ChangeTracker.Clear();
 
         var llm = new Mock<ILanguageModelClient>();
-        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()))
             .ReturnsAsync("""
                 { "intent": "CHITCHAT", "needsLocation": false, "assistantReply": "Chào bạn.",
                   "hardConstraints": {}, "structuredPreferences": {},
@@ -188,7 +188,7 @@ public sealed class AssistantTurnPersistenceTests
             new SendAssistantMessageRequest { Message = "Xin chào" });
 
         Assert.True(result.Success);
-        llm.Verify(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Once);
+        llm.Verify(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()), Times.Once);
         Assert.Equal(2, interceptor.SaveAttempts);
         Assert.Equal(0, interceptor.RemainingFailures);
         Assert.Equal(2, await db.AssistantMessages.CountAsync(item => item.ConversationId == conversationId));

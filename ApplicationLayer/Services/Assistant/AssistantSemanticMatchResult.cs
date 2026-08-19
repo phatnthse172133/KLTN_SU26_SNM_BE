@@ -7,7 +7,17 @@ public sealed class AssistantSemanticMatchResult
 
     public int BatchCount { get; init; }
 
+    public int LogicalBatchCount { get; init; }
+
+    public int ProviderCallCount { get; init; }
+
     public IReadOnlyList<Guid> IdsSent { get; init; } = [];
+
+    public long SemanticTotalMs { get; init; }
+
+    public int SemanticRetryCount { get; init; }
+
+    public IReadOnlyList<AssistantSemanticBatchDiagnostics> BatchDiagnostics { get; init; } = [];
 }
 
 public sealed class AssistantSemanticScore

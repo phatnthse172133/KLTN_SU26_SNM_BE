@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using ApplicationLayer.DTOs;
+using ApplicationLayer.Services.Assistant;
 using DomainLayer.Enums;
 
 namespace ApplicationLayer.DTOs.Responses;
@@ -37,10 +38,26 @@ public sealed class AssistantTurnDiagnostics
     public int AfterHardConstraints { get; set; }
     public int AfterOpenNow { get; set; }
     public int BatchCount { get; set; }
+    public int LogicalBatchCount { get; set; }
+    public int ProviderCallCount { get; set; }
     public int RecommendationCount { get; set; }
     public IReadOnlyList<Guid> IdsSent { get; set; } = [];
     public IReadOnlyList<Guid> IdsEvaluated { get; set; } = [];
     public long LatencyMs { get; set; }
+    public long TotalMs { get; set; }
+    public long IntentMs { get; set; }
+    public long CandidateQueryMs { get; set; }
+    public long DistanceCalculationMs { get; set; }
+    public long HardConstraintMs { get; set; }
+    public int BatchSize { get; set; }
+    public int MaxConcurrency { get; set; }
+    public int SemanticRetryCount { get; set; }
+    public long SemanticTotalMs { get; set; }
+    public long SemanticMs { get; set; }
+    public long MealPlanMs { get; set; }
+    public long RankingMs { get; set; }
+    public long PersistenceMs { get; set; }
+    public IReadOnlyList<AssistantSemanticBatchDiagnostics> SemanticBatches { get; set; } = [];
     public AssistantParsedIntentDiagnostics? ParsedIntent { get; set; }
 }
 

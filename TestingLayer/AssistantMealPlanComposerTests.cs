@@ -36,7 +36,7 @@ public sealed class AssistantMealPlanComposerTests
             CancellationToken.None);
 
         Assert.Empty(plans);
-        llm.Verify(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+        llm.Verify(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()), Times.Never);
     }
 
     [Fact]

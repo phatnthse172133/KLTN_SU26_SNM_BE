@@ -21,4 +21,9 @@ public sealed class OpenAiOptions
     public int MaxOutputTokensMealPlan { get; set; } = 2500;
     public string ApiKey { get; set; } = string.Empty;
     public bool Enabled { get; set; } = true;
+    /// <summary>
+    /// When true, Stage callers may request OpenAI json_schema strict response_format.
+    /// When false or unsupported, falls back to json_object with schema in the system prompt.
+    /// </summary>
+    public bool UseJsonSchemaStrict { get; set; } = true;
 }

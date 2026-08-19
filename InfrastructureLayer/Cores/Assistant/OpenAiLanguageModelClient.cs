@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Net.Sockets;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using ApplicationLayer.Services.Assistant;
@@ -33,7 +34,8 @@ public sealed class OpenAiLanguageModelClient : ILanguageModelClient
         string systemPrompt,
         string userPrompt,
         int maxOutputTokens,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken,
+        LanguageModelJsonSchemaOptions? schemaOptions)
     {
         if (!_options.Enabled)
             throw AssistantErrors.ProviderUnavailable(AssistantErrors.Disabled);
@@ -50,7 +52,7 @@ public sealed class OpenAiLanguageModelClient : ILanguageModelClient
 
         for (var attempt = 0; attempt <= extraAttempts; attempt++)
         {
-            using var request = CreateRequest(boundedUser, systemPrompt, outputTokens);
+            using var request = CreateRequest(boundedUser, systemPrompt, outputTokens, schemaOptions);
             HttpResponseMessage response;
             try
             {
@@ -63,7 +65,23 @@ public sealed class OpenAiLanguageModelClient : ILanguageModelClient
             }
             catch (HttpRequestException exception)
             {
-                _logger.LogWarning(exception, "OpenAI HTTP request failed.");
+                _logger.LogWarning(
+                    exception,
+                    "OpenAI HTTP transport failed. ExceptionType={ExceptionType} InnerType={InnerType} Message={Message} RequestId={RequestId}",
+                    exception.GetType().Name,
+                    exception.InnerException?.GetType().Name,
+                    SanitizeTransportMessage(exception),
+                    _httpContextAccessor?.HttpContext?.TraceIdentifier);
+                throw AssistantErrors.ProviderUnavailable(AssistantErrors.HttpTransport, exception);
+            }
+            catch (SocketException exception)
+            {
+                _logger.LogWarning(
+                    exception,
+                    "OpenAI socket transport failed. SocketError={SocketError} Message={Message} RequestId={RequestId}",
+                    exception.SocketErrorCode,
+                    SanitizeTransportMessage(exception),
+                    _httpContextAccessor?.HttpContext?.TraceIdentifier);
                 throw AssistantErrors.ProviderUnavailable(AssistantErrors.HttpTransport, exception);
             }
 
@@ -155,7 +173,11 @@ public sealed class OpenAiLanguageModelClient : ILanguageModelClient
         => attempt < extraAttempts
             && string.Equals(finishReason, "length", StringComparison.OrdinalIgnoreCase);
 
-    private HttpRequestMessage CreateRequest(string userPrompt, string systemPrompt, int outputTokens)
+    private HttpRequestMessage CreateRequest(
+        string userPrompt,
+        string systemPrompt,
+        int outputTokens,
+        LanguageModelJsonSchemaOptions? schemaOptions)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, Combine("chat/completions"));
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.ApiKey.Trim());
@@ -164,7 +186,7 @@ public sealed class OpenAiLanguageModelClient : ILanguageModelClient
             model = _options.Model,
             temperature = 0,
             max_tokens = outputTokens,
-            response_format = new { type = "json_object" },
+            response_format = BuildResponseFormat(schemaOptions),
             messages = new object[]
             {
                 new { role = "system", content = systemPrompt },
@@ -172,6 +194,25 @@ public sealed class OpenAiLanguageModelClient : ILanguageModelClient
             }
         });
         return request;
+    }
+
+    private object BuildResponseFormat(LanguageModelJsonSchemaOptions? schemaOptions)
+    {
+        if (schemaOptions is not null && _options.UseJsonSchemaStrict)
+        {
+            return new
+            {
+                type = "json_schema",
+                json_schema = new
+                {
+                    name = schemaOptions.Name,
+                    strict = schemaOptions.Strict,
+                    schema = JsonSerializer.Deserialize<JsonElement>(schemaOptions.SchemaJson)
+                }
+            };
+        }
+
+        return new { type = "json_object" };
     }
 
     private LanguageModelJsonCompletion WithRequestMetadata(
@@ -207,6 +248,14 @@ public sealed class OpenAiLanguageModelClient : ILanguageModelClient
 
     private static string Truncate(string value)
         => value.Length <= 400 ? value : value[..400];
+
+    private static string SanitizeTransportMessage(Exception exception)
+    {
+        var message = exception.Message;
+        if (exception.InnerException is not null)
+            message = $"{message} | inner: {exception.InnerException.Message}";
+        return message.Length <= 240 ? message : message[..240];
+    }
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {

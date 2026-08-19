@@ -88,7 +88,7 @@ public sealed class AssistantServiceTests
         Assert.Equal("Món gần tôi", _conversation.PendingUserMessage);
         Assert.False(string.IsNullOrWhiteSpace(_conversation.PendingParsedIntentJson));
         _foods.Verify(repository => repository.GetEligibleFoodsAsync(It.IsAny<AssistantFoodQueryCriteria>(), It.IsAny<CancellationToken>()), Times.Never);
-        _llm.Verify(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Once);
+        _llm.Verify(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()), Times.Once);
     }
 
     [Fact]
@@ -138,7 +138,7 @@ public sealed class AssistantServiceTests
         Assert.Empty(result.Data!.Recommendations);
         Assert.Contains("chưa có món", result.Data.Reply, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(0, result.Data.Diagnostics!.EligibleCount);
-        _llm.Verify(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Once);
+        _llm.Verify(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()), Times.Once);
     }
 
     [Fact]
@@ -164,8 +164,8 @@ public sealed class AssistantServiceTests
     public async Task SendMessage_UsesStructuredPartySizeAndBudget_WithoutRewritingPrompt()
     {
         string? captured = null;
-        _llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .Callback<string, string, int, CancellationToken>((_, user, _, _) => captured = user)
+        _llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()))
+            .Callback<string, string, int, CancellationToken, LanguageModelJsonSchemaOptions?>((_, user, _, _, _) => captured = user)
             .ReturnsAsync("""
                 { "intent": "MEAL_PLAN", "needsLocation": false, "partySize": 9, "budgetMax": 10000,
                   "hardConstraints": {}, "structuredPreferences": {},
@@ -216,7 +216,7 @@ public sealed class AssistantServiceTests
     [Fact]
     public async Task SendMessage_Timeout_Throws503()
     {
-        _llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+        _llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()))
             .ThrowsAsync(new TaskCanceledException());
 
         var exception = await Assert.ThrowsAsync<AppException>(() => Send("Món cay"));
@@ -249,7 +249,7 @@ public sealed class AssistantServiceTests
 
         Assert.Equal("ASSISTANT_PROVIDER_UNAVAILABLE", exception.ErrorCode);
         Assert.Equal(AssistantErrors.MissingKey, AssistantProviderFailure.Reason(exception));
-        _llm.Verify(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+        _llm.Verify(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()), Times.Never);
         _conversations.Verify(repository => repository.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
         _conversations.Verify(repository => repository.SaveTurnAsync(It.IsAny<AssistantConversation>(), It.IsAny<CancellationToken>()), Times.Never);
         _foods.Verify(repository => repository.GetEligibleFoodsAsync(It.IsAny<AssistantFoodQueryCriteria>(), It.IsAny<CancellationToken>()), Times.Never);
@@ -302,7 +302,7 @@ public sealed class AssistantServiceTests
         Assert.Equal(AssistantIntentKind.FOOD_RECOMMENDATION, result.Data!.Intent);
         Assert.Equal(80000m, result.Data.Diagnostics!.ParsedIntent!.BudgetMax);
         Assert.Contains("cay nhẹ", result.Data.Diagnostics.ParsedIntent.SemanticPreferences);
-        _llm.Verify(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+        _llm.Verify(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()), Times.Never);
         _foods.Verify(repository => repository.GetEligibleFoodsAsync(It.IsAny<AssistantFoodQueryCriteria>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -442,8 +442,8 @@ public sealed class AssistantServiceTests
         var allowed = CartFood(allowedId, available: true, price: 32_000m, nightMarketId: plan.NightMarketId);
         _foods.Setup(repository => repository.GetEligibleFoodsAsync(It.IsAny<AssistantFoodQueryCriteria>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(QueryResult(CartFood(currentId, available: true, price: 35_000m, nightMarketId: plan.NightMarketId), allowed));
-        _llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync($$"""{ "scores": [ { "foodItemId": "{{allowedId}}", "semanticCompatibility": 1, "reasons": ["khớp yêu cầu"] } ] }""");
+        _llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()))
+            .ReturnsAsync($$"""{ "scores": [1.0] }""");
 
         var exception = await Assert.ThrowsAsync<AppException>(() =>
             _service.ReplaceMealPlanItemAsync(
@@ -458,24 +458,23 @@ public sealed class AssistantServiceTests
     }
 
     [Fact]
-    public async Task GetMealPlanItemReplacements_HallucinatedId_Throws503()
+    public async Task GetMealPlanItemReplacements_ScoreCountMismatch_Throws503()
     {
         var currentId = Guid.NewGuid();
         var allowedId = Guid.NewGuid();
-        var fakeId = Guid.NewGuid();
         var itemId = Guid.NewGuid();
         var plan = MutationPlan(currentId, itemId, quantity: 1, snapshotPrice: 35_000m, partySize: 2, budget: 200_000m);
         _foods.Setup(repository => repository.GetEligibleFoodsAsync(It.IsAny<AssistantFoodQueryCriteria>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(QueryResult(CartFood(allowedId, available: true, price: 32_000m, nightMarketId: plan.NightMarketId)));
-        _llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync($$"""{ "scores": [ { "foodItemId": "{{fakeId}}", "semanticCompatibility": 1, "reasons": ["bịa"] } ] }""");
+        _llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()))
+            .ReturnsAsync("""{ "scores": [] }""");
 
         var exception = await Assert.ThrowsAsync<AppException>(() =>
             _service.GetMealPlanItemReplacementsAsync(_conversation.CustomerId, _conversation.Id, plan.Id, itemId));
 
         Assert.Equal(503, exception.StatusCode);
         Assert.Equal("ASSISTANT_PROVIDER_UNAVAILABLE", exception.ErrorCode);
-        Assert.Equal(AssistantErrors.HallucinatedId, AssistantProviderFailure.Reason(exception));
+        Assert.Equal(AssistantErrors.SemanticScoreCountMismatch, AssistantProviderFailure.Reason(exception));
     }
 
     [Fact]
@@ -518,7 +517,7 @@ public sealed class AssistantServiceTests
         => _service.SendMessageAsync(_conversation.CustomerId, _conversation.Id, new SendAssistantMessageRequest { Message = message });
 
     private void SetupIntent(string json)
-        => _llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+        => _llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()))
             .ReturnsAsync(json);
 
     private static string FoodIntent()

@@ -6,8 +6,6 @@ public sealed class CompactAssistantFoodCandidate
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
     public string CategoryName { get; set; } = string.Empty;
-    public string BoothName { get; set; } = string.Empty;
-    public string NightMarketName { get; set; } = string.Empty;
     public string SpiceLevel { get; set; } = string.Empty;
     public string? ServingTemperature { get; set; }
     public int? EstimatedServingCount { get; set; }
@@ -15,8 +13,6 @@ public sealed class CompactAssistantFoodCandidate
     public decimal EffectivePrice { get; set; }
     public decimal AverageRating { get; set; }
     public int ReviewCount { get; set; }
-    public int SoldToday { get; set; }
-    public int OrderCount { get; set; }
     public bool HasActivePromotion { get; set; }
     public bool IsFeatured { get; set; }
     public double? SemanticCompatibility { get; set; }

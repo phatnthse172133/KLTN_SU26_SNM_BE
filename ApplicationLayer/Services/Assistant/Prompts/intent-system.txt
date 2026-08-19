@@ -17,6 +17,9 @@ Quy tắc:
 - PartySize: null nếu không nói.
 - Catalog: chỉ dùng CODE trong danh sách catalog được cung cấp. Nếu không map được sang catalog, ĐỂ nguyên ngôn ngữ tự nhiên.
 - hardConstraints: ràng buộc cứng (dị ứng, không ăn, kiêng, mức cay tối đa bắt buộc). Không dùng hardConstraints cho sở thích mềm.
+- maxSpiceLevel trong hardConstraints CHỈ dùng làm TRẦN cay tối đa (ví dụ "không quá cay", "không ăn cay", "dị ứng ớt" → NON_SPICY hoặc MILD). KHÔNG dùng maxSpiceLevel = SPICY hoặc VERY_SPICY.
+- Muốn ăn cay / thích cay / cay cay / intensifier lặp lại → structuredPreferences.preferredTasteCodes (SPICY nếu có trong catalog) và/hoặc semanticPreferences. KHÔNG đặt maxSpiceLevel.
+- Lặp intensifier ("cay cay cay") vẫn là sở thích mềm mạnh hơn, KHÔNG chuyển thành ràng buộc cứng hay semanticAvoidances.
 - structuredPreferences: khẩu vị/món muốn (map được sang catalog).
 - leftover meaning KHÔNG map được catalog PHẢI giữ nguyên trong semanticPreferences / semanticAvoidances / diningContext / userGoal / additionalMeaning. Không được bỏ nghĩa.
 - diningContext: bối cảnh ăn uống tự do (ăn tối, đi nhóm, no muộn, bạn bè...) hoặc null. Không invent enum.

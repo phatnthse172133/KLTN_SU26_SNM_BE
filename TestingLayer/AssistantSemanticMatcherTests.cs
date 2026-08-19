@@ -33,8 +33,8 @@ public sealed class AssistantSemanticMatcherTests
         var llm = new Mock<ILanguageModelClient>();
         var batchSizes = new List<int>();
         var sentIds = new List<Guid>();
-        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .Returns((string _, string user, int _, CancellationToken _) =>
+        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()))
+            .Returns((string _, string user, int _, CancellationToken _, LanguageModelJsonSchemaOptions? _) =>
             {
                 var ids = CandidateIds(user);
                 batchSizes.Add(ids.Count);
@@ -54,7 +54,7 @@ public sealed class AssistantSemanticMatcherTests
         Assert.Equal(expectedIds, result.IdsSent);
         Assert.Equal(expectedIds.ToHashSet(), sentIds.ToHashSet());
         Assert.Equal(expectedIds.ToHashSet(), result.Scores.Keys.ToHashSet());
-        llm.Verify(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Exactly(4));
+        llm.Verify(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()), Times.Exactly(4));
     }
 
     [Fact]
@@ -63,8 +63,8 @@ public sealed class AssistantSemanticMatcherTests
         var llm = new Mock<ILanguageModelClient>();
         var current = 0;
         var peak = 0;
-        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .Returns(async (string _, string user, int _, CancellationToken _) =>
+        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()))
+            .Returns(async (string _, string user, int _, CancellationToken _, LanguageModelJsonSchemaOptions? _) =>
             {
                 var running = Interlocked.Increment(ref current);
                 SpinWait.SpinUntil(() =>
@@ -82,94 +82,105 @@ public sealed class AssistantSemanticMatcherTests
         await matcher.ScoreAsync("gợi ý", Intent(), eligible, CancellationToken.None);
 
         Assert.InRange(peak, 1, 3);
-        llm.Verify(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Exactly(4));
+        llm.Verify(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()), Times.Exactly(4));
     }
 
     [Fact]
-    public void ParseBatch_ExtraIds_Throws503()
+    public async Task Score_BatchEight_ReturnsEightPositionalScores()
     {
-        var allowed = Guid.NewGuid();
-        var extra = Guid.NewGuid();
-        var raw = $$"""
-            {
-              "scores": [
-                { "foodItemId": "{{allowed}}", "semanticCompatibility": 0.9, "reasons": ["khớp vị cay"] },
-                { "foodItemId": "{{extra}}", "semanticCompatibility": 0.99, "reasons": ["id bịa"] }
-              ]
-            }
-            """;
+        var llm = new Mock<ILanguageModelClient>();
+        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()))
+            .Returns((string _, string user, int _, CancellationToken _, LanguageModelJsonSchemaOptions? _) =>
+                Task.FromResult<LanguageModelJsonCompletion>(ScoresJson(CandidateIds(user), 0.5)));
+        var matcher = Create(llm.Object, batchSize: 8);
+        var eligible = Enumerable.Range(0, 8).Select(index => Eligible($"Món {index}")).ToArray();
 
-        var exception = Assert.Throws<AppException>(() =>
-            AssistantSemanticMatcher.ParseBatch(raw, new HashSet<Guid> { allowed }));
+        var result = await matcher.ScoreAsync("gợi ý", Intent(), eligible, CancellationToken.None);
 
-        Assert.Equal(503, exception.StatusCode);
-        Assert.Equal("ASSISTANT_PROVIDER_UNAVAILABLE", exception.ErrorCode);
-        Assert.Equal(AssistantErrors.HallucinatedId, AssistantProviderFailure.Reason(exception));
+        Assert.Equal(8, result.Scores.Count);
+        Assert.Equal(1, result.BatchCount);
+        Assert.Equal(eligible.Select(item => item.FoodItem.Id), result.IdsSent);
     }
 
     [Fact]
-    public void ParseBatch_DuplicateReturnedId_Throws503()
+    public async Task Score_BatchSeven_ReturnsSevenPositionalScores()
     {
-        var id = Guid.NewGuid();
-        var raw = $$"""
-            {
-              "scores": [
-                { "foodItemId": "{{id}}", "semanticCompatibility": 0.9, "reasons": ["a"] },
-                { "foodItemId": "{{id}}", "semanticCompatibility": 0.5, "reasons": ["b"] }
-              ]
-            }
-            """;
+        var llm = new Mock<ILanguageModelClient>();
+        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()))
+            .Returns((string _, string user, int _, CancellationToken _, LanguageModelJsonSchemaOptions? _) =>
+                Task.FromResult<LanguageModelJsonCompletion>(ScoresJson(CandidateIds(user), 0.6)));
+        var matcher = Create(llm.Object, batchSize: 8);
+        var eligible = Enumerable.Range(0, 7).Select(index => Eligible($"Món {index}")).ToArray();
 
-        var exception = Assert.Throws<AppException>(() =>
-            AssistantSemanticMatcher.ParseBatch(raw, new HashSet<Guid> { id }));
+        var result = await matcher.ScoreAsync("gợi ý", Intent(), eligible, CancellationToken.None);
 
-        Assert.Equal("ASSISTANT_PROVIDER_UNAVAILABLE", exception.ErrorCode);
-        Assert.Equal(AssistantErrors.DuplicateId, AssistantProviderFailure.Reason(exception));
+        Assert.Equal(7, result.Scores.Count);
+        Assert.Equal(1, result.BatchCount);
     }
 
     [Fact]
-    public async Task Score_IncompleteBatch_RetriesOnceThenPasses()
+    public void ParseBatch_IndexMapping_MapsScoresToOrderedCandidates()
+    {
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+        var third = Guid.NewGuid();
+        var raw = """{"scores":[0.9,0.4,0.7]}""";
+
+        var scores = AssistantSemanticMatcher.ParseBatch(raw, [first, second, third]);
+
+        Assert.Equal(3, scores.Count);
+        Assert.Equal(first, scores[0].FoodItemId);
+        Assert.Equal(second, scores[1].FoodItemId);
+        Assert.Equal(third, scores[2].FoodItemId);
+        Assert.Equal(0.9d, scores[0].SemanticCompatibility);
+        Assert.Equal(0.4d, scores[1].SemanticCompatibility);
+        Assert.Equal(0.7d, scores[2].SemanticCompatibility);
+    }
+
+    [Fact]
+    public async Task Score_ScoreCountMismatch_RetriesOnceThenPasses()
     {
         var llm = new Mock<ILanguageModelClient>();
         var calls = 0;
-        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .Returns((string _, string user, int _, CancellationToken _) =>
+        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()))
+            .Returns((string _, string user, int _, CancellationToken _, LanguageModelJsonSchemaOptions? _) =>
             {
                 calls++;
                 var ids = CandidateIds(user);
                 if (calls == 1)
-                    ids = ids.Take(ids.Count - 1).ToArray();
-                return Task.FromResult<LanguageModelJsonCompletion>(ScoresJson(ids));
+                    return Task.FromResult<LanguageModelJsonCompletion>(ScoresJson(ids.Take(ids.Count - 1).ToArray(), 0.5));
+                return Task.FromResult<LanguageModelJsonCompletion>(ScoresJson(ids, 0.5));
             });
-        var matcher = Create(llm.Object, 30, semanticBatchRetryCount: 1);
-        var eligible = new[] { Eligible("A"), Eligible("B") };
+        var matcher = Create(llm.Object, 8, semanticBatchRetryCount: 1);
+        var eligible = Enumerable.Range(0, 8).Select(index => Eligible($"Món {index}")).ToArray();
 
         var result = await matcher.ScoreAsync("gợi ý", Intent(), eligible, CancellationToken.None);
 
-        Assert.Equal(2, result.Scores.Count);
+        Assert.Equal(8, result.Scores.Count);
         Assert.Equal(2, calls);
-        llm.Verify(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
+        Assert.Equal(1, result.SemanticRetryCount);
+        llm.Verify(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()), Times.Exactly(2));
     }
 
     [Fact]
-    public async Task Score_IncompleteBatchAfterRetry_Throws503()
+    public async Task Score_ScoreCountMismatchAfterRetry_Throws503()
     {
         var llm = new Mock<ILanguageModelClient>();
-        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .Returns((string _, string user, int _, CancellationToken _) =>
+        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()))
+            .Returns((string _, string user, int _, CancellationToken _, LanguageModelJsonSchemaOptions? _) =>
             {
-                var ids = CandidateIds(user).Take(1).ToArray();
-                return Task.FromResult<LanguageModelJsonCompletion>(ScoresJson(ids));
+                var ids = CandidateIds(user).Take(7).ToArray();
+                return Task.FromResult<LanguageModelJsonCompletion>(ScoresJson(ids, 0.5));
             });
-        var matcher = Create(llm.Object, 30, semanticBatchRetryCount: 1);
-        var eligible = new[] { Eligible("A"), Eligible("B") };
+        var matcher = Create(llm.Object, 8, semanticBatchRetryCount: 1);
+        var eligible = Enumerable.Range(0, 8).Select(index => Eligible($"Món {index}")).ToArray();
 
         var exception = await Assert.ThrowsAsync<AppException>(() =>
             matcher.ScoreAsync("gợi ý", Intent(), eligible, CancellationToken.None));
 
         Assert.Equal("ASSISTANT_PROVIDER_UNAVAILABLE", exception.ErrorCode);
-        Assert.Equal(AssistantErrors.IncompleteIdSet, AssistantProviderFailure.Reason(exception));
-        llm.Verify(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
+        Assert.Equal(AssistantErrors.SemanticScoreCountMismatch, AssistantProviderFailure.Reason(exception));
+        llm.Verify(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()), Times.Exactly(2));
     }
 
     [Fact]
@@ -177,8 +188,8 @@ public sealed class AssistantSemanticMatcherTests
     {
         var llm = new Mock<ILanguageModelClient>();
         var batchCalls = new Dictionary<int, int>();
-        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .Returns((string _, string user, int _, CancellationToken _) =>
+        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()))
+            .Returns((string _, string user, int _, CancellationToken _, LanguageModelJsonSchemaOptions? _) =>
             {
                 var ids = CandidateIds(user);
                 var batchIndex = ids.Count == 10 ? 0 : 1;
@@ -186,7 +197,7 @@ public sealed class AssistantSemanticMatcherTests
                 batchCalls[batchIndex] = count + 1;
                 if (batchIndex == 1 && count == 0)
                     ids = ids.Take(ids.Count - 1).ToArray();
-                return Task.FromResult<LanguageModelJsonCompletion>(ScoresJson(ids));
+                return Task.FromResult<LanguageModelJsonCompletion>(ScoresJson(ids, 0.5));
             });
         var matcher = Create(llm.Object, batchSize: 10, semanticBatchRetryCount: 1);
         var eligible = Enumerable.Range(0, 15).Select(index => Eligible($"Món {index}")).ToArray();
@@ -196,105 +207,66 @@ public sealed class AssistantSemanticMatcherTests
         Assert.Equal(15, result.Scores.Count);
         Assert.Equal(1, batchCalls[0]);
         Assert.Equal(2, batchCalls[1]);
-        llm.Verify(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Exactly(3));
+        llm.Verify(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()), Times.Exactly(3));
     }
 
     [Fact]
-    public async Task Score_IncompleteBatch_DoesNotInventDefaultScores()
+    public async Task Score_ScoreCountMismatch_DoesNotInventDefaultScores()
     {
         var llm = new Mock<ILanguageModelClient>();
-        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .Returns((string _, string user, int _, CancellationToken _) =>
-                Task.FromResult<LanguageModelJsonCompletion>(ScoresJson(CandidateIds(user).Take(1).ToArray())));
-        var matcher = Create(llm.Object, 30, semanticBatchRetryCount: 0);
+        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()))
+            .Returns((string _, string user, int _, CancellationToken _, LanguageModelJsonSchemaOptions? _) =>
+                Task.FromResult<LanguageModelJsonCompletion>(ScoresJson(CandidateIds(user).Take(1).ToArray(), 0.5)));
+        var matcher = Create(llm.Object, 8, semanticBatchRetryCount: 0);
         var eligible = new[] { Eligible("A"), Eligible("B") };
 
         var exception = await Assert.ThrowsAsync<AppException>(() =>
             matcher.ScoreAsync("gợi ý", Intent(), eligible, CancellationToken.None));
 
-        Assert.Equal(AssistantErrors.IncompleteIdSet, AssistantProviderFailure.Reason(exception));
-        llm.Verify(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Once);
+        Assert.Equal(AssistantErrors.SemanticScoreCountMismatch, AssistantProviderFailure.Reason(exception));
+        llm.Verify(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()), Times.Once);
     }
 
     [Fact]
-    public void ParseBatch_MissingAllowedId_IncludesSemanticDiagnostics()
+    public void ParseBatch_ScoreCountMismatch_IncludesSemanticDiagnostics()
     {
-        var allowed = Guid.NewGuid();
-        var missing = Guid.NewGuid();
-        var raw = $$"""
-            {
-              "scores": [
-                { "foodItemId": "{{allowed}}", "semanticCompatibility": 0.4, "reasons": ["ok"] }
-              ]
-            }
-            """;
+        var ids = new[] { Guid.NewGuid(), Guid.NewGuid() };
+        var raw = """{"scores":[0.4]}""";
         var completion = new LanguageModelJsonCompletion
         {
             Content = raw,
             FinishReason = "stop",
             ConfiguredMaxOutputTokens = 2500,
-            OutputTokenCount = 120,
+            OutputTokenCount = 12,
             ResponseCharacterCount = raw.Length
         };
 
         var exception = Assert.Throws<AppException>(() =>
-            AssistantSemanticMatcher.ParseBatch(completion, new HashSet<Guid> { allowed, missing }));
+            AssistantSemanticMatcher.ParseBatch(completion, ids));
 
-        Assert.Equal(AssistantErrors.IncompleteIdSet, AssistantProviderFailure.Reason(exception));
+        Assert.Equal(AssistantErrors.SemanticScoreCountMismatch, AssistantProviderFailure.Reason(exception));
         Assert.Equal(AssistantLlmStages.Semantic, AssistantProviderFailure.Stage(exception));
         Assert.Equal("stop", AssistantProviderFailure.FinishReason(exception));
         Assert.Equal(2500, AssistantProviderFailure.ConfiguredMaxOutputTokens(exception));
     }
 
     [Fact]
-    public void ParseBatch_MissingAllowedId_Throws503()
+    public void ParseBatch_ScoreCountMismatch_Throws503()
     {
-        var allowed = Guid.NewGuid();
-        var missing = Guid.NewGuid();
-        var raw = $$"""
-            {
-              "scores": [
-                { "foodItemId": "{{allowed}}", "semanticCompatibility": 0.4, "reasons": ["ok"] }
-              ]
-            }
-            """;
+        var ids = new[] { Guid.NewGuid(), Guid.NewGuid() };
+        var raw = """{"scores":[0.4]}""";
 
         var exception = Assert.Throws<AppException>(() =>
-            AssistantSemanticMatcher.ParseBatch(raw, new HashSet<Guid> { allowed, missing }));
+            AssistantSemanticMatcher.ParseBatch(raw, ids));
 
         Assert.Equal("ASSISTANT_PROVIDER_UNAVAILABLE", exception.ErrorCode);
-        Assert.Equal(AssistantErrors.IncompleteIdSet, AssistantProviderFailure.Reason(exception));
-    }
-
-    [Fact]
-    public void ParseBatch_PreservesUnknownCaloriesFacet()
-    {
-        var id = Guid.NewGuid();
-        var raw = $$"""
-            {
-              "scores": [
-                {
-                  "foodItemId": "{{id}}",
-                  "semanticCompatibility": 0.6,
-                  "confidence": 0.4,
-                  "reasons": ["MISSING_DB_FIELD"],
-                  "unknownDataFacets": ["calories", "oiliness"]
-                }
-              ]
-            }
-            """;
-
-        var scores = AssistantSemanticMatcher.ParseBatch(raw, new HashSet<Guid> { id });
-
-        Assert.Contains("calories", scores[0].UnknownDataFacets);
-        Assert.Contains("oiliness", scores[0].UnknownDataFacets);
-        Assert.DoesNotContain(scores[0].Reasons, reason => reason.Contains("350 kcal", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(AssistantErrors.SemanticScoreCountMismatch, AssistantProviderFailure.Reason(exception));
     }
 
     [Fact]
     public void ParseBatch_InvalidJson_Throws503()
     {
-        var exception = Assert.Throws<AppException>(() => AssistantSemanticMatcher.ParseBatch("{", new HashSet<Guid>()));
+        var exception = Assert.Throws<AppException>(() => AssistantSemanticMatcher.ParseBatch("{", []));
         Assert.Equal(503, exception.StatusCode);
         Assert.Equal("ASSISTANT_PROVIDER_UNAVAILABLE", exception.ErrorCode);
         Assert.Equal(AssistantErrors.InvalidJson, AssistantProviderFailure.Reason(exception));
@@ -305,7 +277,7 @@ public sealed class AssistantSemanticMatcherTests
     [Fact]
     public void ParseBatch_TruncatedWithFinishLength_HasTokenDiagnostics()
     {
-        var truncated = """{"scores":[{"foodItemId":"11111111-1111-1111-1111-111111111111","semanticCompatibility":0.9,"reasons":["khớp vị""";
+        var truncated = """{"scores":[0.9,0.8""";
         var completion = new LanguageModelJsonCompletion
         {
             Content = truncated,
@@ -317,7 +289,7 @@ public sealed class AssistantSemanticMatcherTests
         };
 
         var exception = Assert.Throws<AppException>(() =>
-            AssistantSemanticMatcher.ParseBatch(completion, new HashSet<Guid> { Guid.Parse("11111111-1111-1111-1111-111111111111") }));
+            AssistantSemanticMatcher.ParseBatch(completion, [Guid.NewGuid(), Guid.NewGuid()]));
 
         Assert.Equal(AssistantErrors.InvalidJson, AssistantProviderFailure.Reason(exception));
         Assert.Equal(AssistantJsonParseClassifier.OutputTruncated, AssistantProviderFailure.ParseFailureCategory(exception));
@@ -331,7 +303,7 @@ public sealed class AssistantSemanticMatcherTests
     public void ParseBatch_SchemaMismatch_ThrowsInvalidJson()
     {
         var exception = Assert.Throws<AppException>(() =>
-            AssistantSemanticMatcher.ParseBatch("""{"scores":{"foodItemId":"x"}}""", new HashSet<Guid>()));
+            AssistantSemanticMatcher.ParseBatch("""{"scores":{"foodItemId":"x"}}""", [Guid.NewGuid()]));
 
         Assert.Equal(AssistantErrors.InvalidJson, AssistantProviderFailure.Reason(exception));
         Assert.Equal(AssistantJsonParseClassifier.SchemaMismatch, AssistantProviderFailure.ParseFailureCategory(exception));
@@ -341,20 +313,22 @@ public sealed class AssistantSemanticMatcherTests
     public void ParseBatch_Malformed_DoesNotInventScores()
     {
         var exception = Assert.Throws<AppException>(() =>
-            AssistantSemanticMatcher.ParseBatch("not-json{{{", new HashSet<Guid> { Guid.NewGuid() }));
+            AssistantSemanticMatcher.ParseBatch("not-json{{{", [Guid.NewGuid()]));
 
         Assert.Equal(AssistantErrors.InvalidJson, AssistantProviderFailure.Reason(exception));
         Assert.Equal(AssistantJsonParseClassifier.MalformedJson, AssistantProviderFailure.ParseFailureCategory(exception));
     }
 
     [Fact]
-    public async Task Score_RequestsSemanticTokenBudget()
+    public async Task Score_RequestsSemanticTokenBudgetAndJsonSchema()
     {
         var llm = new Mock<ILanguageModelClient>();
-        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .Returns((string _, string user, int _, CancellationToken _) =>
-                Task.FromResult<LanguageModelJsonCompletion>(ScoresJson(CandidateIds(user))));
-        var matcher = Create(llm.Object, 30);
+        LanguageModelJsonSchemaOptions? capturedSchema = null;
+        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()))
+            .Callback<string, string, int, CancellationToken, LanguageModelJsonSchemaOptions?>((_, _, _, _, schema) => capturedSchema = schema)
+            .Returns((string _, string user, int _, CancellationToken _, LanguageModelJsonSchemaOptions? _) =>
+                Task.FromResult<LanguageModelJsonCompletion>(ScoresJson(CandidateIds(user), 0.5)));
+        var matcher = Create(llm.Object, 8);
 
         await matcher.ScoreAsync("gợi ý", Intent(), [Eligible("A")], CancellationToken.None);
 
@@ -362,16 +336,20 @@ public sealed class AssistantSemanticMatcherTests
             It.IsAny<string>(),
             It.IsAny<string>(),
             2500,
-            It.IsAny<CancellationToken>()), Times.Once);
+            It.IsAny<CancellationToken>(),
+            It.IsNotNull<LanguageModelJsonSchemaOptions>()), Times.Once);
+        Assert.NotNull(capturedSchema);
+        Assert.Contains("\"minItems\":1", capturedSchema!.SchemaJson, StringComparison.Ordinal);
+        Assert.Contains("\"maxItems\":1", capturedSchema.SchemaJson, StringComparison.Ordinal);
     }
 
     [Fact]
     public async Task Score_AnyBatchTimeout_FailsEntireTurn()
     {
         var llm = new Mock<ILanguageModelClient>();
-        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()))
             .ThrowsAsync(new TaskCanceledException());
-        var matcher = Create(llm.Object, 30);
+        var matcher = Create(llm.Object, 8);
 
         var exception = await Assert.ThrowsAsync<AppException>(() =>
             matcher.ScoreAsync("gợi ý", Intent(), new[] { Eligible("A"), Eligible("B") }, CancellationToken.None));
@@ -385,13 +363,13 @@ public sealed class AssistantSemanticMatcherTests
     public async Task Score_EmptyEligible_DoesNotCallProvider()
     {
         var llm = new Mock<ILanguageModelClient>();
-        var matcher = Create(llm.Object, 30);
+        var matcher = Create(llm.Object, 8);
 
         var result = await matcher.ScoreAsync("gợi ý", Intent(), [], CancellationToken.None);
 
         Assert.Empty(result.Scores);
         Assert.Equal(0, result.BatchCount);
-        llm.Verify(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+        llm.Verify(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()), Times.Never);
     }
 
     [Fact]
@@ -401,7 +379,7 @@ public sealed class AssistantSemanticMatcherTests
         eligible.FoodItem.AverageRating = 4.2m;
         eligible.FoodItem.ReviewCount = 6;
         eligible.FoodItem.IsFeatured = true;
-        var matcher = Create(new Mock<ILanguageModelClient>().Object, 30);
+        var matcher = Create(new Mock<ILanguageModelClient>().Object, 8);
         var compact = matcher.Project(
             new AssistantEligibleFood
             {
@@ -416,13 +394,12 @@ public sealed class AssistantSemanticMatcherTests
         Assert.Equal(45_000m, compact.EffectivePrice);
         Assert.Equal(4.2m, compact.AverageRating);
         Assert.Equal(6, compact.ReviewCount);
-        Assert.Equal(4, compact.SoldToday);
-        Assert.Equal(11, compact.OrderCount);
         Assert.True(compact.HasActivePromotion);
         Assert.True(compact.IsFeatured);
+        Assert.Equal("Bún bò", compact.Name);
     }
 
-    private static AssistantSemanticMatcher Create(ILanguageModelClient llm, int batchSize, int concurrency = 3, int semanticBatchRetryCount = 1)
+    private static AssistantSemanticMatcher Create(ILanguageModelClient llm, int batchSize, int concurrency = 4, int semanticBatchRetryCount = 1)
         => new(
             llm,
             Options.Create(new AssistantOptions
@@ -431,7 +408,7 @@ public sealed class AssistantSemanticMatcherTests
                 SemanticBatchMaxConcurrency = concurrency,
                 SemanticBatchRetryCount = semanticBatchRetryCount
             }),
-            Options.Create(new OpenAiOptions { ApiKey = "test", MaxOutputTokensSemantic = 2500 }));
+            Options.Create(new OpenAiOptions { ApiKey = "test", MaxOutputTokensSemantic = 2500, UseJsonSchemaStrict = true }));
 
     private static ParsedAssistantIntent Intent()
         => new() { Intent = DomainLayer.Enums.AssistantIntentKind.FOOD_RECOMMENDATION };
@@ -445,16 +422,11 @@ public sealed class AssistantSemanticMatcherTests
             .ToArray();
     }
 
-    private static string ScoresJson(IReadOnlyList<Guid> ids)
-        => JsonSerializer.Serialize(new
+    private static LanguageModelJsonCompletion ScoresJson(IReadOnlyList<Guid> ids, double score = 0.5)
+        => LanguageModelJsonCompletion.FromContent(JsonSerializer.Serialize(new
         {
-            scores = ids.Select(id => new
-            {
-                foodItemId = id,
-                semanticCompatibility = 0.5,
-                reasons = new[] { "khớp mô tả" }
-            }).ToArray()
-        });
+            scores = ids.Select(_ => score).ToArray()
+        }));
 
     private static AssistantEligibleFood Eligible(string name)
     {

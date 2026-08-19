@@ -6,5 +6,6 @@ public interface ILanguageModelClient
         string systemPrompt,
         string userPrompt,
         int maxOutputTokens,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken,
+        LanguageModelJsonSchemaOptions? schemaOptions);
 }

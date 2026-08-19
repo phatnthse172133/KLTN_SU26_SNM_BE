@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using ApplicationLayer.Services.CustomerDiscovery;
 using ApplicationLayer.Services.NightMarkets;
 using DomainLayer.Common;
@@ -75,6 +76,7 @@ public sealed class AssistantFoodQueryRepository(SNMDbContext db) : IAssistantFo
             query = query.Where(item => allowed.Contains(item.SpiceLevel));
         }
 
+        var sqlWatch = Stopwatch.StartNew();
         var entities = await query
             .Include(item => item.Booth).ThenInclude(booth => booth.NightMarket)
             .Include(item => item.Booth).ThenInclude(booth => booth.Promotions)
@@ -90,12 +92,15 @@ public sealed class AssistantFoodQueryRepository(SNMDbContext db) : IAssistantFo
             .AsSplitQuery()
             .AsNoTracking()
             .ToListAsync(cancellationToken);
+        var sqlQueryMs = sqlWatch.ElapsedMilliseconds;
 
+        var inMemoryWatch = Stopwatch.StartNew();
         var utcNow = criteria.UtcNow;
         var localTime = TimeOnly.FromDateTime(NightMarketAvailability.GetVietnamLocalTime(utcNow));
         var sales = await LoadSalesFactsAsync(entities.Select(item => item.Id).ToArray(), utcNow, cancellationToken);
         var result = new List<AssistantEligibleFood>(entities.Count);
         var openNowCount = 0;
+        long distanceCalculationMs = 0;
         foreach (var item in entities)
         {
             var price = FoodPriceResolver.GetCurrentPrice(item, utcNow);
@@ -105,11 +110,14 @@ public sealed class AssistantFoodQueryRepository(SNMDbContext db) : IAssistantFo
             double? distance = null;
             if (HasGps(criteria) && item.Booth.NightMarket.Latitude.HasValue && item.Booth.NightMarket.Longitude.HasValue)
             {
+                var distanceWatch = Stopwatch.StartNew();
                 distance = HaversineMeters(
                     criteria.Latitude!.Value,
                     criteria.Longitude!.Value,
                     (double)item.Booth.NightMarket.Latitude.Value,
                     (double)item.Booth.NightMarket.Longitude.Value);
+                distanceWatch.Stop();
+                distanceCalculationMs += distanceWatch.ElapsedMilliseconds;
                 if (criteria.MaxDistanceMeters is > 0 && distance > criteria.MaxDistanceMeters.Value)
                     continue;
             }
@@ -129,6 +137,7 @@ public sealed class AssistantFoodQueryRepository(SNMDbContext db) : IAssistantFo
             });
         }
 
+        inMemoryWatch.Stop();
         return new AssistantFoodQueryResult
         {
             Foods = result,
@@ -139,6 +148,12 @@ public sealed class AssistantFoodQueryRepository(SNMDbContext db) : IAssistantFo
                 AfterFoodVisible = pipeline.AfterFoodVisible,
                 AfterHardConstraints = result.Count,
                 AfterOpenNow = openNowCount
+            },
+            Timing = new AssistantFoodQueryTiming
+            {
+                SqlQueryMs = sqlQueryMs,
+                InMemoryFilterMs = inMemoryWatch.ElapsedMilliseconds,
+                DistanceCalculationMs = distanceCalculationMs
             }
         };
     }

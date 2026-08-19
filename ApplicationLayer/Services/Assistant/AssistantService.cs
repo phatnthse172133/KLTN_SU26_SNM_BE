@@ -97,13 +97,18 @@ public sealed partial class AssistantService(
             Budget = request.Budget
         };
 
-        var intent = TryReusePendingIntent(conversation, incoming, hasGps, catalogs, stageA)
-            ?? await interpreter.InterpretAsync(
+        var intentWatch = Stopwatch.StartNew();
+        var intent = TryReusePendingIntent(conversation, incoming, hasGps, catalogs, stageA);
+        if (intent is null)
+        {
+            intent = await interpreter.InterpretAsync(
                 message,
                 history,
                 catalogs,
                 stageA,
                 cancellationToken);
+        }
+        intentWatch.Stop();
         intent = AssistantIntentInterpreter.ApplyExplicitPlanningContext(intent, stageA);
         if (intent.Intent == AssistantIntentKind.MEAL_PLAN)
         {
@@ -132,28 +137,54 @@ public sealed partial class AssistantService(
         IReadOnlyList<AssistantMealPlanDraft> mealDrafts = [];
         IReadOnlyList<AssistantEligibleFood> eligible = [];
         AssistantFoodQueryPipelineDiagnostics pipeline = new();
+        AssistantFoodQueryTiming queryTiming = new();
         AssistantSemanticMatchResult semantic = new();
         var queryAt = timeProvider.GetUtcNow().UtcDateTime;
+        long candidateQueryMs = 0;
+        long rankingMs = 0;
+        long mealPlanMs = 0;
 
         var skipSearch = intent.Intent is AssistantIntentKind.CHITCHAT or AssistantIntentKind.CLARIFY;
         if (!skipSearch)
         {
             var criteria = BuildCriteria(intent, catalogs, request, queryAt);
+            var queryWatch = Stopwatch.StartNew();
             var queryResult = await foods.GetEligibleFoodsAsync(criteria, cancellationToken);
+            queryWatch.Stop();
+            candidateQueryMs = queryWatch.ElapsedMilliseconds;
             eligible = queryResult.Foods;
             pipeline = queryResult.Pipeline;
+            queryTiming = queryResult.Timing;
             if (eligible.Count > 0)
             {
+                logger.LogInformation(
+                    "Assistant OpenAI runtime for turn. ConversationId={ConversationId} CandidateBatchSize={CandidateBatchSize} SemanticBatchRetryCount={SemanticBatchRetryCount} MaxInputCharacters={MaxInputCharacters} SemanticMaxOutputTokens={SemanticMaxOutputTokens} IntentMaxOutputTokens={IntentMaxOutputTokens} EligibleCount={EligibleCount}",
+                    conversation.Id,
+                    _options.CandidateBatchSize,
+                    _options.SemanticBatchRetryCount,
+                    _openAi.MaxInputCharacters,
+                    _openAi.MaxOutputTokensSemantic,
+                    _openAi.MaxOutputTokensIntent,
+                    eligible.Count);
                 semantic = await semanticMatcher.ScoreAsync(message, intent, eligible, cancellationToken);
+                var rankingWatch = Stopwatch.StartNew();
                 ranked = scorer.Score(eligible, intent, semantic, queryAt);
+                rankingWatch.Stop();
+                rankingMs = rankingWatch.ElapsedMilliseconds;
                 if (intent.Intent == AssistantIntentKind.MEAL_PLAN)
+                {
+                    var mealPlanWatch = Stopwatch.StartNew();
                     mealDrafts = await mealPlanComposer.ComposeAsync(message, intent, ranked, cancellationToken);
+                    mealPlanWatch.Stop();
+                    mealPlanMs = mealPlanWatch.ElapsedMilliseconds;
+                }
             }
         }
 
         var recommendations = ranked.Take(_options.MaxRecommendations).ToArray();
         var persistedPlans = new List<(AssistantMealPlan Plan, AssistantMealPlanDraft Draft)>(mealDrafts.Count);
         var now = timeProvider.GetUtcNow().UtcDateTime;
+        var persistenceWatch = Stopwatch.StartNew();
         foreach (var draft in mealDrafts)
         {
             var plan = PersistMealPlan(conversation, customerId, draft, now);
@@ -182,18 +213,50 @@ public sealed partial class AssistantService(
         conversations.AddMessage(assistantMessage);
         conversation.UpdatedAt = now;
         await conversations.SaveTurnAsync(conversation, cancellationToken);
+        persistenceWatch.Stop();
 
         started.Stop();
-        var diagnostics = BuildDiagnostics(intent, totalFoodCount, pipeline, eligible, semantic, recommendations.Length, started.ElapsedMilliseconds);
+        var turnTiming = new AssistantTurnTiming
+        {
+            TotalMs = started.ElapsedMilliseconds,
+            IntentMs = intentWatch.ElapsedMilliseconds,
+            CandidateQueryMs = candidateQueryMs,
+            DistanceCalculationMs = queryTiming.DistanceCalculationMs,
+            HardConstraintMs = Math.Max(0, queryTiming.SqlQueryMs),
+            RankingMs = rankingMs,
+            PersistenceMs = persistenceWatch.ElapsedMilliseconds,
+            MealPlanMs = mealPlanMs
+        };
+        var diagnostics = BuildDiagnostics(
+            intent,
+            totalFoodCount,
+            pipeline,
+            eligible,
+            semantic,
+            recommendations.Length,
+            turnTiming,
+            _options.CandidateBatchSize,
+            _options.SemanticBatchMaxConcurrency);
         logger.LogInformation(
-            "Assistant turn {ConversationId} eligible={EligibleCount} totalFoods={TotalFoodCount} batches={BatchCount} idsSent={IdsSent} idsEvaluated={IdsEvaluated} latencyMs={LatencyMs} intent={Intent}",
+            "Assistant turn {ConversationId} eligible={EligibleCount} totalFoods={TotalFoodCount} logicalBatches={LogicalBatchCount} providerCalls={ProviderCallCount} idsSent={IdsSent} idsEvaluated={IdsEvaluated} totalMs={TotalMs} intentMs={IntentMs} candidateQueryMs={CandidateQueryMs} semanticMs={SemanticMs} mealPlanMs={MealPlanMs} semanticTotalMs={SemanticTotalMs} rankingMs={RankingMs} persistenceMs={PersistenceMs} batchSize={BatchSize} maxConcurrency={MaxConcurrency} semanticRetries={SemanticRetryCount} intent={Intent}",
             conversation.Id,
             diagnostics.EligibleCount,
             diagnostics.TotalFoodCount,
-            diagnostics.BatchCount,
+            diagnostics.LogicalBatchCount,
+            diagnostics.ProviderCallCount,
             diagnostics.IdsSent.Count,
             diagnostics.IdsEvaluated.Count,
-            diagnostics.LatencyMs,
+            diagnostics.TotalMs,
+            diagnostics.IntentMs,
+            diagnostics.CandidateQueryMs,
+            diagnostics.SemanticMs,
+            diagnostics.MealPlanMs,
+            diagnostics.SemanticTotalMs,
+            diagnostics.RankingMs,
+            diagnostics.PersistenceMs,
+            diagnostics.BatchSize,
+            diagnostics.MaxConcurrency,
+            diagnostics.SemanticRetryCount,
             intent.Intent);
 
         var mappedPlans = persistedPlans.Select(item => MapMealPlan(item.Plan, item.Draft)).ToArray();
@@ -329,7 +392,9 @@ public sealed partial class AssistantService(
         IReadOnlyList<AssistantEligibleFood> eligible,
         AssistantSemanticMatchResult semantic,
         int recommendationCount,
-        long latencyMs)
+        AssistantTurnTiming timing,
+        int configuredBatchSize,
+        int maxConcurrency)
     {
         var idsSent = semantic.IdsSent.Count > 0
             ? semantic.IdsSent
@@ -347,11 +412,27 @@ public sealed partial class AssistantService(
             AfterFoodVisible = pipeline.AfterFoodVisible,
             AfterHardConstraints = pipeline.AfterHardConstraints,
             AfterOpenNow = pipeline.AfterOpenNow,
-            BatchCount = semantic.BatchCount,
+            BatchCount = semantic.LogicalBatchCount,
+            LogicalBatchCount = semantic.LogicalBatchCount,
+            ProviderCallCount = semantic.ProviderCallCount,
             RecommendationCount = recommendationCount,
             IdsSent = idsSent,
             IdsEvaluated = idsEvaluated,
-            LatencyMs = latencyMs,
+            LatencyMs = timing.TotalMs,
+            TotalMs = timing.TotalMs,
+            IntentMs = timing.IntentMs,
+            CandidateQueryMs = timing.CandidateQueryMs,
+            DistanceCalculationMs = timing.DistanceCalculationMs,
+            HardConstraintMs = timing.HardConstraintMs,
+            BatchSize = configuredBatchSize,
+            MaxConcurrency = maxConcurrency,
+            SemanticRetryCount = semantic.SemanticRetryCount,
+            SemanticTotalMs = semantic.SemanticTotalMs,
+            SemanticMs = semantic.SemanticTotalMs,
+            MealPlanMs = timing.MealPlanMs,
+            RankingMs = timing.RankingMs,
+            PersistenceMs = timing.PersistenceMs,
+            SemanticBatches = semantic.BatchDiagnostics,
             ParsedIntent = new AssistantParsedIntentDiagnostics
             {
                 Intent = intent.Intent,

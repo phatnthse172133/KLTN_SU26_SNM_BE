@@ -18,7 +18,7 @@ public sealed class AssistantOpenAiLanguageModelClientTests
         var client = Create(handler, apiKey: "");
 
         var exception = await Assert.ThrowsAsync<AppException>(() =>
-            client.CompleteJsonAsync("sys", "user", 100, CancellationToken.None));
+            client.CompleteJsonAsync("sys", "user", 100, CancellationToken.None, null));
 
         Assert.Equal(503, exception.StatusCode);
         Assert.Equal("ASSISTANT_PROVIDER_UNAVAILABLE", exception.ErrorCode);
@@ -33,7 +33,7 @@ public sealed class AssistantOpenAiLanguageModelClientTests
         var client = Create(handler, apiKey: "test-key", enabled: false);
 
         var exception = await Assert.ThrowsAsync<AppException>(() =>
-            client.CompleteJsonAsync("sys", "user", 100, CancellationToken.None));
+            client.CompleteJsonAsync("sys", "user", 100, CancellationToken.None, null));
 
         Assert.Equal("ASSISTANT_PROVIDER_UNAVAILABLE", exception.ErrorCode);
         Assert.Equal(0, handler.Calls);
@@ -51,7 +51,7 @@ public sealed class AssistantOpenAiLanguageModelClientTests
         var client = Create(handler, apiKey: "test-key");
 
         var exception = await Assert.ThrowsAsync<AppException>(() =>
-            client.CompleteJsonAsync("sys", "user", 100, CancellationToken.None));
+            client.CompleteJsonAsync("sys", "user", 100, CancellationToken.None, null));
 
         Assert.Equal("ASSISTANT_PROVIDER_UNAVAILABLE", exception.ErrorCode);
         Assert.Equal(1, handler.Calls);
@@ -70,7 +70,7 @@ public sealed class AssistantOpenAiLanguageModelClientTests
         var client = Create(handler, apiKey: "test-key");
 
         var exception = await Assert.ThrowsAsync<AppException>(() =>
-            client.CompleteJsonAsync("sys", "user", 100, CancellationToken.None));
+            client.CompleteJsonAsync("sys", "user", 100, CancellationToken.None, null));
 
         Assert.Equal("ASSISTANT_PROVIDER_UNAVAILABLE", exception.ErrorCode);
         Assert.Equal(AssistantErrors.HttpAuth, AssistantProviderFailure.Reason(exception));
@@ -85,7 +85,7 @@ public sealed class AssistantOpenAiLanguageModelClientTests
         var client = Create(handler, apiKey: "test-key");
 
         var exception = await Assert.ThrowsAsync<AppException>(() =>
-            client.CompleteJsonAsync("sys", "user", 100, CancellationToken.None));
+            client.CompleteJsonAsync("sys", "user", 100, CancellationToken.None, null));
 
         Assert.Equal("ASSISTANT_PROVIDER_UNAVAILABLE", exception.ErrorCode);
         Assert.Equal(AssistantErrors.InvalidJson, AssistantProviderFailure.Reason(exception));
@@ -100,11 +100,32 @@ public sealed class AssistantOpenAiLanguageModelClientTests
         var client = Create(handler, apiKey: "test-key", timeoutSeconds: 1);
 
         var exception = await Assert.ThrowsAsync<AppException>(() =>
-            client.CompleteJsonAsync("sys", "user", 100, CancellationToken.None));
+            client.CompleteJsonAsync("sys", "user", 100, CancellationToken.None, null));
 
         Assert.Equal(503, exception.StatusCode);
         Assert.Equal("ASSISTANT_PROVIDER_UNAVAILABLE", exception.ErrorCode);
         Assert.Equal(AssistantErrors.Timeout, AssistantProviderFailure.Reason(exception));
+    }
+
+    [Fact]
+    public async Task CompleteJson_JsonSchemaStrict_UsesStructuredResponseFormat()
+    {
+        var handler = new RecordingHandler();
+        var client = Create(handler, apiKey: "test-key");
+        var schema = AssistantSemanticSchemaBuilder.Build(3);
+
+        await client.CompleteJsonAsync(
+            "sys",
+            "user",
+            2500,
+            CancellationToken.None,
+            new LanguageModelJsonSchemaOptions { SchemaJson = schema, Name = "semantic_scores", Strict = true });
+
+        using var body = JsonDocument.Parse(handler.LastRequestBody!);
+        Assert.Equal("json_schema", body.RootElement.GetProperty("response_format").GetProperty("type").GetString());
+        Assert.Equal("semantic_scores", body.RootElement.GetProperty("response_format").GetProperty("json_schema").GetProperty("name").GetString());
+        Assert.True(body.RootElement.GetProperty("response_format").GetProperty("json_schema").GetProperty("strict").GetBoolean());
+        Assert.Equal(3, body.RootElement.GetProperty("response_format").GetProperty("json_schema").GetProperty("schema").GetProperty("properties").GetProperty("scores").GetProperty("minItems").GetInt32());
     }
 
     [Fact]
@@ -113,7 +134,7 @@ public sealed class AssistantOpenAiLanguageModelClientTests
         var handler = new RecordingHandler();
         var client = Create(handler, apiKey: "test-key", maxOutputTokens: 400);
 
-        var completion = await client.CompleteJsonAsync("sys", "user", 2500, CancellationToken.None);
+        var completion = await client.CompleteJsonAsync("sys", "user", 2500, CancellationToken.None, null);
 
         Assert.Equal("{}", completion.Content);
         Assert.Equal("stop", completion.FinishReason);
@@ -137,7 +158,7 @@ public sealed class AssistantOpenAiLanguageModelClientTests
         };
         var client = Create(handler, apiKey: "test-key", retryCount: 1);
 
-        var completion = await client.CompleteJsonAsync("sys", "user", 2500, CancellationToken.None);
+        var completion = await client.CompleteJsonAsync("sys", "user", 2500, CancellationToken.None, null);
 
         Assert.Equal(2, handler.Calls);
         Assert.Equal("length", completion.FinishReason);

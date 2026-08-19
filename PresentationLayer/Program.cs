@@ -28,11 +28,21 @@ using System.Text;
 using System.Threading.RateLimiting;
 using static DomainLayer.Enums.GeneralEnum;
 
+// Load .env before CreateBuilder so env vars participate in the first configuration pass.
+var envPath = Path.Combine(Directory.GetCurrentDirectory(), ".env");
+if (!File.Exists(envPath))
+    envPath = Path.Combine(AppContext.BaseDirectory, ".env");
+if (File.Exists(envPath))
+    SNMContextFactory.LoadDotEnv(envPath);
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 builder.Logging.AddDebug();
+
+// Re-add environment variables so .env values loaded above remain in IConfiguration.
+builder.Configuration.AddEnvironmentVariables();
 
 var dataProtectionKeysPath = builder.Configuration["DataProtection:KeysPath"];
 if (!string.IsNullOrWhiteSpace(dataProtectionKeysPath))
@@ -41,16 +51,6 @@ if (!string.IsNullOrWhiteSpace(dataProtectionKeysPath))
     Directory.CreateDirectory(absoluteKeysPath);
     builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(absoluteKeysPath));
 }
-
-// Load .env file (environment variables override appsettings.json)
-var envPath = Path.Combine(AppContext.BaseDirectory, ".env");
-if (!File.Exists(envPath))
-    envPath = Path.Combine(Directory.GetCurrentDirectory(), ".env");
-if (File.Exists(envPath))
-    SNMContextFactory.LoadDotEnv(envPath);
-
-// Re-add environment variables so .env values take effect
-builder.Configuration.AddEnvironmentVariables();
 
 FileStream? developmentInstanceLock = null;
 if (builder.Environment.IsDevelopment())
@@ -420,7 +420,8 @@ app.Lifetime.ApplicationStarted.Register(() =>
         Uri.TryCreate(payOSRuntimeSettings.ReturnUrl, UriKind.Absolute, out _),
         Uri.TryCreate(payOSRuntimeSettings.CancelUrl, UriKind.Absolute, out _));
     app.Logger.LogInformation(
-        "OpenAI runtime config. Provider={Provider} Model={Model} TimeoutSeconds={TimeoutSeconds} MaxInputCharacters={MaxInputCharacters} MaxOutputTokens={MaxOutputTokens} MaxOutputTokensIntent={MaxOutputTokensIntent} MaxOutputTokensSemantic={MaxOutputTokensSemantic} MaxOutputTokensMealPlan={MaxOutputTokensMealPlan} RetryCount={RetryCount} CandidateBatchSize={CandidateBatchSize} SemanticBatchMaxConcurrency={SemanticBatchMaxConcurrency} Enabled={Enabled} ApiKeyPresent={ApiKeyPresent}",
+        "OpenAI runtime config. Environment={Environment} Provider={Provider} Model={Model} TimeoutSeconds={TimeoutSeconds} MaxInputCharacters={MaxInputCharacters} MaxOutputTokens={MaxOutputTokens} MaxOutputTokensIntent={MaxOutputTokensIntent} MaxOutputTokensSemantic={MaxOutputTokensSemantic} MaxOutputTokensMealPlan={MaxOutputTokensMealPlan} RetryCount={RetryCount} CandidateBatchSize={CandidateBatchSize} SemanticBatchRetryCount={SemanticBatchRetryCount} SemanticBatchMaxConcurrency={SemanticBatchMaxConcurrency} Enabled={Enabled} ApiKeyPresent={ApiKeyPresent}",
+        app.Environment.EnvironmentName,
         openAiRuntimeSettings.Provider,
         openAiRuntimeSettings.Model,
         openAiRuntimeSettings.TimeoutSeconds,
@@ -431,6 +432,7 @@ app.Lifetime.ApplicationStarted.Register(() =>
         openAiRuntimeSettings.MaxOutputTokensMealPlan,
         openAiRuntimeSettings.RetryCount,
         assistantRuntimeSettings.CandidateBatchSize,
+        assistantRuntimeSettings.SemanticBatchRetryCount,
         assistantRuntimeSettings.SemanticBatchMaxConcurrency,
         openAiRuntimeSettings.Enabled,
         !string.IsNullOrWhiteSpace(openAiRuntimeSettings.ApiKey));
@@ -497,11 +499,15 @@ if (app.Environment.IsDevelopment())
     app.Use(async (context, next) =>
     {
         await next();
+        var remoteIp = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
         app.Logger.LogInformation(
-            "[HTTP] {Method} {Path} -> {StatusCode}",
+            "[HTTP] {Method} {Path} -> {StatusCode} RemoteIp={RemoteIp} TraceId={TraceId} Environment={Environment}",
             context.Request.Method,
             context.Request.Path,
-            context.Response.StatusCode);
+            context.Response.StatusCode,
+            remoteIp,
+            context.TraceIdentifier,
+            app.Environment.EnvironmentName);
     });
 }
 app.UseMiddleware<ExceptionHandlingMiddleware>();

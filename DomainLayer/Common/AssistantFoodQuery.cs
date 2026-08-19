@@ -38,8 +38,16 @@ public sealed class AssistantFoodQueryPipelineDiagnostics
     public int AfterOpenNow { get; init; }
 }
 
+public sealed class AssistantFoodQueryTiming
+{
+    public long SqlQueryMs { get; init; }
+    public long InMemoryFilterMs { get; init; }
+    public long DistanceCalculationMs { get; init; }
+}
+
 public sealed class AssistantFoodQueryResult
 {
     public IReadOnlyList<AssistantEligibleFood> Foods { get; init; } = [];
     public AssistantFoodQueryPipelineDiagnostics Pipeline { get; init; } = new();
+    public AssistantFoodQueryTiming Timing { get; init; } = new();
 }

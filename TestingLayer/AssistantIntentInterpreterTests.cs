@@ -15,7 +15,7 @@ public sealed class AssistantIntentInterpreterTests
     {
         var message = "Tôi muốn món cay, không hải sản";
         var llm = new Mock<ILanguageModelClient>();
-        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()))
             .ReturnsAsync("""
                 {
                   "intent": "FOOD_RECOMMENDATION",
@@ -57,14 +57,15 @@ public sealed class AssistantIntentInterpreterTests
             It.Is<string>(prompt => prompt.Contains("STAGE A", StringComparison.Ordinal)),
             It.Is<string>(user => HasRawOriginalMessage(user, message)),
             It.IsAny<int>(),
-            It.IsAny<CancellationToken>()), Times.Once);
+            It.IsAny<CancellationToken>(),
+            It.IsAny<LanguageModelJsonSchemaOptions>()), Times.Once);
     }
 
     [Fact]
     public async Task Interpret_ExplicitPartyAndBudget_OverrideLlmGuess()
     {
         var llm = new Mock<ILanguageModelClient>();
-        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()))
             .ReturnsAsync("""
                 {
                   "intent": "MEAL_PLAN",
@@ -94,7 +95,7 @@ public sealed class AssistantIntentInterpreterTests
     public async Task Interpret_InvalidJson_ThrowsProviderUnavailable()
     {
         var llm = new Mock<ILanguageModelClient>();
-        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()))
             .ReturnsAsync("not-json{{{");
         var interpreter = new AssistantIntentInterpreter(llm.Object, Options.Create(new OpenAiOptions { ApiKey = "test" }));
 
@@ -113,7 +114,7 @@ public sealed class AssistantIntentInterpreterTests
     {
         var llm = new Mock<ILanguageModelClient>();
         var truncated = """{"intent":"FOOD_RECOMMENDATION","needsLocation":false,"hardConstraints":{""";
-        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()))
             .ReturnsAsync(new LanguageModelJsonCompletion
             {
                 Content = truncated,
@@ -141,7 +142,7 @@ public sealed class AssistantIntentInterpreterTests
     public async Task Interpret_InvalidEnum_ThrowsInvalidJson_NotFakeIntent()
     {
         var llm = new Mock<ILanguageModelClient>();
-        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()))
             .ReturnsAsync("""
                 {
                   "intent": "BANANA",
@@ -165,7 +166,7 @@ public sealed class AssistantIntentInterpreterTests
     public async Task Interpret_RequestsIntentTokenBudget()
     {
         var llm = new Mock<ILanguageModelClient>();
-        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()))
             .ReturnsAsync("""
                 {
                   "intent": "CHITCHAT",
@@ -187,7 +188,8 @@ public sealed class AssistantIntentInterpreterTests
             It.IsAny<string>(),
             It.IsAny<string>(),
             900,
-            It.IsAny<CancellationToken>()), Times.Once);
+            It.IsAny<CancellationToken>(),
+            It.IsAny<LanguageModelJsonSchemaOptions>()), Times.Once);
     }
 
     [Fact]
@@ -236,8 +238,8 @@ public sealed class AssistantIntentInterpreterTests
     {
         string? captured = null;
         var llm = new Mock<ILanguageModelClient>();
-        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .Callback<string, string, int, CancellationToken>((_, user, _, _) => captured = user)
+        llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()))
+            .Callback<string, string, int, CancellationToken, LanguageModelJsonSchemaOptions?>((_, user, _, _, _) => captured = user)
             .ReturnsAsync("""
                 {
                   "intent": "FOOD_RECOMMENDATION",
@@ -276,6 +278,59 @@ public sealed class AssistantIntentInterpreterTests
         Assert.DoesNotContain("keyword", captured, StringComparison.OrdinalIgnoreCase);
         Assert.Equal("hôm nay rảnh", result.AdditionalMeaning);
         Assert.Contains("ngon ngon", result.SemanticPreferences);
+    }
+
+    [Fact]
+    public void Sanitize_SpicyDesire_MaxSpiceLevelBecomesSoftPreference()
+    {
+        var parsed = new ParsedAssistantIntent
+        {
+            Intent = AssistantIntentKind.FOOD_RECOMMENDATION,
+            HardConstraints = new AssistantHardConstraints { MaxSpiceLevel = FoodSpiceLevel.VERY_SPICY },
+            StructuredPreferences = new AssistantStructuredPreferences(),
+            SemanticPreferences = ["cay cay cay"]
+        };
+
+        var sanitized = AssistantIntentInterpreter.Sanitize(parsed, Catalog());
+
+        Assert.Null(sanitized.HardConstraints.MaxSpiceLevel);
+        Assert.Contains("SPICY", sanitized.StructuredPreferences.PreferredTasteCodes);
+        Assert.Contains("cay cay cay", sanitized.SemanticPreferences);
+    }
+
+    [Theory]
+    [InlineData(FoodSpiceLevel.MILD)]
+    [InlineData(FoodSpiceLevel.NON_SPICY)]
+    public void Sanitize_SpiceCeiling_KeepsHardMaxSpiceLevel(FoodSpiceLevel ceiling)
+    {
+        var parsed = new ParsedAssistantIntent
+        {
+            Intent = AssistantIntentKind.FOOD_RECOMMENDATION,
+            HardConstraints = new AssistantHardConstraints { MaxSpiceLevel = ceiling },
+            StructuredPreferences = new AssistantStructuredPreferences(),
+            SemanticPreferences = ["không quá cay"]
+        };
+
+        var sanitized = AssistantIntentInterpreter.Sanitize(parsed, Catalog());
+
+        Assert.Equal(ceiling, sanitized.HardConstraints.MaxSpiceLevel);
+    }
+
+    [Fact]
+    public void NormalizeSpiceConstraints_ParaphraseInvariance_DoesNotHardFilterSpicyDesire()
+    {
+        var mildCeiling = new ParsedAssistantIntent
+        {
+            HardConstraints = new AssistantHardConstraints { MaxSpiceLevel = FoodSpiceLevel.MILD }
+        };
+        var spicyDesire = new ParsedAssistantIntent
+        {
+            HardConstraints = new AssistantHardConstraints { MaxSpiceLevel = FoodSpiceLevel.VERY_SPICY },
+            SemanticPreferences = ["cay cay cay"]
+        };
+
+        Assert.Equal(FoodSpiceLevel.MILD, AssistantIntentInterpreter.NormalizeSpiceConstraints(mildCeiling, Catalog()).HardConstraints.MaxSpiceLevel);
+        Assert.Null(AssistantIntentInterpreter.NormalizeSpiceConstraints(spicyDesire, Catalog()).HardConstraints.MaxSpiceLevel);
     }
 
     private static bool HasRawOriginalMessage(string user, string message)

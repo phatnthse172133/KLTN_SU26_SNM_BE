@@ -177,9 +177,9 @@ public sealed class AssistantMealPlanValidator(IOptions<AssistantOptions> option
             PartySize = partySize,
             BudgetMax = budget,
             RemainingBudget = budget is null ? null : budget.Value - total,
-            Title = proposal.Title,
+            Title = ResolveFinalTitle(proposal.Title, lines, warnings),
             Strategy = proposal.Strategy,
-            OverallPlanReason = proposal.OverallReason,
+            OverallPlanReason = ResolveFinalPlanReason(proposal.OverallReason, lines, warnings),
             Warnings = warnings,
             UnknownDataFacets = unknown,
             Items = lines.Select(line => new AssistantMealPlanDraftItem
@@ -242,6 +242,31 @@ public sealed class AssistantMealPlanValidator(IOptions<AssistantOptions> option
         warnings.Clear();
         warnings.AddRange(unique);
         return lines;
+    }
+
+    private static string? ResolveFinalTitle(string? proposalTitle, IReadOnlyList<DraftLine> lines, IReadOnlyList<string> warnings)
+    {
+        if (warnings.Count == 0 || string.IsNullOrWhiteSpace(proposalTitle))
+            return proposalTitle;
+        return BuildFinalItemSummary(lines, "Kế hoạch");
+    }
+
+    private static string? ResolveFinalPlanReason(string? proposalReason, IReadOnlyList<DraftLine> lines, IReadOnlyList<string> warnings)
+    {
+        if (warnings.Count == 0)
+            return proposalReason;
+        return BuildFinalItemSummary(lines, "Kế hoạch gồm");
+    }
+
+    private static string BuildFinalItemSummary(IReadOnlyList<DraftLine> lines, string prefix)
+    {
+        var names = lines.Select(line => line.Food.Name).Distinct(StringComparer.OrdinalIgnoreCase).Take(4).ToArray();
+        if (names.Length == 0)
+            return prefix;
+        var joined = string.Join(", ", names);
+        if (lines.Count > names.Length)
+            joined += $" và {lines.Count - names.Length} món khác";
+        return $"{prefix}: {joined}.";
     }
 
     private static decimal LineTotal(IReadOnlyList<DraftLine> lines)

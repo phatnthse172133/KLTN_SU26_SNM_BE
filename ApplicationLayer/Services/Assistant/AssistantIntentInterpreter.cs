@@ -30,7 +30,8 @@ public sealed class AssistantIntentInterpreter(
                 AssistantPromptCatalog.IntentSystem + "\nJSON schema:\n" + AssistantPromptCatalog.IntentSchema,
                 userPrompt,
                 _openAi.MaxOutputTokensIntent,
-                cancellationToken);
+                cancellationToken,
+                null);
         }
         catch (AppException)
         {
@@ -77,7 +78,7 @@ public sealed class AssistantIntentInterpreter(
         var hard = parsed.HardConstraints ?? new AssistantHardConstraints();
         var prefs = parsed.StructuredPreferences ?? new AssistantStructuredPreferences();
 
-        return new ParsedAssistantIntent
+        return NormalizeSpiceConstraints(new ParsedAssistantIntent
         {
             Intent = parsed.Intent,
             BudgetMin = parsed.BudgetMin is < 0 ? null : parsed.BudgetMin,
@@ -105,7 +106,23 @@ public sealed class AssistantIntentInterpreter(
             },
             SemanticPreferences = semanticPreferences.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
             SemanticAvoidances = semanticAvoidances.Distinct(StringComparer.OrdinalIgnoreCase).ToArray()
-        };
+        }, catalogs);
+    }
+
+    public static ParsedAssistantIntent NormalizeSpiceConstraints(ParsedAssistantIntent parsed, FoodSemanticCatalogSet catalogs)
+    {
+        var maxSpice = parsed.HardConstraints.MaxSpiceLevel;
+        if (maxSpice is not (FoodSpiceLevel.SPICY or FoodSpiceLevel.VERY_SPICY))
+            return parsed;
+
+        var tasteCodes = catalogs.TasteProfiles.Select(item => item.Code).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var preferred = parsed.StructuredPreferences.PreferredTasteCodes.ToList();
+        if (tasteCodes.Contains("SPICY") && !preferred.Any(code => string.Equals(code, "SPICY", StringComparison.OrdinalIgnoreCase)))
+            preferred.Add("SPICY");
+
+        parsed.HardConstraints.MaxSpiceLevel = null;
+        parsed.StructuredPreferences.PreferredTasteCodes = preferred.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        return parsed;
     }
 
     private static IReadOnlyList<string> KeepKnown(

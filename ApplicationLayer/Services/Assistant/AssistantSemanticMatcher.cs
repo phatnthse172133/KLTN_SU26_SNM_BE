@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using ApplicationLayer.Exceptions;
 using DomainLayer.Common;
@@ -25,14 +26,20 @@ public sealed class AssistantSemanticMatcher(
         if (eligible.Count == 0)
             return new AssistantSemanticMatchResult();
 
+        var semanticWatch = Stopwatch.StartNew();
         var batchSize = Math.Max(1, _assistant.CandidateBatchSize);
         var batches = SplitBatches(eligible, batchSize);
         var idsSent = eligible.Select(item => item.FoodItem.Id).ToArray();
         var batchScores = new IReadOnlyList<AssistantSemanticScore>[batches.Count];
+        var batchDiagnostics = new AssistantSemanticBatchDiagnostics[batches.Count];
+        var totalRetries = 0;
 
         if (batches.Count == 1)
         {
-            batchScores[0] = await ScoreBatchAsync(originalMessage, intent, batches[0], cancellationToken);
+            var (batchResult, diagnostics) = await ScoreBatchAsync(originalMessage, intent, batches[0], batchIndex: 0, cancellationToken);
+            batchScores[0] = batchResult;
+            batchDiagnostics[0] = diagnostics;
+            totalRetries += diagnostics.RetryCount;
         }
         else
         {
@@ -44,13 +51,20 @@ public sealed class AssistantSemanticMatcher(
                 var captured = index;
                 tasks[captured] = RunBoundedBatchAsync(
                     gate,
-                    () => ScoreBatchAsync(originalMessage, intent, batches[captured], cancellationToken),
-                    scores => batchScores[captured] = scores,
+                    async () =>
+                    {
+                        var (batchResult, diagnostics) = await ScoreBatchAsync(originalMessage, intent, batches[captured], captured, cancellationToken);
+                        batchScores[captured] = batchResult;
+                        batchDiagnostics[captured] = diagnostics;
+                    },
                     cancellationToken);
             }
 
             await Task.WhenAll(tasks);
+            totalRetries = batchDiagnostics.Sum(item => item.RetryCount);
         }
+
+        semanticWatch.Stop();
 
         var scores = new Dictionary<Guid, AssistantSemanticScore>();
         foreach (var batch in batchScores)
@@ -60,13 +74,29 @@ public sealed class AssistantSemanticMatcher(
         }
 
         if (scores.Count != eligible.Count || idsSent.Any(id => !scores.ContainsKey(id)))
-            throw AssistantErrors.ProviderUnavailable(AssistantErrors.IncompleteIdSet);
+        {
+            logger?.LogWarning(
+                "Assistant semantic aggregate score count mismatch. EligibleCount={EligibleCount} BatchCount={BatchCount} IdsSent={IdsSent} IdsEvaluated={IdsEvaluated} CandidateBatchSize={CandidateBatchSize} SemanticBatchRetryCount={SemanticBatchRetryCount} SemanticMaxOutputTokens={SemanticMaxOutputTokens}",
+                eligible.Count,
+                batches.Count,
+                idsSent.Length,
+                scores.Count,
+                batchSize,
+                _assistant.SemanticBatchRetryCount,
+                _openAi.MaxOutputTokensSemantic);
+            throw AssistantErrors.ProviderUnavailable(AssistantErrors.SemanticScoreCountMismatch);
+        }
 
         return new AssistantSemanticMatchResult
         {
             Scores = scores,
             BatchCount = batches.Count,
-            IdsSent = idsSent
+            LogicalBatchCount = batches.Count,
+            ProviderCallCount = batches.Count + totalRetries,
+            IdsSent = idsSent,
+            SemanticTotalMs = semanticWatch.ElapsedMilliseconds,
+            SemanticRetryCount = totalRetries,
+            BatchDiagnostics = batchDiagnostics
         };
     }
 
@@ -103,8 +133,6 @@ public sealed class AssistantSemanticMatcher(
                 ? Trim(food.Description, projection.MaxDescriptionCharacters)
                 : null,
             CategoryName = food.Category.Name,
-            BoothName = food.Booth.BoothName,
-            NightMarketName = food.Booth.NightMarket.Name,
             SpiceLevel = food.SpiceLevel.ToString(),
             ServingTemperature = food.ServingTemperature?.ToString(),
             EstimatedServingCount = food.EstimatedServingCount,
@@ -112,8 +140,6 @@ public sealed class AssistantSemanticMatcher(
             EffectivePrice = eligible.EffectivePrice,
             AverageRating = food.AverageRating,
             ReviewCount = food.ReviewCount,
-            SoldToday = eligible.SoldToday,
-            OrderCount = eligible.OrderCount,
             HasActivePromotion = eligible.HasActivePromotion,
             IsFeatured = food.IsFeatured,
             IngredientCodes = projection.IncludeIngredients
@@ -153,14 +179,13 @@ public sealed class AssistantSemanticMatcher(
 
     private static async Task RunBoundedBatchAsync(
         SemaphoreSlim gate,
-        Func<Task<IReadOnlyList<AssistantSemanticScore>>> run,
-        Action<IReadOnlyList<AssistantSemanticScore>> assign,
+        Func<Task> run,
         CancellationToken cancellationToken)
     {
         await gate.WaitAsync(cancellationToken);
         try
         {
-            assign(await run());
+            await run();
         }
         finally
         {
@@ -168,46 +193,67 @@ public sealed class AssistantSemanticMatcher(
         }
     }
 
-    private async Task<IReadOnlyList<AssistantSemanticScore>> ScoreBatchAsync(
+    private async Task<(IReadOnlyList<AssistantSemanticScore> Scores, AssistantSemanticBatchDiagnostics Diagnostics)> ScoreBatchAsync(
         string originalMessage,
         ParsedAssistantIntent intent,
         IReadOnlyList<AssistantEligibleFood> batch,
+        int batchIndex,
         CancellationToken cancellationToken)
     {
         var compact = batch.Select(item => Project(item, _assistant.CompactCandidateProjection)).ToArray();
-        var allowed = compact.Select(item => item.FoodItemId).ToHashSet();
-        EnsureUniqueBatchInput(allowed, batch.Count);
+        var orderedIds = compact.Select(item => item.FoodItemId).ToArray();
+        EnsureUniqueBatchInput(orderedIds);
 
+        var batchWatch = Stopwatch.StartNew();
         var extraAttempts = Math.Clamp(_assistant.SemanticBatchRetryCount, 0, 1);
         LanguageModelJsonCompletion? lastCompletion = null;
+        var retryCount = 0;
+        IReadOnlyList<AssistantSemanticScore>? parsed = null;
 
         for (var attempt = 0; attempt <= extraAttempts; attempt++)
         {
             lastCompletion = await CompleteBatchAsync(originalMessage, intent, compact, cancellationToken);
             try
             {
-                return ParseBatch(lastCompletion, allowed, logger);
+                parsed = ParseBatch(lastCompletion, orderedIds, logger, batchIndex);
+                break;
             }
-            catch (AppException exception) when (attempt < extraAttempts && AssistantErrors.IsProviderReason(exception, AssistantErrors.IncompleteIdSet))
+            catch (AppException exception) when (attempt < extraAttempts && AssistantErrors.IsProviderReason(exception, AssistantErrors.SemanticScoreCountMismatch))
             {
+                retryCount++;
                 logger?.LogWarning(
-                    "Assistant semantic batch incomplete ID set; retrying batch. Attempt={Attempt} BatchSize={BatchSize} FinishReason={FinishReason} RequestId={RequestId}",
+                    "Assistant semantic batch score count mismatch; retrying batch. BatchIndex={BatchIndex} Attempt={Attempt} BatchSize={BatchSize} FinishReason={FinishReason} SemanticMaxOutputTokens={SemanticMaxOutputTokens} RequestId={RequestId}",
+                    batchIndex,
                     attempt + 1,
-                    allowed.Count,
+                    orderedIds.Length,
                     lastCompletion.FinishReason,
+                    _openAi.MaxOutputTokensSemantic,
                     lastCompletion.RequestId);
             }
         }
 
-        return ParseBatch(lastCompletion!, allowed, logger);
+        parsed ??= ParseBatch(lastCompletion!, orderedIds, logger, batchIndex);
+        batchWatch.Stop();
+        return (parsed, new AssistantSemanticBatchDiagnostics
+        {
+            BatchIndex = batchIndex,
+            BatchSize = orderedIds.Length,
+            DurationMs = batchWatch.ElapsedMilliseconds,
+            RetryCount = retryCount,
+            FinishReason = lastCompletion?.FinishReason,
+            IdsSent = orderedIds.Length,
+            IdsReturned = parsed.Count
+        });
     }
 
-    internal static void EnsureUniqueBatchInput(ISet<Guid> allowedIds, int batchCount)
+    internal static void EnsureUniqueBatchInput(IReadOnlyList<Guid> orderedIds)
     {
-        if (allowedIds.Count != batchCount)
-            throw AssistantErrors.ProviderUnavailable(AssistantErrors.IncompleteIdSet);
-        if (allowedIds.Any(id => id == Guid.Empty))
-            throw AssistantErrors.ProviderUnavailable(AssistantErrors.IncompleteIdSet);
+        if (orderedIds.Count == 0)
+            throw AssistantErrors.ProviderUnavailable(AssistantErrors.InvalidBatchInput);
+        if (orderedIds.Any(id => id == Guid.Empty))
+            throw AssistantErrors.ProviderUnavailable(AssistantErrors.InvalidBatchInput);
+        if (orderedIds.ToHashSet().Count != orderedIds.Count)
+            throw AssistantErrors.ProviderUnavailable(AssistantErrors.InvalidBatchInput);
     }
 
     private async Task<LanguageModelJsonCompletion> CompleteBatchAsync(
@@ -223,13 +269,24 @@ public sealed class AssistantSemanticMatcher(
             candidates = batch
         }, AssistantJson.Options);
 
+        var schemaJson = AssistantSemanticSchemaBuilder.Build(batch.Count);
+        LanguageModelJsonSchemaOptions? schemaOptions = _openAi.UseJsonSchemaStrict
+            ? new LanguageModelJsonSchemaOptions
+            {
+                SchemaJson = schemaJson,
+                Name = "semantic_scores",
+                Strict = true
+            }
+            : null;
+
         try
         {
             return await languageModel.CompleteJsonAsync(
-                AssistantPromptCatalog.SemanticSystem + "\nJSON schema:\n" + AssistantPromptCatalog.SemanticSchema,
+                AssistantPromptCatalog.SemanticSystem + "\nJSON schema:\n" + schemaJson,
                 payload,
                 _openAi.MaxOutputTokensSemantic,
-                cancellationToken);
+                cancellationToken,
+                schemaOptions);
         }
         catch (AppException)
         {
@@ -245,13 +302,14 @@ public sealed class AssistantSemanticMatcher(
         }
     }
 
-    public static IReadOnlyList<AssistantSemanticScore> ParseBatch(string raw, ISet<Guid> allowedIds)
-        => ParseBatch(LanguageModelJsonCompletion.FromContent(raw), allowedIds);
+    public static IReadOnlyList<AssistantSemanticScore> ParseBatch(string raw, IReadOnlyList<Guid> orderedCandidateIds)
+        => ParseBatch(LanguageModelJsonCompletion.FromContent(raw), orderedCandidateIds);
 
     public static IReadOnlyList<AssistantSemanticScore> ParseBatch(
         LanguageModelJsonCompletion completion,
-        ISet<Guid> allowedIds,
-        ILogger? logger = null)
+        IReadOnlyList<Guid> orderedCandidateIds,
+        ILogger? logger = null,
+        int? batchIndex = null)
     {
         var dto = AssistantJsonParseClassifier.DeserializeOrThrow<SemanticBatchDto>(
             completion,
@@ -267,34 +325,24 @@ public sealed class AssistantSemanticMatcher(
                 logger: logger);
         }
 
-        var result = new List<AssistantSemanticScore>();
-        var seen = new HashSet<Guid>();
-        foreach (var item in dto.Scores)
+        if (dto.Scores.Count != orderedCandidateIds.Count)
         {
-            if (item.FoodItemId == Guid.Empty || !allowedIds.Contains(item.FoodItemId))
-                throw AssistantErrors.ProviderUnavailable(AssistantErrors.HallucinatedId);
-            if (!seen.Add(item.FoodItemId))
-                throw AssistantErrors.ProviderUnavailable(AssistantErrors.DuplicateId);
-
-            result.Add(new AssistantSemanticScore
-            {
-                FoodItemId = item.FoodItemId,
-                SemanticCompatibility = Math.Clamp(item.SemanticCompatibility, 0d, 1d),
-                Confidence = Math.Clamp(item.Confidence ?? 1d, 0d, 1d),
-                Reasons = (item.Reasons ?? []).Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value.Trim()).ToArray(),
-                UnknownDataFacets = (item.UnknownDataFacets ?? []).Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value.Trim()).ToArray()
-            });
+            throw AssistantErrors.SemanticScoreCountMismatchUnavailable(
+                completion,
+                orderedCandidateIds.Count,
+                dto.Scores.Count,
+                logger,
+                batchIndex);
         }
 
-        if (result.Count != allowedIds.Count)
+        var result = new List<AssistantSemanticScore>(orderedCandidateIds.Count);
+        for (var index = 0; index < orderedCandidateIds.Count; index++)
         {
-            var missingCount = allowedIds.Count - result.Count;
-            throw AssistantErrors.IncompleteIdSetUnavailable(
-                completion,
-                allowedIds.Count,
-                result.Count,
-                missingCount,
-                logger);
+            result.Add(new AssistantSemanticScore
+            {
+                FoodItemId = orderedCandidateIds[index],
+                SemanticCompatibility = Math.Clamp(dto.Scores[index], 0d, 1d)
+            });
         }
 
         return result;
@@ -309,15 +357,6 @@ public sealed class AssistantSemanticMatcher(
 
     private sealed class SemanticBatchDto
     {
-        public List<SemanticScoreDto>? Scores { get; set; }
-    }
-
-    private sealed class SemanticScoreDto
-    {
-        public Guid FoodItemId { get; set; }
-        public double SemanticCompatibility { get; set; }
-        public double? Confidence { get; set; }
-        public List<string>? Reasons { get; set; }
-        public List<string>? UnknownDataFacets { get; set; }
+        public List<double>? Scores { get; set; }
     }
 }

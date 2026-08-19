@@ -28,7 +28,8 @@ public static class AssistantErrors
     public const string EmptyContent = "empty_content";
     public const string HallucinatedId = "hallucinated_id";
     public const string DuplicateId = "duplicate_id";
-    public const string IncompleteIdSet = "incomplete_id_set";
+    public const string SemanticScoreCountMismatch = "semantic_score_count_mismatch";
+    public const string InvalidBatchInput = "invalid_batch_input";
 
     public static AppException ProviderUnavailable(Exception? inner = null)
         => ProviderUnavailable("unspecified", inner);
@@ -48,27 +49,27 @@ public static class AssistantErrors
         return ProviderUnavailable(InvalidJson, inner, httpStatus: null, diagnostics);
     }
 
-    public static AppException IncompleteIdSetUnavailable(
+    public static AppException SemanticScoreCountMismatchUnavailable(
         LanguageModelJsonCompletion? completion,
         int expectedCount,
         int returnedCount,
-        int missingCount,
-        ILogger? logger = null)
+        ILogger? logger = null,
+        int? batchIndex = null)
     {
         var diagnostics = completion is null
             ? null
-            : AssistantProviderDiagnostics.From(AssistantLlmStages.Semantic, completion, IncompleteIdSet);
+            : AssistantProviderDiagnostics.From(AssistantLlmStages.Semantic, completion, SemanticScoreCountMismatch);
         logger?.LogWarning(
-            "Assistant semantic batch incomplete ID set. Expected={ExpectedCount} Returned={ReturnedCount} Missing={MissingCount} FinishReason={FinishReason} ConfiguredMaxOutputTokens={ConfiguredMaxOutputTokens} OutputTokenCount={OutputTokenCount} ResponseCharacterCount={ResponseCharacterCount} RequestId={RequestId}",
+            "Assistant semantic batch score count mismatch. BatchIndex={BatchIndex} Expected={ExpectedCount} Returned={ReturnedCount} FinishReason={FinishReason} ConfiguredMaxOutputTokens={ConfiguredMaxOutputTokens} OutputTokenCount={OutputTokenCount} ResponseCharacterCount={ResponseCharacterCount} RequestId={RequestId}",
+            batchIndex,
             expectedCount,
             returnedCount,
-            missingCount,
             completion?.FinishReason,
             completion?.ConfiguredMaxOutputTokens,
             completion?.OutputTokenCount,
             completion?.ResponseCharacterCount,
             completion?.RequestId);
-        return ProviderUnavailable(IncompleteIdSet, diagnostics: diagnostics);
+        return ProviderUnavailable(SemanticScoreCountMismatch, diagnostics: diagnostics);
     }
 
     public static bool IsProviderReason(AppException exception, string reason)

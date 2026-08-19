@@ -55,6 +55,7 @@ public sealed class AssistantArbitraryPromptTests
             CandidateBatchSize = 30,
             MaxRecommendations = 8,
             MinimumCompatibilityScore = 0.4,
+            MinimumSemanticRelevanceScore = 0.55,
             MaxMealPlanOptions = 3,
             MaxMealPlanCandidates = 40,
             MaxMealPlanItemsPerPlan = 8
@@ -77,6 +78,126 @@ public sealed class AssistantArbitraryPromptTests
             NullLogger<AssistantService>.Instance);
     }
 
+    [Fact]
+    public async Task Recommend_SemanticallyRelated_OutranksNearbyUnrelated()
+    {
+        var related = Eligible("Bún bò Huế", 45_000m, rating: 4.5m, reviews: 10, distanceMeters: 750);
+        var unrelated = Eligible("Trà sữa trân châu", 25_000m, rating: 4.9m, reviews: 30, distanceMeters: 40);
+        SetupPipeline(
+            RecommendIntent("bún bò cay"),
+            [unrelated, related],
+            stageB: (ids, _) => ScoresFor(ids, (unrelated.FoodItem.Id, 0.15), (related.FoodItem.Id, 0.84)));
+
+        var result = await Send("Muốn bún bò cay, càng cay càng tốt.");
+
+        Assert.True(result.Success);
+        var rec = Assert.Single(result.Data!.Recommendations);
+        Assert.Equal(related.FoodItem.Id, rec.FoodItemId);
+        Assert.DoesNotContain(result.Data.Recommendations, item => item.FoodItemId == unrelated.FoodItem.Id);
+    }
+
+    [Fact]
+    public async Task Recommend_NearbyUnrelated_NotReturnedAsFalseMatch()
+    {
+        var unrelated = Eligible("Kem dừa", 20_000m, rating: 4.8m, reviews: 18, distanceMeters: 25);
+        SetupPipeline(
+            RecommendIntent("đồ nướng"),
+            [unrelated],
+            stageB: (ids, _) => ScoresFor(ids, (unrelated.FoodItem.Id, 0.20)));
+
+        var result = await Send("Tối nay muốn ăn đồ nướng thơm khói.");
+
+        Assert.True(result.Success);
+        Assert.Empty(result.Data!.Recommendations);
+        Assert.Contains("chưa có món", result.Data.Reply, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Recommend_UnseenArbitraryPrompt_FlowsThroughPipelineWithoutKeywordLogic()
+    {
+        var food = Eligible("Cháo lòng", 35_000m, rating: 4.1m, reviews: 7);
+        string? stageASystem = null;
+        string? stageBSystem = null;
+        SetupPipeline(
+            RecommendIntent("ấm bụng nhẹ nhàng"),
+            [food],
+            stageB: (ids, user) =>
+            {
+                Assert.Contains("Cháo lòng", user, StringComparison.Ordinal);
+                return ScoresJson(ids, 0.76);
+            });
+        _llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()))
+            .Returns((string system, string user, int _, CancellationToken _, LanguageModelJsonSchemaOptions? _) =>
+            {
+                if (system.Contains("STAGE A", StringComparison.Ordinal))
+                {
+                    stageASystem = system;
+                    return Task.FromResult<LanguageModelJsonCompletion>(RecommendIntent("ấm bụng nhẹ nhàng"));
+                }
+                if (system.Contains("STAGE B", StringComparison.Ordinal))
+                {
+                    stageBSystem = system;
+                    var ids = CandidateIds(user);
+                    return Task.FromResult<LanguageModelJsonCompletion>(ScoresJson(ids, 0.76));
+                }
+                throw new InvalidOperationException(system);
+            });
+
+        var result = await Send("Hôm nay trời lạnh, muốn cái gì ấm bụng nhẹ nhàng thôi.");
+
+        Assert.True(result.Success);
+        Assert.Equal(food.FoodItem.Id, Assert.Single(result.Data!.Recommendations).FoodItemId);
+        Assert.Contains("STAGE A", stageASystem, StringComparison.Ordinal);
+        Assert.Contains("STAGE B", stageBSystem, StringComparison.Ordinal);
+        Assert.DoesNotContain("cháo", stageASystem!, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Recommend_AllReturnedFoodIds_ExistInEligiblePool()
+    {
+        var a = Eligible("Gỏi cuốn", 30_000m, rating: 4.2m, reviews: 5);
+        var b = Eligible("Bánh mì thịt", 28_000m, rating: 4.0m, reviews: 3);
+        var eligibleIds = new HashSet<Guid> { a.FoodItem.Id, b.FoodItem.Id };
+        SetupPipeline(
+            RecommendIntent("nhẹ nhàng"),
+            [a, b],
+            stageB: (ids, _) => ScoresFor(ids, (a.FoodItem.Id, 0.71), (b.FoodItem.Id, 0.63)));
+
+        var result = await Send("Gợi ý món nhẹ nhàng buổi chiều.");
+
+        Assert.All(result.Data!.Recommendations, rec => Assert.Contains(rec.FoodItemId, eligibleIds));
+    }
+
+    [Theory]
+    [InlineData("Món chiên giòn tan.", "giòn tan")]
+    [InlineData("Có gì cay xé lưỡi không?", "cay xé lưỡi")]
+    [InlineData("Đang đói, muốn no nhanh.", "no nhanh")]
+    public async Task Recommend_DiversePromptShapes_UseSemanticGate(string prompt, string leftover)
+    {
+        var food = Eligible("Món test", 40_000m, rating: 4.4m, reviews: 6);
+        SetupPipeline(RecommendIntent(leftover), [food], stageB: (ids, _) => ScoresJson(ids, 0.74));
+
+        var result = await Send(prompt);
+
+        Assert.True(result.Success);
+        Assert.Equal(food.FoodItem.Id, Assert.Single(result.Data!.Recommendations).FoodItemId);
+    }
+
+    [Fact]
+    public async Task Recommend_NoSemanticMatch_ReturnsEmptyNotFabricated()
+    {
+        var food = Eligible("Phở bò", 50_000m, rating: 4.7m, reviews: 20);
+        SetupPipeline(
+            RecommendIntent("hải sản tươi"),
+            [food],
+            stageB: (ids, _) => ScoresJson(ids, 0.32));
+
+        var result = await Send("Muốn hải sản tươi sống.");
+
+        Assert.True(result.Success);
+        Assert.Empty(result.Data!.Recommendations);
+    }
+
     [Theory]
     [InlineData("Tìm 1 món ngon ngon cho hôm nay.", "ngon ngon")]
     [InlineData("Tôi muốn ăn gì đó hấp dẫn.", "hấp dẫn")]
@@ -92,7 +213,7 @@ public sealed class AssistantArbitraryPromptTests
             stageB: (ids, user) =>
             {
                 stageBPayload = user;
-                return ScoresJson(ids, 0.82, reasons: ["khớp mô tả"], unknown: []);
+                return ScoresJson(ids, 0.82);
             });
 
         var result = await Send(prompt);
@@ -103,7 +224,8 @@ public sealed class AssistantArbitraryPromptTests
         Assert.Equal("Bún bò Huế", rec.Name);
         Assert.Equal(45_000m, rec.EffectivePrice);
         Assert.Contains(leftover, result.Data.PreferenceSummary.SemanticPreferences);
-        Assert.Contains("soldToday", stageBPayload, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("effectivePrice", stageBPayload, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("foodItemId", stageBPayload, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("chất lượng cao", result.Data.Reply, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -118,20 +240,18 @@ public sealed class AssistantArbitraryPromptTests
             stageB: (ids, user) =>
             {
                 stageBPayload = user;
-                Assert.Contains("\"soldToday\":0", user.Replace(" ", ""), StringComparison.OrdinalIgnoreCase);
-                return ScoresJson(ids, 0.7, reasons: ["MISSING_DB_FIELD"], unknown: ["sales"]);
+                return ScoresJson(ids, 0.7);
             });
 
         var result = await Send("Tôi muốn kiếm món bestseller cho hôm nay.");
 
         Assert.True(result.Success);
         var rec = Assert.Single(result.Data!.Recommendations);
-        Assert.Contains("sales", rec.UnknownDataFacets);
+        Assert.Empty(rec.UnknownDataFacets);
         Assert.DoesNotContain(rec.Reasons, reason => reason.Contains("featured", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(rec.Reasons, reason => reason.Contains("bán chạy", StringComparison.OrdinalIgnoreCase));
         Assert.True(rec.IsFeatured);
-        Assert.Contains("soldToday", stageBPayload, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("lượng bán", result.Data.Reply, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("foodItemId", stageBPayload, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -327,8 +447,8 @@ public sealed class AssistantArbitraryPromptTests
     {
         _foods.Setup(repository => repository.GetEligibleFoodsAsync(It.IsAny<AssistantFoodQueryCriteria>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new AssistantFoodQueryResult { Foods = eligible.ToArray(), Pipeline = new AssistantFoodQueryPipelineDiagnostics { AfterHardConstraints = eligible.Count } });
-        _llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .Returns((string system, string user, int _, CancellationToken _) =>
+        _llm.Setup(client => client.CompleteJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>(), It.IsAny<LanguageModelJsonSchemaOptions>()))
+            .Returns((string system, string user, int _, CancellationToken _, LanguageModelJsonSchemaOptions? _) =>
             {
                 if (system.Contains("STAGE A", StringComparison.Ordinal))
                     return Task.FromResult<LanguageModelJsonCompletion>(stageA);
@@ -336,7 +456,7 @@ public sealed class AssistantArbitraryPromptTests
                 if (system.Contains("STAGE B", StringComparison.Ordinal))
                 {
                     var ids = CandidateIds(user);
-                    return Task.FromResult<LanguageModelJsonCompletion>(stageB?.Invoke(ids, user) ?? ScoresJson(ids, 0.8, reasons: ["khớp"], unknown: []));
+                    return Task.FromResult<LanguageModelJsonCompletion>(stageB?.Invoke(ids, user) ?? ScoresJson(ids, 0.8));
                 }
 
                 if (system.Contains("STAGE C", StringComparison.Ordinal))
@@ -372,17 +492,17 @@ public sealed class AssistantArbitraryPromptTests
     private static string ToJson(string? value)
         => value is null ? "null" : JsonSerializer.Serialize(value);
 
-    private static string ScoresJson(IReadOnlyList<Guid> ids, double score, string[] reasons, string[] unknown)
-        => JsonSerializer.Serialize(new
+    private static string ScoresFor(IReadOnlyList<Guid> ids, params (Guid Id, double Score)[] scores)
+    {
+        var lookup = scores.ToDictionary(item => item.Id, item => item.Score);
+        return JsonSerializer.Serialize(new
         {
-            scores = ids.Select(id => new
-            {
-                foodItemId = id,
-                semanticCompatibility = score,
-                reasons,
-                unknownDataFacets = unknown
-            }).ToArray()
+            scores = ids.Select(id => lookup.TryGetValue(id, out var score) ? score : 0.1).ToArray()
         });
+    }
+
+    private static string ScoresJson(IReadOnlyList<Guid> ids, double score)
+        => JsonSerializer.Serialize(new { scores = ids.Select(_ => score).ToArray() });
 
     private static string PlansJson(string? title = null, string? overall = null, params (Guid Id, int Qty, string Course)[] items)
         => JsonSerializer.Serialize(new
@@ -424,7 +544,8 @@ public sealed class AssistantArbitraryPromptTests
         bool featured = false,
         int soldToday = 0,
         int orderCount = 0,
-        Guid? marketId = null)
+        Guid? marketId = null,
+        double? distanceMeters = null)
     {
         var market = new NightMarket
         {
@@ -470,7 +591,8 @@ public sealed class AssistantArbitraryPromptTests
             FoodItem = food,
             EffectivePrice = price,
             SoldToday = soldToday,
-            OrderCount = orderCount
+            OrderCount = orderCount,
+            DistanceMeters = distanceMeters
         };
     }
 

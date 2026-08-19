@@ -1,3 +1,4 @@
+using System.Text.Json;
 using ApplicationLayer.Exceptions;
 using Microsoft.Extensions.Logging;
 
@@ -46,6 +47,45 @@ public static class AssistantErrors
         LogInvalidJson(logger, diagnostics, inner);
         return ProviderUnavailable(InvalidJson, inner, httpStatus: null, diagnostics);
     }
+
+    public static AppException IncompleteIdSetUnavailable(
+        LanguageModelJsonCompletion? completion,
+        int expectedCount,
+        int returnedCount,
+        int missingCount,
+        ILogger? logger = null)
+    {
+        var diagnostics = completion is null
+            ? null
+            : AssistantProviderDiagnostics.From(AssistantLlmStages.Semantic, completion, IncompleteIdSet);
+        logger?.LogWarning(
+            "Assistant semantic batch incomplete ID set. Expected={ExpectedCount} Returned={ReturnedCount} Missing={MissingCount} FinishReason={FinishReason} ConfiguredMaxOutputTokens={ConfiguredMaxOutputTokens} OutputTokenCount={OutputTokenCount} ResponseCharacterCount={ResponseCharacterCount} RequestId={RequestId}",
+            expectedCount,
+            returnedCount,
+            missingCount,
+            completion?.FinishReason,
+            completion?.ConfiguredMaxOutputTokens,
+            completion?.OutputTokenCount,
+            completion?.ResponseCharacterCount,
+            completion?.RequestId);
+        return ProviderUnavailable(IncompleteIdSet, diagnostics: diagnostics);
+    }
+
+    public static bool IsProviderReason(AppException exception, string reason)
+    {
+        if (!string.Equals(exception.ErrorCode, "ASSISTANT_PROVIDER_UNAVAILABLE", StringComparison.Ordinal)
+            || exception.Details is null)
+            return false;
+
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(exception.Details));
+        return document.RootElement.TryGetProperty("reason", out var value)
+            && string.Equals(value.GetString(), reason, StringComparison.Ordinal);
+    }
+
+    public static AppException ProviderUnavailable(
+        string reason,
+        AssistantProviderDiagnostics? diagnostics)
+        => ProviderUnavailable(reason, inner: null, httpStatus: null, diagnostics);
 
     public static AppException ProviderUnavailable(
         string reason,

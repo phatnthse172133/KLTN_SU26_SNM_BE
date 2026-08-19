@@ -176,8 +176,38 @@ public sealed class AssistantSemanticMatcher(
     {
         var compact = batch.Select(item => Project(item, _assistant.CompactCandidateProjection)).ToArray();
         var allowed = compact.Select(item => item.FoodItemId).ToHashSet();
-        var completion = await CompleteBatchAsync(originalMessage, intent, compact, cancellationToken);
-        return ParseBatch(completion, allowed, logger);
+        EnsureUniqueBatchInput(allowed, batch.Count);
+
+        var extraAttempts = Math.Clamp(_assistant.SemanticBatchRetryCount, 0, 1);
+        LanguageModelJsonCompletion? lastCompletion = null;
+
+        for (var attempt = 0; attempt <= extraAttempts; attempt++)
+        {
+            lastCompletion = await CompleteBatchAsync(originalMessage, intent, compact, cancellationToken);
+            try
+            {
+                return ParseBatch(lastCompletion, allowed, logger);
+            }
+            catch (AppException exception) when (attempt < extraAttempts && AssistantErrors.IsProviderReason(exception, AssistantErrors.IncompleteIdSet))
+            {
+                logger?.LogWarning(
+                    "Assistant semantic batch incomplete ID set; retrying batch. Attempt={Attempt} BatchSize={BatchSize} FinishReason={FinishReason} RequestId={RequestId}",
+                    attempt + 1,
+                    allowed.Count,
+                    lastCompletion.FinishReason,
+                    lastCompletion.RequestId);
+            }
+        }
+
+        return ParseBatch(lastCompletion!, allowed, logger);
+    }
+
+    internal static void EnsureUniqueBatchInput(ISet<Guid> allowedIds, int batchCount)
+    {
+        if (allowedIds.Count != batchCount)
+            throw AssistantErrors.ProviderUnavailable(AssistantErrors.IncompleteIdSet);
+        if (allowedIds.Any(id => id == Guid.Empty))
+            throw AssistantErrors.ProviderUnavailable(AssistantErrors.IncompleteIdSet);
     }
 
     private async Task<LanguageModelJsonCompletion> CompleteBatchAsync(
@@ -257,7 +287,15 @@ public sealed class AssistantSemanticMatcher(
         }
 
         if (result.Count != allowedIds.Count)
-            throw AssistantErrors.ProviderUnavailable(AssistantErrors.IncompleteIdSet);
+        {
+            var missingCount = allowedIds.Count - result.Count;
+            throw AssistantErrors.IncompleteIdSetUnavailable(
+                completion,
+                allowedIds.Count,
+                result.Count,
+                missingCount,
+                logger);
+        }
 
         return result;
     }

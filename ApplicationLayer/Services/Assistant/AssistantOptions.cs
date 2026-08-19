@@ -5,6 +5,11 @@ public sealed class AssistantOptions
     public const string SectionName = "Assistant";
 
     public int CandidateBatchSize { get; set; } = 30;
+    /// <summary>
+    /// Extra Stage B batch attempts when the provider returns an incomplete ID set (0..1).
+    /// Does not repeat Stage A or completed batches.
+    /// </summary>
+    public int SemanticBatchRetryCount { get; set; } = 1;
     public int SemanticBatchMaxConcurrency { get; set; } = 3;
     public int MaxRecommendations { get; set; } = 8;
     public int MaxMealPlanOptions { get; set; } = 3;

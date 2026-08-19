@@ -262,8 +262,12 @@ public class LayoutGraphValidationFoundationTests
         Assert.Contains(result.Errors, error => error.Contains("duplicate edges"));
         Assert.Contains(result.Errors, error => error.Contains("cannot connect a node to itself"));
         Assert.Contains(result.Errors, error => error.Contains("distance greater than zero"));
-        Assert.Contains(result.Errors, error => error.Contains("no connected walkway"));
         Assert.Contains(result.Errors, error => error.Contains("invalid node"));
+        // Persisted walkway reachability is advisory, matching MapNavigationService's
+        // transient corridor builder. Incomplete gate links warn instead of blocking.
+        Assert.Contains(result.Warnings, warning => warning.Contains("Navigation links are incomplete"));
+        Assert.Contains(result.Warnings, warning => warning.Contains("1 gate(s)"));
+        Assert.DoesNotContain(result.Errors, error => error.Contains("walkway"));
     }
 }
 

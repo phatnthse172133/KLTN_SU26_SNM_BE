@@ -397,22 +397,13 @@ public class MarketLayoutService : IMarketLayoutService
                 "Path distance must be greater than zero.",
                 "LAYOUT_EDGE_DISTANCE_INVALID");
 
-        var invalidRoute = edges.FirstOrDefault(edge =>
-            EdgeCrossesGeneratedBlock(edge, nodes, blocks));
-        if (invalidRoute is not null)
-        {
-            var from = nodes.First(node => node.Id == invalidRoute.FromNodeId);
-            var to = nodes.First(node => node.Id == invalidRoute.ToNodeId);
-            var crossedBlock = blocks.FirstOrDefault(block =>
-                !block.IsDeleted
-                && LayoutBlockGeometry.SegmentIntersects(
-                    (double)from.Xcoordinate, (double)from.Ycoordinate,
-                    (double)to.Xcoordinate, (double)to.Ycoordinate,
-                    new LayoutRect(block.X, block.Y, block.Width, block.Height)));
-            throw AppException.BadRequest(
-                $"Route from {from.NodeName ?? from.SlotCode ?? from.Id.ToString()[..8]} to {to.NodeName ?? to.SlotCode ?? to.Id.ToString()[..8]} crosses Zone '{crossedBlock?.Name ?? "unknown"}'. Move the route to the corridor around the Zone.",
-                "LAYOUT_EDGE_CROSSES_ZONE");
-        }
+        // A graph save is also used after moving a gate/zone.  Older maps can
+        // still contain stale straight edges that cross a newly regenerated
+        // Zone, and rejecting the whole payload made every subsequent edit
+        // fail with HTTP 400.  Drop only those unsafe segments; valid edges
+        // and booth-access links are kept, while the transient customer
+        // router rebuilds safe corridors from the current geometry.
+        edges.RemoveAll(edge => EdgeCrossesGeneratedBlock(edge, nodes, blocks));
 
         await _layouts.SaveGraphTransactionalAsync(layoutId, blocks, nodes, edges, null, cancellationToken);
         var saved = await _layouts.GetActiveByIdAsync(layoutId, cancellationToken)
@@ -725,30 +716,15 @@ public class MarketLayoutService : IMarketLayoutService
         IReadOnlyList<LayoutNode> nodes,
         List<LayoutEdge> edges)
     {
-        var entrances = nodes.Where(node => node.NodeType == LayoutNodeType.Entrance).ToList();
-        // Auto Corridor nodes are routing waypoints, not independent aisles.
-        // The visibility graph only persists the waypoints that are actually
-        // used by a shortest path; requiring every candidate waypoint to be
-        // reachable makes every generation fail with CORRIDOR_DISCONNECTED.
-        // Only real zone junctions participate in the connectivity invariant.
+        // Generation must not fail because a persisted walkway is incomplete.
+        // A gate is the only required map anchor.  Customer navigation builds
+        // a transient obstacle-aware corridor graph from the saved geometry,
+        // so missing/isolated junctions are not a reason to reject the layout.
         var junctions = nodes
             .Where(node => node.NodeType == LayoutNodeType.Junction
                 && !IsGeneratedCorridorNode(node))
             .ToList();
         var slots = nodes.Where(node => node.NodeType == LayoutNodeType.BoothSlot).ToList();
-
-        if (slots.Count == 0)
-            return;
-
-        if (entrances.Count == 0)
-            throw AppException.Conflict(
-                "Add at least one entrance before generating booth slots.",
-                "LAYOUT_ENTRANCE_REQUIRED");
-
-        if (junctions.Count == 0)
-            throw AppException.Conflict(
-                "The generated layout has no walkway junction. Generate the layout again.",
-                "LAYOUT_JUNCTION_REQUIRED");
 
         var nodeIds = nodes.Select(node => node.Id).ToHashSet();
         edges.RemoveAll(edge => edge.IsDeleted
@@ -761,7 +737,9 @@ public class MarketLayoutService : IMarketLayoutService
             .ToHashSet();
         var junctionIds = junctions.Select(junction => junction.Id).ToHashSet();
 
-        // Every slot must first be attached to the junction belonging to its zone/block.
+        // Add the safe local slot-to-zone-junction links when a matching
+        // junction exists.  This is only an enrichment step; it never throws
+        // when a hand-edited layout has no junction or an isolated zone.
         foreach (var slot in slots)
         {
             var hasAccessibleJunctionEdge = edges.Any(edge => edge.IsAccessible
@@ -777,38 +755,9 @@ public class MarketLayoutService : IMarketLayoutService
                 .OrderBy(candidate => SquaredDistance(slot, candidate))
                 .FirstOrDefault();
 
-            if (junction is null)
-                throw AppException.Conflict(
-                    $"Booth slot {slot.SlotCode ?? slot.NodeName ?? slot.Id.ToString()[..8]} is not assigned to a valid zone walkway.",
-                    "LAYOUT_SLOT_ZONE_JUNCTION_MISSING");
-
-            AddConnectivityEdge(layoutId, slot, junction, edges, pairs);
+            if (junction is not null)
+                AddConnectivityEdge(layoutId, slot, junction, edges, pairs);
         }
-
-        var reachable = ReachableFromEntrances(entrances.Select(node => node.Id), edges);
-
-        // Never repair a disconnected aisle with a nearest-neighbour straight
-        // edge: that creates a path through another Zone. The obstacle-aware
-        // generator must have produced the corridor route already.
-        var unreachableJunctions = junctions
-            .Where(junction => !reachable.Contains(junction.Id))
-            .Select(junction => junction.NodeName ?? junction.Id.ToString()[..8])
-            .ToList();
-        if (unreachableJunctions.Count > 0)
-            throw AppException.Conflict(
-                $"Generated walkways cannot reach: {string.Join(", ", unreachableJunctions)}. Regenerate the layout so routes go around Zone blocks.",
-                "LAYOUT_CORRIDOR_DISCONNECTED");
-
-        reachable = ReachableFromEntrances(entrances.Select(node => node.Id), edges);
-        var unreachableSlots = slots
-            .Where(slot => !reachable.Contains(slot.Id))
-            .Select(slot => slot.SlotCode ?? slot.NodeName ?? "Unnamed slot")
-            .ToList();
-
-        if (unreachableSlots.Count > 0)
-            throw AppException.Conflict(
-                $"The generated paths could not reach these booth slots: {string.Join(", ", unreachableSlots)}. Please regenerate the layout.",
-                "LAYOUT_GENERATED_PATH_DISCONNECTED");
     }
 
     private static void AddConnectivityEdge(

@@ -41,15 +41,19 @@ public class LayoutGraphValidationService : ILayoutGraphValidationService
         if (layout.Width <= 0 || layout.Height <= 0)
             errors.Add("Layout width and height must be greater than zero.");
 
-        if (!nodes.Any(x => x.NodeType == LayoutNodeType.Entrance))
-            errors.Add("Layout must have at least one entrance.");
+        // A gate is a visual starting point for the market map.  It does not
+        // have to be connected to a persisted walkway before the layout can
+        // be activated; customers can still use the transient navigation
+        // corridor builder.  Entrance and legacy Exit nodes are both gates.
+        if (!nodes.Any(IsGate))
+            errors.Add("Layout must have at least one gate.");
 
-        // BoothSlot support: require at least one Junction when booth slots exist.
-        // Junctions are auto-generated per Zone by the layout generator; if the market owner
-        // manually placed BoothSlots without the generator they must add a Junction manually.
+        // A junction is optional.  Gates are the only required navigation
+        // anchor; the customer app can build a transient corridor graph from
+        // the gate and Zone/slot geometry.  Requiring a persisted junction
+        // made otherwise usable manually arranged layouts impossible to
+        // activate.
         var boothSlots = nodes.Where(x => x.NodeType == LayoutNodeType.BoothSlot).ToList();
-        if (boothSlots.Count > 0 && !nodes.Any(x => x.NodeType == LayoutNodeType.Junction))
-            errors.Add("Layout must have at least one path point (junction). Use the Generate Layout feature or add one manually.");
 
         // BoothAccess is a retired, legacy-only node type. Existing rows are retained
         // for compatibility but do not affect whether a modern Gate-based layout can
@@ -81,6 +85,7 @@ public class LayoutGraphValidationService : ILayoutGraphValidationService
 
         // Edges must not cross through Zone blocks (walkways go around, not through)
         var liveBlocks = blocks.Where(b => !b.IsDeleted).ToList();
+        var crossingEdgeCount = 0;
         foreach (var edge in edges)
         {
             if (!nodeById.TryGetValue(edge.FromNodeId, out var fromNode) || !nodeById.TryGetValue(edge.ToNodeId, out var toNode))
@@ -102,30 +107,29 @@ public class LayoutGraphValidationService : ILayoutGraphValidationService
                     (double)fromNode.Xcoordinate, (double)fromNode.Ycoordinate,
                     (double)toNode.Xcoordinate, (double)toNode.Ycoordinate, rect))
                 {
-                    errors.Add($"Edge from {fromNode.NodeName ?? fromNode.SlotCode ?? fromNode.Id.ToString()[..8]} to {toNode.NodeName ?? toNode.SlotCode ?? toNode.Id.ToString()[..8]} crosses through block {block.Name}. Routes must go around zone blocks, not through them.");
+                    crossingEdgeCount++;
                     break;
                 }
             }
         }
+        if (crossingEdgeCount > 0)
+            warnings.Add($"{crossingEdgeCount} outdated path segment(s) cross a Zone and will be rebuilt around the Zone before customer navigation.");
 
+        // Persisted walkway reachability is intentionally advisory.  Older
+        // generated layouts may contain only slot/aisle links, and requiring a
+        // full BFS-connected graph here made otherwise valid layouts impossible
+        // to activate.  Navigation builds a transient corridor graph at read
+        // time, so report the gap as one compact warning instead of blocking
+        // activation with dozens of per-booth errors.
         var connectedIds = edges.SelectMany(x => new[] { x.FromNodeId, x.ToNodeId }).ToHashSet();
-
-        // A Gate (stored as Entrance) and each booth slot must be connected. Retired
-        // BoothAccess records from an older layout are deliberately ignored here.
-        var disconnectedGates = nodes.Where(x => x.NodeType is LayoutNodeType.Entrance or LayoutNodeType.Exit && !connectedIds.Contains(x.Id)).ToList();
-        foreach (var gate in disconnectedGates)
-            errors.Add($"Gate {gate.NodeName ?? gate.Id.ToString()[..8]} has no connected walkway. Connect it to a junction before activating the layout.");
-
-        var disconnectedSlots = boothSlots.Where(x => !connectedIds.Contains(x.Id)).ToList();
-        foreach (var slot in disconnectedSlots)
-            errors.Add($"Booth {slot.SlotCode ?? slot.NodeName ?? slot.Id.ToString()[..8]} has no connected walkway to a gate. Connect its access point before activating the layout.");
-
-        var reachable = ReachableFromEntrances(nodes.Where(x => x.NodeType == LayoutNodeType.Entrance).Select(x => x.Id), edges);
-
-        // Every BoothSlot must be reachable from an entrance
-        var unreachableSlots = boothSlots.Where(bs => !reachable.Contains(bs.Id)).ToList();
-        foreach (var slot in unreachableSlots)
-            errors.Add($"Booth {slot.SlotCode ?? slot.NodeName ?? slot.Id.ToString()[..8]} is not reachable from any gate. Check that walkways connect it to an entrance.");
+        var disconnectedGateCount = nodes.Count(node => IsGate(node) && !connectedIds.Contains(node.Id));
+        var disconnectedSlotCount = boothSlots.Count(slot => !connectedIds.Contains(slot.Id));
+        if (disconnectedGateCount > 0 || disconnectedSlotCount > 0)
+        {
+            warnings.Add(
+                $"Navigation links are incomplete ({disconnectedGateCount} gate(s), {disconnectedSlotCount} booth slot(s)); " +
+                "the customer map will build temporary corridors when a route is requested.");
+        }
 
         // SlotCode validation for BoothSlots
         var slotsWithEmptyCode = boothSlots.Where(x => string.IsNullOrWhiteSpace(x.SlotCode)).ToList();
@@ -155,6 +159,9 @@ public class LayoutGraphValidationService : ILayoutGraphValidationService
 
         return new() { Errors = errors.Distinct().ToList(), Warnings = warnings };
     }
+
+    private static bool IsGate(DomainLayer.Entities.LayoutNode node)
+        => node.NodeType is LayoutNodeType.Entrance or LayoutNodeType.Exit;
 
     private static bool IsGeneratedSlotAccessLink(
         DomainLayer.Entities.LayoutNode first,

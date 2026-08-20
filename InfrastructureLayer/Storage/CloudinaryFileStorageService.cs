@@ -3,6 +3,7 @@ using ApplicationLayer.Services.Storage;
 using CloudinaryDotNet;
 using CloudinaryDotNet.Actions;
 using Microsoft.Extensions.Configuration;
+using System.Net.Http.Json;
 
 namespace InfrastructureLayer.Storage;
 
@@ -12,9 +13,12 @@ public sealed class CloudinaryFileStorageService : IFileStorageService
     private const long MaxPdfSize = 10 * 1024 * 1024;
     private readonly Cloudinary _cloudinary;
     private readonly string _rootFolder;
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly Uri _bridgeBaseUri;
 
-    public CloudinaryFileStorageService(IConfiguration configuration)
+    public CloudinaryFileStorageService(IConfiguration configuration, IHttpClientFactory httpClientFactory)
     {
+        _httpClientFactory = httpClientFactory;
         var cloudName = configuration["Cloudinary:CloudName"];
         var apiKey = configuration["Cloudinary:ApiKey"];
         var apiSecret = configuration["Cloudinary:ApiSecret"];
@@ -29,6 +33,10 @@ public sealed class CloudinaryFileStorageService : IFileStorageService
             Api = { Secure = true }
         };
         _rootFolder = NormalizeCategory(configuration["Cloudinary:RootFolder"] ?? "smart-night-market");
+        var bridgeUrl = configuration["Cloudinary:BridgeUrl"] ?? "http://127.0.0.1:5290/";
+        if (!Uri.TryCreate(bridgeUrl, UriKind.Absolute, out var parsedBridgeUrl))
+            throw new InvalidOperationException("Cloudinary bridge URL is invalid.");
+        _bridgeBaseUri = parsedBridgeUrl;
     }
 
     public Task<string> SaveAvatarAsync(
@@ -92,20 +100,75 @@ public sealed class CloudinaryFileStorageService : IFileStorageService
     {
         ValidateRequired(stream, length, MaxImageSize, "IMAGE");
         var kind = GetImageKind(fileName, contentType);
-        await ValidateSignatureAsync(stream, kind, cancellationToken);
 
-        var result = await _cloudinary.UploadAsync(new ImageUploadParams
+        // Buffer once because a failed SDK upload may dispose the multipart stream.
+        await using var payload = new MemoryStream();
+        await stream.CopyToAsync(payload, cancellationToken);
+        var bytes = payload.ToArray();
+        await using var signatureStream = new MemoryStream(bytes, writable: false);
+        await ValidateSignatureAsync(signatureStream, kind, cancellationToken);
+
+        try
         {
-            File = new FileDescription(fileName, stream),
-            PublicId = BuildPublicId(category),
-            Overwrite = false,
-            UseFilename = false,
-            UniqueFilename = true
-        }, cancellationToken);
-        EnsureUploadSucceeded(result);
-        return result.SecureUrl?.AbsoluteUri
-            ?? throw AppException.BadRequest("The image could not be uploaded.", "IMAGE_UPLOAD_FAILED");
+            await using var cloudinaryStream = new MemoryStream(bytes, writable: false);
+            var result = await _cloudinary.UploadAsync(new ImageUploadParams
+            {
+                File = new FileDescription(fileName, cloudinaryStream),
+                PublicId = BuildPublicId(category),
+                Overwrite = false,
+                UseFilename = false,
+                UniqueFilename = true
+            }, cancellationToken);
+            EnsureUploadSucceeded(result);
+            return result.SecureUrl?.AbsoluteUri
+                ?? throw AppException.BadRequest("The image could not be uploaded.", "IMAGE_UPLOAD_FAILED");
+        }
+        catch (HttpRequestException)
+        {
+            await using var bridgeStream = new MemoryStream(bytes, writable: false);
+            return await UploadViaBridgeAsync(category, bridgeStream, fileName, contentType, "image", cancellationToken);
+        }
     }
+
+    private async Task<string> UploadViaBridgeAsync(
+        string category, Stream stream, string fileName, string contentType, string resourceType,
+        CancellationToken cancellationToken)
+    {
+        if (!stream.CanSeek)
+            throw AppException.ServiceUnavailable(
+                "Image upload is temporarily unavailable. Please try again.",
+                "IMAGE_STORAGE_UNAVAILABLE");
+
+        stream.Position = 0;
+        await using var buffer = new MemoryStream();
+        await stream.CopyToAsync(buffer, cancellationToken);
+
+        var client = _httpClientFactory.CreateClient("CloudinaryBridge");
+        client.BaseAddress = _bridgeBaseUri;
+        using var response = await client.PostAsJsonAsync("upload", new
+        {
+            category,
+            fileName,
+            contentType,
+            resourceType,
+            fileBase64 = Convert.ToBase64String(buffer.ToArray())
+        }, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+            throw AppException.ServiceUnavailable(
+                "Image upload is temporarily unavailable. Please try again.",
+                "IMAGE_STORAGE_UNAVAILABLE");
+
+        var result = await response.Content.ReadFromJsonAsync<BridgeUploadResponse>(cancellationToken: cancellationToken);
+        if (string.IsNullOrWhiteSpace(result?.SecureUrl))
+            throw AppException.ServiceUnavailable(
+                "Image upload is temporarily unavailable. Please try again.",
+                "IMAGE_STORAGE_UNAVAILABLE");
+
+        return result.SecureUrl;
+    }
+
+    private sealed record BridgeUploadResponse(string? SecureUrl);
 
     private async Task DeleteManagedAsync(string? url, CancellationToken cancellationToken)
     {

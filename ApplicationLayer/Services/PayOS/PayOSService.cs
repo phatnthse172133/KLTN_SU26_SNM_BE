@@ -169,7 +169,18 @@ namespace ApplicationLayer.Services.PayOS
 
         public async Task<PayOSWebhookData?> VerifyWebhookAsync(Webhook webhook)
         {
-            var client = await GetClientByOrderCodeAsync(webhook.Data.OrderCode);
+            PayOSClient client;
+            try
+            {
+                client = await GetClientByOrderCodeAsync(webhook.Data.OrderCode);
+            }
+            catch (AppException ex) when (ex.ErrorCode == "ORDER_NOT_FOUND")
+            {
+                // PayOS sends a signed sample event while configuring the webhook;
+                // it has no local order yet, so verify it with the platform credentials.
+                _logger.LogInformation("No local order for PayOS webhook {OrderCode}; using platform credentials for signature verification.", webhook.Data.OrderCode);
+                client = GetClient();
+            }
             try
             {
                 var verifiedData = await client.Webhooks.VerifyAsync(webhook);

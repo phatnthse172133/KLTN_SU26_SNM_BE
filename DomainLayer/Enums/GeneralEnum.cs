@@ -175,6 +175,9 @@ namespace DomainLayer.Enums
             Released = 2
         }
 
+        // Lifecycle (reconciled, not blind-replaced):
+        // Pending ≈ Submitted; WaitingForCustomer ≈ NeedMoreInfo; InProgress added for active handling.
+        // Closed remains a legacy terminal status.
         public enum ComplaintStatus
         {
             Pending = 0,
@@ -183,16 +186,19 @@ namespace DomainLayer.Enums
             UnderReview = 3,
             WaitingForCustomer = 4,
             Closed = 5,
-            Withdrawn = 6
+            Withdrawn = 6,
+            InProgress = 7
         }
 
+        // Final customer categories: WrongItem, MissingItem, FoodQuality, DelayedOrder,
+        // PaymentIssue, BoothBehavior, Other. PromotionIssue kept only for legacy rows.
         public enum ComplaintCategory
         {
             FoodQuality = 0,
             WrongItem = 1,
             MissingItem = 2,
-            OrderNotReceived = 3,
-            BoothService = 4,
+            DelayedOrder = 3,
+            BoothBehavior = 4,
             PaymentIssue = 5,
             PromotionIssue = 6,
             Other = 7

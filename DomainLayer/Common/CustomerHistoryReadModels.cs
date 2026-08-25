@@ -37,6 +37,7 @@ public sealed class CustomerOrderItemReadModel
     public Guid OrderDetailId { get; set; }
     public Guid FoodItemId { get; set; }
     public string FoodName { get; set; } = string.Empty;
+    public string? ThumbnailUrl { get; set; }
     public int Quantity { get; set; }
     public decimal UnitPrice { get; set; }
     public decimal LineTotal { get; set; }

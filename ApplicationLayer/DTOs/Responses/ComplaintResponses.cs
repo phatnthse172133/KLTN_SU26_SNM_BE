@@ -14,7 +14,9 @@ public class ComplaintResponse
     public string Status { get; set; } = string.Empty;
     public string? ResolutionAction { get; set; }
     public string? PolicyViolation { get; set; }
+    public string? BoothOwnerResponse { get; set; }
     public bool CanWithdraw { get; set; }
+    public bool CanAddEvidence { get; set; }
     public List<string> ImageUrls { get; set; } = new();
     public List<ComplaintStatusHistoryResponse> StatusHistory { get; set; } = new();
     public DateTime CreatedAt { get; set; }

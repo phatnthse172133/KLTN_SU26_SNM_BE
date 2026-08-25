@@ -157,6 +157,7 @@ namespace ApplicationLayer.Services.Orders
                     OrderDetailId = item.OrderDetailId,
                     FoodItemId = item.FoodItemId,
                     FoodName = item.FoodName,
+                    ThumbnailUrl = item.ThumbnailUrl,
                     Quantity = item.Quantity,
                     UnitPrice = item.UnitPrice,
                     LineTotal = item.LineTotal

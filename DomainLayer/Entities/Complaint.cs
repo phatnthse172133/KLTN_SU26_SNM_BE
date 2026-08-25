@@ -24,6 +24,8 @@ public partial class Complaint
 
     public string? AdminResponse { get; set; }
 
+    public string? BoothOwnerResponse { get; set; }
+
     public string? CustomerEvidenceRequestNote { get; set; }
 
     public ComplaintStatus Status { get; set; }

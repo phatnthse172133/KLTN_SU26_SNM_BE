@@ -19,7 +19,8 @@ public class ComplaintService : IComplaintService
     [
         ComplaintStatus.Pending,
         ComplaintStatus.UnderReview,
-        ComplaintStatus.WaitingForCustomer
+        ComplaintStatus.WaitingForCustomer,
+        ComplaintStatus.InProgress
     ];
 
     private static readonly HashSet<ComplaintStatus> TerminalStatuses =
@@ -65,6 +66,8 @@ public class ComplaintService : IComplaintService
     public async Task<ApiResponse<ComplaintResponse>> CreateAsync(Guid customerId, CreateComplaintRequest request, CancellationToken cancellationToken = default)
     {
         if (!Enum.IsDefined(request.Category))
+            throw AppException.BadRequest("Complaint category is invalid.", "COMPLAINT_CATEGORY_INVALID");
+        if (request.Category == ComplaintCategory.PromotionIssue)
             throw AppException.BadRequest("Complaint category is invalid.", "COMPLAINT_CATEGORY_INVALID");
 
         var title = TextHelper.NormalizeOptionalText(request.Title) ?? GetCategoryTitle(request.Category);
@@ -252,7 +255,7 @@ public class ComplaintService : IComplaintService
         if (complaint is null)
             throw AppException.NotFound("Complaint was not found.", "COMPLAINT_NOT_FOUND");
 
-        if (complaint.Status != ComplaintStatus.WaitingForCustomer)
+        if (!CanAddEvidence(complaint.Status))
             throw AppException.BadRequest("Evidence can only be added while waiting for customer response.", "COMPLAINT_EVIDENCE_NOT_ALLOWED");
 
         var requestedImages = request.Images ?? [];
@@ -313,6 +316,108 @@ public class ComplaintService : IComplaintService
             JsonSerializer.Serialize(new { complaintId, status = ComplaintStatus.UnderReview.ToString() })), cancellationToken);
 
         return ApiResponse<ComplaintResponse>.SuccessResponse(ToResponse(updated!), "Evidence submitted successfully.");
+    }
+
+    public async Task<ApiResponse<ComplaintResponse>> AddBoothResponseAsync(
+        Guid boothOwnerId,
+        Guid complaintId,
+        BoothComplaintResponseRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var complaint = await _complaints.GetWithImagesByIdAsync(complaintId)
+            ?? throw AppException.NotFound("Complaint was not found.", "COMPLAINT_NOT_FOUND");
+
+        var booth = await _booths.GetByIdAsync(complaint.BoothId)
+            ?? throw AppException.NotFound("Booth was not found.");
+        if (booth.BoothOwnerId != boothOwnerId)
+            throw AppException.Forbidden("You can only respond to complaints for your own booth.", "BOOTH_OWNERSHIP_REQUIRED");
+
+        if (!ActiveStatuses.Contains(complaint.Status))
+            throw AppException.BadRequest("This complaint can no longer accept booth responses.", "COMPLAINT_BOOTH_RESPONSE_NOT_ALLOWED");
+
+        var explanation = TextHelper.NormalizeOptionalText(request.Explanation);
+        if (explanation is null || explanation.Length < 10)
+            throw AppException.BadRequest("Booth explanation must contain at least 10 characters.", "COMPLAINT_BOOTH_RESPONSE_INVALID");
+        if (explanation.Length > 2000)
+            throw AppException.BadRequest("Booth explanation cannot exceed 2000 characters.", "COMPLAINT_BOOTH_RESPONSE_INVALID");
+
+        var requestedImages = request.Images ?? [];
+        var existingCount = complaint.ComplaintImages?.Count ?? 0;
+        if (existingCount + requestedImages.Count > 5)
+            throw AppException.BadRequest("A complaint can contain at most 5 images.", "COMPLAINT_IMAGE_LIMIT");
+
+        var now = DateTime.UtcNow;
+        var previous = complaint.Status;
+        var nextStatus = previous is ComplaintStatus.Pending or ComplaintStatus.WaitingForCustomer
+            ? ComplaintStatus.UnderReview
+            : previous;
+
+        await _complaints.BeginTransactionAsync();
+        try
+        {
+            if (nextStatus != previous)
+            {
+                var rows = await _complaints.UpdateStatusWithConcurrencyAsync(
+                    complaintId, previous, nextStatus,
+                    complaint.AdminResponse, complaint.ResolutionAction, complaint.PolicyViolation, now, complaint.CustomerEvidenceRequestNote);
+                if (rows == 0)
+                    throw AppException.Conflict("Complaint has already been processed.", "COMPLAINT_ALREADY_PROCESSED");
+            }
+
+            complaint.BoothOwnerResponse = explanation;
+            complaint.UpdatedAt = now;
+            _complaints.Update(complaint);
+
+            var images = requestedImages
+                .Where(i => !string.IsNullOrWhiteSpace(i.ImageUrl))
+                .Select(i => new ComplaintImage
+                {
+                    Id = Guid.NewGuid(),
+                    ComplaintId = complaintId,
+                    ImageUrl = i.ImageUrl.Trim(),
+                    CreatedAt = now,
+                    UpdatedAt = now
+                })
+                .ToList();
+
+            if (images.Count > 0)
+                await _complaints.AddImagesAsync(images);
+
+            await AddHistoryAsync(
+                complaintId,
+                previous,
+                nextStatus,
+                $"Booth owner response: {explanation}",
+                boothOwnerId,
+                "BoothOwner",
+                now,
+                cancellationToken);
+            await _complaints.SaveChangesAsync();
+            await _complaints.CommitTransactionAsync();
+        }
+        catch (AppException)
+        {
+            await _complaints.RollbackTransactionAsync();
+            throw;
+        }
+        catch
+        {
+            await _complaints.RollbackTransactionAsync();
+            throw;
+        }
+
+        var updated = await _complaints.GetWithImagesByIdAsync(complaintId);
+        await TryNotifyRoleAsync(new RoleNotificationMessage(
+            "Admin",
+            NotificationType.ComplaintInReview,
+            "Booth owner responded to complaint",
+            $"Booth responded to complaint \"{updated?.Title}\".",
+            updated?.BoothId,
+            "Complaint",
+            complaintId,
+            JsonSerializer.Serialize(new { complaintId, status = nextStatus.ToString() })), cancellationToken);
+
+        return ApiResponse<ComplaintResponse>.SuccessResponse(ToResponse(updated!), "Booth response submitted successfully.");
     }
 
     public async Task<ApiResponse<ComplaintImageUploadResponse>> UploadImageAsync(Stream stream, string fileName, string contentType, long length, CancellationToken cancellationToken = default)
@@ -717,6 +822,9 @@ public class ComplaintService : IComplaintService
     private static bool CanWithdraw(ComplaintStatus status)
         => ActiveStatuses.Contains(status);
 
+    private static bool CanAddEvidence(ComplaintStatus status)
+        => status == ComplaintStatus.WaitingForCustomer;
+
     private static void ValidateStatusTransition(ComplaintStatus currentStatus, ComplaintStatus nextStatus)
     {
         if (currentStatus == nextStatus)
@@ -724,12 +832,15 @@ public class ComplaintService : IComplaintService
 
         var allowed = currentStatus switch
         {
-            ComplaintStatus.Pending => nextStatus is ComplaintStatus.UnderReview or ComplaintStatus.WaitingForCustomer
+            ComplaintStatus.Pending => nextStatus is ComplaintStatus.UnderReview or ComplaintStatus.InProgress
+                or ComplaintStatus.WaitingForCustomer or ComplaintStatus.Resolved or ComplaintStatus.Rejected
+                or ComplaintStatus.Closed,
+            ComplaintStatus.UnderReview => nextStatus is ComplaintStatus.InProgress or ComplaintStatus.WaitingForCustomer
                 or ComplaintStatus.Resolved or ComplaintStatus.Rejected or ComplaintStatus.Closed,
-            ComplaintStatus.UnderReview => nextStatus is ComplaintStatus.WaitingForCustomer or ComplaintStatus.Resolved
-                or ComplaintStatus.Rejected or ComplaintStatus.Closed,
-            ComplaintStatus.WaitingForCustomer => nextStatus is ComplaintStatus.UnderReview or ComplaintStatus.Resolved
-                or ComplaintStatus.Rejected or ComplaintStatus.Closed,
+            ComplaintStatus.InProgress => nextStatus is ComplaintStatus.UnderReview or ComplaintStatus.WaitingForCustomer
+                or ComplaintStatus.Resolved or ComplaintStatus.Rejected or ComplaintStatus.Closed,
+            ComplaintStatus.WaitingForCustomer => nextStatus is ComplaintStatus.UnderReview or ComplaintStatus.InProgress
+                or ComplaintStatus.Resolved or ComplaintStatus.Rejected or ComplaintStatus.Closed,
             ComplaintStatus.Resolved => nextStatus is ComplaintStatus.Closed,
             ComplaintStatus.Rejected => false,
             ComplaintStatus.Closed => false,
@@ -779,8 +890,8 @@ public class ComplaintService : IComplaintService
             ComplaintCategory.FoodQuality => "Food quality / Chất lượng món ăn",
             ComplaintCategory.WrongItem => "Wrong item / Sai món",
             ComplaintCategory.MissingItem => "Missing item / Thiếu món",
-            ComplaintCategory.OrderNotReceived => "Order not received / Không nhận được đơn",
-            ComplaintCategory.BoothService => "Booth service / Dịch vụ gian hàng",
+            ComplaintCategory.DelayedOrder => "Delayed order / Đơn xử lý chậm",
+            ComplaintCategory.BoothBehavior => "Booth behavior / Thái độ / hành vi gian hàng",
             ComplaintCategory.PaymentIssue => "Payment issue / Vấn đề thanh toán",
             ComplaintCategory.PromotionIssue => "Promotion issue / Vấn đề khuyến mãi",
             _ => "Other / Khác"
@@ -791,7 +902,9 @@ public class ComplaintService : IComplaintService
         var response = _mapper.Map<ComplaintResponse>(complaint);
         response.ImageUrls = complaint.ComplaintImages?.Select(i => i.ImageUrl).ToList() ?? [];
         response.EvidenceRequestNote = complaint.CustomerEvidenceRequestNote;
+        response.BoothOwnerResponse = complaint.BoothOwnerResponse;
         response.CanWithdraw = CanWithdraw(complaint.Status);
+        response.CanAddEvidence = CanAddEvidence(complaint.Status);
         response.StatusHistory = (complaint.StatusHistories ?? [])
             .OrderBy(h => h.CreatedAt)
             .ThenBy(h => h.Id)

@@ -19,6 +19,30 @@ public class FoodReviewRepository : GenericRepository<FoodReview>, IFoodReviewRe
     public Task<bool> ExistsByOrderDetailAsync(Guid orderDetailId, CancellationToken cancellationToken = default)
         => _dbSet.AnyAsync(review => review.OrderDetailId == orderDetailId, cancellationToken);
 
+    public Task<List<FoodReview>> GetByOrderIdAsync(Guid orderId, CancellationToken cancellationToken = default)
+        => QueryWithNav()
+            .Where(review => review.OrderId == orderId)
+            .OrderBy(review => review.CreatedAt)
+            .ThenBy(review => review.Id)
+            .ToListAsync(cancellationToken);
+
+    public async Task<Dictionary<Guid, List<FoodReview>>> GetByOrderIdsAsync(IEnumerable<Guid> orderIds, CancellationToken cancellationToken = default)
+    {
+        var ids = orderIds.Distinct().ToList();
+        if (ids.Count == 0)
+            return new Dictionary<Guid, List<FoodReview>>();
+
+        var reviews = await QueryWithNav()
+            .Where(review => ids.Contains(review.OrderId))
+            .OrderBy(review => review.CreatedAt)
+            .ThenBy(review => review.Id)
+            .ToListAsync(cancellationToken);
+
+        return reviews
+            .GroupBy(review => review.OrderId)
+            .ToDictionary(group => group.Key, group => group.ToList());
+    }
+
     public async Task<bool> TrySaveNewFoodReviewAsync(CancellationToken cancellationToken = default)
     {
         try

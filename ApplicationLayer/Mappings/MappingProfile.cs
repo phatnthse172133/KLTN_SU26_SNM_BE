@@ -265,6 +265,7 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.ResolutionAction, o => o.MapFrom(s => s.ResolutionAction == null ? null : s.ResolutionAction.ToString()))
                 .ForMember(d => d.EvidenceRequestNote, o => o.MapFrom(s => s.CustomerEvidenceRequestNote))
                 .ForMember(d => d.CanWithdraw, o => o.Ignore())
+                .ForMember(d => d.CanAddEvidence, o => o.Ignore())
                 .ForMember(d => d.StatusHistory, o => o.Ignore())
                 .ForMember(d => d.ImageUrls, o => o.MapFrom(s => s.ComplaintImages.Select(i => i.ImageUrl)));
 
@@ -279,7 +280,21 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.Booth, o => o.Ignore())
                 .ForMember(d => d.Customer, o => o.Ignore())
                 .ForMember(d => d.Order, o => o.Ignore())
-                .ForMember(d => d.ReviewReply, o => o.Ignore());
+                .ForMember(d => d.ReviewReply, o => o.Ignore())
+                .ForSourceMember(s => s.FoodReviews, o => o.DoNotValidate());
+            CreateMap<UpdateReviewRequest, Review>()
+                .ForMember(d => d.Id, o => o.Ignore())
+                .ForMember(d => d.CustomerId, o => o.Ignore())
+                .ForMember(d => d.BoothId, o => o.Ignore())
+                .ForMember(d => d.OrderId, o => o.Ignore())
+                .ForMember(d => d.IsVisible, o => o.Ignore())
+                .ForMember(d => d.CreatedAt, o => o.Ignore())
+                .ForMember(d => d.UpdatedAt, o => o.Ignore())
+                .ForMember(d => d.Booth, o => o.Ignore())
+                .ForMember(d => d.Customer, o => o.Ignore())
+                .ForMember(d => d.Order, o => o.Ignore())
+                .ForMember(d => d.ReviewReply, o => o.Ignore())
+                .ForSourceMember(s => s.FoodReviews, o => o.DoNotValidate());
             CreateMap<Review, ReviewResponse>()
                 .ForMember(d => d.BoothName, o => o.MapFrom(s => s.Booth != null ? s.Booth.BoothName : null))
                 .ForMember(d => d.CustomerName, o => o.MapFrom(s => s.Customer != null ? s.Customer.FullName : null))

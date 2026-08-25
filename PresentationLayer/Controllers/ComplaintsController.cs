@@ -81,6 +81,14 @@ public class ComplaintsController : ControllerBase
     public async Task<IActionResult> GetByBooth(Guid boothId, [FromQuery] PaginationReq pagination, CancellationToken cancellationToken)
         => Ok(await _service.GetByBoothAsync(CurrentUserId, boothId, pagination, cancellationToken));
 
+    [Authorize(Roles = "BoothOwner")]
+    [HttpPost("{complaintId:guid}/booth-response")]
+    public async Task<IActionResult> AddBoothResponse(Guid complaintId, BoothComplaintResponseRequest request, CancellationToken cancellationToken)
+    {
+        var response = await _service.AddBoothResponseAsync(CurrentUserId, complaintId, request, cancellationToken);
+        return response.Success ? Ok(response) : BadRequest(response);
+    }
+
     [Authorize(Roles = "MarketOwner")]
     [HttpGet("market-owner")]
     public async Task<IActionResult> GetByMarketOwner([FromQuery] MarketOwnerComplaintQueryRequest query, CancellationToken cancellationToken)

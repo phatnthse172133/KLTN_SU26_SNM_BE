@@ -8,6 +8,8 @@ public interface IFoodReviewRepository : IGenericRepository<FoodReview>
     Task<FoodReview?> GetByIdWithNavAsync(Guid foodReviewId, CancellationToken cancellationToken = default);
     Task<bool> ExistsByOrderDetailAsync(Guid orderDetailId, CancellationToken cancellationToken = default);
     Task<bool> TrySaveNewFoodReviewAsync(CancellationToken cancellationToken = default);
+    Task<List<FoodReview>> GetByOrderIdAsync(Guid orderId, CancellationToken cancellationToken = default);
+    Task<Dictionary<Guid, List<FoodReview>>> GetByOrderIdsAsync(IEnumerable<Guid> orderIds, CancellationToken cancellationToken = default);
     Task<PagedResult<FoodReview>> GetPagedVisibleByFoodItemAsync(Guid foodItemId, int page, int pageSize, CancellationToken cancellationToken = default);
     Task<PagedResult<FoodReview>> GetPagedByCustomerAsync(Guid customerId, int page, int pageSize, CancellationToken cancellationToken = default);
     Task RefreshFoodItemAverageRatingAsync(Guid foodItemId, CancellationToken cancellationToken = default);

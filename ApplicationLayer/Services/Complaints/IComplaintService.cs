@@ -11,6 +11,7 @@ public interface IComplaintService
     Task<ApiResponse<ComplaintResponse>> GetMineDetailAsync(Guid customerId, Guid complaintId, CancellationToken cancellationToken = default);
     Task<ApiResponse<ComplaintResponse>> WithdrawAsync(Guid customerId, Guid complaintId, CancellationToken cancellationToken = default);
     Task<ApiResponse<ComplaintResponse>> AddEvidenceAsync(Guid customerId, Guid complaintId, AddComplaintEvidenceRequest request, CancellationToken cancellationToken = default);
+    Task<ApiResponse<ComplaintResponse>> AddBoothResponseAsync(Guid boothOwnerId, Guid complaintId, BoothComplaintResponseRequest request, CancellationToken cancellationToken = default);
     Task<ApiResponse<ComplaintImageUploadResponse>> UploadImageAsync(Stream stream, string fileName, string contentType, long length, CancellationToken cancellationToken = default);
     Task<ApiResponse<PaginationResp<ComplaintResponse>>> GetAllAsync(PaginationReq pagination, DomainLayer.Enums.GeneralEnum.ComplaintStatus? status = null, CancellationToken cancellationToken = default);
     Task<ApiResponse<PaginationResp<ComplaintResponse>>> GetAllFilteredAsync(AdminComplaintQueryRequest query, CancellationToken cancellationToken = default);

@@ -70,12 +70,13 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
                 OrderStatus = order.Status,
                 CreatedAt = order.CreatedAt,
                 UpdatedAt = order.UpdatedAt,
-                Items = order.OrderDetails.OrderBy(detail => detail.CreatedAt)
+                    Items = order.OrderDetails.OrderBy(detail => detail.CreatedAt)
                     .Select(detail => new CustomerOrderItemReadModel
                     {
                         OrderDetailId = detail.Id,
                         FoodItemId = detail.FoodItemId,
                         FoodName = detail.FoodNameSnapshot,
+                        ThumbnailUrl = detail.FoodItem.ThumbnailUrl,
                         Quantity = detail.Quantity,
                         UnitPrice = detail.UnitPrice,
                         LineTotal = detail.TotalPrice

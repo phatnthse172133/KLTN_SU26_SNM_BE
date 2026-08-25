@@ -75,6 +75,8 @@ public class ReviewService : IReviewService
         await _reviews.AddAsync(review);
         if (!await _reviews.TrySaveNewReviewAsync(cancellationToken))
             throw AppException.Conflict("This order has already been reviewed.", "REVIEW_ALREADY_EXISTS");
+
+        await UpsertFoodReviewsForOrderAsync(customerId, request.OrderId, request.FoodReviews, allowCreate: true, cancellationToken);
         await _reviews.RefreshBoothAverageRatingAsync(boothId);
         var booth = await _booths.GetByIdAsync(boothId);
         if (booth is not null)
@@ -95,7 +97,8 @@ public class ReviewService : IReviewService
         }
 
         var created = await _reviews.GetWithReplyByIdAsync(review.Id) ?? review;
-        return ApiResponse<CustomerReviewHistoryResponse>.SuccessResponse(ToCustomerResponse(created), "Review created successfully.");
+        return ApiResponse<CustomerReviewHistoryResponse>.SuccessResponse(
+            await ToCustomerResponseAsync(created, cancellationToken), "Review created successfully.");
     }
 
     public async Task<ApiResponse<CustomerReviewHistoryResponse>> UpdateAsync(Guid customerId, Guid reviewId, UpdateReviewRequest request, CancellationToken cancellationToken = default)
@@ -114,10 +117,12 @@ public class ReviewService : IReviewService
         review.UpdatedAt = DateTime.UtcNow;
         _reviews.Update(review);
         await _reviews.SaveChangesAsync();
+        await UpsertFoodReviewsForOrderAsync(customerId, review.OrderId, request.FoodReviews, allowCreate: true, cancellationToken);
         await _reviews.RefreshBoothAverageRatingAsync(review.BoothId);
 
         var updated = await _reviews.GetWithReplyByIdAsync(review.Id);
-        return ApiResponse<CustomerReviewHistoryResponse>.SuccessResponse(ToCustomerResponse(updated!), "Review updated successfully.");
+        return ApiResponse<CustomerReviewHistoryResponse>.SuccessResponse(
+            await ToCustomerResponseAsync(updated!, cancellationToken), "Review updated successfully.");
     }
 
     public async Task<ApiResponse<CustomerReviewHistoryResponse>> HideAsync(Guid customerId, Guid reviewId, CancellationToken cancellationToken = default)
@@ -127,7 +132,8 @@ public class ReviewService : IReviewService
             throw AppException.NotFound("Review was not found.", "REVIEW_NOT_FOUND");
 
         if (!review.IsVisible)
-            return ApiResponse<CustomerReviewHistoryResponse>.SuccessResponse(ToCustomerResponse(review), "Review is already hidden.");
+            return ApiResponse<CustomerReviewHistoryResponse>.SuccessResponse(
+                await ToCustomerResponseAsync(review, cancellationToken), "Review is already hidden.");
 
         review.IsVisible = false;
         review.UpdatedAt = DateTime.UtcNow;
@@ -136,7 +142,8 @@ public class ReviewService : IReviewService
         await _reviews.RefreshBoothAverageRatingAsync(review.BoothId);
 
         var updated = await _reviews.GetWithReplyByIdAsync(review.Id);
-        return ApiResponse<CustomerReviewHistoryResponse>.SuccessResponse(ToCustomerResponse(updated!), "Review hidden successfully.");
+        return ApiResponse<CustomerReviewHistoryResponse>.SuccessResponse(
+            await ToCustomerResponseAsync(updated!, cancellationToken), "Review hidden successfully.");
     }
 
     public async Task<ApiResponse<PaginationResp<CustomerReviewResponse>>> GetByBoothAsync(Guid boothId, PaginationReq pagination, CancellationToken cancellationToken = default)
@@ -153,6 +160,7 @@ public class ReviewService : IReviewService
             Rating = review.Rating,
             Content = review.Content,
             ImageUrl = review.ImageUrl,
+            IsVerifiedPurchase = review.OrderId != Guid.Empty,
             CreatedAt = review.CreatedAt,
             Reply = review.ReviewReply is null ? null : new CustomerReviewReplyResponse
             {
@@ -168,9 +176,14 @@ public class ReviewService : IReviewService
     {
         var page = await _reviews.GetPagedByCustomerWithReplyAsync(
             customerId, pagination.Page, pagination.PageSize, cancellationToken);
+        var foodByOrder = await _foodReviews.GetByOrderIdsAsync(page.Items.Select(review => review.OrderId), cancellationToken);
+        var items = page.Items.Select(review =>
+        {
+            foodByOrder.TryGetValue(review.OrderId, out var foodReviews);
+            return ToCustomerResponse(review, foodReviews);
+        }).ToList();
         return ApiResponse<PaginationResp<CustomerReviewHistoryResponse>>.SuccessResponse(
-            PaginationResp<CustomerReviewHistoryResponse>.Create(
-                page.Items.Select(ToCustomerResponse).ToList(), page.TotalCount, pagination));
+            PaginationResp<CustomerReviewHistoryResponse>.Create(items, page.TotalCount, pagination));
     }
 
     public async Task<ApiResponse<PaginationResp<ReviewResponse>>> GetAllAsync(PaginationReq pagination, CancellationToken cancellationToken = default)
@@ -281,6 +294,9 @@ public class ReviewService : IReviewService
 
         if (orderDetail.Order.Status != OrderStatus.Completed)
             throw AppException.BadRequest("Only completed orders can be reviewed.");
+
+        if (!await _reviews.ExistsByOrderAsync(orderDetail.OrderId))
+            throw AppException.BadRequest("Create the booth review for this order before rating foods.", "ORDER_REVIEW_REQUIRED");
 
         if (await _foodReviews.ExistsByOrderDetailAsync(request.OrderDetailId, cancellationToken))
             throw AppException.Conflict("This order item has already been reviewed.", "FOOD_REVIEW_ALREADY_EXISTS");
@@ -422,33 +438,6 @@ public class ReviewService : IReviewService
     private ReviewResponse ToResponse(Review review)
         => _mapper.Map<ReviewResponse>(review);
 
-    private CustomerReviewHistoryResponse ToCustomerResponse(Review review)
-    {
-        var edit = GetEditState(review.CreatedAt, review.IsVisible);
-        return new()
-        {
-            ReviewId = review.Id,
-            OrderId = review.OrderId,
-            OrderCode = review.Order?.OrderCode.ToString(),
-            BoothId = review.BoothId,
-            BoothName = review.Booth?.BoothName,
-            Rating = review.Rating,
-            Content = review.Content,
-            ImageUrl = review.ImageUrl,
-            IsVisible = review.IsVisible,
-            HasReply = review.ReviewReply is not null,
-            Reply = review.ReviewReply is null ? null : new CustomerReviewReplyResponse
-            {
-                Content = review.ReviewReply.Content,
-                CreatedAt = review.ReviewReply.CreatedAt
-            },
-            CanEdit = edit.CanEdit,
-            EditDeadline = edit.EditDeadline,
-            CreatedAt = review.CreatedAt,
-            UpdatedAt = review.UpdatedAt
-        };
-    }
-
     private CustomerFoodReviewHistoryResponse ToFoodCustomerResponse(FoodReview review)
     {
         var edit = GetEditState(review.CreatedAt, review.IsVisible);
@@ -489,9 +478,125 @@ public class ReviewService : IReviewService
             Content = review.Content,
             ImageUrl = review.ImageUrl,
             IsVisible = review.IsVisible,
+            IsVerifiedPurchase = review.OrderId != Guid.Empty,
             CreatedAt = review.CreatedAt,
             UpdatedAt = review.UpdatedAt
         };
+
+    private async Task<CustomerReviewHistoryResponse> ToCustomerResponseAsync(Review review, CancellationToken cancellationToken)
+    {
+        var foodReviews = await _foodReviews.GetByOrderIdAsync(review.OrderId, cancellationToken);
+        return ToCustomerResponse(review, foodReviews);
+    }
+
+    private CustomerReviewHistoryResponse ToCustomerResponse(Review review, IReadOnlyCollection<FoodReview>? foodReviews = null)
+    {
+        var edit = GetEditState(review.CreatedAt, review.IsVisible);
+        return new()
+        {
+            ReviewId = review.Id,
+            OrderId = review.OrderId,
+            OrderCode = review.Order?.OrderCode.ToString(),
+            BoothId = review.BoothId,
+            BoothName = review.Booth?.BoothName,
+            Rating = review.Rating,
+            Content = review.Content,
+            ImageUrl = review.ImageUrl,
+            IsVisible = review.IsVisible,
+            HasReply = review.ReviewReply is not null,
+            Reply = review.ReviewReply is null ? null : new CustomerReviewReplyResponse
+            {
+                Content = review.ReviewReply.Content,
+                CreatedAt = review.ReviewReply.CreatedAt
+            },
+            CanEdit = edit.CanEdit,
+            EditDeadline = edit.EditDeadline,
+            FoodReviews = (foodReviews ?? []).Select(ToFoodCustomerResponse).ToList(),
+            CreatedAt = review.CreatedAt,
+            UpdatedAt = review.UpdatedAt
+        };
+    }
+
+    private async Task UpsertFoodReviewsForOrderAsync(
+        Guid customerId,
+        Guid orderId,
+        List<CreateFoodReviewRequest>? requests,
+        bool allowCreate,
+        CancellationToken cancellationToken)
+    {
+        if (requests is null || requests.Count == 0)
+            return;
+
+        var distinct = requests
+            .GroupBy(item => item.OrderDetailId)
+            .Select(group => group.Last())
+            .ToList();
+
+        var existingByDetail = (await _foodReviews.GetByOrderIdAsync(orderId, cancellationToken))
+            .ToDictionary(review => review.OrderDetailId);
+        var touchedFoodItemIds = new HashSet<Guid>();
+
+        foreach (var item in distinct)
+        {
+            ValidateRating(item.Rating);
+            NormalizeAndValidateFoodContent(item.Content, item.ImageUrl);
+            var content = TextHelper.NormalizeOptionalText(item.Content);
+            var imageUrl = TextHelper.NormalizeOptionalText(item.ImageUrl);
+
+            var orderDetail = await _orders.GetCustomerOrderDetailLineAsync(customerId, item.OrderDetailId, cancellationToken)
+                ?? throw AppException.BadRequest("Food review must target an item from this order.", "FOOD_REVIEW_ORDER_DETAIL_INVALID");
+
+            if (orderDetail.OrderId != orderId)
+                throw AppException.BadRequest("Food review must target an item from this order.", "FOOD_REVIEW_ORDER_DETAIL_INVALID");
+
+            if (orderDetail.Order.Status != OrderStatus.Completed)
+                throw AppException.BadRequest("Only completed orders can be reviewed.");
+
+            if (existingByDetail.TryGetValue(item.OrderDetailId, out var existing))
+            {
+                if (existing.CustomerId != customerId)
+                    throw AppException.Forbidden("You do not have permission to edit this food review.");
+
+                EnsureWithinEditWindow(existing.CreatedAt);
+                existing.Rating = item.Rating;
+                existing.Content = content;
+                existing.ImageUrl = imageUrl;
+                existing.UpdatedAt = DateTime.UtcNow;
+                _foodReviews.Update(existing);
+                await _foodReviews.SaveChangesAsync();
+                touchedFoodItemIds.Add(existing.FoodItemId);
+                continue;
+            }
+
+            if (!allowCreate)
+                continue;
+
+            var now = DateTime.UtcNow;
+            var foodReview = new FoodReview
+            {
+                Id = Guid.NewGuid(),
+                OrderDetailId = orderDetail.Id,
+                OrderId = orderDetail.OrderId,
+                FoodItemId = orderDetail.FoodItemId,
+                CustomerId = customerId,
+                BoothId = orderDetail.FoodItem.BoothId,
+                Rating = item.Rating,
+                Content = content,
+                ImageUrl = imageUrl,
+                IsVisible = true,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+            await _foodReviews.AddAsync(foodReview);
+            if (!await _foodReviews.TrySaveNewFoodReviewAsync(cancellationToken))
+                throw AppException.Conflict("This order item has already been reviewed.", "FOOD_REVIEW_ALREADY_EXISTS");
+            existingByDetail[foodReview.OrderDetailId] = foodReview;
+            touchedFoodItemIds.Add(foodReview.FoodItemId);
+        }
+
+        foreach (var foodItemId in touchedFoodItemIds)
+            await _foodReviews.RefreshFoodItemAverageRatingAsync(foodItemId, cancellationToken);
+    }
 
     private static void ValidateRating(short rating)
     {

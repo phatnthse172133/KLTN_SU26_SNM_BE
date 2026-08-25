@@ -16,6 +16,9 @@ public class CreateReviewRequest
 
     [StringLength(500)]
     public string? ImageUrl { get; set; }
+
+    /// <summary>Optional per-item food ratings for foods purchased in this order. Empty/null is allowed.</summary>
+    public List<CreateFoodReviewRequest>? FoodReviews { get; set; }
 }
 
 public class UpdateReviewRequest
@@ -28,6 +31,9 @@ public class UpdateReviewRequest
 
     [StringLength(500)]
     public string? ImageUrl { get; set; }
+
+    /// <summary>Optional food-review upserts keyed by OrderDetailId for this review's order.</summary>
+    public List<CreateFoodReviewRequest>? FoodReviews { get; set; }
 }
 
 public class CreateFoodReviewRequest

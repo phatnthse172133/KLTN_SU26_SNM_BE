@@ -34,6 +34,15 @@ public class AddComplaintEvidenceRequest
     public List<ComplaintImageRequest> Images { get; set; } = new();
 }
 
+public class BoothComplaintResponseRequest
+{
+    [Required, StringLength(2000, MinimumLength = 10)]
+    public string Explanation { get; set; } = string.Empty;
+
+    [MaxLength(5)]
+    public List<ComplaintImageRequest> Images { get; set; } = new();
+}
+
 public class UpdateComplaintStatusRequest
 {
     public ComplaintStatus Status { get; set; }

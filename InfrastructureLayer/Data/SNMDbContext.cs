@@ -457,7 +457,7 @@ namespace InfrastructureLayer.Data
                 entity.HasIndex(e => new { e.CustomerId, e.CreatedAt }, "idx_complaint_customer_created").IsDescending(false, true);
                 entity.HasIndex(e => new { e.CustomerId, e.OrderId, e.BoothId }, "uq_complaint_active_customer_order_booth")
                     .IsUnique()
-                    .HasFilter("\"Status\" IN ('Pending', 'UnderReview', 'WaitingForCustomer')");
+                    .HasFilter("\"Status\" IN ('Pending', 'UnderReview', 'WaitingForCustomer', 'InProgress')");
 
                 entity.ToTable(tb => tb.HasComment("Khiếu nại của khách hàng về đơn hàng/gian hàng"));
 
@@ -467,13 +467,15 @@ namespace InfrastructureLayer.Data
                     .HasConversion<string>()
                     .HasMaxLength(30)
                     .HasDefaultValueSql("'Pending'::character varying")
-                    .HasComment("Pending | UnderReview | WaitingForCustomer | Resolved | Rejected | Closed | Withdrawn");
+                    .HasComment("Pending | UnderReview | InProgress | WaitingForCustomer | Resolved | Rejected | Closed | Withdrawn");
                 entity.Property(e => e.Category)
                     .HasConversion<string>()
                     .HasMaxLength(30)
                     .HasDefaultValue(ComplaintCategory.Other)
                     .HasSentinel((ComplaintCategory)(-1));
                 entity.Property(e => e.CustomerEvidenceRequestNote).HasMaxLength(2000);
+                entity.Property(e => e.BoothOwnerResponse).HasMaxLength(2000);
+                entity.Property(e => e.AdminResponse).HasMaxLength(2000);
                 entity.Property(e => e.ResolutionAction)
                     .HasConversion<string>()
                     .HasMaxLength(30)

@@ -27,7 +27,8 @@ public class ComplaintRepository : GenericRepository<Complaint>, IComplaintRepos
             complaint.OrderId == orderId &&
             (complaint.Status == ComplaintStatus.Pending
              || complaint.Status == ComplaintStatus.UnderReview
-             || complaint.Status == ComplaintStatus.WaitingForCustomer));
+             || complaint.Status == ComplaintStatus.WaitingForCustomer
+             || complaint.Status == ComplaintStatus.InProgress));
 
     public Task<Guid?> GetActiveComplaintIdAsync(Guid customerId, Guid boothId, Guid orderId, CancellationToken cancellationToken = default)
         => _dbSet.AsNoTracking()
@@ -37,7 +38,8 @@ public class ComplaintRepository : GenericRepository<Complaint>, IComplaintRepos
                 complaint.OrderId == orderId &&
                 (complaint.Status == ComplaintStatus.Pending
                  || complaint.Status == ComplaintStatus.UnderReview
-                 || complaint.Status == ComplaintStatus.WaitingForCustomer))
+                 || complaint.Status == ComplaintStatus.WaitingForCustomer
+                 || complaint.Status == ComplaintStatus.InProgress))
             .Select(complaint => (Guid?)complaint.Id)
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -55,7 +57,8 @@ public class ComplaintRepository : GenericRepository<Complaint>, IComplaintRepos
                 ids.Contains(complaint.OrderId) &&
                 (complaint.Status == ComplaintStatus.Pending
                  || complaint.Status == ComplaintStatus.UnderReview
-                 || complaint.Status == ComplaintStatus.WaitingForCustomer))
+                 || complaint.Status == ComplaintStatus.WaitingForCustomer
+                 || complaint.Status == ComplaintStatus.InProgress))
             .Select(complaint => new { complaint.OrderId, complaint.Id })
             .ToListAsync(cancellationToken);
 

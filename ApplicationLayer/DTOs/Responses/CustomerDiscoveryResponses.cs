@@ -106,6 +106,8 @@ public sealed class CustomerReviewResponse
     public short Rating { get; set; }
     public string? Content { get; set; }
     public string? ImageUrl { get; set; }
+    /// <summary>Derived from Review→Order ownership; not a stored fake flag.</summary>
+    public bool IsVerifiedPurchase { get; set; }
     public CustomerReviewReplyResponse? Reply { get; set; }
     public DateTime CreatedAt { get; set; }
 }

@@ -8,7 +8,8 @@ using System.Threading.Tasks;
 namespace PresentationLayer.Controllers
 {
     [ApiController]
-    [Route("api/Webhook/payos")]
+    // Keep one canonical, public callback URL for PayOS and the reverse proxy.
+    [Route("api/webhook/payos")]
     public class PayOSWebhookController : ControllerBase
     {
         private readonly IPayOSWebhookDispatcher _dispatcher;
@@ -19,6 +20,10 @@ namespace PresentationLayer.Controllers
             _dispatcher = dispatcher;
             _logger = logger;
         }
+
+        [HttpGet]
+        [AllowAnonymous]
+        public IActionResult Health() => Ok(new { status = "ok", service = "payos-webhook" });
 
         [HttpPost]
         [AllowAnonymous]
@@ -36,7 +41,7 @@ namespace PresentationLayer.Controllers
                     _logger.LogWarning("PayOS webhook: order code not found or unknown prefix.");
                     // A link can be created immediately before its local transaction
                     // commits. Non-2xx asks PayOS to retry instead of losing that event.
-                    return NotFound(new { error = -1, message = "Matching payment is not available yet." });
+                    return Ok(new { error = 0, message = "Webhook received; no matching local payment was found." });
 
                 case WebhookDispatchResult.NotSuccessful:
                     _logger.LogInformation("PayOS webhook: payment not successful.");

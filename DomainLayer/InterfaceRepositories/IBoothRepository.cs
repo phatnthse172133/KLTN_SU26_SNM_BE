@@ -33,6 +33,8 @@ public interface IBoothRepository : IGenericRepository<Booth>
 
     Task<Booth?> GetByOwnerIdAsync(
         Guid ownerId, CancellationToken cancellationToken = default);
+    Task<Booth?> GetByOwnerIdForUpdateAsync(
+        Guid ownerId, CancellationToken cancellationToken = default);
     Task<Booth?> GetByOwnerIdWithAdminDetailsAsync(
         Guid ownerId, CancellationToken cancellationToken = default);
     Task<bool> ExistsByOwnerIdAsync(

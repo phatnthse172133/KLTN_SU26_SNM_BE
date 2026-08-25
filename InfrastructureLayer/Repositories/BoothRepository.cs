@@ -123,6 +123,12 @@ public class BoothRepository : GenericRepository<Booth>, IBoothRepository
             .FirstOrDefaultAsync(
                 booth => booth.BoothOwnerId == ownerId, cancellationToken);
 
+    public Task<Booth?> GetByOwnerIdForUpdateAsync(
+        Guid ownerId, CancellationToken cancellationToken = default)
+        => _dbSet
+            .FirstOrDefaultAsync(
+                booth => booth.BoothOwnerId == ownerId, cancellationToken);
+
     public Task<Booth?> GetByOwnerIdWithAdminDetailsAsync(
         Guid ownerId,
         CancellationToken cancellationToken = default)

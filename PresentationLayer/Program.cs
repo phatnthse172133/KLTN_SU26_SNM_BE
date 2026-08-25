@@ -24,11 +24,14 @@ using PresentationLayer.Middlewares;
 using PresentationLayer.Filters;
 using InfrastructureLayer.Health;
 using System.Security.Claims;
+using System.Net;
 using System.Text;
 using System.Threading.RateLimiting;
 using static DomainLayer.Enums.GeneralEnum;
 
 // Load .env before CreateBuilder so env vars participate in the first configuration pass.
+// Cloudinary requires TLS 1.2+. Pin the legacy SDK transport for Windows Server deployments.
+ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
 var envPath = Path.Combine(Directory.GetCurrentDirectory(), ".env");
 if (!File.Exists(envPath))
     envPath = Path.Combine(AppContext.BaseDirectory, ".env");
@@ -375,6 +378,7 @@ builder.Services.AddSignalR();
 builder.Services.AddScoped<IRealtimeNotificationPublisher, SignalRNotificationPublisher>();
 builder.Services.AddScoped<ApplicationLayer.Services.Chats.IRealtimeChatPublisher, SignalRChatPublisher>();
 builder.Services.AddScoped<ApplicationLayer.Services.Realtime.IRealtimeEventPublisher, SignalREventPublisher>();
+builder.Services.AddHttpClient("CloudinaryBridge");
 builder.Services.AddScoped<IFileStorageService>(serviceProvider =>
 {
     var configuration = serviceProvider.GetRequiredService<IConfiguration>();

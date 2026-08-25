@@ -77,7 +77,10 @@ public class BoothService : IBoothService
         UpdateMyBoothRequest request,
         CancellationToken cancellationToken = default)
     {
-        var booth = await _booths.GetByOwnerIdAsync(ownerId, cancellationToken);
+        // Use a tracked Booth without navigation properties for writes. The read
+        // query includes NightMarket, and attaching that detached graph after
+        // loading the market separately causes EF Core identity-tracking conflicts.
+        var booth = await _booths.GetByOwnerIdForUpdateAsync(ownerId, cancellationToken);
         if (booth is null)
             throw AppException.NotFound("You do not have a booth.");
 
@@ -91,7 +94,9 @@ public class BoothService : IBoothService
         booth.PhoneNumber = TextHelper.NormalizePhoneNumber(request.PhoneNumber);
         booth.UpdatedAt = DateTime.UtcNow;
 
-        _booths.Update(booth); await _booths.SaveChangesAsync();
+        // The repository returns a tracked entity; updating the whole graph is
+        // intentionally avoided so NightMarket/Zone are never re-attached.
+        await _booths.SaveChangesAsync();
 
         if (!string.IsNullOrWhiteSpace(oldThumbnailUrl) && oldThumbnailUrl != booth.ThumbnailUrl)
         {
@@ -99,9 +104,12 @@ public class BoothService : IBoothService
         }
 
         var updatedResponse = _mapper.Map<BoothResponse>(booth);
+        updatedResponse.NightMarketName = market?.Name;
+        updatedResponse.ZoneName = booth.ZoneId.HasValue
+            ? (await _zones.GetByIdAsync(booth.ZoneId.Value))?.ZoneName
+            : null;
         updatedResponse.MarketOpeningHours = market?.OpeningHours;
-        updatedResponse.MarketClosingHours = market?.ClosingHours;
-        return ApiResponse<BoothResponse>.SuccessResponse(updatedResponse, "Booth updated successfully.");
+        updatedResponse.MarketClosingHours = market?.ClosingHours;        return ApiResponse<BoothResponse>.SuccessResponse(updatedResponse, "Booth updated successfully.");
     }
 
     public async Task<ApiResponse<BoothResponse>> TogglePauseMyBoothAsync(Guid ownerId, CancellationToken cancellationToken = default)

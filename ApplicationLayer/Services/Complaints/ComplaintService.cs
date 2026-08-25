@@ -923,14 +923,14 @@ public class ComplaintService : IComplaintService
     private static string GetCategoryTitle(ComplaintCategory category)
         => category switch
         {
-            ComplaintCategory.FoodQuality => "Food quality / Chất lượng món ăn",
-            ComplaintCategory.WrongItem => "Wrong item / Sai món",
-            ComplaintCategory.MissingItem => "Missing item / Thiếu món",
-            ComplaintCategory.DelayedOrder => "Delayed order / Đơn xử lý chậm",
-            ComplaintCategory.BoothBehavior => "Booth behavior / Thái độ / hành vi gian hàng",
-            ComplaintCategory.PaymentIssue => "Payment issue / Vấn đề thanh toán",
-            ComplaintCategory.PromotionIssue => "Promotion issue / Vấn đề khuyến mãi",
-            _ => "Other / Khác"
+            ComplaintCategory.FoodQuality => "Food quality",
+            ComplaintCategory.WrongItem => "Wrong item",
+            ComplaintCategory.MissingItem => "Missing item",
+            ComplaintCategory.DelayedOrder => "Delayed order",
+            ComplaintCategory.BoothBehavior => "Booth behavior",
+            ComplaintCategory.PaymentIssue => "Payment issue",
+            ComplaintCategory.PromotionIssue => "Promotion issue",
+            _ => "Other"
         };
 
     private ComplaintResponse ToResponse(Complaint complaint)

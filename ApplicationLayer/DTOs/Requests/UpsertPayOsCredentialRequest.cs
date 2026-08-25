@@ -9,7 +9,7 @@ namespace ApplicationLayer.DTOs.Requests
 {
     public class UpsertPayOsCredentialRequest
     {
-        [Required(ErrorMessage = "BoothId không được để trống.")]
+        [Required(ErrorMessage = "BoothId is required.")]
         public Guid BoothId { get; set; }
 
         //[Required(ErrorMessage = "ClientId không được để trống.")]

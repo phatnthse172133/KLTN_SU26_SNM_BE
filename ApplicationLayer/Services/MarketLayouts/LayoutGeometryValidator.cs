@@ -79,7 +79,7 @@ public static class LayoutGeometryValidator
         var errors = new List<string>();
         if (x < -0.01 || y < -0.01 || x + block.Width > (double)layout.Width + 0.01 || y + block.Height > (double)layout.Height + 0.01)
         {
-            errors.Add($"Zone '{block.Name}' phải nằm hoàn toàn bên trong boundary khu chợ.");
+            errors.Add($"Zone '{block.Name}' must remain completely inside the market boundary.");
         }
 
         var blockRight = x + block.Width;
@@ -94,7 +94,7 @@ public static class LayoutGeometryValidator
                            || blockBottom <= other.Y || y >= otherBottom);
             if (overlaps)
             {
-                errors.Add($"Zone '{block.Name}' bị chồng lấn với Zone '{other.Name}'.");
+                errors.Add($"Zone '{block.Name}' overlaps zone '{other.Name}'.");
                 break;
             }
         }

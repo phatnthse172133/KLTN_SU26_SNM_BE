@@ -729,12 +729,12 @@ public class LayoutGeneratorService : ILayoutGeneratorService
             if (blockX + blockW > boundaryWidth + 0.01)
             {
                 var exceedW = (blockX + blockW - boundaryWidth) / (physical ? request.PixelsPerMeter : 1);
-                errors.Add($"Zone '{zone.ZoneName}' vượt boundary khu chợ {exceedW:0.##}m theo chiều rộng.");
+                errors.Add($"Zone '{zone.ZoneName}' exceeds the market boundary by {exceedW:0.##} m in width.");
             }
             if (blockY + blockH > boundaryHeight + 0.01)
             {
                 var exceedH = (blockY + blockH - boundaryHeight) / (physical ? request.PixelsPerMeter : 1);
-                errors.Add($"Zone '{zone.ZoneName}' vượt boundary khu chợ {exceedH:0.##}m theo chiều dài.");
+                errors.Add($"Zone '{zone.ZoneName}' exceeds the market boundary by {exceedH:0.##} m in length.");
             }
 
             blocks.Add(new LayoutBlock
@@ -776,7 +776,7 @@ public class LayoutGeneratorService : ILayoutGeneratorService
                                || b1.Y + b1.Height <= b2.Y || b2.Y + b2.Height <= b1.Y);
                 if (overlaps)
                 {
-                    errors.Add($"Zone '{b1.Name}' và Zone '{b2.Name}' đang bị chồng lấn (overlap) nhau.");
+                    errors.Add($"Zone '{b1.Name}' overlaps zone '{b2.Name}'.");
                 }
             }
         }
@@ -788,9 +788,9 @@ public class LayoutGeneratorService : ILayoutGeneratorService
             var exceedW = Math.Max(0, (requiredWidth - request.MarketWidthMeters.Value * request.PixelsPerMeter) / request.PixelsPerMeter);
             var exceedH = Math.Max(0, (requiredHeight - request.MarketLengthMeters!.Value * request.PixelsPerMeter) / request.PixelsPerMeter);
             if (exceedW > 0)
-                errors.Add($"Layout vượt boundary khu chợ {exceedW:0.##}m theo chiều rộng.");
+                errors.Add($"The layout exceeds the market boundary by {exceedW:0.##} m in width.");
             if (exceedH > 0)
-                errors.Add($"Layout vượt boundary khu chợ {exceedH:0.##}m theo chiều dài.");
+                errors.Add($"The layout exceeds the market boundary by {exceedH:0.##} m in length.");
         }
 
         return (blocks, errors, warnings);

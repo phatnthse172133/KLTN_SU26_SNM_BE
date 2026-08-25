@@ -24,14 +24,14 @@ internal static class EmailVerificationHtml
 
     public static IActionResult Page(bool success, int statusCode)
     {
-        var title = success ? "Email đã được xác minh" : "Không thể xác minh email";
+        var title = success ? "Email verified" : "Email verification failed";
         var body = success
-            ? "Tài khoản Smart Night Market của bạn đã được kích hoạt. Hãy quay lại ứng dụng và đăng nhập."
-            : "Liên kết xác minh không hợp lệ hoặc đã hết hạn. Hãy mở ứng dụng và gửi lại email xác minh.";
+            ? "Your Smart Night Market account has been activated. Return to the app and sign in."
+            : "This verification link is invalid or has expired. Open the app and request a new verification email.";
 
         var html = $$"""
             <!doctype html>
-            <html lang="vi">
+            <html lang="en">
             <head>
                 <meta charset="utf-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1">

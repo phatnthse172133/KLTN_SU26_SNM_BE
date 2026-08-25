@@ -478,7 +478,7 @@ public class MarketLayoutService : IMarketLayoutService
 
         var market = await EnsureNightMarketExistsAsync(layout.NightMarketId, cancellationToken);
         if (!market.BoundaryWidthMeters.HasValue || !market.BoundaryHeightMeters.HasValue || market.BoundaryWidthMeters.Value <= 0 || market.BoundaryHeightMeters.Value <= 0)
-            throw AppException.BadRequest("Khu chợ chưa được thiết lập kích thước (chiều rộng và chiều dài). Vui lòng cập nhật kích thước khu chợ trước.", "MARKET_BOUNDARY_MISSING");
+            throw AppException.BadRequest("The market boundary dimensions have not been configured. Set the market width and length before continuing.", "MARKET_BOUNDARY_MISSING");
 
         request.MarketWidthMeters = market.BoundaryWidthMeters.Value;
         request.MarketLengthMeters = market.BoundaryHeightMeters.Value;
@@ -585,7 +585,7 @@ public class MarketLayoutService : IMarketLayoutService
 
         var market = await EnsureNightMarketExistsAsync(layout.NightMarketId, cancellationToken);
         if (!market.BoundaryWidthMeters.HasValue || !market.BoundaryHeightMeters.HasValue || market.BoundaryWidthMeters.Value <= 0 || market.BoundaryHeightMeters.Value <= 0)
-            throw AppException.BadRequest("Khu chợ chưa được thiết lập kích thước (chiều rộng và chiều dài). Vui lòng cập nhật kích thước khu chợ trước.", "MARKET_BOUNDARY_MISSING");
+            throw AppException.BadRequest("The market boundary dimensions have not been configured. Set the market width and length before continuing.", "MARKET_BOUNDARY_MISSING");
 
         request.MarketWidthMeters = market.BoundaryWidthMeters.Value;
         request.MarketLengthMeters = market.BoundaryHeightMeters.Value;

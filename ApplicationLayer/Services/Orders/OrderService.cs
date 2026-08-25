@@ -929,17 +929,17 @@ namespace ApplicationLayer.Services.Orders
         {
             // 1. Láº¥y Ä‘Æ¡n hÃ ng lÃªn kÃ¨m thÃ´ng tin giao dá»‹ch Ä‘á»ƒ kiá»ƒm tra dÃ²ng tiá»n
             var order = await _orderRepo.GetOrderByCodeAsync(dto.OrderCode);
-            if (order == null) return ApiResponse<bool>.Failure("KhÃ´ng tÃ¬m tháº¥y Ä‘Æ¡n hÃ ng!");
+            if (order == null) return ApiResponse<bool>.Failure("Order was not found.");
 
             // 2. Báº¢O Máº¬T: Kiá»ƒm tra xem Ä‘Æ¡n nÃ y cÃ³ thuá»™c vá» quáº§y cá»§a Ã´ng nÃ y khÃ´ng
             if (order.BoothOwnerId != boothOwnerId)
             {
-                return ApiResponse<bool>.Failure("BÃ¡ÂºÂ¡n khÃƒÂ´ng cÃƒÂ³ quyÃ¡Â»Ân chÃ¡Â»â€°nh sÃ¡Â»Â­a Ã„â€˜Ã†Â¡n hÃƒÂ ng cÃ¡Â»Â§a quÃ¡ÂºÂ§y khÃƒÂ¡c!");
+                return ApiResponse<bool>.Failure("You cannot update an order that belongs to another booth.");
             }
 
             if (order.Status == OrderStatus.Cancelled || order.Status == OrderStatus.Completed)
             {
-                return ApiResponse<bool>.Failure($"ÄÆ¡n hÃ ng Ä‘Ã£ Ä‘Ã³ng (Tráº¡ng thÃ¡i hiá»‡n táº¡i: {order.Status}). KhÃ´ng thá»ƒ chá»‰nh sá»­a thÃªm.");
+                return ApiResponse<bool>.Failure($"This order is already closed (current status: {order.Status}) and cannot be updated.");
             }
 
             //Xá»­ lÃ½ dá»±a trÃªn loáº¡i thanh toÃ¡n: Náº¿u lÃ  tiá»n máº·t thÃ¬ khi quáº§y báº¥m "HoÃ n thÃ nh" thÃ¬ tá»± Ä‘á»™ng cáº­p nháº­t Payment sang Paid, náº¿u lÃ  PayOS thÃ¬ pháº£i chá» Webhook tá»« PayOS vá» má»›i Ä‘Æ°á»£c phÃ©p hoÃ n thÃ nh
@@ -963,7 +963,7 @@ namespace ApplicationLayer.Services.Orders
 
             if (payment == null)
             {
-                return ApiResponse<bool>.Failure("KhÃ´ng tÃ¬m tháº¥y thÃ´ng tin thanh toÃ¡n cá»§a Ä‘Æ¡n hÃ ng!");
+                return ApiResponse<bool>.Failure("Payment information for this order was not found.");
             }
 
             if (dto.NewStatus == OrderStatus.Preparing)
@@ -976,7 +976,7 @@ namespace ApplicationLayer.Services.Orders
                     // Náº¿u khÃ¡ch chÆ°a thanh toÃ¡n Ä‘á»“ng nÃ o -> CHáº¶N TUYá»†T Äá»I khÃ´ng cho lÃ m mÃ³n
                     else if (payment.Status != PaymentStatus.Paid)
                     {
-                        return ApiResponse<bool>.Failure("KhÃ¡ch Ä‘áº·t online chÆ°a thanh toÃ¡n thÃ nh cÃ´ng. KhÃ´ng thá»ƒ duyá»‡t lÃ m mÃ³n!");
+                        return ApiResponse<bool>.Failure("The online order has not been paid successfully and cannot be accepted for preparation.");
                     }
                 }
             }
@@ -988,7 +988,7 @@ namespace ApplicationLayer.Services.Orders
                 bool isPaid = order.Payments.Any(p => p.Status == PaymentStatus.Paid);
                 if (!isPaid)
                 {
-                    return ApiResponse<bool>.Failure("KhÃ´ng thá»ƒ hoÃ n thÃ nh Ä‘Æ¡n hÃ ng chÆ°a Ä‘Æ°á»£c thanh toÃ¡n thÃ nh cÃ´ng!");
+                    return ApiResponse<bool>.Failure("An order cannot be completed until payment is successful.");
                 }
             }
 
@@ -1021,16 +1021,16 @@ namespace ApplicationLayer.Services.Orders
                 switch (order.Status)
                 {
                     case OrderStatus.Preparing:
-                        title = "ÄÆ¡n hÃ ng Ä‘ang Ä‘Æ°á»£c cháº¿ biáº¿n!";
-                        content = $"Quáº§y Ä‘Ã£ tiáº¿p nháº­n vÃ  Ä‘ang lÃ m mÃ³n cho Ä‘Æ¡n # {order.OrderCode} cá»§a báº¡n.";
+                        title = "Your order is being prepared.";
+                        content = $"The booth has accepted order #{order.OrderCode} and is preparing your items.";
                         break;
                     case OrderStatus.ReadyForPickup:
-                        title = "MÃ³n Äƒn Ä‘Ã£ sáºµn sÃ ng! ðŸ¥³";
-                        content = $"ÄÆ¡n hÃ ng # {order.OrderCode} Ä‘Ã£ lÃ m xong. Báº¡n hÃ£y Ä‘áº¿n quáº§y Ä‘á»ƒ nháº­n mÃ³n nhÃ©!";
+                        title = "Your order is ready for pickup.";
+                        content = $"Order #{order.OrderCode} is ready. Please collect it at the booth.";
                         break;
                     case OrderStatus.Completed:
-                        title = "Cáº£m Æ¡n báº¡n Ä‘Ã£ mua hÃ ng! â¤ï¸";
-                        content = $"ÄÆ¡n hÃ ng # {order.OrderCode} Ä‘Ã£ Ä‘Æ°á»£c giao thÃ nh cÃ´ng. ChÃºc báº¡n ngon miá»‡ng!";
+                        title = "Thank you for your order.";
+                        content = $"Order #{order.OrderCode} has been completed. Enjoy your meal!";
                         break;
                 }
 
@@ -1054,7 +1054,7 @@ namespace ApplicationLayer.Services.Orders
                 }
             }
 
-            return ApiResponse<bool>.SuccessResponse(true, "Cáº­p nháº­t tráº¡ng thÃ¡i Ä‘Æ¡n hÃ ng thÃ nh cÃ´ng!");
+            return ApiResponse<bool>.SuccessResponse(true, "Order status updated successfully.");
         }
 
         //KhÃ¡ch chá»§ Ä‘á»™ng há»§y Ä‘Æ¡n hÃ ng trÆ°á»›c khi quáº§y nháº­n Ä‘Æ¡n (Chá»‰ Ã¡p dá»¥ng cho khÃ¡ch Ä‘áº·t qua App, khÃ´ng Ã¡p dá»¥ng cho khÃ¡ch vÃ£ng lai)
@@ -1072,7 +1072,7 @@ namespace ApplicationLayer.Services.Orders
                 await _orderRepo.RollbackTransactionAsync();
                 return ApiResponse<bool>.Failure("Order does not exist.", "ORDER_NOT_FOUND", false);
             }
-            if (order == null) return ApiResponse<bool>.Failure("Ã„ÂÃ†Â¡n hÃƒÂ ng khÃƒÂ´ng tÃ¡Â»â€œn tÃ¡ÂºÂ¡i", data: false);
+            if (order == null) return ApiResponse<bool>.Failure("Order was not found.", data: false);
 
             // ChÃ¡Â»â€° cho phÃƒÂ©p hÃ¡Â»Â§y khi Ã„â€˜Ã†Â¡n Ã„â€˜ang Ã¡Â»Å¸ trÃ¡ÂºÂ¡ng thÃƒÂ¡i chÃ¡Â»Â thanh toÃƒÂ¡n (Pending)
 
@@ -1081,7 +1081,7 @@ namespace ApplicationLayer.Services.Orders
             if (order.Status != OrderStatus.Placed)
             {
                 await _orderRepo.RollbackTransactionAsync();
-                return ApiResponse<bool>.Failure($"Ã„ÂÃ†Â¡n hÃƒÂ ng khÃƒÂ´ng thÃ¡Â»Æ’ hÃ¡Â»Â§y Ã¡Â»Å¸ trÃ¡ÂºÂ¡ng thÃƒÂ¡i {order.Status}", data: false);
+                return ApiResponse<bool>.Failure($"This order cannot be cancelled while its status is {order.Status}.", data: false);
             }
 
             var payment = order.Payments
@@ -1091,7 +1091,7 @@ namespace ApplicationLayer.Services.Orders
             if (payment == null)
             {
                 await _orderRepo.RollbackTransactionAsync();
-                return ApiResponse<bool>.Failure("KhÃ´ng tÃ¬m tháº¥y báº£n ghi thanh toÃ¡n Pending Ä‘á»ƒ há»§y Ä‘Æ¡n", data: false);
+                return ApiResponse<bool>.Failure("No pending payment record was found for this order.", data: false);
             }
 
             try
@@ -1144,13 +1144,13 @@ namespace ApplicationLayer.Services.Orders
                     }
                 }
 
-                return ApiResponse<bool>.SuccessResponse(true, "Há»§y Ä‘Æ¡n hÃ ng thÃ nh cÃ´ng");
+                return ApiResponse<bool>.SuccessResponse(true, "Order cancelled successfully.");
             }
             catch (Exception ex)
             {
                 await _orderRepo.RollbackTransactionAsync();
                 _logger.LogError(ex, $"Lá»—i xáº£y ra khi cáº­p nháº­t DB há»§y Ä‘Æ¡n hÃ ng #{orderCode}");
-                return ApiResponse<bool>.Failure($"Lá»—i há»‡ thá»‘ng khi cáº­p nháº­t tráº¡ng thÃ¡i há»§y Ä‘Æ¡n. Lá»—i: {ex.Message}", data: false);
+                return ApiResponse<bool>.Failure("The order could not be cancelled due to a system error. Please try again.", data: false);
             }
         }
 
@@ -1648,13 +1648,13 @@ namespace ApplicationLayer.Services.Orders
         public async Task<ApiResponse<bool>> ActiveCheckPaymentStatus(long orderCode)
         {
             var order = await _orderRepo.GetOrderByCodeAsync(orderCode);
-            if (order == null) return ApiResponse<bool>.Failure("ÄÆ¡n hÃ ng khÃ´ng tá»“n táº¡i", data: false);
+            if (order == null) return ApiResponse<bool>.Failure("Order was not found.", data: false);
 
             // Náº¿u Ä‘Æ¡n Ä‘Ã£ xá»­ lÃ½ thÃ nh cÃ´ng trÆ°á»›c Ä‘Ã³ rá»“i thÃ¬ thÃ´i
             if (order.Status != OrderStatus.Placed && 
                 order.Status != OrderStatus.Underpaid && 
                 order.Status != OrderStatus.Cancelled) //order cÃ³ status tá»« preparing, ready, completed thÃ¬ coi nhÆ° Ä‘Ã£ thanh toÃ¡n thÃ nh cÃ´ng rá»“i
-                return ApiResponse<bool>.SuccessResponse(true, "ÄÆ¡n Ä‘Ã£ Ä‘Æ°á»£c thanh toÃ¡n vÃ  Ä‘ang xá»­ lÃ½.");
+                return ApiResponse<bool>.SuccessResponse(true, "The order has already been paid and is being processed.");
 
             try
             {
@@ -1736,12 +1736,12 @@ namespace ApplicationLayer.Services.Orders
 
                     // 4. Chuáº©n bá»‹ ná»™i dung thÃ´ng bÃ¡o SignalR
                     string notificationTitle = previousStatus == OrderStatus.Cancelled
-                        ? "ÄÆ¡n Ä‘Ã£ há»§y Ä‘Æ°á»£c thanh toÃ¡n trá»…!"
-                        : "ÄÆ¡n hÃ ng Ä‘Ã£ thanh toÃ¡n!";
+                        ? "Late payment received"
+                        : "Payment received";
 
                     string notificationContent = previousStatus == OrderStatus.Cancelled
-                        ? $"ÄÆ¡n hÃ ng #{order.OrderCode} (tá»«ng bá»‹ há»§y do quÃ¡ háº¡n) vá»«a Ä‘Æ°á»£c Ä‘á»‘i soÃ¡t thanh toÃ¡n thÃ nh cÃ´ng qua PayOS. Sá»‘ tiá»n: {order.FinalAmount:N0}Ä‘"
-                        : $"ÄÆ¡n hÃ ng #{order.OrderCode} Ä‘Ã£ Ä‘Æ°á»£c thanh toÃ¡n thÃ nh cÃ´ng qua PayOS. Sá»‘ tiá»n: {order.FinalAmount:N0}Ä‘";
+                        ? $"Payment for cancelled order #{order.OrderCode} was confirmed by PayOS. Amount: {order.FinalAmount:N0} VND."
+                        : $"Payment for order #{order.OrderCode} was confirmed by PayOS. Amount: {order.FinalAmount:N0} VND.";
 
                     await PublishPersistedNotificationAsync(
                         order.BoothOwnerId,
@@ -1750,15 +1750,15 @@ namespace ApplicationLayer.Services.Orders
                         notificationContent,
                         order.Id);
 
-                    return ApiResponse<bool>.SuccessResponse(true, "Báº¡n Ä‘Ã£ thanh toÃ¡n thÃ nh cÃ´ng! Chá»§ quÃ¡n Ä‘ang chuáº©n bá»‹ Ä‘Æ¡n hÃ ng.");
+                    return ApiResponse<bool>.SuccessResponse(true, "Payment received successfully. The booth is preparing your order.");
                 }
 
-                return ApiResponse<bool>.Failure("Thanh toÃ¡n chÆ°a Ä‘Æ°á»£c ghi nháº­n trÃªn há»‡ thá»‘ng PayOS", data: false);
+                return ApiResponse<bool>.Failure("Payment has not yet been confirmed by PayOS.", data: false);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Lá»—i xáº£y ra khi Ä‘á»‘i soÃ¡t Ä‘Æ¡n hÃ ng #{orderCode}");
-                return ApiResponse<bool>.Failure("Lá»—i khi Ä‘á»‘i soÃ¡t vá»›i PayOS. Vui lÃ²ng thá»­ láº¡i sau.", "PAYOS_RECONCILIATION_FAILED", data: false);
+                return ApiResponse<bool>.Failure("Unable to reconcile the payment with PayOS. Please try again later.", "PAYOS_RECONCILIATION_FAILED", data: false);
             }
         }
 

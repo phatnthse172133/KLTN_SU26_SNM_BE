@@ -1,11 +1,13 @@
 using InfrastructureLayer.Data;
 using ApplicationLayer.Services.Notifications;
+using ApplicationLayer.Services.Realtime;
 using DomainLayer.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using static DomainLayer.Enums.GeneralEnum;
@@ -58,9 +60,21 @@ public class SubscriptionExpiryWorker : BackgroundService
         using var scope = _serviceProvider.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<SNMDbContext>();
         var notifications = scope.ServiceProvider.GetRequiredService<INotificationService>();
+        var realtime = scope.ServiceProvider.GetService<IRealtimeEventPublisher>();
         var now = DateTime.UtcNow;
 
         await SendExpiryWarningsAsync(context, notifications, now, stoppingToken);
+
+        var expiringBooth = await context.BoothSubscriptions
+            .Include(bs => bs.Booth)
+            .Where(bs => bs.Status == SubscriptionStatus.Active && bs.EndDate < now)
+            .Select(bs => new { bs.Id, OwnerId = bs.Booth != null ? bs.Booth.BoothOwnerId : (Guid?)null })
+            .ToListAsync(stoppingToken);
+
+        var expiringMarket = await context.MarketSubscriptions
+            .Where(ms => ms.Status == SubscriptionStatus.Active && ms.EndDate < now)
+            .Select(ms => new { ms.Id, OwnerId = (Guid?)ms.MarketOwnerId })
+            .ToListAsync(stoppingToken);
 
         var expiredBooth = await context.BoothSubscriptions
             .Where(bs => bs.Status == SubscriptionStatus.Active && bs.EndDate < now)
@@ -73,6 +87,43 @@ public class SubscriptionExpiryWorker : BackgroundService
             .ExecuteUpdateAsync(s => s
                 .SetProperty(ms => ms.Status, SubscriptionStatus.Expired)
                 .SetProperty(ms => ms.UpdatedAt, now), stoppingToken);
+
+        if (realtime is not null)
+        {
+            foreach (var item in expiringBooth.Where(x => x.OwnerId.HasValue))
+            {
+                try
+                {
+                    await realtime.PublishAsync(new RealtimeEvent
+                    {
+                        EventType = "SubscriptionChanged",
+                        RecipientId = item.OwnerId,
+                        Payload = new { subscriptionId = item.Id, ownerType = "Booth", status = "Expired", activated = false }
+                    }, stoppingToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to publish SubscriptionChanged for expired booth subscription {Id}", item.Id);
+                }
+            }
+
+            foreach (var item in expiringMarket.Where(x => x.OwnerId.HasValue))
+            {
+                try
+                {
+                    await realtime.PublishAsync(new RealtimeEvent
+                    {
+                        EventType = "SubscriptionChanged",
+                        RecipientId = item.OwnerId,
+                        Payload = new { subscriptionId = item.Id, ownerType = "Market", status = "Expired", activated = false }
+                    }, stoppingToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to publish SubscriptionChanged for expired market subscription {Id}", item.Id);
+                }
+            }
+        }
 
         if (expiredBooth > 0 || expiredMarket > 0)
         {

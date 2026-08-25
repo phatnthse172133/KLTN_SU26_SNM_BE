@@ -4,6 +4,7 @@ using ApplicationLayer.DTOs.Requests;
 using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
+using ApplicationLayer.Services.Realtime;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceCore.Email;
 using DomainLayer.InterfaceCore.External;
@@ -25,6 +26,7 @@ public class AuthService : IAuthService
     private readonly IUserDeviceTokenRepository _deviceTokens;
     private readonly IMapper _mapper;
     private readonly ILogger<AuthService> _logger;
+    private readonly IRealtimeEventPublisher? _realtimeEvents;
 
     public AuthService(
         IGenericRepository<User> userRepository,
@@ -35,7 +37,8 @@ public class AuthService : IAuthService
         IGoogleTokenValidator googleTokenValidator,
         IUserDeviceTokenRepository deviceTokens,
         IMapper mapper,
-        ILogger<AuthService> logger)
+        ILogger<AuthService> logger,
+        IRealtimeEventPublisher? realtimeEvents = null)
     {
         _userRepository = userRepository;
         _roleRepository = roleRepository;
@@ -46,6 +49,7 @@ public class AuthService : IAuthService
         _deviceTokens = deviceTokens;
         _mapper = mapper;
         _logger = logger;
+        _realtimeEvents = realtimeEvents;
     }
 
     public Task<ApiResponse<object>> RegisterCustomerAsync(
@@ -523,12 +527,35 @@ public class AuthService : IAuthService
                 "New password must be different from the current password.",
                 AuthErrorCodes.PasswordReuseNotAllowed);
 
+        var wasMustChangePassword = user.MustChangePassword;
         user.PasswordHash = _passwordHasher.HashPassword(request.NewPassword);
         user.MustChangePassword = false;
         ClearRefreshToken(user);
         user.UpdatedAt = DateTime.UtcNow;
         _userRepository.Update(user);
         await _userRepository.SaveChangesAsync();
+
+        if (wasMustChangePassword && user.CreatedByMarketOwnerId.HasValue && _realtimeEvents is not null)
+        {
+            try
+            {
+                await _realtimeEvents.PublishAsync(new RealtimeEvent
+                {
+                    EventType = "InvitationChanged",
+                    RecipientId = user.CreatedByMarketOwnerId.Value,
+                    Payload = new
+                    {
+                        boothOwnerId = user.Id,
+                        invitationStatus = "Accepted",
+                        marketOwnerId = user.CreatedByMarketOwnerId.Value
+                    }
+                }, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to publish InvitationChanged after password change for user {UserId}.", user.Id);
+            }
+        }
 
         return ApiResponse<object>.SuccessResponse(
             new { },

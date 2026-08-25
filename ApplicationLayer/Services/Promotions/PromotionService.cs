@@ -9,6 +9,7 @@ using DomainLayer.InterfaceRepository;
 using static DomainLayer.Enums.GeneralEnum;
 using DomainLayer.Common;
 using ApplicationLayer.Services.Subscriptions;
+using ApplicationLayer.Services.Realtime;
 
 namespace ApplicationLayer.Services.Promotions;
 
@@ -24,8 +25,20 @@ public class PromotionService : IPromotionService
     private readonly IPromotionValidationService _validation;
     private readonly IMapper _mapper;
     private readonly ISubscriptionEntitlementService _entitlements;
+    private readonly IRealtimeEventPublisher? _realtimeEvents;
 
-    public PromotionService(IBoothRepository booths, IPromotionRepository promotions, IPromotionUsageRepository usages, ICartRepository carts, ICartItemRepository cartItems, IFoodItemRepository foodItems, IFoodCategoryRepository categories, IPromotionValidationService validation, IMapper mapper, ISubscriptionEntitlementService entitlements)
+    public PromotionService(
+        IBoothRepository booths,
+        IPromotionRepository promotions,
+        IPromotionUsageRepository usages,
+        ICartRepository carts,
+        ICartItemRepository cartItems,
+        IFoodItemRepository foodItems,
+        IFoodCategoryRepository categories,
+        IPromotionValidationService validation,
+        IMapper mapper,
+        ISubscriptionEntitlementService entitlements,
+        IRealtimeEventPublisher? realtimeEvents = null)
     {
         _booths = booths;
         _promotions = promotions;
@@ -37,6 +50,7 @@ public class PromotionService : IPromotionService
         _validation = validation;
         _mapper = mapper;
         _entitlements = entitlements;
+        _realtimeEvents = realtimeEvents;
     }
 
     public async Task<ApiResponse<PaginationResp<PromotionResponse>>> GetByBoothAsync(Guid ownerId, Guid boothId, PromotionListRequest request, CancellationToken cancellationToken = default)
@@ -159,6 +173,7 @@ public class PromotionService : IPromotionService
         await _promotions.SaveChangesAsync();
 
         promotion = await GetPromotionAsync(promotion.Id, cancellationToken);
+        await PublishPromotionChangedAsync(promotion, cancellationToken);
         return ApiResponse<PromotionResponse>.SuccessResponse(
             MapPromotion(promotion),
             "Promotion updated successfully.");
@@ -188,6 +203,7 @@ public class PromotionService : IPromotionService
         promotion.UpdatedAt = now;
         await _promotions.SaveChangesAsync();
 
+        await PublishPromotionChangedAsync(promotion, cancellationToken);
         return ApiResponse<PromotionResponse>.SuccessResponse(
             MapPromotion(promotion),
             "Promotion activated successfully.");
@@ -205,6 +221,7 @@ public class PromotionService : IPromotionService
         promotion.UpdatedAt = DateTime.UtcNow;
         await _promotions.SaveChangesAsync();
 
+        await PublishPromotionChangedAsync(promotion, cancellationToken);
         return ApiResponse<PromotionResponse>.SuccessResponse(
             MapPromotion(promotion),
             "Promotion deactivated successfully.");
@@ -217,6 +234,7 @@ public class PromotionService : IPromotionService
         promotion.UpdatedAt = DateTime.UtcNow;
         await _promotions.SaveChangesAsync();
 
+        await PublishPromotionChangedAsync(promotion, cancellationToken);
         return ApiResponse<PromotionResponse>.SuccessResponse(
             MapPromotion(promotion),
             "Promotion banned successfully.");
@@ -236,6 +254,7 @@ public class PromotionService : IPromotionService
         _promotions.Delete(promotion);
         await _promotions.SaveChangesAsync();
 
+        await PublishPromotionChangedAsync(promotion, cancellationToken, deleted: true);
         return ApiResponse<object>.SuccessResponse(
             new { promotion.Id },
             "Promotion deleted successfully.");
@@ -627,6 +646,33 @@ public class PromotionService : IPromotionService
             throw AppException.BadRequest(
                 "Promotion filter date range is invalid.",
                 "INVALID_DATE_RANGE");
+        }
+    }
+
+    private async Task PublishPromotionChangedAsync(
+        Promotion promotion,
+        CancellationToken cancellationToken,
+        bool deleted = false)
+    {
+        if (_realtimeEvents is null) return;
+        try
+        {
+            await _realtimeEvents.PublishAsync(new RealtimeEvent
+            {
+                EventType = "PromotionChanged",
+                GroupName = RealtimeGroups.Booth(promotion.BoothId),
+                Payload = new
+                {
+                    promotionId = promotion.Id,
+                    boothId = promotion.BoothId,
+                    status = deleted ? "Deleted" : promotion.Status.ToString(),
+                    deleted
+                }
+            }, cancellationToken);
+        }
+        catch
+        {
+            // Non-fatal scoped fan-out to booth listeners only.
         }
     }
 

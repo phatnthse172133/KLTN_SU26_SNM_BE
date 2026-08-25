@@ -4,6 +4,7 @@ using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
 using ApplicationLayer.Mappings;
 using ApplicationLayer.Services.Notifications;
+using ApplicationLayer.Services.Realtime;
 using ApplicationLayer.Services.Storage;
 using AutoMapper;
 using DomainLayer.Entities;
@@ -40,6 +41,7 @@ public class ComplaintService : IComplaintService
     private readonly IMapper _mapper;
     private readonly INotificationService _notifications;
     private readonly IFileStorageService _fileStorage;
+    private readonly IRealtimeEventPublisher? _realtimeEvents;
 
     public ComplaintService(
         IComplaintRepository complaints,
@@ -50,7 +52,8 @@ public class ComplaintService : IComplaintService
         IModerationRepository moderation,
         IMapper mapper,
         INotificationService notifications,
-        IFileStorageService fileStorage)
+        IFileStorageService fileStorage,
+        IRealtimeEventPublisher? realtimeEvents = null)
     {
         _complaints = complaints;
         _booths = booths;
@@ -61,6 +64,7 @@ public class ComplaintService : IComplaintService
         _mapper = mapper;
         _notifications = notifications;
         _fileStorage = fileStorage;
+        _realtimeEvents = realtimeEvents;
     }
 
     public async Task<ApiResponse<ComplaintResponse>> CreateAsync(Guid customerId, CreateComplaintRequest request, CancellationToken cancellationToken = default)
@@ -180,6 +184,7 @@ public class ComplaintService : IComplaintService
         }
 
         var created = await _complaints.GetWithImagesByIdAsync(complaint.Id) ?? complaint;
+        await PublishComplaintChangedAsync(created, cancellationToken);
         return ApiResponse<ComplaintResponse>.SuccessResponse(ToResponse(created), "Complaint submitted successfully.");
     }
 
@@ -416,6 +421,9 @@ public class ComplaintService : IComplaintService
             "Complaint",
             complaintId,
             JsonSerializer.Serialize(new { complaintId, status = nextStatus.ToString() })), cancellationToken);
+
+        if (updated is not null)
+            await PublishComplaintChangedAsync(updated, cancellationToken);
 
         return ApiResponse<ComplaintResponse>.SuccessResponse(ToResponse(updated!), "Booth response submitted successfully.");
     }
@@ -768,6 +776,34 @@ public class ComplaintService : IComplaintService
             }
         }
 
+        if (updated is not null)
+            await PublishComplaintChangedAsync(updated, cancellationToken);
+
+        if (request.Status == ComplaintStatus.Resolved
+            && request.ResolutionAction == ComplaintResolutionAction.SuspendBooth
+            && _realtimeEvents is not null)
+        {
+            try
+            {
+                await _realtimeEvents.PublishAsync(new RealtimeEvent
+                {
+                    EventType = "BoothStatusChanged",
+                    GroupName = RealtimeGroups.Booth(complaint.BoothId),
+                    Role = "Customer",
+                    Payload = new
+                    {
+                        boothId = complaint.BoothId,
+                        status = BoothStatus.Banned.ToString(),
+                        nightMarketId = (await _booths.GetByIdAsync(complaint.BoothId))?.NightMarketId
+                    }
+                }, cancellationToken);
+            }
+            catch
+            {
+                // Non-fatal realtime fan-out
+            }
+        }
+
         return ApiResponse<ComplaintResponse>.SuccessResponse(ToResponse(updated!), "Complaint status updated successfully.");
     }
 
@@ -943,6 +979,67 @@ public class ComplaintService : IComplaintService
         catch (Exception exception)
         {
             Console.Error.WriteLine($"Complaint was persisted but role notification delivery failed: {exception.Message}");
+        }
+    }
+
+    private async Task PublishComplaintChangedAsync(Complaint complaint, CancellationToken cancellationToken)
+    {
+        if (_realtimeEvents is null) return;
+
+        var booth = await _booths.GetByIdAsync(complaint.BoothId);
+        var market = booth is null
+            ? null
+            : await _nightMarkets.GetActiveByIdAsync(booth.NightMarketId, cancellationToken);
+        var payload = new
+        {
+            complaintId = complaint.Id,
+            boothId = complaint.BoothId,
+            nightMarketId = booth?.NightMarketId,
+            status = complaint.Status.ToString(),
+            customerId = complaint.CustomerId,
+            boothOwnerId = booth?.BoothOwnerId,
+            marketOwnerId = market?.MarketOwnerId
+        };
+
+        try
+        {
+            await _realtimeEvents.PublishAsync(new RealtimeEvent
+            {
+                EventType = "ComplaintChanged",
+                RecipientId = complaint.CustomerId,
+                Payload = payload
+            }, cancellationToken);
+
+            if (booth is not null)
+            {
+                await _realtimeEvents.PublishAsync(new RealtimeEvent
+                {
+                    EventType = "ComplaintChanged",
+                    RecipientId = booth.BoothOwnerId,
+                    Payload = payload
+                }, cancellationToken);
+            }
+
+            if (market?.MarketOwnerId is Guid marketOwnerId)
+            {
+                await _realtimeEvents.PublishAsync(new RealtimeEvent
+                {
+                    EventType = "ComplaintChanged",
+                    RecipientId = marketOwnerId,
+                    Payload = payload
+                }, cancellationToken);
+            }
+
+            await _realtimeEvents.PublishAsync(new RealtimeEvent
+            {
+                EventType = "ComplaintChanged",
+                Role = "Admin",
+                Payload = payload
+            }, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            Console.Error.WriteLine($"ComplaintChanged realtime publish failed: {exception.Message}");
         }
     }
 }

@@ -34,6 +34,7 @@ public class ChatServiceTests
             _realtime.Object,
             _events.Object,
             _notifications.Object,
+            Mock.Of<ApplicationLayer.Services.Storage.IFileStorageService>(),
             Mock.Of<ILogger<ChatService>>());
     }
 
@@ -380,6 +381,230 @@ public class ChatServiceTests
             It.IsAny<CancellationToken>()), Times.Once);
         _events.Verify(publisher => publisher.PublishAsync(
             It.Is<RealtimeEvent>(evt => evt.EventType == "MessageCreated"),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SendAttachment_FromCustomer_PublishesExactlyOneMessageCreatedToBoothOwner()
+    {
+        var customerId = Guid.NewGuid();
+        var ownerId = Guid.NewGuid();
+        var conversationId = Guid.NewGuid();
+        var booth = new Booth { Id = Guid.NewGuid(), BoothOwnerId = ownerId };
+        var conversation = Conversation(customerId, ownerId, booth, conversationId);
+        Message? persisted = null;
+        var storage = new Mock<ApplicationLayer.Services.Storage.IFileStorageService>();
+        storage.Setup(service => service.SaveImageAsync(
+                "chat",
+                It.IsAny<Stream>(),
+                It.IsAny<string>(),
+                "image/jpeg",
+                It.IsAny<long>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync("/uploads/images/chat/demo.jpg");
+
+        var service = new ChatService(
+            _conversations.Object,
+            _messages.Object,
+            _booths.Object,
+            _mapper.Object,
+            _realtime.Object,
+            _events.Object,
+            _notifications.Object,
+            storage.Object,
+            Mock.Of<ILogger<ChatService>>());
+
+        _conversations.Setup(repository => repository.GetOwnedWithUsersAsync(
+                conversationId,
+                customerId,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(conversation);
+        _booths.Setup(repository => repository.CustomerVisibleExistsAsync(
+                booth.Id,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        _messages.Setup(repository => repository.AddAsync(It.IsAny<Message>()))
+            .Callback<Message>(message => persisted = message)
+            .Returns(Task.CompletedTask);
+        _messages.Setup(repository => repository.SaveChangesAsync()).ReturnsAsync(1);
+        _messages.Setup(repository => repository.GetOwnedAsync(
+                It.IsAny<Guid>(),
+                customerId,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => persisted);
+        _mapper.Setup(mapper => mapper.Map<MessageResponse>(It.IsAny<Message>()))
+            .Returns((Message message) => new MessageResponse
+            {
+                Id = message.Id,
+                ConversationId = message.ConversationId,
+                SenderId = message.SenderId,
+                SenderName = "Customer",
+                Type = message.Type,
+                Content = message.Content,
+                AttachmentUrl = message.AttachmentUrl,
+                AttachmentName = message.AttachmentName,
+                AttachmentMimeType = message.AttachmentMimeType,
+                AttachmentSize = message.AttachmentSize,
+                CreatedAt = message.CreatedAt
+            });
+
+        await using var stream = new MemoryStream(new byte[] { 0xFF, 0xD8, 0xFF, 0x00 });
+        var result = await service.SendAttachmentMessageAsync(
+            customerId,
+            conversationId,
+            stream,
+            "photo.jpg",
+            "image/jpeg",
+            stream.Length,
+            "caption",
+            null);
+
+        Assert.True(result.Success);
+        Assert.Equal(MessageType.Image, persisted!.Type);
+        Assert.Equal("/uploads/images/chat/demo.jpg", persisted.AttachmentUrl);
+        Assert.Equal(conversation.LastMessageId, persisted.Id);
+        _realtime.Verify(publisher => publisher.PublishMessageCreatedAsync(
+            conversationId,
+            ownerId,
+            It.IsAny<MessageResponse>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        _realtime.Verify(publisher => publisher.PublishMessageCreatedAsync(
+            conversationId,
+            customerId,
+            It.IsAny<MessageResponse>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SendAttachment_ForeignConversation_IsRejected()
+    {
+        _conversations.Setup(repository => repository.GetOwnedWithUsersAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<Guid>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Conversation?)null);
+
+        await using var stream = new MemoryStream(new byte[] { 0x25, 0x50, 0x44, 0x46 });
+        var exception = await Assert.ThrowsAsync<AppException>(() =>
+            _service.SendAttachmentMessageAsync(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                stream,
+                "doc.pdf",
+                "application/pdf",
+                stream.Length,
+                null,
+                null));
+
+        Assert.Equal("CHAT_CONVERSATION_NOT_FOUND", exception.ErrorCode);
+    }
+
+    [Fact]
+    public async Task SendAttachment_UnsupportedMime_IsRejectedBeforeStorage()
+    {
+        var storage = new Mock<ApplicationLayer.Services.Storage.IFileStorageService>();
+        var service = new ChatService(
+            _conversations.Object,
+            _messages.Object,
+            _booths.Object,
+            _mapper.Object,
+            _realtime.Object,
+            _events.Object,
+            _notifications.Object,
+            storage.Object,
+            Mock.Of<ILogger<ChatService>>());
+
+        await using var stream = new MemoryStream(new byte[] { 1, 2, 3 });
+        var exception = await Assert.ThrowsAsync<AppException>(() =>
+            service.SendAttachmentMessageAsync(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                stream,
+                "malware.exe",
+                "application/x-msdownload",
+                stream.Length,
+                null,
+                null));
+
+        Assert.Equal("CHAT_ATTACHMENT_TYPE_NOT_ALLOWED", exception.ErrorCode);
+        storage.Verify(s => s.SaveImageAsync(
+            It.IsAny<string>(),
+            It.IsAny<Stream>(),
+            It.IsAny<string>(),
+            It.IsAny<string>(),
+            It.IsAny<long>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        storage.Verify(s => s.SaveDocumentAsync(
+            It.IsAny<string>(),
+            It.IsAny<Stream>(),
+            It.IsAny<string>(),
+            It.IsAny<string>(),
+            It.IsAny<long>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SendAttachment_DbFailure_CleansUpUploadedFile()
+    {
+        var customerId = Guid.NewGuid();
+        var ownerId = Guid.NewGuid();
+        var conversationId = Guid.NewGuid();
+        var booth = new Booth { Id = Guid.NewGuid(), BoothOwnerId = ownerId };
+        var conversation = Conversation(customerId, ownerId, booth, conversationId);
+        var storage = new Mock<ApplicationLayer.Services.Storage.IFileStorageService>();
+        storage.Setup(service => service.SaveDocumentAsync(
+                "chat",
+                It.IsAny<Stream>(),
+                It.IsAny<string>(),
+                "application/pdf",
+                It.IsAny<long>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync("/uploads/images/chat/doc.pdf");
+
+        var service = new ChatService(
+            _conversations.Object,
+            _messages.Object,
+            _booths.Object,
+            _mapper.Object,
+            _realtime.Object,
+            _events.Object,
+            _notifications.Object,
+            storage.Object,
+            Mock.Of<ILogger<ChatService>>());
+
+        _conversations.Setup(repository => repository.GetOwnedWithUsersAsync(
+                conversationId,
+                customerId,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(conversation);
+        _booths.Setup(repository => repository.CustomerVisibleExistsAsync(
+                booth.Id,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        _messages.Setup(repository => repository.AddAsync(It.IsAny<Message>()))
+            .Returns(Task.CompletedTask);
+        _messages.Setup(repository => repository.SaveChangesAsync())
+            .ThrowsAsync(new InvalidOperationException("db down"));
+
+        await using var stream = new MemoryStream(new byte[] { 0x25, 0x50, 0x44, 0x46, 0x2D });
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.SendAttachmentMessageAsync(
+                customerId,
+                conversationId,
+                stream,
+                "invoice.pdf",
+                "application/pdf",
+                stream.Length,
+                null,
+                null));
+
+        storage.Verify(s => s.DeleteImageIfManagedAsync(
+            "/uploads/images/chat/doc.pdf",
+            It.IsAny<CancellationToken>()), Times.Once);
+        _realtime.Verify(publisher => publisher.PublishMessageCreatedAsync(
+            It.IsAny<Guid>(),
+            It.IsAny<Guid>(),
+            It.IsAny<MessageResponse>(),
             It.IsAny<CancellationToken>()), Times.Never);
     }
 

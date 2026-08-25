@@ -74,6 +74,33 @@ public class ChatsController : ControllerBase
             request,
             cancellationToken));
 
+    [HttpPost("{conversationId:guid}/messages/attachment")]
+    [EnableRateLimiting("ChatSendPolicy")]
+    [RequestSizeLimit(11 * 1024 * 1024)]
+    [RequestFormLimits(MultipartBodyLengthLimit = 11 * 1024 * 1024)]
+    public async Task<IActionResult> SendAttachmentMessage(
+        Guid conversationId,
+        IFormFile file,
+        [FromForm] string? content,
+        [FromForm] Guid? clientMessageId,
+        CancellationToken cancellationToken)
+    {
+        if (file is null || file.Length == 0)
+            return BadRequest(new { success = false, message = "Attachment file is required.", errorCode = "CHAT_ATTACHMENT_REQUIRED" });
+
+        await using var stream = file.OpenReadStream();
+        return Ok(await _service.SendAttachmentMessageAsync(
+            CurrentUserId,
+            conversationId,
+            stream,
+            file.FileName,
+            file.ContentType ?? string.Empty,
+            file.Length,
+            content,
+            clientMessageId,
+            cancellationToken));
+    }
+
     [HttpPatch("{conversationId:guid}/read")]
     public async Task<IActionResult> MarkRead(
         Guid conversationId,

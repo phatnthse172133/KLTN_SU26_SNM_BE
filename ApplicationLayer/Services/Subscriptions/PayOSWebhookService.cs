@@ -229,16 +229,23 @@ namespace ApplicationLayer.Services.Subscriptions
             if (!userId.HasValue) return;
             try
             {
+                var payload = new { subscriptionId, ownerType, status = "Active", activated = true };
                 await _eventPublisher.PublishAsync(new RealtimeEvent
                 {
                     EventType = "SubscriptionActivated",
                     RecipientId = userId.Value,
-                    Payload = new { subscriptionId, ownerType, activated = true }
+                    Payload = payload
+                });
+                await _eventPublisher.PublishAsync(new RealtimeEvent
+                {
+                    EventType = "SubscriptionChanged",
+                    RecipientId = userId.Value,
+                    Payload = payload
                 });
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to publish SubscriptionActivated event for subscription {Id}", subscriptionId);
+                _logger.LogWarning(ex, "Failed to publish SubscriptionActivated/Changed event for subscription {Id}", subscriptionId);
             }
         }
 

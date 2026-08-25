@@ -5,6 +5,7 @@ using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
 using ApplicationLayer.Mappings;
+using ApplicationLayer.Services.Realtime;
 using ApplicationLayer.Services.Subscriptions;
 using ApplicationLayer.Services.CustomerDiscovery;
 using DomainLayer.Common;
@@ -28,6 +29,7 @@ public class NightMarketService : INightMarketService
     private readonly ApplicationLayer.Services.Storage.IFileStorageService _fileStorage;
     private readonly INightMarketImageRepository _marketImages;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IRealtimeEventPublisher? _realtimeEvents;
 
     public NightMarketService(
         INightMarketRepository markets,
@@ -40,7 +42,8 @@ public class NightMarketService : INightMarketService
         IOrderRepository orders,
         ApplicationLayer.Services.Storage.IFileStorageService fileStorage,
         INightMarketImageRepository marketImages,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        IRealtimeEventPublisher? realtimeEvents = null)
     {
         _markets = markets;
         _mapper = mapper;
@@ -53,6 +56,7 @@ public class NightMarketService : INightMarketService
         _fileStorage = fileStorage;
         _marketImages = marketImages;
         _unitOfWork = unitOfWork;
+        _realtimeEvents = realtimeEvents;
     }
 
     public async Task<ApiResponse<PaginationResp<NightMarketResponse>>> GetAllAsync(
@@ -515,6 +519,30 @@ public class NightMarketService : INightMarketService
 
         _markets.Update(market);
         await _markets.SaveChangesAsync();
+
+        if (_realtimeEvents is not null)
+        {
+            try
+            {
+                await _realtimeEvents.PublishAsync(new RealtimeEvent
+                {
+                    EventType = "MarketStatusChanged",
+                    GroupName = RealtimeGroups.Market(id),
+                    // Customers are not in market:{id}; role fan-out keeps discovery lists fresh.
+                    Role = "Customer",
+                    Payload = new
+                    {
+                        nightMarketId = id,
+                        status = request.Status.ToString(),
+                        moderationStatus = market.ModerationStatus.ToString()
+                    }
+                }, cancellationToken);
+            }
+            catch
+            {
+                // Non-fatal
+            }
+        }
 
         return ApiResponse<NightMarketResponse>.SuccessResponse(
             _mapper.Map<NightMarketResponse>(market),

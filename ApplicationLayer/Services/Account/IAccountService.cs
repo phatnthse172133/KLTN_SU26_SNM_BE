@@ -25,6 +25,7 @@ public interface IAccountService
     Task<ApiResponse<BoothOwnerAccountInvitationResponse>> CreateBoothOwnerAccountAsync(Guid marketOwnerId, CreateBoothOwnerAccountRequest request, CancellationToken cancellationToken = default);
     Task<ApiResponse<PaginationResp<BoothOwnerAccountInvitationResponse>>> GetCreatedBoothOwnerAccountsAsync(Guid marketOwnerId, BoothOwnerAccountListRequest request, CancellationToken cancellationToken = default);
     Task<ApiResponse<BoothOwnerAccountInvitationResponse>> ResendBoothOwnerInvitationAsync(Guid marketOwnerId, Guid boothOwnerId, CancellationToken cancellationToken = default);
+    Task<ApiResponse<BoothOwnerAccountInvitationResponse>> CancelBoothOwnerInvitationAsync(Guid marketOwnerId, Guid boothOwnerId, CancellationToken cancellationToken = default);
     Task<ApiResponse<MarketOwnerAccountInvitationResponse>> CreateMarketOwnerAccountAsync(Guid adminId, CreateMarketOwnerAccountRequest request, CancellationToken cancellationToken = default);
     Task<ApiResponse<MarketOwnerAccountInvitationResponse>> ResendMarketOwnerInvitationAsync(Guid adminId, Guid marketOwnerId, CancellationToken cancellationToken = default);
 }

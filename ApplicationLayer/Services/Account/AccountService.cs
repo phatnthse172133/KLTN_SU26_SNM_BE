@@ -9,6 +9,7 @@ using DomainLayer.InterfaceRepository;
 using DomainLayer.InterfaceCore.JWT;
 using static DomainLayer.Enums.GeneralEnum;
 using ApplicationLayer.Services.Notifications;
+using ApplicationLayer.Services.Realtime;
 using ApplicationLayer.Services.Storage;
 
 using Microsoft.Extensions.Logging;
@@ -21,10 +22,12 @@ public class AccountService : IAccountService
 {
     private const string BoothOwnerInvitationType = "BoothOwnerInvitation";
     private const string MarketOwnerInvitationType = "MarketOwnerInvitation";
+    private static readonly TimeSpan BoothOwnerInvitationTtl = TimeSpan.FromDays(7);
     private readonly IUserRepository _users;
     private readonly IGenericRepository<Role> _roles;
     private readonly IMapper _mapper;
     private readonly INotificationService _notifications;
+    private readonly IRealtimeEventPublisher? _realtimeEvents;
     private readonly IGenericRepository<UserStatusHistory> _history;
     private readonly IGenericRepository<EmailOutbox> _outbox;
     private readonly ILogger<AccountService> _logger;
@@ -32,7 +35,18 @@ public class AccountService : IAccountService
     private readonly IBoothRepository? _booths;
     private readonly IPasswordHasher? _passwordHasher;
 
-    public AccountService(IUserRepository users, IGenericRepository<Role> roles, IMapper mapper, INotificationService notifications, IGenericRepository<UserStatusHistory> history, IGenericRepository<EmailOutbox> outbox, ILogger<AccountService> logger, IFileStorageService fileStorage, IBoothRepository? booths = null, IPasswordHasher? passwordHasher = null)
+    public AccountService(
+        IUserRepository users,
+        IGenericRepository<Role> roles,
+        IMapper mapper,
+        INotificationService notifications,
+        IGenericRepository<UserStatusHistory> history,
+        IGenericRepository<EmailOutbox> outbox,
+        ILogger<AccountService> logger,
+        IFileStorageService fileStorage,
+        IBoothRepository? booths = null,
+        IPasswordHasher? passwordHasher = null,
+        IRealtimeEventPublisher? realtimeEvents = null)
     {
         _users = users;
         _roles = roles;
@@ -44,6 +58,7 @@ public class AccountService : IAccountService
         _fileStorage = fileStorage;
         _booths = booths;
         _passwordHasher = passwordHasher;
+        _realtimeEvents = realtimeEvents;
     }
 
     public async Task<ApiResponse<UserResponse>> GetMyAccountAsync(Guid userId, CancellationToken cancellationToken = default)
@@ -113,7 +128,7 @@ public class AccountService : IAccountService
             user.Id);
 
         return ApiResponse<BoothOwnerAccountInvitationResponse>.SuccessResponse(
-            ToInvitationResponse(user, invitationStatus: "Pending"),
+            ToInvitationResponse(user, "Pending", invitationAnchor: user.CreatedAt),
             "Booth Owner account created. The invitation email is queued for delivery.");
     }
 
@@ -191,14 +206,18 @@ public class AccountService : IAccountService
         var accountIds = accounts.Select(user => user.Id).ToList();
         var invitations = (await _outbox.FindAsync(item =>
                 accountIds.Contains(item.ReferenceId) && item.EmailType == BoothOwnerInvitationType))
-            .ToDictionary(item => item.ReferenceId);
+            .GroupBy(item => item.ReferenceId)
+            .ToDictionary(group => group.Key, group => group.OrderByDescending(item => item.UpdatedAt).First());
 
         var normalizedKeyword = request.Keyword?.Trim();
         var normalizedStatus = request.InvitationStatus?.Trim();
         var response = accounts
-            .Select(user => invitations.TryGetValue(user.Id, out var invitation)
-                ? ToInvitationResponse(user, invitation.Status, invitation.SentAt)
-                : ToInvitationResponse(user, "NotQueued"))
+            .Select(user =>
+            {
+                invitations.TryGetValue(user.Id, out var invitation);
+                var anchor = invitation?.UpdatedAt ?? invitation?.CreatedAt ?? user.UpdatedAt;
+                return ToInvitationResponse(user, invitation?.Status, invitation?.SentAt, anchor);
+            })
             .Where(item => string.IsNullOrWhiteSpace(normalizedKeyword)
                 || item.FullName.Contains(normalizedKeyword, StringComparison.OrdinalIgnoreCase)
                 || item.Email.Contains(normalizedKeyword, StringComparison.OrdinalIgnoreCase)
@@ -282,8 +301,63 @@ public class AccountService : IAccountService
             user.Id);
 
         return ApiResponse<BoothOwnerAccountInvitationResponse>.SuccessResponse(
-            ToInvitationResponse(user, invitation.Status, invitation.SentAt),
+            ToInvitationResponse(user, invitation.Status, invitation.SentAt, now),
             "A new invitation email is queued for delivery.");
+    }
+
+    public async Task<ApiResponse<BoothOwnerAccountInvitationResponse>> CancelBoothOwnerInvitationAsync(
+        Guid marketOwnerId,
+        Guid boothOwnerId,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var user = await _users.GetByIdAsync(boothOwnerId);
+        if (user is null)
+            throw AppException.NotFound("The Booth Owner account could not be found.", "BOOTH_OWNER_ACCOUNT_NOT_FOUND");
+
+        var role = await _roles.GetByIdAsync(user.RoleId);
+        if (role is null || !string.Equals(role.RoleName, "BoothOwner", StringComparison.Ordinal))
+            throw AppException.BadRequest("The selected account is not a Booth Owner account.", "BOOTH_OWNER_ROLE_REQUIRED");
+        if (user.CreatedByMarketOwnerId != marketOwnerId)
+            throw AppException.Forbidden(
+                "You can cancel invitations only for Booth Owner accounts created by your account.",
+                "BOOTH_OWNER_INVITATION_NOT_OWNED");
+        if (!user.MustChangePassword)
+            throw AppException.BadRequest(
+                "Accepted invitations cannot be cancelled. Suspend the account from user management if needed.",
+                "BOOTH_OWNER_INVITATION_ALREADY_ACCEPTED");
+
+        var now = DateTime.UtcNow;
+        user.Status = UserStatus.Inactive;
+        user.UpdatedAt = now;
+        _users.Update(user);
+
+        var invitation = await _outbox.FirstOrDefaultAsync(item =>
+            item.ReferenceId == user.Id && item.EmailType == BoothOwnerInvitationType);
+        if (invitation is not null && invitation.Status is not "Sent")
+        {
+            invitation.Status = "Cancelled";
+            invitation.UpdatedAt = now;
+            _outbox.Update(invitation);
+        }
+
+        await _users.BeginTransactionAsync();
+        try
+        {
+            await _users.SaveChangesAsync();
+            await _users.CommitTransactionAsync();
+        }
+        catch
+        {
+            await _users.RollbackTransactionAsync();
+            throw;
+        }
+
+        await PublishInvitationChangedAsync(marketOwnerId, user.Id, "Cancelled", cancellationToken);
+
+        return ApiResponse<BoothOwnerAccountInvitationResponse>.SuccessResponse(
+            ToInvitationResponse(user, invitation?.Status ?? "Cancelled", invitation?.SentAt, now),
+            "Invitation cancelled.");
     }
 
     public async Task<ApiResponse<MarketOwnerAccountInvitationResponse>> ResendMarketOwnerInvitationAsync(
@@ -440,9 +514,14 @@ public class AccountService : IAccountService
 
     private static BoothOwnerAccountInvitationResponse ToInvitationResponse(
         User user,
-        string invitationStatus,
-        DateTime? invitationSentAt = null)
-        => new()
+        string? emailDeliveryStatus = null,
+        DateTime? invitationSentAt = null,
+        DateTime? invitationAnchor = null)
+    {
+        var anchor = invitationAnchor ?? user.UpdatedAt;
+        var operational = ResolveBoothOwnerInvitationStatus(user, anchor);
+        var delivery = emailDeliveryStatus ?? "NotQueued";
+        return new()
         {
             UserId = user.Id,
             UserName = user.UserName,
@@ -450,11 +529,54 @@ public class AccountService : IAccountService
             Email = user.Email,
             Status = user.Status.ToString(),
             MustChangePassword = user.MustChangePassword,
-            InvitationQueued = invitationStatus is "Pending" or "Processing" or "Failed",
-            InvitationStatus = invitationStatus,
+            InvitationQueued = delivery is "Pending" or "Processing" or "Failed",
+            InvitationStatus = operational,
+            EmailDeliveryStatus = delivery,
             InvitationSentAt = invitationSentAt,
+            InvitationExpiresAt = operational is "Pending" or "Expired"
+                ? anchor.Add(BoothOwnerInvitationTtl)
+                : null,
             CreatedAt = user.CreatedAt
         };
+    }
+
+    private static string ResolveBoothOwnerInvitationStatus(User user, DateTime invitationAnchor)
+    {
+        if (user.Status is UserStatus.Inactive or UserStatus.Banned)
+            return "Cancelled";
+        if (!user.MustChangePassword)
+            return "Accepted";
+        if (invitationAnchor.Add(BoothOwnerInvitationTtl) < DateTime.UtcNow)
+            return "Expired";
+        return "Pending";
+    }
+
+    private async Task PublishInvitationChangedAsync(
+        Guid marketOwnerId,
+        Guid boothOwnerId,
+        string invitationStatus,
+        CancellationToken cancellationToken)
+    {
+        if (_realtimeEvents is null) return;
+        try
+        {
+            await _realtimeEvents.PublishAsync(new RealtimeEvent
+            {
+                EventType = "InvitationChanged",
+                RecipientId = marketOwnerId,
+                Payload = new
+                {
+                    boothOwnerId,
+                    invitationStatus,
+                    marketOwnerId
+                }
+            }, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to publish InvitationChanged for Booth Owner {BoothOwnerId}.", boothOwnerId);
+        }
+    }
 
     public async Task<ApiResponse<UserResponse>> UpdateMyAccountAsync(Guid userId, UpdateProfileRequest request, CancellationToken cancellationToken = default)
     {
@@ -851,6 +973,30 @@ public class AccountService : IAccountService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to send notification for account status change to user {UserId}.", user.Id);
+        }
+
+        if (_realtimeEvents is not null)
+        {
+            try
+            {
+                await _realtimeEvents.PublishAsync(new RealtimeEvent
+                {
+                    EventType = "AccountStatusChanged",
+                    RecipientId = user.Id,
+                    Payload = new
+                    {
+                        userId = user.Id,
+                        previousStatus = previousStatus.ToString(),
+                        status = request.Status.ToString(),
+                        reason,
+                        forceLogout = request.Status == UserStatus.Inactive
+                    }
+                }, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to publish AccountStatusChanged for user {UserId}.", user.Id);
+            }
         }
 
         return ApiResponse<ManagedUserResponse>.SuccessResponse(await ToManagedUserResponseAsync(user), "Account status updated successfully.");

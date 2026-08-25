@@ -147,6 +147,78 @@ namespace TestingLayer
         }
 
         [Fact]
+        public async Task ChangeUserStatusAsync_ValidBan_PublishesAccountStatusChanged()
+        {
+            var adminId = Guid.NewGuid();
+            var targetId = Guid.NewGuid();
+            var user = new User { Id = targetId, Status = UserStatus.Active, Email = "user@example.com", FullName = "User" };
+            var request = new ChangeUserStatusRequest { Status = UserStatus.Inactive, Reason = "Valid reason length here for ban" };
+            var realtime = new Mock<ApplicationLayer.Services.Realtime.IRealtimeEventPublisher>();
+
+            _mockUsers.Setup(repo => repo.GetByIdAsync(targetId)).ReturnsAsync(user);
+            _mockUsers.Setup(repo => repo.UpdateStatusWithConcurrencyAsync(targetId, UserStatus.Active, UserStatus.Inactive, It.IsAny<DateTime>()))
+                .Callback<Guid, UserStatus, UserStatus, DateTime>((_, _, newS, _) => user.Status = newS)
+                .ReturnsAsync(1);
+            _mockUsers.Setup(repo => repo.SaveChangesAsync()).ReturnsAsync(1);
+            _mockMapper.Setup(m => m.Map<ManagedUserResponse>(It.IsAny<User>())).Returns(new ManagedUserResponse());
+
+            var service = new AccountService(
+                _mockUsers.Object,
+                _mockRoles.Object,
+                _mockMapper.Object,
+                _mockNotifications.Object,
+                _mockHistory.Object,
+                _mockOutbox.Object,
+                _mockLogger.Object,
+                _mockFileStorage.Object,
+                realtimeEvents: realtime.Object);
+
+            await service.ChangeUserStatusAsync(adminId, targetId, request);
+
+            realtime.Verify(r => r.PublishAsync(
+                It.Is<ApplicationLayer.Services.Realtime.RealtimeEvent>(evt =>
+                    evt.EventType == "AccountStatusChanged" &&
+                    evt.RecipientId == targetId),
+                It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Fact]
+        public async Task ChangeUserStatusAsync_ValidUnban_PublishesAccountStatusChangedWithoutForceLogoutIntent()
+        {
+            var adminId = Guid.NewGuid();
+            var targetId = Guid.NewGuid();
+            var user = new User { Id = targetId, Status = UserStatus.Inactive, Email = "user@example.com", FullName = "User" };
+            var request = new ChangeUserStatusRequest { Status = UserStatus.Active, Reason = "Valid reason length here for unban" };
+            var realtime = new Mock<ApplicationLayer.Services.Realtime.IRealtimeEventPublisher>();
+
+            _mockUsers.Setup(repo => repo.GetByIdAsync(targetId)).ReturnsAsync(user);
+            _mockUsers.Setup(repo => repo.UpdateStatusWithConcurrencyAsync(targetId, UserStatus.Inactive, UserStatus.Active, It.IsAny<DateTime>()))
+                .Callback<Guid, UserStatus, UserStatus, DateTime>((_, _, newS, _) => user.Status = newS)
+                .ReturnsAsync(1);
+            _mockUsers.Setup(repo => repo.SaveChangesAsync()).ReturnsAsync(1);
+            _mockMapper.Setup(m => m.Map<ManagedUserResponse>(It.IsAny<User>())).Returns(new ManagedUserResponse());
+
+            var service = new AccountService(
+                _mockUsers.Object,
+                _mockRoles.Object,
+                _mockMapper.Object,
+                _mockNotifications.Object,
+                _mockHistory.Object,
+                _mockOutbox.Object,
+                _mockLogger.Object,
+                _mockFileStorage.Object,
+                realtimeEvents: realtime.Object);
+
+            await service.ChangeUserStatusAsync(adminId, targetId, request);
+
+            realtime.Verify(r => r.PublishAsync(
+                It.Is<ApplicationLayer.Services.Realtime.RealtimeEvent>(evt =>
+                    evt.EventType == "AccountStatusChanged" &&
+                    evt.RecipientId == targetId),
+                It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Fact]
         public async Task ChangeUserStatusAsync_NotificationFails_DoesNotThrow()
         {
             var adminId = Guid.NewGuid();

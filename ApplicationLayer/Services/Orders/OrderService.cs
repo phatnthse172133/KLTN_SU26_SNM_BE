@@ -6,6 +6,7 @@ using ApplicationLayer.Services.CustomerDiscovery;
 using ApplicationLayer.Services.Notifications;
 using ApplicationLayer.Services.PayOS;
 using ApplicationLayer.Services.Promotions;
+using ApplicationLayer.Services.Realtime;
 using DomainLayer.Common;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
@@ -41,6 +42,7 @@ namespace ApplicationLayer.Services.Orders
         private readonly IReviewRepository? _reviews;
         private readonly IComplaintRepository? _complaints;
         private readonly IPayOSPayoutServiceFactory _payoutServiceFactory;
+        private readonly IRealtimeEventPublisher? _realtimeEvents;
 
         public OrderService(IOrderRepository orderRepo,
                             IPromotionRepository promotionRepo,
@@ -57,7 +59,8 @@ namespace ApplicationLayer.Services.Orders
                              IPromotionUsageRepository promotionUsages,
                              INotificationService? notifications = null,
                              IReviewRepository? reviews = null,
-                             IComplaintRepository? complaints = null)
+                             IComplaintRepository? complaints = null,
+                             IRealtimeEventPublisher? realtimeEvents = null)
         {
             _orderRepo = orderRepo;
             _promotionRepo = promotionRepo;
@@ -75,6 +78,7 @@ namespace ApplicationLayer.Services.Orders
             _reviews = reviews;
             _complaints = complaints;
             _payoutServiceFactory = payoutServiceFactory;
+            _realtimeEvents = realtimeEvents;
         }
 
         //DÃƒÂ nh cho customer lÃ¡ÂºÂ«n khÃƒÂ¡ch vang lai (Walk-in) Ã„â€˜Ã¡ÂºÂ·t mÃƒÂ³n, trÃ¡ÂºÂ£ vÃ¡Â»Â link thanh toÃƒÂ¡n nÃ¡ÂºÂ¿u chÃ¡Â»Ân online
@@ -1120,6 +1124,26 @@ namespace ApplicationLayer.Services.Orders
                 await _orderRepo.SaveChangesAsync();
                 await _orderRepo.CommitTransactionAsync();
 
+                await PublishOrderStatusChangedAsync(order, OrderStatus.Cancelled, actorUserId: customerId);
+                if (_notifications is not null && !IsWalkInCustomer(order.CustomerId))
+                {
+                    try
+                    {
+                        await _notifications.NotifyAsync(new NotificationMessage(
+                            order.BoothOwnerId,
+                            NotificationType.OrderCancelled,
+                            "Order cancelled",
+                            $"Customer cancelled order #{order.OrderCode}.",
+                            null,
+                            "Order",
+                            order.Id));
+                    }
+                    catch (Exception notifyEx)
+                    {
+                        _logger.LogWarning(notifyEx, "Failed to notify booth owner about cancelled order {OrderCode}.", order.OrderCode);
+                    }
+                }
+
                 return ApiResponse<bool>.SuccessResponse(true, "Há»§y Ä‘Æ¡n hÃ ng thÃ nh cÃ´ng");
             }
             catch (Exception ex)
@@ -1937,6 +1961,11 @@ namespace ApplicationLayer.Services.Orders
                     "Payment committed for order {OrderCode} but notification failed.",
                     order.OrderCode);
             }
+
+            var payment = LatestPayment(order);
+            if (payment is not null)
+                await PublishPaymentStatusChangedAsync(order, payment, actorUserId: null);
+            await PublishOrderStatusChangedAsync(order, order.Status, actorUserId: null);
         }
 
         private async Task TryPublishOrderPendingApprovalAsync(Order order, DateTime utcNow)
@@ -2180,6 +2209,7 @@ namespace ApplicationLayer.Services.Orders
             }
 
             await PublishOrderStatusAsync(order, request.Status);
+            await PublishOrderStatusChangedAsync(order, request.Status, actorUserId: boothOwnerId);
             return ApiResponse<bool>.SuccessResponse(true, "Order status updated successfully.");
         }
 
@@ -2208,6 +2238,8 @@ namespace ApplicationLayer.Services.Orders
             payment.PaidAt = DateTime.UtcNow;
             payment.UpdatedAt = DateTime.UtcNow;
             await _orderRepo.SaveChangesAsync();
+
+            await PublishPaymentStatusChangedAsync(order, payment, actorUserId: boothOwnerId);
             return ApiResponse<bool>.SuccessResponse(true, "Cash payment confirmed successfully.");
         }
 
@@ -2299,6 +2331,100 @@ namespace ApplicationLayer.Services.Orders
                     "Order {OrderCode} status changed to {OrderStatus}, but its realtime notification could not be delivered.",
                     order.OrderCode,
                     newStatus);
+            }
+        }
+
+        private async Task PublishOrderStatusChangedAsync(
+            Order order,
+            OrderStatus newStatus,
+            Guid? actorUserId)
+        {
+            if (_realtimeEvents is null)
+                return;
+
+            var payment = LatestPayment(order);
+            var payload = new
+            {
+                orderId = order.Id,
+                orderCode = order.OrderCode,
+                status = newStatus.ToString(),
+                paymentStatus = payment?.Status.ToString(),
+                boothOwnerId = order.BoothOwnerId,
+                customerId = order.CustomerId,
+                actorUserId,
+                updatedAt = order.UpdatedAt == default ? DateTime.UtcNow : order.UpdatedAt
+            };
+
+            try
+            {
+                var recipients = new HashSet<Guid> { order.BoothOwnerId };
+                if (!IsWalkInCustomer(order.CustomerId))
+                    recipients.Add(order.CustomerId);
+
+                foreach (var recipientId in recipients)
+                {
+                    await _realtimeEvents.PublishAsync(new RealtimeEvent
+                    {
+                        EventType = "OrderStatusChanged",
+                        RecipientId = recipientId,
+                        Payload = payload
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Order {OrderCode} status changed to {OrderStatus}, but OrderStatusChanged realtime event failed.",
+                    order.OrderCode,
+                    newStatus);
+            }
+        }
+
+        private async Task PublishPaymentStatusChangedAsync(
+            Order order,
+            Payment payment,
+            Guid? actorUserId)
+        {
+            if (_realtimeEvents is null)
+                return;
+
+            var payload = new
+            {
+                orderId = order.Id,
+                orderCode = order.OrderCode,
+                paymentId = payment.Id,
+                paymentStatus = payment.Status.ToString(),
+                paymentType = payment.Type.ToString(),
+                orderStatus = order.Status.ToString(),
+                boothOwnerId = order.BoothOwnerId,
+                customerId = order.CustomerId,
+                actorUserId,
+                updatedAt = payment.UpdatedAt == default ? DateTime.UtcNow : payment.UpdatedAt
+            };
+
+            try
+            {
+                var recipients = new HashSet<Guid> { order.BoothOwnerId };
+                if (!IsWalkInCustomer(order.CustomerId))
+                    recipients.Add(order.CustomerId);
+
+                foreach (var recipientId in recipients)
+                {
+                    await _realtimeEvents.PublishAsync(new RealtimeEvent
+                    {
+                        EventType = "PaymentStatusChanged",
+                        RecipientId = recipientId,
+                        Payload = payload
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Payment status for order {OrderCode} changed, but PaymentStatusChanged realtime event failed.",
+                    order.OrderCode);
             }
         }
 

@@ -5,9 +5,11 @@ using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
 using ApplicationLayer.Services.Notifications;
 using ApplicationLayer.Services.PayOS;
+using ApplicationLayer.Services.Realtime;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
@@ -30,6 +32,8 @@ namespace ApplicationLayer.Services.Subscriptions
         private readonly IBoothRepository _boothRepo;
         private readonly IPayOSOrderCodeGenerator _orderCodeGenerator;
         private readonly PayOSSettings _payOSSettings;
+        private readonly IRealtimeEventPublisher? _realtimeEvents;
+        private readonly ILogger<OwnerSubscriptionService>? _logger;
 
         public OwnerSubscriptionService(
             ISubscriptionRepository repo,
@@ -38,7 +42,9 @@ namespace ApplicationLayer.Services.Subscriptions
             INotificationService notifications,
             IBoothRepository boothRepo,
             IPayOSOrderCodeGenerator orderCodeGenerator,
-            IOptions<PayOSSettings> payOSOptions)
+            IOptions<PayOSSettings> payOSOptions,
+            IRealtimeEventPublisher? realtimeEvents = null,
+            ILogger<OwnerSubscriptionService>? logger = null)
         {
             _repo = repo;
             _payos = payos;
@@ -47,6 +53,8 @@ namespace ApplicationLayer.Services.Subscriptions
             _boothRepo = boothRepo;
             _orderCodeGenerator = orderCodeGenerator;
             _payOSSettings = payOSOptions.Value;
+            _realtimeEvents = realtimeEvents;
+            _logger = logger;
         }
 
         private async Task EnsureBoothOwnershipAsync(Guid ownerId, Guid boothId, CancellationToken ct)
@@ -705,6 +713,7 @@ namespace ApplicationLayer.Services.Subscriptions
                 {
                     await _repo.CancelBoothSubscriptionAsync(subscription.Id, ct);
                     await _repo.SaveChangesAsync(ct);
+                    await PublishSubscriptionChangedAsync(subscription.Booth?.BoothOwnerId, "Booth", subscription.Id, "Cancelled", ct);
                     return new(SubscriptionStatus.Cancelled, provider.Status, "Payment was cancelled in PayOS.");
                 }
 
@@ -713,6 +722,7 @@ namespace ApplicationLayer.Services.Subscriptions
                     await _repo.UpdateBoothSubscriptionStatusAsync(subscription.Id, SubscriptionStatus.PendingPayment,
                         SubscriptionStatus.Expired, subscription.StartDate, subscription.EndDate, "Payment link expired.", ct);
                     await _repo.SaveChangesAsync(ct);
+                    await PublishSubscriptionChangedAsync(subscription.Booth?.BoothOwnerId, "Booth", subscription.Id, "Expired", ct);
                     return new(SubscriptionStatus.Expired, provider.Status, "Payment link has expired.");
                 }
 
@@ -762,6 +772,7 @@ namespace ApplicationLayer.Services.Subscriptions
                 {
                     await _repo.CancelMarketSubscriptionAsync(subscription.Id, ct);
                     await _repo.SaveChangesAsync(ct);
+                    await PublishSubscriptionChangedAsync(subscription.MarketOwnerId, "Market", subscription.Id, "Cancelled", ct);
                     return new(SubscriptionStatus.Cancelled, provider.Status, "Payment was cancelled in PayOS.");
                 }
 
@@ -770,6 +781,7 @@ namespace ApplicationLayer.Services.Subscriptions
                     await _repo.UpdateMarketSubscriptionStatusAsync(subscription.Id, SubscriptionStatus.PendingPayment,
                         SubscriptionStatus.Expired, subscription.StartDate, subscription.EndDate, "Payment link expired.", ct);
                     await _repo.SaveChangesAsync(ct);
+                    await PublishSubscriptionChangedAsync(subscription.MarketOwnerId, "Market", subscription.Id, "Expired", ct);
                     return new(SubscriptionStatus.Expired, provider.Status, "Payment link has expired.");
                 }
 
@@ -963,6 +975,7 @@ namespace ApplicationLayer.Services.Subscriptions
                 throw AppException.Conflict("The free booth subscription could not be activated. Please try again.", "FREE_SUBSCRIPTION_ACTIVATION_FAILED");
 
             await _repo.SaveChangesAsync(ct);
+            await PublishSubscriptionChangedAsync(await ResolveBoothOwnerIdAsync(boothId, ct), "Booth", subscription.Id, "Active", ct);
             return ApiResponse<PayOSPaymentResponseDto>.SuccessResponse(
                 MapDirectActivationResponse(subscription.Id, package.PackageName, durationDays, 0, 0, 0, "FreeDefault"));
         }
@@ -1015,6 +1028,7 @@ namespace ApplicationLayer.Services.Subscriptions
                 throw;
             }
 
+            await PublishSubscriptionChangedAsync(await ResolveBoothOwnerIdAsync(subscription.BoothId, ct), "Booth", subscription.Id, "Active", ct);
             return ApiResponse<PayOSPaymentResponseDto>.SuccessResponse(
                 MapDirectActivationResponse(subscription.Id, package.PackageName, durationDays, baseAmount, creditAmount, 0, changeType));
         }
@@ -1067,6 +1081,7 @@ namespace ApplicationLayer.Services.Subscriptions
                 throw;
             }
 
+            await PublishSubscriptionChangedAsync(subscription.MarketOwnerId, "Market", subscription.Id, "Active", ct);
             return ApiResponse<PayOSPaymentResponseDto>.SuccessResponse(
                 MapDirectActivationResponse(subscription.Id, package.PackageName, durationDays, baseAmount, creditAmount, 0, changeType));
         }
@@ -1667,6 +1682,41 @@ namespace ApplicationLayer.Services.Subscriptions
                 PaidAt = sub.PaidAt,
                 CreatedAt = sub.CreatedAt,
             };
+        }
+
+        private async Task<Guid?> ResolveBoothOwnerIdAsync(Guid boothId, CancellationToken ct)
+        {
+            var booth = await _boothRepo.GetByIdAsync(boothId);
+            return booth?.BoothOwnerId;
+        }
+
+        private async Task PublishSubscriptionChangedAsync(
+            Guid? userId,
+            string ownerType,
+            Guid subscriptionId,
+            string status,
+            CancellationToken ct)
+        {
+            if (!userId.HasValue || _realtimeEvents is null) return;
+            try
+            {
+                await _realtimeEvents.PublishAsync(new RealtimeEvent
+                {
+                    EventType = "SubscriptionChanged",
+                    RecipientId = userId.Value,
+                    Payload = new
+                    {
+                        subscriptionId,
+                        ownerType,
+                        status,
+                        activated = status == "Active"
+                    }
+                }, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to publish SubscriptionChanged for subscription {SubscriptionId}", subscriptionId);
+            }
         }
     }
 }

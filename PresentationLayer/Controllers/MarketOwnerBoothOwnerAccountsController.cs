@@ -32,4 +32,9 @@ public sealed class MarketOwnerBoothOwnerAccountsController : ControllerBase
     [EnableRateLimiting("AuthAbusePolicy")]
     public async Task<IActionResult> Resend(Guid boothOwnerId, CancellationToken cancellationToken)
         => Ok(await _accountService.ResendBoothOwnerInvitationAsync(CurrentUserId, boothOwnerId, cancellationToken));
+
+    [HttpPost("{boothOwnerId:guid}/cancel-invitation")]
+    [EnableRateLimiting("AuthAbusePolicy")]
+    public async Task<IActionResult> Cancel(Guid boothOwnerId, CancellationToken cancellationToken)
+        => Ok(await _accountService.CancelBoothOwnerInvitationAsync(CurrentUserId, boothOwnerId, cancellationToken));
 }

@@ -33,6 +33,17 @@ public interface IChatService
         SendMessageRequest request,
         CancellationToken cancellationToken = default);
 
+    Task<ApiResponse<MessageResponse>> SendAttachmentMessageAsync(
+        Guid userId,
+        Guid conversationId,
+        Stream fileStream,
+        string fileName,
+        string contentType,
+        long fileLength,
+        string? caption,
+        Guid? clientMessageId,
+        CancellationToken cancellationToken = default);
+
     Task<ApiResponse<object>> MarkReadAsync(
         Guid userId,
         Guid conversationId,

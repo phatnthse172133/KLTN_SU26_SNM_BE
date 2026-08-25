@@ -11,6 +11,8 @@ public sealed class BoothOwnerAccountInvitationResponse
     public bool MustChangePassword { get; init; }
     public bool InvitationQueued { get; init; }
     public string InvitationStatus { get; init; } = string.Empty;
+    public string? EmailDeliveryStatus { get; init; }
     public DateTime? InvitationSentAt { get; init; }
+    public DateTime? InvitationExpiresAt { get; init; }
     public DateTime CreatedAt { get; init; }
 }

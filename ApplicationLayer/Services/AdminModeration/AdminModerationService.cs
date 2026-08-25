@@ -4,6 +4,7 @@ using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
 using ApplicationLayer.Mappings;
 using ApplicationLayer.Services.Notifications;
+using ApplicationLayer.Services.Realtime;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
 using Microsoft.Extensions.Logging;
@@ -20,6 +21,7 @@ public class AdminModerationService : IAdminModerationService
     private readonly IUserRepository _userRepo;
     private readonly INotificationService _notifications;
     private readonly ILogger<AdminModerationService> _logger;
+    private readonly IRealtimeEventPublisher? _realtimeEvents;
 
     public AdminModerationService(
         IModerationRepository moderationRepo,
@@ -27,7 +29,8 @@ public class AdminModerationService : IAdminModerationService
         IBoothRepository boothRepo,
         IUserRepository userRepo,
         INotificationService notifications,
-        ILogger<AdminModerationService> logger)
+        ILogger<AdminModerationService> logger,
+        IRealtimeEventPublisher? realtimeEvents = null)
     {
         _moderationRepo = moderationRepo;
         _marketRepo = marketRepo;
@@ -35,6 +38,7 @@ public class AdminModerationService : IAdminModerationService
         _userRepo = userRepo;
         _notifications = notifications;
         _logger = logger;
+        _realtimeEvents = realtimeEvents;
     }
 
     // ════════════════════════════════════════════════════════════
@@ -179,6 +183,43 @@ public class AdminModerationService : IAdminModerationService
             }
         }
 
+        if (_realtimeEvents is not null)
+        {
+            try
+            {
+                await _realtimeEvents.PublishAsync(new RealtimeEvent
+                {
+                    EventType = "MarketStatusChanged",
+                    GroupName = RealtimeGroups.Market(marketId),
+                    Role = "Customer",
+                    Payload = new
+                    {
+                        nightMarketId = marketId,
+                        moderationStatus = request.Status.ToString(),
+                        status = market.Status.ToString()
+                    }
+                }, cancellationToken);
+                if (market.MarketOwnerId.HasValue)
+                {
+                    await _realtimeEvents.PublishAsync(new RealtimeEvent
+                    {
+                        EventType = "MarketStatusChanged",
+                        RecipientId = market.MarketOwnerId.Value,
+                        Payload = new
+                        {
+                            nightMarketId = marketId,
+                            moderationStatus = request.Status.ToString(),
+                            status = market.Status.ToString()
+                        }
+                    }, cancellationToken);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to publish MarketStatusChanged for market {MarketId}", marketId);
+            }
+        }
+
         return ApiResponse<ModerationActionResponse>.SuccessResponse(
             new ModerationActionResponse { Id = history.Id, Success = true, Message = $"Night market has been {request.Status.ToString().ToLower()}." },
             request.Status == ModerationStatus.Suspended ? "Night market has been banned." : "Night market has been restored.");
@@ -262,6 +303,8 @@ public class AdminModerationService : IAdminModerationService
             BoothStatus.Banned,
             cancellationToken);
 
+        await PublishBoothStatusChangedAsync(booth, BoothStatus.Banned, cancellationToken);
+
         return ApiResponse<ModerationActionResponse>.SuccessResponse(
             new ModerationActionResponse { Id = history.Id, Success = true, Message = "Booth has been banned." },
             "Booth has been banned.");
@@ -287,6 +330,8 @@ public class AdminModerationService : IAdminModerationService
             $"Your booth \"{booth.BoothName}\" has been restored.\n\nReason: {request.Reason.Trim()}",
             BoothStatus.Active,
             cancellationToken);
+
+        await PublishBoothStatusChangedAsync(booth, BoothStatus.Active, cancellationToken);
 
         return ApiResponse<ModerationActionResponse>.SuccessResponse(
             new ModerationActionResponse { Id = history.Id, Success = true, Message = "Booth has been restored." },
@@ -567,5 +612,42 @@ public class AdminModerationService : IAdminModerationService
             ComplaintId = history.ComplaintId,
             CreatedAt = history.CreatedAt
         };
+    }
+
+    private async Task PublishBoothStatusChangedAsync(Booth booth, BoothStatus status, CancellationToken cancellationToken)
+    {
+        if (_realtimeEvents is null) return;
+        try
+        {
+            var payload = new
+            {
+                boothId = booth.Id,
+                nightMarketId = booth.NightMarketId,
+                status = status.ToString()
+            };
+            await _realtimeEvents.PublishAsync(new RealtimeEvent
+            {
+                EventType = "BoothStatusChanged",
+                GroupName = RealtimeGroups.Booth(booth.Id),
+                Role = "Customer",
+                Payload = payload
+            }, cancellationToken);
+            await _realtimeEvents.PublishAsync(new RealtimeEvent
+            {
+                EventType = "BoothStatusChanged",
+                GroupName = RealtimeGroups.Market(booth.NightMarketId),
+                Payload = payload
+            }, cancellationToken);
+            await _realtimeEvents.PublishAsync(new RealtimeEvent
+            {
+                EventType = "BoothStatusChanged",
+                RecipientId = booth.BoothOwnerId,
+                Payload = payload
+            }, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to publish BoothStatusChanged for booth {BoothId}", booth.Id);
+        }
     }
 }

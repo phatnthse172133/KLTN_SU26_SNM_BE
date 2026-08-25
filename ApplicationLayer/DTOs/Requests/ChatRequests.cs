@@ -30,3 +30,15 @@ public class SendMessageRequest
     [MaxLength(2000)]
     public string Content { get; set; } = string.Empty;
 }
+
+/// <summary>
+/// Multipart attachment send. File is provided via IFormFile on the controller;
+/// caption and clientMessageId are optional form fields.
+/// </summary>
+public class SendAttachmentMessageRequest
+{
+    public Guid? ClientMessageId { get; set; }
+
+    [MaxLength(2000)]
+    public string? Content { get; set; }
+}

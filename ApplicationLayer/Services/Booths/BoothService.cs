@@ -6,6 +6,7 @@ using ApplicationLayer.Helppers;
 using ApplicationLayer.Mappings;
 using ApplicationLayer.Services.Subscriptions;
 using ApplicationLayer.Services.Notifications;
+using ApplicationLayer.Services.Realtime;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
 using static DomainLayer.Enums.GeneralEnum;
@@ -30,7 +31,26 @@ public class BoothService : IBoothService
     private readonly IGenericRepository<ModerationActionHistory> _moderationHistory;
     private readonly IGenericRepository<EmailOutbox> _emailOutbox;
     private readonly INotificationService _notifications;
-    public BoothService(IBoothRepository booths, IZoneRepository zones, IMapper mapper, IBoothLocationRepository locations, ISubscriptionEntitlementService entitlements, INightMarketRepository nightMarkets, IUserRepository users, IGenericRepository<Role> roles, IUnitOfWork unitOfWork, ILayoutNodeRepository layoutNodes, IMarketLayoutRepository marketLayouts, ISubscriptionRepository subscriptions, ApplicationLayer.Services.Storage.IFileStorageService fileStorage, IGenericRepository<ModerationActionHistory> moderationHistory, IGenericRepository<EmailOutbox> emailOutbox, INotificationService notifications)
+    private readonly IRealtimeEventPublisher? _realtimeEvents;
+
+    public BoothService(
+        IBoothRepository booths,
+        IZoneRepository zones,
+        IMapper mapper,
+        IBoothLocationRepository locations,
+        ISubscriptionEntitlementService entitlements,
+        INightMarketRepository nightMarkets,
+        IUserRepository users,
+        IGenericRepository<Role> roles,
+        IUnitOfWork unitOfWork,
+        ILayoutNodeRepository layoutNodes,
+        IMarketLayoutRepository marketLayouts,
+        ISubscriptionRepository subscriptions,
+        ApplicationLayer.Services.Storage.IFileStorageService fileStorage,
+        IGenericRepository<ModerationActionHistory> moderationHistory,
+        IGenericRepository<EmailOutbox> emailOutbox,
+        INotificationService notifications,
+        IRealtimeEventPublisher? realtimeEvents = null)
     {
         _booths = booths;
         _zones = zones;
@@ -48,6 +68,7 @@ public class BoothService : IBoothService
         _moderationHistory = moderationHistory;
         _emailOutbox = emailOutbox;
         _notifications = notifications;
+        _realtimeEvents = realtimeEvents;
     }
 
     public async Task<ApiResponse<BoothResponse>> GetMyBoothAsync(
@@ -139,6 +160,29 @@ public class BoothService : IBoothService
         booth.UpdatedAt = DateTime.UtcNow;
         _booths.Update(booth);
         await _booths.SaveChangesAsync();
+
+        if (_realtimeEvents is not null)
+        {
+            try
+            {
+                await _realtimeEvents.PublishAsync(new RealtimeEvent
+                {
+                    EventType = "BoothStatusChanged",
+                    GroupName = RealtimeGroups.Booth(booth.Id),
+                    Role = "Customer",
+                    Payload = new
+                    {
+                        boothId = booth.Id,
+                        nightMarketId = booth.NightMarketId,
+                        status = booth.Status.ToString()
+                    }
+                }, cancellationToken);
+            }
+            catch
+            {
+                // Non-fatal
+            }
+        }
 
         var message = booth.Status == BoothStatus.Inactive ? "Booth has been paused successfully." : "Booth has been resumed successfully.";
         return ApiResponse<BoothResponse>.SuccessResponse(_mapper.Map<BoothResponse>(booth), message);
@@ -574,6 +618,29 @@ public class BoothService : IBoothService
         var market = await _nightMarkets.GetByIdAsync(booth.NightMarketId);
         Zone? zone = null;
         if (booth.ZoneId.HasValue) zone = await _zones.GetByIdAsync(booth.ZoneId.Value);
+
+        if (_realtimeEvents is not null)
+        {
+            try
+            {
+                await _realtimeEvents.PublishAsync(new RealtimeEvent
+                {
+                    EventType = "BoothStatusChanged",
+                    GroupName = RealtimeGroups.Booth(booth.Id),
+                    Role = "Customer",
+                    Payload = new
+                    {
+                        boothId = booth.Id,
+                        nightMarketId = booth.NightMarketId,
+                        status = booth.Status.ToString()
+                    }
+                }, cancellationToken);
+            }
+            catch
+            {
+                // Non-fatal
+            }
+        }
 
         return ApiResponse<MarketOwnerBoothResponse>.SuccessResponse(
             MapMarketOwnerBooth(booth, owner, market, zone),

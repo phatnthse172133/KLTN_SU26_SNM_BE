@@ -900,7 +900,11 @@ namespace InfrastructureLayer.Data
                     .HasConversion<string>()
                     .HasMaxLength(20)
                     .HasDefaultValueSql("'Text'::character varying")
-                    .HasComment("Text | Image | System");
+                    .HasComment("Text | Image | System | File");
+                entity.Property(e => e.Content).IsRequired();
+                entity.Property(e => e.AttachmentUrl).HasMaxLength(1000);
+                entity.Property(e => e.AttachmentName).HasMaxLength(255);
+                entity.Property(e => e.AttachmentMimeType).HasMaxLength(100);
                 entity.Property(e => e.SenderRole)
                     .HasConversion<string>()
                     .HasMaxLength(20)

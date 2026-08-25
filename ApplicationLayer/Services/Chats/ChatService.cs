@@ -6,6 +6,7 @@ using ApplicationLayer.Mappings;
 using ApplicationLayer.Services.Chats;
 using ApplicationLayer.Services.Notifications;
 using ApplicationLayer.Services.Realtime;
+using ApplicationLayer.Services.Storage;
 using AutoMapper;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
@@ -17,6 +18,12 @@ namespace ApplicationLayer.Services.Chats;
 public class ChatService : IChatService
 {
     private const int MaxMessageLength = 2000;
+    private const string ChatStorageCategory = "chat";
+    private static readonly HashSet<string> ImageMimeTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "image/jpeg", "image/png", "image/webp"
+    };
+
     private readonly IConversationRepository _conversations;
     private readonly IMessageRepository _messages;
     private readonly IBoothRepository _booths;
@@ -24,6 +31,7 @@ public class ChatService : IChatService
     private readonly IRealtimeChatPublisher _realtime;
     private readonly IRealtimeEventPublisher _eventPublisher;
     private readonly INotificationService _notifications;
+    private readonly IFileStorageService _fileStorage;
     private readonly ILogger<ChatService> _logger;
 
     public ChatService(
@@ -34,6 +42,7 @@ public class ChatService : IChatService
         IRealtimeChatPublisher realtime,
         IRealtimeEventPublisher eventPublisher,
         INotificationService notifications,
+        IFileStorageService fileStorage,
         ILogger<ChatService> logger)
     {
         _conversations = conversations;
@@ -43,6 +52,7 @@ public class ChatService : IChatService
         _realtime = realtime;
         _eventPublisher = eventPublisher;
         _notifications = notifications;
+        _fileStorage = fileStorage;
         _logger = logger;
     }
 
@@ -215,38 +225,185 @@ public class ChatService : IChatService
 
         var created = await _messages.GetOwnedAsync(message.Id, userId, cancellationToken) ?? message;
         var response = _mapper.Map<MessageResponse>(created);
-        var receiverId = conversation.CustomerId == userId
-            ? conversation.Booth.BoothOwnerId
-            : conversation.CustomerId;
-        // Sender already has the REST response optimistically; publish MessageCreated
-        // only to the other participant via chat-user:{receiverId} (no sender echo,
-        // no conversation-group fan-out, no SignalREventPublisher duplicate).
-        await RunPostCommitSafelyAsync(
-            () => _realtime.PublishMessageCreatedAsync(
-                conversationId,
-                receiverId,
-                response,
-                CancellationToken.None),
-            "realtime message delivery",
-            message.Id);
-
-        await RunPostCommitSafelyAsync(
-            () => _notifications.NotifyAsync(
-                new NotificationMessage(
-                    receiverId,
-                    NotificationType.NewMessage,
-                    "New chat message",
-                    $"You have a new message from {response.SenderName}.",
-                    conversation.BoothId,
-                    "Conversation",
-                    conversation.Id),
-                CancellationToken.None),
-            "chat notification creation",
-            message.Id);
+        await DeliverCreatedMessageAsync(conversation, userId, response, message.Id);
 
         return ApiResponse<MessageResponse>.SuccessResponse(
             response,
             "Message sent successfully.");
+    }
+
+    public async Task<ApiResponse<MessageResponse>> SendAttachmentMessageAsync(
+        Guid userId,
+        Guid conversationId,
+        Stream fileStream,
+        string fileName,
+        string contentType,
+        long fileLength,
+        string? caption,
+        Guid? clientMessageId,
+        CancellationToken cancellationToken = default)
+    {
+        if (fileStream is null || fileLength <= 0)
+        {
+            throw AppException.BadRequest(
+                "Attachment file is required.",
+                "CHAT_ATTACHMENT_REQUIRED");
+        }
+
+        var safeFileName = SanitizeOriginalFileName(fileName);
+        var mime = (contentType ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(mime))
+        {
+            throw AppException.BadRequest(
+                "Attachment content type is required.",
+                "CHAT_ATTACHMENT_TYPE_REQUIRED");
+        }
+
+        var isImage = ImageMimeTypes.Contains(mime);
+        var isPdf = string.Equals(mime, "application/pdf", StringComparison.OrdinalIgnoreCase);
+        if (!isImage && !isPdf)
+        {
+            throw AppException.BadRequest(
+                "Please select a JPG, PNG, WEBP image or a PDF file.",
+                "CHAT_ATTACHMENT_TYPE_NOT_ALLOWED");
+        }
+
+        var messageType = isImage ? MessageType.Image : MessageType.File;
+        var content = NormalizeOptionalCaption(caption);
+        var conversation = await GetOwnedConversationAsync(userId, conversationId, cancellationToken);
+
+        if (clientMessageId.HasValue)
+        {
+            var duplicated = await _messages.GetByClientMessageIdAsync(
+                userId,
+                clientMessageId.Value,
+                cancellationToken);
+            if (duplicated is not null)
+            {
+                if (duplicated.ConversationId != conversationId)
+                {
+                    throw AppException.Conflict(
+                        "ClientMessageId was already used in another conversation.",
+                        "CHAT_CLIENT_MESSAGE_ID_CONFLICT");
+                }
+
+                if (duplicated.Type != messageType
+                    || !string.Equals(duplicated.Content, content, StringComparison.Ordinal)
+                    || !string.Equals(duplicated.AttachmentName, safeFileName, StringComparison.Ordinal)
+                    || duplicated.AttachmentSize != fileLength
+                    || !string.Equals(duplicated.AttachmentMimeType, mime, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw AppException.Conflict(
+                        "ClientMessageId was reused with different message content.",
+                        "CHAT_CLIENT_MESSAGE_ID_PAYLOAD_CONFLICT");
+                }
+
+                return ApiResponse<MessageResponse>.SuccessResponse(
+                    _mapper.Map<MessageResponse>(duplicated),
+                    "Message already exists.");
+            }
+        }
+
+        EnsureConversationCanAcceptMessages(conversation);
+
+        if (!await _booths.CustomerVisibleExistsAsync(conversation.BoothId, cancellationToken))
+        {
+            throw AppException.BadRequest(
+                "Messages cannot be sent while the booth is unavailable.",
+                "CHAT_BOOTH_UNAVAILABLE");
+        }
+
+        await using var buffered = new MemoryStream();
+        await fileStream.CopyToAsync(buffered, cancellationToken);
+        if (buffered.Length == 0)
+        {
+            throw AppException.BadRequest(
+                "Attachment file is required.",
+                "CHAT_ATTACHMENT_REQUIRED");
+        }
+
+        if (buffered.Length != fileLength && fileLength > 0)
+        {
+            // Prefer measured length over declared multipart length.
+            fileLength = buffered.Length;
+        }
+        else
+        {
+            fileLength = buffered.Length;
+        }
+
+        buffered.Position = 0;
+        string? storedUrl = null;
+        try
+        {
+            storedUrl = isImage
+                ? await _fileStorage.SaveImageAsync(
+                    ChatStorageCategory,
+                    buffered,
+                    safeFileName,
+                    mime,
+                    fileLength,
+                    cancellationToken)
+                : await _fileStorage.SaveDocumentAsync(
+                    ChatStorageCategory,
+                    buffered,
+                    safeFileName,
+                    mime,
+                    fileLength,
+                    cancellationToken);
+
+            var now = DateTime.UtcNow;
+            var message = new Message
+            {
+                Id = Guid.NewGuid(),
+                ConversationId = conversationId,
+                SenderId = userId,
+                ClientMessageId = clientMessageId,
+                SenderRole = GetSenderRole(conversation, userId),
+                Type = messageType,
+                Content = content,
+                AttachmentUrl = storedUrl,
+                AttachmentName = safeFileName,
+                AttachmentMimeType = mime,
+                AttachmentSize = fileLength,
+                IsRead = false,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+
+            await _messages.AddAsync(message);
+            conversation.LastMessageId = message.Id;
+            conversation.LastMessageAt = now;
+            conversation.UpdatedAt = now;
+            _conversations.Update(conversation);
+            await _messages.SaveChangesAsync();
+
+            var created = await _messages.GetOwnedAsync(message.Id, userId, cancellationToken) ?? message;
+            var response = _mapper.Map<MessageResponse>(created);
+            await DeliverCreatedMessageAsync(conversation, userId, response, message.Id);
+            return ApiResponse<MessageResponse>.SuccessResponse(
+                response,
+                "Attachment message sent successfully.");
+        }
+        catch
+        {
+            if (!string.IsNullOrWhiteSpace(storedUrl))
+            {
+                try
+                {
+                    await _fileStorage.DeleteImageIfManagedAsync(storedUrl, CancellationToken.None);
+                }
+                catch (Exception cleanupException)
+                {
+                    _logger.LogWarning(
+                        cleanupException,
+                        "Failed to clean up chat attachment {AttachmentUrl} after persistence failure.",
+                        storedUrl);
+                }
+            }
+
+            throw;
+        }
     }
 
     public async Task<ApiResponse<object>> MarkReadAsync(
@@ -319,6 +476,10 @@ public class ChatService : IChatService
         var now = DateTime.UtcNow;
         message.DeletedAt = now;
         message.Content = string.Empty;
+        message.AttachmentUrl = null;
+        message.AttachmentName = null;
+        message.AttachmentMimeType = null;
+        message.AttachmentSize = null;
         message.UpdatedAt = now;
         _messages.Update(message);
 
@@ -386,6 +547,52 @@ public class ChatService : IChatService
         return response;
     }
 
+    private static void EnsureConversationCanAcceptMessages(Conversation conversation)
+    {
+        if (conversation.Status != ConversationStatus.Active)
+        {
+            throw AppException.BadRequest(
+                "Conversation is not active.",
+                "CHAT_CONVERSATION_CLOSED");
+        }
+    }
+
+    private async Task DeliverCreatedMessageAsync(
+        Conversation conversation,
+        Guid senderId,
+        MessageResponse response,
+        Guid messageId)
+    {
+        var receiverId = conversation.CustomerId == senderId
+            ? conversation.Booth.BoothOwnerId
+            : conversation.CustomerId;
+        // Sender already has the REST response optimistically; publish MessageCreated
+        // only to the other participant via chat-user:{receiverId} (no sender echo,
+        // no conversation-group fan-out, no SignalREventPublisher duplicate).
+        await RunPostCommitSafelyAsync(
+            () => _realtime.PublishMessageCreatedAsync(
+                conversation.Id,
+                receiverId,
+                response,
+                CancellationToken.None),
+            "realtime message delivery",
+            messageId);
+
+        await RunPostCommitSafelyAsync(
+            () => _notifications.NotifyAsync(
+                new NotificationMessage(
+                    receiverId,
+                    NotificationType.NewMessage,
+                    "New chat message",
+                    $"You have a new message from {response.SenderName}.",
+                    conversation.BoothId,
+                    "Conversation",
+                    conversation.Id),
+                CancellationToken.None),
+            "chat notification creation",
+            messageId);
+    }
+
     private static string NormalizeContent(string content)
     {
         var normalized = content?.Trim() ?? string.Empty;
@@ -404,6 +611,53 @@ public class ChatService : IChatService
         }
 
         return normalized;
+    }
+
+    private static string NormalizeOptionalCaption(string? content)
+    {
+        var normalized = content?.Trim() ?? string.Empty;
+        if (normalized.Length > MaxMessageLength)
+        {
+            throw AppException.BadRequest(
+                $"Message content cannot exceed {MaxMessageLength} characters.",
+                "CHAT_MESSAGE_TOO_LONG");
+        }
+
+        return normalized;
+    }
+
+    private static string SanitizeOriginalFileName(string? fileName)
+    {
+        var raw = Path.GetFileName(fileName?.Trim() ?? string.Empty);
+        if (string.IsNullOrWhiteSpace(raw)
+            || raw.Contains("..", StringComparison.Ordinal)
+            || Path.IsPathRooted(raw))
+        {
+            throw AppException.BadRequest(
+                "Attachment file name is invalid.",
+                "CHAT_ATTACHMENT_NAME_INVALID");
+        }
+
+        var sanitized = new string(raw.Where(ch =>
+            !char.IsControl(ch)
+            && ch != '/'
+            && ch != '\\'
+            && ch != ':'
+            && ch != '*'
+            && ch != '?'
+            && ch != '"'
+            && ch != '<'
+            && ch != '>'
+            && ch != '|').ToArray()).Trim();
+
+        if (string.IsNullOrWhiteSpace(sanitized))
+        {
+            throw AppException.BadRequest(
+                "Attachment file name is invalid.",
+                "CHAT_ATTACHMENT_NAME_INVALID");
+        }
+
+        return sanitized.Length > 255 ? sanitized[..255] : sanitized;
     }
 
     private static ConversationParticipantRole GetSenderRole(Conversation conversation, Guid userId)

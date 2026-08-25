@@ -119,8 +119,8 @@ public class NotificationHub : Hub
         => Groups.RemoveFromGroupAsync(Context.ConnectionId, RealtimeGroups.Layout(layoutId), Context.ConnectionAborted);
 
     /// <summary>
-    /// Join the booth group.  Booth Owner can only join their own booth;
-    /// Admin can join any booth.
+    /// Join the booth group. Booth owners join their own booth; admins can join any;
+    /// authenticated customers may join customer-visible booths for menu/order realtime.
     /// </summary>
     public async Task JoinBooth(Guid boothId)
     {
@@ -131,11 +131,20 @@ public class NotificationHub : Hub
             return;
         }
 
-        var booth = await _boothRepo.GetOwnedBoothAsync(userId, boothId);
-        if (booth is null)
-            throw new HubException("You are not authorized to join this booth group.");
+        var owned = await _boothRepo.GetOwnedBoothAsync(userId, boothId);
+        if (owned is not null)
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, RealtimeGroups.Booth(boothId), Context.ConnectionAborted);
+            return;
+        }
 
-        await Groups.AddToGroupAsync(Context.ConnectionId, RealtimeGroups.Booth(boothId), Context.ConnectionAborted);
+        if (await _boothRepo.CustomerVisibleExistsAsync(boothId, Context.ConnectionAborted))
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, RealtimeGroups.Booth(boothId), Context.ConnectionAborted);
+            return;
+        }
+
+        throw new HubException("You are not authorized to join this booth group.");
     }
 
     public Task LeaveBooth(Guid boothId)

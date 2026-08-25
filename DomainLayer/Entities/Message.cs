@@ -24,6 +24,16 @@ public partial class Message
 
     public string Content { get; set; } = null!;
 
+    /// <summary>Public URL for the single optional attachment (Image or File).</summary>
+    public string? AttachmentUrl { get; set; }
+
+    /// <summary>Original client file name (sanitized for display only).</summary>
+    public string? AttachmentName { get; set; }
+
+    public string? AttachmentMimeType { get; set; }
+
+    public long? AttachmentSize { get; set; }
+
     public bool IsRead { get; set; }
 
     public DateTime? ReadAt { get; set; }

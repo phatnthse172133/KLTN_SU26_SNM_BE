@@ -3,6 +3,7 @@ using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
 using ApplicationLayer.Mappings;
+using ApplicationLayer.Services.Realtime;
 using AutoMapper;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
@@ -18,6 +19,7 @@ public class MenuService : IMenuService
     private readonly IFoodItemRepository _foodItems;
     private readonly IMapper _mapper;
     private readonly IFoodSemanticMetadataRepository? _semanticMetadata;
+    private readonly IRealtimeEventPublisher? _realtimeEvents;
 
     public MenuService(
         IBoothRepository booths,
@@ -39,6 +41,19 @@ public class MenuService : IMenuService
         IFoodSemanticMetadataRepository semanticMetadata)
         : this(booths, categories, foodItems, mapper)
         => _semanticMetadata = semanticMetadata;
+
+    public MenuService(
+        IBoothRepository booths,
+        IFoodCategoryRepository categories,
+        IFoodItemRepository foodItems,
+        IMapper mapper,
+        IFoodSemanticMetadataRepository? semanticMetadata,
+        IRealtimeEventPublisher? realtimeEvents)
+        : this(booths, categories, foodItems, mapper)
+    {
+        _semanticMetadata = semanticMetadata;
+        _realtimeEvents = realtimeEvents;
+    }
 
     public async Task<ApiResponse<PaginationResp<FoodItemResponse>>> GetMyBoothMenuAsync(
         Guid ownerId,
@@ -162,6 +177,24 @@ public class MenuService : IMenuService
 
         _foodItems.Update(foodItem);
         await _foodItems.SaveChangesAsync();
+
+        if (_realtimeEvents is not null)
+        {
+            await _realtimeEvents.PublishAsync(new RealtimeEvent
+            {
+                EventType = "FoodAvailabilityChanged",
+                GroupName = RealtimeGroups.Booth(boothId),
+                // Discovery lists (Home/FoodList/FoodDetail) are not always in booth:{id}.
+                Role = "Customer",
+                Payload = new
+                {
+                    boothId,
+                    foodItemId = foodItem.Id,
+                    isAvailable = foodItem.IsAvailable,
+                    updatedAt = foodItem.UpdatedAt
+                }
+            }, cancellationToken);
+        }
 
         return ApiResponse<FoodItemResponse>.SuccessResponse(_mapper.Map<FoodItemResponse>(foodItem), request.IsAvailable ? "Food item is now available." : "Food item is now unavailable.");
     }

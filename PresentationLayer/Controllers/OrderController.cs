@@ -34,7 +34,7 @@ namespace PresentationLayer.Controllers
         {
             if (dto == null || dto.Items.Count == 0)
             {
-                return BadRequest(new { message = "Giỏ hàng không có sản phẩm nào!" });
+                return BadRequest(new { message = "The cart does not contain any items." });
             }
 
             if (dto.CheckoutRequestId == Guid.Empty)
@@ -67,7 +67,7 @@ namespace PresentationLayer.Controllers
         {
             if (dto == null)
             {
-                return BadRequest(new { message = "Dữ liệu không hợp lệ!" });
+                return BadRequest(new { message = "The request data is invalid." });
             }
 
             if (dto.OrderCode != 0 && dto.OrderCode != orderCode)

@@ -117,7 +117,7 @@ namespace ApplicationLayer.Services.PayOS
                     ex.ErrorCode,
                     ex.Message);
                 throw AppException.BadGateway(
-                    "Không thể tạo liên kết thanh toán PayOS. Vui lòng thử lại.",
+                    "Unable to create the PayOS payment link. Please try again.",
                     "PAYOS_CREATE_LINK_FAILED",
                     ex);
             }
@@ -130,7 +130,7 @@ namespace ApplicationLayer.Services.PayOS
                     amount,
                     ex.Message);
                 throw AppException.BadGateway(
-                    "Không thể tạo liên kết thanh toán PayOS. Vui lòng thử lại.",
+                    "Unable to create the PayOS payment link. Please try again.",
                     "PAYOS_CREATE_LINK_FAILED",
                     ex);
             }
@@ -146,7 +146,7 @@ namespace ApplicationLayer.Services.PayOS
                     request.OrderCode,
                     amount);
                 throw AppException.ServiceUnavailable(
-                    "Không thể kết nối PayOS. Vui lòng thử lại.",
+                    "Unable to connect to PayOS. Please try again.",
                     "PAYOS_UNAVAILABLE",
                     ex);
             }

@@ -92,7 +92,7 @@ namespace ApplicationLayer.Services.BoothPayOsCredentials
             else
                 await _repository.UpdateAsync(credential, cancellationToken);
 
-            return ApiResponse<bool>.SuccessResponse(true, "Cấu hình tài khoản PayOS thành công.");
+            return ApiResponse<bool>.SuccessResponse(true, "PayOS account configuration saved successfully.");
         }
 
         public async Task<ApiResponse<BoothPayOsStatusResponse>> GetStatusAsync(

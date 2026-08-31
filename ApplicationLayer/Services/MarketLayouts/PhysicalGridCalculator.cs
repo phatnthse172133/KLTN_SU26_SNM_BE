@@ -78,17 +78,17 @@ public static class PhysicalGridCalculator
                 var requestedCapacity = request.DefaultZoneCapacity ?? request.RequestedBoothCount ?? 0;
                 if (requestedCapacity > grid.Capacity)
                 {
-                    errors.Add($"Zone 'General Area' chỉ chứa tối đa {grid.Capacity} booth nhưng đang yêu cầu {requestedCapacity} booth.");
+                    errors.Add($"Zone 'General Area' can contain at most {grid.Capacity} booths, but {requestedCapacity} booths were requested.");
                 }
                 else if (requestedCapacity <= 0)
                 {
-                    errors.Add("Zone 'General Area' yêu cầu số lượng booth lớn hơn 0.");
+                    errors.Add("Zone 'General Area' requires a booth count greater than zero.");
                 }
             }
 
             var defaultZoneArea = (request.DefaultZoneWidthMeters ?? 0) * (request.DefaultZoneLengthMeters ?? 0);
             if (defaultZoneArea > marketArea + 0.0001)
-                errors.Add($"Diện tích General Area ({defaultZoneArea:0.##} m²) vượt diện tích khu chợ ({marketArea:0.##} m²) là {(defaultZoneArea - marketArea):0.##} m².");
+                errors.Add($"The General Area ({defaultZoneArea:0.##} m²) exceeds the market area ({marketArea:0.##} m²) by {(defaultZoneArea - marketArea):0.##} m².");
         }
         else
         {
@@ -106,11 +106,11 @@ public static class PhysicalGridCalculator
                 var requestedCapacity = config.Capacity ?? 0;
                 if (requestedCapacity > grid.Capacity)
                 {
-                    errors.Add($"Zone '{config.ZoneName ?? "Zone"}' chỉ chứa tối đa {grid.Capacity} booth nhưng đang yêu cầu {requestedCapacity} booth.");
+                    errors.Add($"Zone '{config.ZoneName ?? "Zone"}' can contain at most {grid.Capacity} booths, but {requestedCapacity} booths were requested.");
                 }
                 else if (requestedCapacity <= 0)
                 {
-                    errors.Add($"Zone '{config.ZoneName ?? "Zone"}' yêu cầu số lượng booth lớn hơn 0.");
+                    errors.Add($"Zone '{config.ZoneName ?? "Zone"}' requires a booth count greater than zero.");
                 }
             }
 
@@ -118,7 +118,7 @@ public static class PhysicalGridCalculator
                 (config.ZoneWidthMeters ?? 0) * (config.ZoneLengthMeters ?? 0));
 
             if (totalZoneArea > marketArea + 0.0001)
-                errors.Add($"Tổng diện tích các zone ({totalZoneArea:0.##} m²) vượt diện tích khu chợ ({marketArea:0.##} m²) là {(totalZoneArea - marketArea):0.##} m².");
+                errors.Add($"The total zone area ({totalZoneArea:0.##} m²) exceeds the market area ({marketArea:0.##} m²) by {(totalZoneArea - marketArea):0.##} m².");
         }
 
         return new PhysicalLayoutPreparation(true, errors, warnings);
@@ -133,7 +133,7 @@ public static class PhysicalGridCalculator
         if (config.ZoneWidthMeters is not > 0 || config.ZoneLengthMeters is not > 0
             || config.BoothWidthMeters is not > 0 || config.BoothLengthMeters is not > 0)
         {
-            errors.Add($"Zone '{zoneLabel}' yêu cầu chiều rộng, chiều dài zone và kích thước booth hợp lệ (> 0m).");
+            errors.Add($"Zone '{zoneLabel}' requires valid zone width, zone length, and booth dimensions (all greater than 0 m).");
             return null;
         }
 
@@ -141,7 +141,7 @@ public static class PhysicalGridCalculator
         var gapY = config.VerticalGapMeters ?? 0;
         if (gapX < 0 || gapY < 0)
         {
-            errors.Add($"Zone '{zoneLabel}' khoảng cách giữa các booth không được âm.");
+            errors.Add($"Zone '{zoneLabel}' cannot use negative spacing between booths.");
             return null;
         }
 
@@ -153,7 +153,7 @@ public static class PhysicalGridCalculator
 
         if (columns < 1 || rows < 1)
         {
-            errors.Add($"Zone '{zoneLabel}' có kích thước {config.ZoneWidthMeters:0.##}m x {config.ZoneLengthMeters:0.##}m quá nhỏ để chứa 1 booth {config.BoothWidthMeters:0.##}m x {config.BoothLengthMeters:0.##}m với khoảng cách đã chọn.");
+            errors.Add($"Zone '{zoneLabel}' ({config.ZoneWidthMeters:0.##}m × {config.ZoneLengthMeters:0.##}m) is too small for one booth ({config.BoothWidthMeters:0.##}m × {config.BoothLengthMeters:0.##}m) with the selected spacing.");
             return null;
         }
 

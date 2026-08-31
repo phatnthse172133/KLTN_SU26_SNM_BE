@@ -24,7 +24,7 @@ public sealed class PayOSCallbackController : ControllerBase
         {
             ContentType = "text/html; charset=utf-8",
             StatusCode = StatusCodes.Status200OK,
-            Content = $"<!doctype html><html><head><meta name=\"viewport\" content=\"width=device-width\"><meta http-equiv=\"refresh\" content=\"0;url={encoded}\"></head><body><p>Đang quay lại ứng dụng…</p><p><a href=\"{encoded}\">Mở Smart Night Market</a></p></body></html>"
+            Content = $"<!doctype html><html><head><meta name=\"viewport\" content=\"width=device-width\"><meta http-equiv=\"refresh\" content=\"0;url={encoded}\"></head><body><p>Returning to the application…</p><p><a href=\"{encoded}\">Open Smart Night Market</a></p></body></html>"
         };
     }
 }

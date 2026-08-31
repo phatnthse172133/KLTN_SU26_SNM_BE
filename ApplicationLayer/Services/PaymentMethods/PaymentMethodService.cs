@@ -26,7 +26,7 @@ namespace ApplicationLayer.Services.PaymentMethods
         {
             // 1. Logic nghiá»‡p vá»¥: Kiá»ƒm tra User
             var userExists = await _userRepo.UserExistsAsync(userId);
-            if (!userExists) return ApiResponse<bool>.Failure("KhÃ´ng tÃ¬m tháº¥y User trong há»‡ thá»‘ng.", data: false);
+            if (!userExists) return ApiResponse<bool>.Failure("User was not found.", data: false);
 
             // 2. Logic nghiá»‡p vá»¥: Xá»­ lÃ½ máº·c Ä‘á»‹nh (Default toggling)
             var oldDefault = await _paymentMethodRepo.GetDefaultMethodByUserIdAsync(userId);
@@ -50,7 +50,7 @@ namespace ApplicationLayer.Services.PaymentMethods
             // 4. LÆ°u táº¥t cáº£ thay Ä‘á»•i (Unit of Work)
             await _paymentMethodRepo.SaveChangesAsync();
 
-            return ApiResponse<bool>.SuccessResponse(true, "LiÃªn káº¿t phÆ°Æ¡ng thá»©c thanh toÃ¡n thÃ nh cÃ´ng!");
+            return ApiResponse<bool>.SuccessResponse(true, "Payment method linked successfully.");
         }
     }
 }

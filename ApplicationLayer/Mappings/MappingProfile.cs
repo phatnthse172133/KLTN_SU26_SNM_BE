@@ -248,6 +248,7 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.Description, o => o.MapFrom(s => s.Description.Trim()))
                 .ForMember(d => d.Category, o => o.MapFrom(s => s.Category))
                 .ForMember(d => d.AdminResponse, o => o.Ignore())
+                .ForMember(d => d.BoothOwnerResponse, o => o.Ignore())
                 .ForMember(d => d.CustomerEvidenceRequestNote, o => o.Ignore())
                 .ForMember(d => d.Status, o => o.Ignore())
                 .ForMember(d => d.CreatedAt, o => o.Ignore())

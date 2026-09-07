@@ -172,16 +172,16 @@ public class BoothRepository : GenericRepository<Booth>, IBoothRepository
             booth.NightMarket.Status == DomainLayer.Enums.GeneralEnum.NightMarketStatus.Open &&
             booth.NightMarket.OpeningHours.HasValue &&
             booth.NightMarket.ClosingHours.HasValue &&
-            booth.NightMarket.OpeningHours.Value != booth.NightMarket.ClosingHours.Value &&
-            (booth.NightMarket.OpeningHours.Value < booth.NightMarket.ClosingHours.Value
-                ? booth.NightMarket.OpeningHours.Value <= localTime && localTime < booth.NightMarket.ClosingHours.Value
-                : localTime >= booth.NightMarket.OpeningHours.Value || localTime < booth.NightMarket.ClosingHours.Value) &&
+            (booth.NightMarket.OpeningHours.Value == booth.NightMarket.ClosingHours.Value
+                || (booth.NightMarket.OpeningHours.Value < booth.NightMarket.ClosingHours.Value
+                    ? booth.NightMarket.OpeningHours.Value <= localTime && localTime < booth.NightMarket.ClosingHours.Value
+                    : localTime >= booth.NightMarket.OpeningHours.Value || localTime < booth.NightMarket.ClosingHours.Value)) &&
             ((!booth.OpenTime.HasValue && !booth.CloseTime.HasValue) ||
              (booth.OpenTime.HasValue && booth.CloseTime.HasValue &&
-              booth.OpenTime.Value != booth.CloseTime.Value &&
-              (booth.OpenTime.Value < booth.CloseTime.Value
-                  ? booth.OpenTime.Value <= localTime && localTime < booth.CloseTime.Value
-                  : localTime >= booth.OpenTime.Value || localTime < booth.CloseTime.Value)));
+              (booth.OpenTime.Value == booth.CloseTime.Value
+                  || (booth.OpenTime.Value < booth.CloseTime.Value
+                      ? booth.OpenTime.Value <= localTime && localTime < booth.CloseTime.Value
+                      : localTime >= booth.OpenTime.Value || localTime < booth.CloseTime.Value))));
 
     private static Expression<Func<Booth, bool>> Negate(Expression<Func<Booth, bool>> predicate)
         => Expression.Lambda<Func<Booth, bool>>(Expression.Not(predicate.Body), predicate.Parameters);

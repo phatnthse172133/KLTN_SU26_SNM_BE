@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 using ApplicationLayer.Helppers;
 using static DomainLayer.Enums.GeneralEnum;
 
@@ -10,6 +11,10 @@ public class CreateComplaintRequest
     public Guid BoothId { get; set; }
     public Guid OrderId { get; set; }
 
+    // Wire: PascalCase enum name string (matches ComplaintResponse.Category). Integers still accepted.
+    // Domain members: FoodQuality, WrongItem, MissingItem, DelayedOrder, BoothBehavior, PaymentIssue, Other
+    // (PromotionIssue is legacy-only and rejected in ComplaintService).
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public ComplaintCategory Category { get; set; } = ComplaintCategory.Other;
 
     [StringLength(200)]
@@ -45,6 +50,7 @@ public class BoothComplaintResponseRequest
 
 public class UpdateComplaintStatusRequest
 {
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public ComplaintStatus Status { get; set; }
 
     [StringLength(2000)]
@@ -53,6 +59,7 @@ public class UpdateComplaintStatusRequest
     [StringLength(2000)]
     public string? EvidenceRequestNote { get; set; }
 
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public ComplaintResolutionAction? ResolutionAction { get; set; }
 
     [StringLength(500)]

@@ -9,6 +9,7 @@ using DomainLayer.InterfaceRepository;
 using ApplicationLayer.Services.Booths;
 using ApplicationLayer.Services.CustomerDiscovery;
 using ApplicationLayer.Services.NightMarkets;
+using static DomainLayer.Enums.GeneralEnum;
 
 namespace ApplicationLayer.Services.Carts;
 
@@ -317,18 +318,14 @@ public class CartService : ICartService
         DateTime utcNow)
     {
         var items = boothItems.ToList();
-        var hoursResult = new BoothOperatingHoursEvaluator().Evaluate(booth, utcNow);
+        var openState = EvaluateCartBoothOpenState(booth, utcNow);
         return new CartBoothResponse
         {
             BoothId = booth.Id,
             BoothName = booth.BoothName,
-            IsOpen = hoursResult.IsOpen,
-            NextOpenAt = hoursResult.NextOpenAt.HasValue
-                ? BoothOperatingHoursEvaluator.FormatNextOpenAt(hoursResult.NextOpenAt)
-                : null,
-            CloseReason = hoursResult.Status != BoothOperatingStatus.Open
-                ? hoursResult.Reason
-                : null,
+            IsOpen = openState.IsOpen,
+            NextOpenAt = openState.NextOpenAt,
+            CloseReason = openState.CloseReason,
             Subtotal = items.Sum(item => GetCurrentPrice(item.FoodItem, utcNow) * item.Quantity),
             Categories = items
                 .GroupBy(item => new
@@ -351,6 +348,59 @@ public class CartService : ICartService
                 .ToList()
         };
     }
+
+    /// <summary>
+    /// Cart booth open flag must match place-order eligibility hours:
+    /// market operational ∩ market schedule ∩ booth schedule (null booth hours = inherit market).
+    /// </summary>
+    public static (bool IsOpen, string? NextOpenAt, string? CloseReason) EvaluateCartBoothOpenState(
+        Booth booth,
+        DateTime utcNow)
+    {
+        if (booth.Status != BoothStatus.Active)
+        {
+            return (false, null, booth.Status == BoothStatus.Banned ? "Banned" : "Paused");
+        }
+
+        var market = booth.NightMarket;
+        var marketOperational = market is not null
+            && !market.IsDeleted
+            && market.ModerationStatus == ModerationStatus.Active
+            && market.Status == NightMarketStatus.Active;
+
+        var localTime = TimeOnly.FromDateTime(NightMarketAvailability.GetVietnamLocalTime(utcNow));
+        var isOpen = CustomerAvailability.IsOpenNow(
+            marketOperational,
+            market?.OpeningHours,
+            market?.ClosingHours,
+            booth.OpenTime,
+            booth.CloseTime,
+            localTime);
+
+        if (isOpen)
+            return (true, null, null);
+
+        if (!marketOperational)
+            return (false, FormatClock(market?.OpeningHours), "Market unavailable");
+
+        if (!CustomerAvailability.IsWithinInterval(market?.OpeningHours, market?.ClosingHours, localTime))
+            return (false, FormatClock(market?.OpeningHours), "Market closed");
+
+        if (booth.OpenTime.HasValue != booth.CloseTime.HasValue)
+            return (false, null, "Operating hours not set");
+
+        if (booth.OpenTime is { } boothOpen && booth.CloseTime is { } boothClose
+            && !CustomerAvailability.IsWithinInterval(boothOpen, boothClose, localTime))
+        {
+            var next = BoothOperatingHoursEvaluator.ComputeNextOpenAt(boothOpen, boothClose, localTime);
+            return (false, BoothOperatingHoursEvaluator.FormatNextOpenAt(next), "Closed");
+        }
+
+        return (false, FormatClock(market?.OpeningHours), "Closed");
+    }
+
+    private static string? FormatClock(TimeOnly? time)
+        => time.HasValue ? time.Value.ToString("HH:mm") : null;
 
     private CartItemResponse MapItem(CartItem item, DateTime utcNow)
     {

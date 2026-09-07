@@ -38,7 +38,9 @@ public sealed class CustomerCheckoutService : ICustomerCheckoutService
     public async Task<CheckoutPreviewResponse> GetPreviewAsync(Guid customerId, Guid boothId, Guid? promotionId = null,
         CancellationToken cancellationToken = default)
     {
-        var (cart, items) = await LoadOrderableCartAsync(customerId, boothId, cancellationToken);
+        // Preview must remain available while market/booth are closed so customers can
+        // review the cart and return later. Place-order still revalidates via Evaluate.
+        var (cart, items) = await LoadCartBoothItemsAsync(customerId, boothId, cancellationToken);
         var now = DateTime.UtcNow;
         var groups = items.GroupBy(item => item.FoodItem.Booth).ToList();
         var subtotal = items.Sum(item => FoodPriceResolver.GetCurrentPrice(item.FoodItem, now) * item.Quantity);
@@ -173,18 +175,34 @@ public sealed class CustomerCheckoutService : ICustomerCheckoutService
         return response;
     }
 
-    private async Task<(Cart Cart, IReadOnlyCollection<CartItem> Items)> LoadOrderableCartAsync(Guid customerId, Guid boothId, CancellationToken cancellationToken)
+    private async Task<(Cart Cart, IReadOnlyCollection<CartItem> Items)> LoadCartBoothItemsAsync(
+        Guid customerId,
+        Guid boothId,
+        CancellationToken cancellationToken)
     {
         if (boothId == Guid.Empty)
             throw AppException.BadRequest("Booth id is required.", "BOOTH_ID_REQUIRED");
         var cart = await _carts.GetActiveByCustomerAsync(customerId, cancellationToken)
             ?? throw AppException.UnprocessableEntity("Cart is empty.", "CART_EMPTY");
         var items = await _cartItems.GetActiveByCartAndBoothAsync(cart.Id, boothId, cancellationToken);
-        if (items.Count == 0) throw AppException.UnprocessableEntity("The cart does not contain items from this booth.", "CART_BOOTH_EMPTY");
+        if (items.Count == 0)
+            throw AppException.UnprocessableEntity(
+                "The cart does not contain items from this booth.",
+                "CART_BOOTH_EMPTY");
+        return (cart, items);
+    }
+
+    private async Task<(Cart Cart, IReadOnlyCollection<CartItem> Items)> LoadOrderableCartAsync(
+        Guid customerId,
+        Guid boothId,
+        CancellationToken cancellationToken)
+    {
+        var (cart, items) = await LoadCartBoothItemsAsync(customerId, boothId, cancellationToken);
         var utcNow = DateTime.UtcNow;
         foreach (var item in items)
         {
-            if (item.Quantity <= 0 || item.FoodItem is null) throw AppException.Conflict("Cart changed. Refresh it and try again.", "PRICE_CHANGED");
+            if (item.Quantity <= 0 || item.FoodItem is null)
+                throw AppException.Conflict("Cart changed. Refresh it and try again.", "PRICE_CHANGED");
             var orderability = CustomerOrderability.Evaluate(item.FoodItem, utcNow);
             if (!orderability.CanOrder)
             {

@@ -1,6 +1,7 @@
 using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
+using ApplicationLayer.Services.CustomerDiscovery;
 using ApplicationLayer.Services.PayOS;
 using DomainLayer.Common;
 using DomainLayer.Entities;
@@ -86,6 +87,7 @@ public partial class OrderService
             throw AppException.Conflict("Order can no longer be paid.", "ORDER_CANNOT_RETRY_PAYMENT");
 
         var now = DateTime.UtcNow;
+        await EnsureCustomerOrderStillOrderableAsync(order, now);
         var active = payment.Attempts.OrderByDescending(item => item.AttemptNumber)
             .FirstOrDefault(item => item.Status is PaymentAttemptStatus.Creating or PaymentAttemptStatus.Pending);
         if (active is not null && (!active.ExpiresAt.HasValue || active.ExpiresAt > now))
@@ -176,4 +178,33 @@ public partial class OrderService
         TotalAmount = order.FinalAmount, PaymentUrl = payment.CheckoutUrl, CheckoutUrl = payment.CheckoutUrl,
         QrCode = payment.QrCode, ExpiresAt = payment.ExpiresAt
     };
+
+    private async Task EnsureCustomerOrderStillOrderableAsync(Order order, DateTime utcNow)
+    {
+        var detail = await _orderRepo.GetCustomerDetailAsync(order.CustomerId, order.Id)
+            ?? throw AppException.NotFound("Order was not found.", "ORDER_NOT_FOUND");
+        var foodIds = detail.Items.Select(item => item.FoodItemId).Distinct().ToList();
+        if (foodIds.Count == 0)
+            throw AppException.Conflict("Order has no items.", "ORDER_HAS_NO_ITEMS");
+
+        var foods = await _foodItemRepo.GetAllFoodItemsByIdsAsync(foodIds);
+        if (foods.Count != foodIds.Count)
+            throw AppException.Conflict(
+                "One or more food items are no longer available for payment.",
+                CustomerOrderability.FoodUnavailable);
+
+        foreach (var food in foods)
+        {
+            var orderability = CustomerOrderability.Evaluate(food, utcNow);
+            if (!orderability.CanOrder)
+            {
+                var boothName = food.Booth?.BoothName ?? "The booth";
+                var message = orderability.ReasonCode == CustomerOrderability.BoothClosed
+                    && orderability.NextOpenAt.HasValue
+                    ? $"{boothName} is currently closed. It opens at {orderability.NextOpenAt.Value:HH:mm}."
+                    : CustomerOrderability.GetPublicMessage(orderability.ReasonCode!);
+                throw AppException.Conflict(message, orderability.ReasonCode!);
+            }
+        }
+    }
 }

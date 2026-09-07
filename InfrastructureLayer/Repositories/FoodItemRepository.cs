@@ -227,16 +227,16 @@ public class FoodItemRepository : GenericRepository<FoodItem>, IFoodItemReposito
             item.Booth.NightMarket.Status == NightMarketStatus.Active &&
             item.Booth.NightMarket.OpeningHours.HasValue &&
             item.Booth.NightMarket.ClosingHours.HasValue &&
-            item.Booth.NightMarket.OpeningHours.Value != item.Booth.NightMarket.ClosingHours.Value &&
-            (item.Booth.NightMarket.OpeningHours.Value < item.Booth.NightMarket.ClosingHours.Value
-                ? item.Booth.NightMarket.OpeningHours.Value <= localTime && localTime < item.Booth.NightMarket.ClosingHours.Value
-                : localTime >= item.Booth.NightMarket.OpeningHours.Value || localTime < item.Booth.NightMarket.ClosingHours.Value) &&
+            (item.Booth.NightMarket.OpeningHours.Value == item.Booth.NightMarket.ClosingHours.Value
+                || (item.Booth.NightMarket.OpeningHours.Value < item.Booth.NightMarket.ClosingHours.Value
+                    ? item.Booth.NightMarket.OpeningHours.Value <= localTime && localTime < item.Booth.NightMarket.ClosingHours.Value
+                    : localTime >= item.Booth.NightMarket.OpeningHours.Value || localTime < item.Booth.NightMarket.ClosingHours.Value)) &&
             ((!item.Booth.OpenTime.HasValue && !item.Booth.CloseTime.HasValue) ||
              (item.Booth.OpenTime.HasValue && item.Booth.CloseTime.HasValue &&
-              item.Booth.OpenTime.Value != item.Booth.CloseTime.Value &&
-              (item.Booth.OpenTime.Value < item.Booth.CloseTime.Value
-                  ? item.Booth.OpenTime.Value <= localTime && localTime < item.Booth.CloseTime.Value
-                  : localTime >= item.Booth.OpenTime.Value || localTime < item.Booth.CloseTime.Value)));
+              (item.Booth.OpenTime.Value == item.Booth.CloseTime.Value
+                  || (item.Booth.OpenTime.Value < item.Booth.CloseTime.Value
+                      ? item.Booth.OpenTime.Value <= localTime && localTime < item.Booth.CloseTime.Value
+                      : localTime >= item.Booth.OpenTime.Value || localTime < item.Booth.CloseTime.Value))));
 
     private static IQueryable<CustomerFoodReadModel> ProjectCustomer(
         IQueryable<FoodItemWithEffectivePrice> query,

@@ -50,6 +50,7 @@ public class MapNavigationService : IMapNavigationService
         var blocks = await _layouts.GetBlocksByLayoutIdAsync(layout.Id, cancellationToken);
         var locations = await _locations.GetCustomerCurrentByLayoutAsync(layout.Id, cancellationToken);
         var zones = await _zones.GetActiveByNightMarketIdAsync(nightMarketId, cancellationToken: cancellationToken);
+        zones = LayoutZoneSnapshot.Resolve(zones, blocks);
 
         return ApiResponse<NightMarketMapResponse>.SuccessResponse(new()
         {
@@ -76,7 +77,7 @@ public class MapNavigationService : IMapNavigationService
             {
                 BoothId = x.BoothId, BoothName = x.Booth.BoothName, NodeId = x.LayoutNodeId,
                 ZoneId = x.ZoneId, SlotNumber = x.SlotNumber, XCoordinate = x.Xcoordinate, YCoordinate = x.Ycoordinate,
-                SlotCode = x.LayoutNode?.SlotCode, ZoneName = x.Zone?.ZoneName
+                SlotCode = x.LayoutNode?.SlotCode, ZoneName = zones.FirstOrDefault(z => z.Id == x.ZoneId)?.ZoneName
             }).ToList()
         });
     }
@@ -166,6 +167,7 @@ public class MapNavigationService : IMapNavigationService
 
         var slot = byId[location.LayoutNodeId];
         var zones = await _zones.GetActiveByNightMarketIdAsync(layout.NightMarketId, cancellationToken: cancellationToken);
+        zones = LayoutZoneSnapshot.Resolve(zones, blocks);
         var zoneName = slot.ZoneId.HasValue
             ? zones.FirstOrDefault(z => z.Id == slot.ZoneId.Value)?.ZoneName
             : null;

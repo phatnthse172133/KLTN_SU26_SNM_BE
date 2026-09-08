@@ -213,9 +213,24 @@ public class BoothRepository : GenericRepository<Booth>, IBoothRepository
             includeImages
                 ? booth.BoothImages.OrderBy(image => image.DisplayOrder).ThenBy(image => image.Id).Select(image => image.ImageUrl).ToList()
                 : new List<string>(),
-            booth.BoothLocations.Where(location => !location.IsDeleted).Select(location => (Guid?)location.LayoutId).FirstOrDefault(),
-            booth.BoothLocations.Where(location => !location.IsDeleted).Select(location => (Guid?)location.LayoutNodeId).FirstOrDefault(),
-            booth.BoothLocations.Where(location => !location.IsDeleted).Select(location => location.SlotNumber).FirstOrDefault(),
-            booth.BoothLocations.Where(location => !location.IsDeleted).Select(location => location.ZoneId).FirstOrDefault(),
-            booth.BoothLocations.Where(location => !location.IsDeleted).Select(location => location.Zone == null ? null : location.Zone.ZoneName).FirstOrDefault()));
+            booth.BoothLocations.Where(location => !location.IsDeleted && location.ReleasedAt == null
+                && !location.Layout.IsDeleted && location.Layout.NightMarketId == booth.NightMarketId
+                && location.Layout.Status == DomainLayer.Enums.GeneralEnum.MarketLayoutStatus.Active)
+                .OrderBy(location => location.Id).Select(location => (Guid?)location.LayoutId).FirstOrDefault(),
+            booth.BoothLocations.Where(location => !location.IsDeleted && location.ReleasedAt == null
+                && !location.Layout.IsDeleted && location.Layout.NightMarketId == booth.NightMarketId
+                && location.Layout.Status == DomainLayer.Enums.GeneralEnum.MarketLayoutStatus.Active)
+                .OrderBy(location => location.Id).Select(location => (Guid?)location.LayoutNodeId).FirstOrDefault(),
+            booth.BoothLocations.Where(location => !location.IsDeleted && location.ReleasedAt == null
+                && !location.Layout.IsDeleted && location.Layout.NightMarketId == booth.NightMarketId
+                && location.Layout.Status == DomainLayer.Enums.GeneralEnum.MarketLayoutStatus.Active)
+                .OrderBy(location => location.Id).Select(location => location.SlotNumber).FirstOrDefault(),
+            booth.BoothLocations.Where(location => !location.IsDeleted && location.ReleasedAt == null
+                && !location.Layout.IsDeleted && location.Layout.NightMarketId == booth.NightMarketId
+                && location.Layout.Status == DomainLayer.Enums.GeneralEnum.MarketLayoutStatus.Active)
+                .OrderBy(location => location.Id).Select(location => location.ZoneId).FirstOrDefault(),
+            booth.BoothLocations.Where(location => !location.IsDeleted && location.ReleasedAt == null
+                && !location.Layout.IsDeleted && location.Layout.NightMarketId == booth.NightMarketId
+                && location.Layout.Status == DomainLayer.Enums.GeneralEnum.MarketLayoutStatus.Active)
+                .OrderBy(location => location.Id).Select(location => location.Zone == null ? null : location.Zone.ZoneName).FirstOrDefault()));
 }

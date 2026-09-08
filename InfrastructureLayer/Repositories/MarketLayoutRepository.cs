@@ -161,7 +161,7 @@ public class MarketLayoutRepository : GenericRepository<MarketLayout>, IMarketLa
 
     public async Task<MarketLayout> CloneToDraftAsync(
         Guid sourceLayoutId, string? layoutName, DateTime createdAt,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, int? maxLayouts = null)
     {
         await using var transaction = _context.Database.IsRelational()
             ? await _context.Database.BeginTransactionAsync(cancellationToken)
@@ -183,6 +183,16 @@ public class MarketLayoutRepository : GenericRepository<MarketLayout>, IMarketLa
             await _context.Database.ExecuteSqlInterpolatedAsync(
                 $"SELECT pg_advisory_xact_lock(hashtextextended(CAST({source.NightMarketId} AS text), 1))",
                 cancellationToken);
+
+        if (maxLayouts.HasValue)
+        {
+            var used = await _dbSet.CountAsync(layout => layout.NightMarketId == source.NightMarketId
+                && !layout.IsDeleted, cancellationToken);
+            if (used >= maxLayouts.Value)
+                throw ApplicationLayer.Exceptions.AppException.Forbidden(
+                    $"Your package allows {maxLayouts.Value} layouts per market. This market already has {used}. Upgrade your package or archive an unused layout before creating a copy.",
+                    "LAYOUT_LIMIT_REACHED");
+        }
 
         var nextVersion = await _dbSet
             .Where(layout => layout.NightMarketId == source.NightMarketId && !layout.IsDeleted)
@@ -291,11 +301,8 @@ public class MarketLayoutRepository : GenericRepository<MarketLayout>, IMarketLa
             }
             else
             {
-                existingZone.ZoneName = zone.ZoneName;
-                existingZone.Description = zone.Description;
-                existingZone.Color = zone.Color;
-                existingZone.Capacity = zone.Capacity;
-                existingZone.UpdatedAt = now;
+                // Existing zone identity is shared by other layouts. New
+                // geometry/labels are persisted in this layout's block snapshot.
             }
         }
 

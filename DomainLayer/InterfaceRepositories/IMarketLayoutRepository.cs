@@ -26,6 +26,6 @@ public interface IMarketLayoutRepository : IGenericRepository<MarketLayout>
     Task<int> GetNextVersionAsync(Guid nightMarketId, CancellationToken cancellationToken = default);
     Task<bool> ActiveNameOrVersionExistsAsync(Guid nightMarketId, string name, int version, Guid? excludeId = null, CancellationToken cancellationToken = default);
     Task ActivateExclusiveAsync(Guid nightMarketId, Guid activeLayoutId, DateTime updatedAt, CancellationToken cancellationToken = default);
-    Task<MarketLayout> CloneToDraftAsync(Guid sourceLayoutId, string? layoutName, DateTime createdAt, CancellationToken cancellationToken = default);
+    Task<MarketLayout> CloneToDraftAsync(Guid sourceLayoutId, string? layoutName, DateTime createdAt, CancellationToken cancellationToken = default, int? maxLayouts = null);
     Task SaveGraphTransactionalAsync(Guid layoutId, IEnumerable<LayoutBlock> blocks, IEnumerable<LayoutNode> nodes, IEnumerable<LayoutEdge> edges, IEnumerable<Zone>? zoneUpserts = null, CancellationToken cancellationToken = default);
 }

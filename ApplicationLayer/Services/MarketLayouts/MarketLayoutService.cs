@@ -44,6 +44,24 @@ public class MarketLayoutService : IMarketLayoutService
         _eventPublisher = eventPublisher;
     }
 
+    public async Task<ApiResponse<MarketLayoutResponse>> CloneAsync(
+        Guid layoutId, CloneMarketLayoutDraftRequest request, CancellationToken cancellationToken = default, Guid? actorId = null)
+    {
+        var source = await GetActiveLayoutAsync(layoutId, cancellationToken);
+        await EnsureLayoutOwnershipAsync(source, actorId, cancellationToken);
+        var market = await EnsureNightMarketExistsAsync(source.NightMarketId, cancellationToken);
+        int? maxLayouts = null;
+        if (market.MarketOwnerId is Guid ownerId)
+        {
+            if (!await _entitlements.HasActiveMarketSubscriptionAsync(ownerId))
+                throw AppException.Forbidden("An active Market subscription is required to perform this action.", "MARKET_SUBSCRIPTION_REQUIRED");
+            maxLayouts = await _entitlements.GetMaxLayoutsPerMarketAsync(ownerId);
+        }
+        var clone = await _layouts.CloneToDraftAsync(layoutId, request.LayoutName, DateTime.UtcNow, cancellationToken, maxLayouts);
+        return ApiResponse<MarketLayoutResponse>.SuccessResponse(
+            _mapper.Map<MarketLayoutResponse>(clone), "Layout copied to a draft. The active layout is unchanged.");
+    }
+
     public async Task<ApiResponse<PaginationResp<MarketLayoutResponse>>> GetAllAsync(
         Guid nightMarketId, MarketLayoutListRequest request, CancellationToken cancellationToken = default, Guid? actorId = null)
     {
@@ -376,6 +394,17 @@ public class MarketLayoutService : IMarketLayoutService
                 : now,
             UpdatedAt = now
         }).ToList();
+        foreach (var node in nodes)
+        {
+            var nodeErrors = LayoutGeometryValidator.ValidateNodeMove(
+                layout, node, node.Xcoordinate, node.Ycoordinate, nodes, blocks);
+            if (nodeErrors.Count > 0)
+                throw AppException.Validation(
+                    $"Map point '{node.SlotCode ?? node.NodeName ?? node.Id.ToString()}': {string.Join(" ", nodeErrors)}",
+                    new Dictionary<string, string[]> { ["nodes"] = nodeErrors.ToArray() },
+                    "LAYOUT_NODE_GEOMETRY_INVALID");
+        }
+
         var edges = request.Edges.Select(edge => new LayoutEdge
         {
             Id = edge.Id,
@@ -439,6 +468,7 @@ public class MarketLayoutService : IMarketLayoutService
         var zones = await _zones.GetActiveByNightMarketIdAsync(layout.NightMarketId, cancellationToken: cancellationToken);
         var blocks = await _layouts.GetBlocksByLayoutIdAsync(layout.Id, cancellationToken);
         var edges = await _layouts.GetEdgesByLayoutIdAsync(layout.Id, cancellationToken);
+        zones = LayoutZoneSnapshot.Resolve(zones, blocks);
         var blockResponses = _mapper.Map<List<LayoutBlockResponse>>(blocks);
         foreach (var block in blockResponses)
         {
@@ -494,6 +524,8 @@ public class MarketLayoutService : IMarketLayoutService
                          ?? throw AppException.NotFound("Market layout was not found.");
 
         var boothLocations = editorData.BoothLocations.ToList();
+        var layoutBlocks = await _layouts.GetBlocksByLayoutIdAsync(layoutId, cancellationToken);
+        zones = LayoutZoneSnapshot.Resolve(zones, layoutBlocks);
         var plan = BuildZoneMaterializationPlan(market, zones, existingNodes, boothLocations, request, hasZoneManagement);
         var generationResult = _generator.ComputeGeneration(
             layout, plan.EffectiveZones, existingNodes, boothLocations, plan.NormalizedRequest);
@@ -603,6 +635,8 @@ public class MarketLayoutService : IMarketLayoutService
                          ?? throw AppException.NotFound("Market layout was not found.");
 
         var boothLocations = editorData.BoothLocations.ToList();
+        var layoutBlocks = await _layouts.GetBlocksByLayoutIdAsync(layoutId, cancellationToken);
+        zones = LayoutZoneSnapshot.Resolve(zones, layoutBlocks);
         var plan = BuildZoneMaterializationPlan(market, zones, existingNodes, boothLocations, request, hasZoneManagement);
         if (plan.CapacityErrors.Count > 0)
             throw AppException.Conflict(plan.CapacityErrors[0], "CAPACITY_BELOW_ASSIGNED");
@@ -998,6 +1032,13 @@ public class MarketLayoutService : IMarketLayoutService
         if (layout.Status == MarketLayoutStatus.Active)
             throw AppException.Conflict("Deactivate the market layout before archiving it.");
 
+        var editor = await _layouts.GetEditorLayoutAsync(layoutId, cancellationToken)
+            ?? throw AppException.NotFound("Market layout was not found.");
+        if (editor.BoothLocations.Any(location => !location.IsDeleted && !location.ReleasedAt.HasValue))
+            throw AppException.Conflict(
+                "Release or move all assigned booths before archiving this layout.",
+                "LAYOUT_HAS_ASSIGNED_BOOTHS");
+
         layout.Status = MarketLayoutStatus.Archived;
         layout.UpdatedAt = DateTime.UtcNow;
         _layouts.Delete(layout);
@@ -1149,7 +1190,7 @@ public class MarketLayoutService : IMarketLayoutService
             .ToDictionary(g => g.Key, g => g.Count());
         var assignedWithoutZone = assignedSlots.Count(n => !n.ZoneId.HasValue);
 
-        var effectiveZones = zones.ToList();
+        var effectiveZones = zones.Select(LayoutZoneSnapshot.Copy).ToList();
         var zoneUpserts = new List<Zone>();
         var newZoneIds = new HashSet<Guid>();
         var capacityErrors = new List<string>();

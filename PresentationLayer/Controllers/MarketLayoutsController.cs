@@ -20,6 +20,13 @@ public class MarketLayoutsController : ControllerBase
 
     private Guid? ActorId => User.IsInRole("Admin") ? null : Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
+    [HttpPost("api/layouts/{layoutId:guid}/clone")]
+    public async Task<IActionResult> Clone(Guid layoutId, CloneMarketLayoutDraftRequest request, CancellationToken cancellationToken)
+    {
+        var response = await _service.CloneAsync(layoutId, request, cancellationToken, ActorId);
+        return CreatedAtAction(nameof(Get), new { layoutId = response.Data!.Id }, response);
+    }
+
     [HttpGet("api/night-markets/{nightMarketId:guid}/layouts")]
     public async Task<IActionResult> GetAll(Guid nightMarketId, [FromQuery] MarketLayoutListRequest request, CancellationToken cancellationToken = default)
         => Ok(await _service.GetAllAsync(nightMarketId, request, cancellationToken, ActorId));

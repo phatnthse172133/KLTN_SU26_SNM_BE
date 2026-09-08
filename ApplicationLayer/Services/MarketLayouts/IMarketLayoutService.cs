@@ -6,6 +6,7 @@ namespace ApplicationLayer.Services.MarketLayouts;
 
 public interface IMarketLayoutService
 {
+    Task<ApiResponse<MarketLayoutResponse>> CloneAsync(Guid layoutId, CloneMarketLayoutDraftRequest request, CancellationToken cancellationToken = default, Guid? actorId = null);
     Task<ApiResponse<PaginationResp<MarketLayoutResponse>>> GetAllAsync(Guid nightMarketId, MarketLayoutListRequest request, CancellationToken cancellationToken = default, Guid? actorId = null);
     Task<ApiResponse<MarketLayoutResponse>> GetByIdAsync(Guid layoutId, CancellationToken cancellationToken = default, Guid? actorId = null);
     Task<ApiResponse<MarketLayoutResponse>> CreateAsync(Guid nightMarketId, CreateMarketLayoutRequest request, CancellationToken cancellationToken = default, Guid? actorId = null);

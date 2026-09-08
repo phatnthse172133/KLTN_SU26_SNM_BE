@@ -5,6 +5,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>smart-night-market-presentation-2026</UserSecretsId>
+    <!-- Safe deploy fingerprint (no secrets). Overridable in CI: /p:SourceRevisionId=<sha> -->
+    <SourceRevisionId Condition="'$(SourceRevisionId)' == ''">local</SourceRevisionId>
+    <InformationalVersion>complaint-category-string-enum-v1+$(SourceRevisionId)</InformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>

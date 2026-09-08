@@ -93,7 +93,7 @@ public class ComplaintService : IComplaintService
             throw AppException.BadRequest("The booth does not match the order.", "ORDER_BOOTH_MISMATCH");
 
         if (await _complaints.HasActiveComplaintAsync(customerId, boothId, request.OrderId))
-            throw AppException.Conflict("There is already an active complaint for this order and booth.");
+            throw AppException.Conflict("There is already an active complaint for this order and booth.", "ACTIVE_COMPLAINT_EXISTS");
 
         var now = DateTime.UtcNow;
         var complaint = _mapper.Map<Complaint>(request);

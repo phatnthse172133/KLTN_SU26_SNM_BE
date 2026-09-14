@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using DomainLayer.Common;
 using static DomainLayer.Enums.GeneralEnum;
@@ -14,6 +14,16 @@ public partial class MarketLayout : ISoftDelete
     public Guid NightMarketId { get; set; }
 
     public string LayoutName { get; set; } = null!;
+
+    // Layouts sharing SectionCode are versions of the same physical map section.
+    public string SectionCode { get; set; } = "MAIN";
+    public string SectionName { get; set; } = "Main Area";
+    public string? Description { get; set; }
+    public double OffsetXMeters { get; set; }
+    public double OffsetYMeters { get; set; }
+    public bool IsDefaultView { get; set; }
+    public int DisplayOrder { get; set; }
+    public Guid? BasedOnLayoutId { get; set; }
 
     public int Version { get; set; }
 

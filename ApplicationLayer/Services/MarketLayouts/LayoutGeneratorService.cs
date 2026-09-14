@@ -178,7 +178,8 @@ public class LayoutGeneratorService : ILayoutGeneratorService
                     innerPadding = request.MarketWidthMeters.HasValue ? request.PixelsPerMeter : BlockPadding,
                     columns = zonePreview.Columns,
                     rows = zonePreview.Rows,
-                    physical = request.MarketWidthMeters.HasValue
+                    physical = request.MarketWidthMeters.HasValue,
+                    zoneSnapshot = LayoutZoneSnapshot.Copy(zone)
                 }),
                 DisplayOrder = displayOrder++,
                 IsDeleted = false,
@@ -716,6 +717,11 @@ public class LayoutGeneratorService : ILayoutGeneratorService
 
             double blockX = config.CustomX ?? curX;
             double blockY = config.CustomY ?? blockYWithAisle;
+            if (!double.IsFinite(blockX) || !double.IsFinite(blockY) || blockX < 0 || blockY < 0)
+            {
+                errors.Add($"Zone '{zone.ZoneName}' must have finite, non-negative X and Y coordinates.");
+                continue;
+            }
 
             var boundaryWidth = request.MarketWidthMeters.HasValue
                 ? request.MarketWidthMeters.Value * request.PixelsPerMeter

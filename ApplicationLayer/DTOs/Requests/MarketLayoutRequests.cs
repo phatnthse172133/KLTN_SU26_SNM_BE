@@ -22,9 +22,25 @@ public class CreateMarketLayoutRequest
 {
     [Required, StringLength(150)]
     public string LayoutName { get; set; } = string.Empty;
+
+    [StringLength(50)]
+    [RegularExpression("^[A-Za-z0-9_-]+$", ErrorMessage = "Section code may contain only letters, numbers, hyphens, and underscores.")]
+    public string? SectionCode { get; set; }
+    [StringLength(150)] public string? SectionName { get; set; }
+    [StringLength(500)] public string? Description { get; set; }
+    [Range(0, 5000)] public double OffsetXMeters { get; set; }
+    [Range(0, 5000)] public double OffsetYMeters { get; set; }
+    [Range(1, 5000)] public double? MapWidthMeters { get; set; }
+    [Range(1, 5000)] public double? MapLengthMeters { get; set; }
+    [Range(0, 1000)] public int DisplayOrder { get; set; }
 }
 
 public class UpdateMarketLayoutRequest : CreateMarketLayoutRequest { }
+
+public class SetDefaultMarketLayoutRequest
+{
+    public bool IsDefaultView { get; set; } = true;
+}
 
 public class UpdateMarketLayoutImageRequest
 {

@@ -7,6 +7,14 @@ public class MarketLayoutResponse
     public Guid Id { get; set; }
     public Guid NightMarketId { get; set; }
     public string LayoutName { get; set; } = string.Empty;
+    public string SectionCode { get; set; } = string.Empty;
+    public string SectionName { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public double OffsetXMeters { get; set; }
+    public double OffsetYMeters { get; set; }
+    public bool IsDefaultView { get; set; }
+    public int DisplayOrder { get; set; }
+    public Guid? BasedOnLayoutId { get; set; }
     public int Version { get; set; }
     public string? LayoutImageUrl { get; set; }
     public int Width { get; set; }
@@ -21,6 +29,44 @@ public class MarketLayoutResponse
     public string Status { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+}
+
+public class MarketLayoutMetricsResponse
+{
+    public Guid LayoutId { get; set; }
+    public string SectionCode { get; set; } = string.Empty;
+    public string SectionName { get; set; } = string.Empty;
+    public double MarketAreaSquareMeters { get; set; }
+    public double MapAreaSquareMeters { get; set; }
+    public double MarketCoveragePercent { get; set; }
+    public double ZoneAreaSquareMeters { get; set; }
+    public double ZoneUtilizationPercent { get; set; }
+    public double BoothAreaSquareMeters { get; set; }
+    public double BoothUtilizationPercent { get; set; }
+    public double WalkwayOpenAreaSquareMeters { get; set; }
+    public int ZoneCount { get; set; }
+    public int TotalSlots { get; set; }
+    public int AssignedSlots { get; set; }
+    public double OccupancyPercent { get; set; }
+    public int ReachableAssignedBooths { get; set; }
+    public double NavigationReadinessPercent { get; set; }
+    public string Assessment { get; set; } = string.Empty;
+}
+
+public class MarketLayoutComparisonResponse
+{
+    public MarketLayoutResponse Left { get; set; } = new();
+    public MarketLayoutMetricsResponse LeftMetrics { get; set; } = new();
+    public MarketLayoutResponse Right { get; set; } = new();
+    public MarketLayoutMetricsResponse RightMetrics { get; set; } = new();
+    public int ZoneDifference { get; set; }
+    public int SlotDifference { get; set; }
+    public int AssignedSlotDifference { get; set; }
+    public double ZoneAreaDifferenceSquareMeters { get; set; }
+    public double BoothAreaDifferenceSquareMeters { get; set; }
+    public double WalkwayAreaDifferenceSquareMeters { get; set; }
+    public double OccupancyDifferencePercent { get; set; }
+    public double NavigationReadinessDifferencePercent { get; set; }
 }
 
 public class LayoutBlockResponse

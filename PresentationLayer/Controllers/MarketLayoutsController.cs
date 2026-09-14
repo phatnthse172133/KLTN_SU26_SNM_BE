@@ -20,6 +20,13 @@ public class MarketLayoutsController : ControllerBase
 
     private Guid? ActorId => User.IsInRole("Admin") ? null : Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
+    [HttpPost("api/layouts/{layoutId:guid}/clone")]
+    public async Task<IActionResult> Clone(Guid layoutId, CloneMarketLayoutDraftRequest request, CancellationToken cancellationToken)
+    {
+        var response = await _service.CloneAsync(layoutId, request, cancellationToken, ActorId);
+        return CreatedAtAction(nameof(Get), new { layoutId = response.Data!.Id }, response);
+    }
+
     [HttpGet("api/night-markets/{nightMarketId:guid}/layouts")]
     public async Task<IActionResult> GetAll(Guid nightMarketId, [FromQuery] MarketLayoutListRequest request, CancellationToken cancellationToken = default)
         => Ok(await _service.GetAllAsync(nightMarketId, request, cancellationToken, ActorId));
@@ -67,9 +74,22 @@ public class MarketLayoutsController : ControllerBase
     public async Task<IActionResult> Validate(Guid layoutId, CancellationToken cancellationToken)
         => Ok(await _service.ValidateAsync(layoutId, cancellationToken, ActorId));
 
+    [HttpGet("api/layouts/{layoutId:guid}/metrics")]
+    public async Task<IActionResult> Metrics(Guid layoutId, CancellationToken cancellationToken)
+        => Ok(await _service.GetMetricsAsync(layoutId, cancellationToken, ActorId));
+
+    [HttpGet("api/layouts/compare")]
+    public async Task<IActionResult> Compare(
+        [FromQuery] Guid leftLayoutId, [FromQuery] Guid rightLayoutId, CancellationToken cancellationToken)
+        => Ok(await _service.CompareAsync(leftLayoutId, rightLayoutId, cancellationToken, ActorId));
+
     [HttpPost("api/layouts/{layoutId:guid}/activate")]
     public async Task<IActionResult> Activate(Guid layoutId, CancellationToken cancellationToken)
         => Ok(await _service.ActivateAsync(layoutId, cancellationToken, ActorId));
+
+    [HttpPost("api/layouts/{layoutId:guid}/default-view")]
+    public async Task<IActionResult> SetDefaultView(Guid layoutId, CancellationToken cancellationToken)
+        => Ok(await _service.SetDefaultViewAsync(layoutId, cancellationToken, ActorId));
 
     [HttpPost("api/layouts/{layoutId:guid}/deactivate")]
     public async Task<IActionResult> Deactivate(Guid layoutId, CancellationToken cancellationToken)

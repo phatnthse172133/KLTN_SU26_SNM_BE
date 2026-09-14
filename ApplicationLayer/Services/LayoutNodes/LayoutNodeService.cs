@@ -67,6 +67,22 @@ public class LayoutNodeService : ILayoutNodeService
         var node = _mapper.Map<LayoutNode>(request);
         var now = DateTime.UtcNow;
         node.Id = Guid.NewGuid(); node.LayoutId = layoutId; node.IsDeleted = false; node.CreatedAt = now; node.UpdatedAt = now;
+        if (node.NodeType == DomainLayer.Enums.GeneralEnum.LayoutNodeType.BoothSlot)
+        {
+            var blocks = await _layouts.GetBlocksByLayoutIdAsync(layoutId, cancellationToken);
+            var existingNodes = await _nodes.GetByLayoutAsync(layoutId, cancellationToken: cancellationToken);
+            if (!node.LayoutBlockId.HasValue && node.ZoneId.HasValue)
+            {
+                var matches = blocks.Where(block => !block.IsDeleted && block.ZoneId == node.ZoneId).ToList();
+                if (matches.Count == 1) node.LayoutBlockId = matches[0].Id;
+            }
+            if (!node.LayoutBlockId.HasValue)
+                throw AppException.BadRequest("Select a zone block before adding a booth slot.", "LAYOUT_SLOT_BLOCK_REQUIRED");
+            var errors = LayoutGeometryValidator.ValidateNodeMove(layout, node,
+                node.Xcoordinate, node.Ycoordinate, existingNodes, blocks);
+            if (errors.Count > 0)
+                throw AppException.BadRequest(string.Join(" ", errors), "LAYOUT_NODE_GEOMETRY_INVALID");
+        }
         await _nodes.AddAsync(node); await _nodes.SaveChangesAsync();
 
         // A user-facing Gate is stored as an Entrance for backwards-compatible

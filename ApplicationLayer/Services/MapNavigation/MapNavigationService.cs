@@ -40,16 +40,61 @@ public class MapNavigationService : IMapNavigationService
         _graphBuilder = graphBuilder ?? new NavigationGraphBuilder(navigationOptions);
     }
 
-    public async Task<ApiResponse<NightMarketMapResponse>> GetMapAsync(Guid nightMarketId, CancellationToken cancellationToken = default)
+    public async Task<ApiResponse<IReadOnlyCollection<PublishedMapSectionResponse>>> GetPublishedMapsAsync(
+        Guid nightMarketId, CancellationToken cancellationToken = default)
     {
         var market = await _markets.GetCustomerByIdAsync(nightMarketId, cancellationToken)
             ?? throw AppException.NotFound("Night market was not found.", "NIGHT_MARKET_NOT_FOUND");
-        var layout = await _layouts.GetActiveMapAsync(nightMarketId, cancellationToken) ?? throw AppException.NotFound("This night market has no active map.");
+        var layouts = await _layouts.GetPublishedMapsAsync(nightMarketId, cancellationToken);
+        var zones = await _zones.GetActiveByNightMarketIdAsync(
+            nightMarketId, cancellationToken: cancellationToken);
+        var result = new List<PublishedMapSectionResponse>();
+
+        foreach (var layout in layouts)
+        {
+            var nodes = await _layouts.GetNodesByLayoutIdAsync(layout.Id, cancellationToken);
+            var edges = await _layouts.GetEdgesByLayoutIdAsync(layout.Id, cancellationToken);
+            var blocks = await _layouts.GetBlocksByLayoutIdAsync(layout.Id, cancellationToken);
+            var locations = await _locations.GetCustomerCurrentByLayoutAsync(layout.Id, cancellationToken);
+            var metrics = LayoutMetricsCalculator.Calculate(
+                layout, market.BoundaryWidthMeters, market.BoundaryHeightMeters, blocks, nodes, edges, locations, zones);
+            result.Add(new PublishedMapSectionResponse
+            {
+                Id = layout.Id,
+                LayoutName = layout.LayoutName,
+                SectionCode = layout.SectionCode,
+                SectionName = layout.SectionName,
+                Description = layout.Description,
+                Version = layout.Version,
+                OffsetXMeters = layout.OffsetXMeters,
+                OffsetYMeters = layout.OffsetYMeters,
+                WidthMeters = layout.MarketWidthMeters,
+                LengthMeters = layout.MarketLengthMeters,
+                IsDefaultView = layout.IsDefaultView,
+                DisplayOrder = layout.DisplayOrder,
+                Metrics = metrics
+            });
+        }
+
+        return ApiResponse<IReadOnlyCollection<PublishedMapSectionResponse>>.SuccessResponse(result);
+    }
+
+    public async Task<ApiResponse<NightMarketMapResponse>> GetMapAsync(
+        Guid nightMarketId, Guid? layoutId = null, CancellationToken cancellationToken = default)
+    {
+        var market = await _markets.GetCustomerByIdAsync(nightMarketId, cancellationToken)
+            ?? throw AppException.NotFound("Night market was not found.", "NIGHT_MARKET_NOT_FOUND");
+        var layout = layoutId.HasValue
+            ? await _layouts.GetActiveByIdAsync(layoutId.Value, cancellationToken)
+            : await _layouts.GetActiveMapAsync(nightMarketId, cancellationToken);
+        if (layout is null || layout.NightMarketId != nightMarketId || layout.Status != DomainLayer.Enums.GeneralEnum.MarketLayoutStatus.Active)
+            throw AppException.NotFound("The published map section was not found.", "MAP_SECTION_NOT_PUBLISHED");
         var nodes = await _nodes.GetByLayoutAsync(layout.Id, cancellationToken: cancellationToken);
         var edges = await _edges.GetByLayoutAsync(layout.Id, cancellationToken: cancellationToken);
         var blocks = await _layouts.GetBlocksByLayoutIdAsync(layout.Id, cancellationToken);
         var locations = await _locations.GetCustomerCurrentByLayoutAsync(layout.Id, cancellationToken);
         var zones = await _zones.GetActiveByNightMarketIdAsync(nightMarketId, cancellationToken: cancellationToken);
+        zones = LayoutZoneSnapshot.Resolve(zones, blocks);
 
         return ApiResponse<NightMarketMapResponse>.SuccessResponse(new()
         {
@@ -57,7 +102,12 @@ public class MapNavigationService : IMapNavigationService
             NightMarket = new() { Id = market.Id, Name = market.Name },
             Layout = new()
             {
-                Id = layout.Id, Version = layout.Version, ImageUrl = layout.LayoutImageUrl,
+                Id = layout.Id, LayoutName = layout.LayoutName,
+                SectionCode = layout.SectionCode, SectionName = layout.SectionName,
+                Description = layout.Description, OffsetXMeters = layout.OffsetXMeters,
+                OffsetYMeters = layout.OffsetYMeters, IsDefaultView = layout.IsDefaultView,
+                DisplayOrder = layout.DisplayOrder,
+                Version = layout.Version, ImageUrl = layout.LayoutImageUrl,
                 Width = layout.Width, Height = layout.Height,
                 CoordinateUnit = layout.CoordinateUnit.ToString(),
                 MetersPerLayoutUnit = layout.MetersPerLayoutUnit,
@@ -76,7 +126,7 @@ public class MapNavigationService : IMapNavigationService
             {
                 BoothId = x.BoothId, BoothName = x.Booth.BoothName, NodeId = x.LayoutNodeId,
                 ZoneId = x.ZoneId, SlotNumber = x.SlotNumber, XCoordinate = x.Xcoordinate, YCoordinate = x.Ycoordinate,
-                SlotCode = x.LayoutNode?.SlotCode, ZoneName = x.Zone?.ZoneName
+                SlotCode = x.LayoutNode?.SlotCode, ZoneName = zones.FirstOrDefault(z => z.Id == x.ZoneId)?.ZoneName
             }).ToList()
         });
     }
@@ -108,7 +158,6 @@ public class MapNavigationService : IMapNavigationService
             FromNodeId = nearest.Node.Id, NodeName = nearest.Node.NodeName, Distance = nearest.Distance
         });
     }
-
     public async Task<ApiResponse<ShortestPathResponse>> FindRouteToBoothAsync(
         Guid layoutId, Guid fromNodeId, Guid boothId,
         CancellationToken cancellationToken = default,
@@ -166,6 +215,7 @@ public class MapNavigationService : IMapNavigationService
 
         var slot = byId[location.LayoutNodeId];
         var zones = await _zones.GetActiveByNightMarketIdAsync(layout.NightMarketId, cancellationToken: cancellationToken);
+        zones = LayoutZoneSnapshot.Resolve(zones, blocks);
         var zoneName = slot.ZoneId.HasValue
             ? zones.FirstOrDefault(z => z.Id == slot.ZoneId.Value)?.ZoneName
             : null;

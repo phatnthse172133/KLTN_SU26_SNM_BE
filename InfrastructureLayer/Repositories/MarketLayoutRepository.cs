@@ -70,8 +70,22 @@ public class MarketLayoutRepository : GenericRepository<MarketLayout>, IMarketLa
 
     public Task<MarketLayout?> GetActiveMapAsync(Guid nightMarketId, CancellationToken cancellationToken = default)
         => _dbSet.AsNoTracking()
-            .FirstOrDefaultAsync(x => x.NightMarketId == nightMarketId && !x.IsDeleted &&
-                x.Status == MarketLayoutStatus.Active && !x.NightMarket.IsDeleted, cancellationToken);
+            .Where(x => x.NightMarketId == nightMarketId && !x.IsDeleted &&
+                x.Status == MarketLayoutStatus.Active && !x.NightMarket.IsDeleted)
+            .OrderByDescending(x => x.IsDefaultView)
+            .ThenBy(x => x.DisplayOrder)
+            .ThenBy(x => x.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    public async Task<IReadOnlyCollection<MarketLayout>> GetPublishedMapsAsync(
+        Guid nightMarketId, CancellationToken cancellationToken = default)
+        => await _dbSet.AsNoTracking()
+            .Where(x => x.NightMarketId == nightMarketId && !x.IsDeleted &&
+                x.Status == MarketLayoutStatus.Active && !x.NightMarket.IsDeleted)
+            .OrderByDescending(x => x.IsDefaultView)
+            .ThenBy(x => x.DisplayOrder)
+            .ThenBy(x => x.SectionName)
+            .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyCollection<LayoutNode>> GetNodesByLayoutIdAsync(
         Guid layoutId, CancellationToken cancellationToken = default)
@@ -108,23 +122,27 @@ public class MarketLayoutRepository : GenericRepository<MarketLayout>, IMarketLa
             cancellationToken);
 
     public async Task<int> GetNextVersionAsync(
-        Guid nightMarketId, CancellationToken cancellationToken = default)
+        Guid nightMarketId, string sectionCode, CancellationToken cancellationToken = default)
     {
+        var normalizedSectionCode = sectionCode.Trim().ToUpperInvariant();
         var currentMax = await _dbSet
-            .Where(layout => layout.NightMarketId == nightMarketId && !layout.IsDeleted)
+            .Where(layout => layout.NightMarketId == nightMarketId && !layout.IsDeleted
+                && layout.SectionCode == normalizedSectionCode)
             .MaxAsync(layout => (int?)layout.Version, cancellationToken);
         return (currentMax ?? 0) + 1;
     }
 
     public Task<bool> ActiveNameOrVersionExistsAsync(
-        Guid nightMarketId, string name, int version, Guid? excludeId = null,
+        Guid nightMarketId, string sectionCode, string name, int version, Guid? excludeId = null,
         CancellationToken cancellationToken = default)
     {
         var normalized = name.Trim().ToLower();
+        var normalizedSectionCode = sectionCode.Trim().ToUpperInvariant();
         return _dbSet.AnyAsync(layout =>
             layout.NightMarketId == nightMarketId &&
             !layout.IsDeleted &&
-            (layout.LayoutName.ToLower() == normalized || layout.Version == version) &&
+            (layout.LayoutName.ToLower() == normalized ||
+             (layout.SectionCode == normalizedSectionCode && layout.Version == version)) &&
             (!excludeId.HasValue || layout.Id != excludeId.Value), cancellationToken);
     }
 
@@ -137,11 +155,38 @@ public class MarketLayoutRepository : GenericRepository<MarketLayout>, IMarketLa
             $"SELECT pg_advisory_xact_lock(hashtextextended(CAST({nightMarketId} AS text), 0))",
             cancellationToken);
 
+        var target = await _dbSet.AsNoTracking().FirstOrDefaultAsync(
+            layout => layout.Id == activeLayoutId && layout.NightMarketId == nightMarketId && !layout.IsDeleted,
+            cancellationToken) ?? throw ApplicationLayer.Exceptions.AppException.NotFound("Market layout was not found.");
+
+        var sectionWasDefault = await _dbSet.AnyAsync(layout =>
+            layout.NightMarketId == nightMarketId && !layout.IsDeleted &&
+            layout.SectionCode == target.SectionCode && layout.Status == MarketLayoutStatus.Active &&
+            layout.IsDefaultView, cancellationToken);
+        var marketHasDefault = await _dbSet.AnyAsync(layout =>
+            layout.NightMarketId == nightMarketId && !layout.IsDeleted &&
+            layout.Status == MarketLayoutStatus.Active && layout.IsDefaultView, cancellationToken);
+        var makeDefault = target.IsDefaultView || sectionWasDefault || !marketHasDefault;
+
+        if (makeDefault)
+        {
+            await _context.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "MarketLayouts"
+                SET "IsDefaultView" = false,
+                    "UpdatedAt" = {updatedAt}
+                WHERE "NightMarketId" = {nightMarketId}
+                  AND "IsDeleted" = false
+                  AND "IsDefaultView" = true
+                """, cancellationToken);
+        }
+
         await _context.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE "MarketLayouts"
             SET "Status" = 'Inactive',
+                "IsDefaultView" = false,
                 "UpdatedAt" = {updatedAt}
             WHERE "NightMarketId" = {nightMarketId}
+              AND "SectionCode" = {target.SectionCode}
               AND "IsDeleted" = false
               AND "Id" <> {activeLayoutId}
               AND "Status" = 'Active'
@@ -150,6 +195,7 @@ public class MarketLayoutRepository : GenericRepository<MarketLayout>, IMarketLa
         await _context.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE "MarketLayouts"
             SET "Status" = 'Active',
+                "IsDefaultView" = {makeDefault},
                 "UpdatedAt" = {updatedAt}
             WHERE "Id" = {activeLayoutId}
               AND "NightMarketId" = {nightMarketId}
@@ -159,9 +205,38 @@ public class MarketLayoutRepository : GenericRepository<MarketLayout>, IMarketLa
         await transaction.CommitAsync(cancellationToken);
     }
 
+    public async Task SetDefaultViewAsync(
+        Guid nightMarketId, Guid layoutId, DateTime updatedAt,
+        CancellationToken cancellationToken = default)
+    {
+        await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+        await _context.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT pg_advisory_xact_lock(hashtextextended(CAST({nightMarketId} AS text), 0))",
+            cancellationToken);
+
+        var isPublished = await _dbSet.AnyAsync(layout =>
+            layout.Id == layoutId && layout.NightMarketId == nightMarketId &&
+            !layout.IsDeleted && layout.Status == MarketLayoutStatus.Active, cancellationToken);
+        if (!isPublished)
+            throw ApplicationLayer.Exceptions.AppException.Conflict(
+                "Only a published map section can be set as the default view.",
+                "LAYOUT_NOT_PUBLISHED");
+
+        await _context.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "MarketLayouts"
+            SET "IsDefaultView" = CASE WHEN "Id" = {layoutId} THEN true ELSE false END,
+                "UpdatedAt" = {updatedAt}
+            WHERE "NightMarketId" = {nightMarketId}
+              AND "IsDeleted" = false
+              AND ("IsDefaultView" = true OR "Id" = {layoutId})
+            """, cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
+    }
+
     public async Task<MarketLayout> CloneToDraftAsync(
         Guid sourceLayoutId, string? layoutName, DateTime createdAt,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, int? maxLayouts = null)
     {
         await using var transaction = _context.Database.IsRelational()
             ? await _context.Database.BeginTransactionAsync(cancellationToken)
@@ -184,8 +259,19 @@ public class MarketLayoutRepository : GenericRepository<MarketLayout>, IMarketLa
                 $"SELECT pg_advisory_xact_lock(hashtextextended(CAST({source.NightMarketId} AS text), 1))",
                 cancellationToken);
 
+        if (maxLayouts.HasValue)
+        {
+            var used = await _dbSet.CountAsync(layout => layout.NightMarketId == source.NightMarketId
+                && !layout.IsDeleted, cancellationToken);
+            if (used >= maxLayouts.Value)
+                throw ApplicationLayer.Exceptions.AppException.Forbidden(
+                    $"Your package allows {maxLayouts.Value} layouts per market. This market already has {used}. Upgrade your package or archive an unused layout before creating a copy.",
+                    "LAYOUT_LIMIT_REACHED");
+        }
+
         var nextVersion = await _dbSet
-            .Where(layout => layout.NightMarketId == source.NightMarketId && !layout.IsDeleted)
+            .Where(layout => layout.NightMarketId == source.NightMarketId && !layout.IsDeleted
+                && layout.SectionCode == source.SectionCode)
             .MaxAsync(layout => (int?)layout.Version, cancellationToken) + 1 ?? 1;
         var nextName = string.IsNullOrWhiteSpace(layoutName)
             ? $"{source.LayoutName} v{nextVersion}"
@@ -199,6 +285,10 @@ public class MarketLayoutRepository : GenericRepository<MarketLayout>, IMarketLa
         var clone = new MarketLayout
         {
             Id = Guid.NewGuid(), NightMarketId = source.NightMarketId, LayoutName = nextName,
+            SectionCode = source.SectionCode, SectionName = source.SectionName,
+            Description = source.Description, OffsetXMeters = source.OffsetXMeters,
+            OffsetYMeters = source.OffsetYMeters, IsDefaultView = false,
+            DisplayOrder = source.DisplayOrder, BasedOnLayoutId = source.Id,
             Version = nextVersion, LayoutImageUrl = source.LayoutImageUrl,
             Width = source.Width, Height = source.Height,
             MarketWidthMeters = source.MarketWidthMeters,
@@ -291,11 +381,8 @@ public class MarketLayoutRepository : GenericRepository<MarketLayout>, IMarketLa
             }
             else
             {
-                existingZone.ZoneName = zone.ZoneName;
-                existingZone.Description = zone.Description;
-                existingZone.Color = zone.Color;
-                existingZone.Capacity = zone.Capacity;
-                existingZone.UpdatedAt = now;
+                // Existing zone identity is shared by other layouts. New
+                // geometry/labels are persisted in this layout's block snapshot.
             }
         }
 

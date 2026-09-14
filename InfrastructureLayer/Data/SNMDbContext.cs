@@ -841,6 +841,13 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
                 entity.Property(e => e.LayoutName).HasMaxLength(150);
+                entity.Property(e => e.SectionCode).HasMaxLength(50).HasDefaultValue("MAIN");
+                entity.Property(e => e.SectionName).HasMaxLength(150).HasDefaultValue("Main Area");
+                entity.Property(e => e.Description).HasMaxLength(500);
+                entity.Property(e => e.OffsetXMeters).HasPrecision(10, 2).HasDefaultValue(0d);
+                entity.Property(e => e.OffsetYMeters).HasPrecision(10, 2).HasDefaultValue(0d);
+                entity.Property(e => e.IsDefaultView).HasDefaultValue(false);
+                entity.Property(e => e.DisplayOrder).HasDefaultValue(0);
                 entity.Property(e => e.LayoutImageUrl).HasMaxLength(500);
                 entity.Property(e => e.MarketWidthMeters).HasPrecision(10, 2);
                 entity.Property(e => e.MarketLengthMeters).HasPrecision(10, 2);
@@ -870,12 +877,16 @@ namespace InfrastructureLayer.Data
                 entity.HasIndex(e => new { e.NightMarketId, e.LayoutName }, "ux_marketlayout_market_name_active")
                     .IsUnique()
                     .HasFilter("\"IsDeleted\" = false");
-                entity.HasIndex(e => new { e.NightMarketId, e.Version }, "ux_marketlayout_market_version_active")
+                entity.HasIndex(e => new { e.NightMarketId, e.SectionCode, e.Version }, "ux_marketlayout_section_version_active")
                     .IsUnique()
                     .HasFilter("\"IsDeleted\" = false");
-                entity.HasIndex(e => e.NightMarketId, "ux_marketlayout_one_active_per_market")
+                entity.HasIndex(e => new { e.NightMarketId, e.SectionCode }, "ux_marketlayout_one_published_per_section")
                     .IsUnique()
                     .HasFilter("\"IsDeleted\" = false AND \"Status\" = 'Active'");
+
+                entity.HasIndex(e => e.NightMarketId, "ux_marketlayout_one_default_per_market")
+                    .IsUnique()
+                    .HasFilter("\"IsDeleted\" = false AND \"Status\" = 'Active' AND \"IsDefaultView\" = true");
 
                 entity.HasOne(d => d.NightMarket).WithMany(p => p.MarketLayouts)
                     .HasForeignKey(d => d.NightMarketId)

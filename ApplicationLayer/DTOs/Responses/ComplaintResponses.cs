@@ -6,6 +6,7 @@ public class ComplaintResponse
     public Guid CustomerId { get; set; }
     public Guid BoothId { get; set; }
     public Guid OrderId { get; set; }
+    public long OrderCode { get; set; }
     public string Category { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;

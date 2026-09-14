@@ -225,6 +225,7 @@ public class ComplaintRepository : GenericRepository<Complaint>, IComplaintRepos
         => _dbSet
             .Include(complaint => complaint.ComplaintImages)
             .Include(complaint => complaint.StatusHistories)
+            .Include(complaint => complaint.Order)
             .AsSplitQuery();
 
     private static async Task<PagedResult<Complaint>> ToPagedAsync(

@@ -265,6 +265,7 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.Category, o => o.MapFrom(s => s.Category.ToString()))
                 .ForMember(d => d.ResolutionAction, o => o.MapFrom(s => s.ResolutionAction == null ? null : s.ResolutionAction.ToString()))
                 .ForMember(d => d.EvidenceRequestNote, o => o.MapFrom(s => s.CustomerEvidenceRequestNote))
+                .ForMember(d => d.OrderCode, o => o.MapFrom(s => s.Order != null ? s.Order.OrderCode : 0L))
                 .ForMember(d => d.CanWithdraw, o => o.Ignore())
                 .ForMember(d => d.CanAddEvidence, o => o.Ignore())
                 .ForMember(d => d.StatusHistory, o => o.Ignore())

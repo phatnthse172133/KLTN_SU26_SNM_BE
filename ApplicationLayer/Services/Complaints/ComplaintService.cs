@@ -936,6 +936,7 @@ public class ComplaintService : IComplaintService
     private ComplaintResponse ToResponse(Complaint complaint)
     {
         var response = _mapper.Map<ComplaintResponse>(complaint);
+        response.OrderCode = complaint.Order?.OrderCode ?? 0;
         response.ImageUrls = complaint.ComplaintImages?.Select(i => i.ImageUrl).ToList() ?? [];
         response.EvidenceRequestNote = complaint.CustomerEvidenceRequestNote;
         response.BoothOwnerResponse = complaint.BoothOwnerResponse;

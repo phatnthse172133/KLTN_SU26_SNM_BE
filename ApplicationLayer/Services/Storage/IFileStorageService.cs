@@ -9,4 +9,5 @@ public interface IFileStorageService
     Task<string> SaveImageAsync(string category, Stream stream, string fileName, string contentType, long length, CancellationToken cancellationToken = default);
     Task DeleteImageIfManagedAsync(string? imageUrl, CancellationToken cancellationToken = default);
     Task<string> SaveDocumentAsync(string category, Stream stream, string fileName, string contentType, long length, CancellationToken cancellationToken = default);
+    Task<string> SaveChatAttachmentAsync(string category, Stream stream, string fileName, string contentType, long length, CancellationToken cancellationToken = default);
 }

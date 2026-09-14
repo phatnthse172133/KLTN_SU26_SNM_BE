@@ -19,11 +19,6 @@ public class ChatService : IChatService
 {
     private const int MaxMessageLength = 2000;
     private const string ChatStorageCategory = "chat";
-    private static readonly HashSet<string> ImageMimeTypes = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "image/jpeg", "image/png", "image/webp"
-    };
-
     private readonly IConversationRepository _conversations;
     private readonly IMessageRepository _messages;
     private readonly IBoothRepository _booths;
@@ -251,24 +246,9 @@ public class ChatService : IChatService
         }
 
         var safeFileName = SanitizeOriginalFileName(fileName);
-        var mime = (contentType ?? string.Empty).Trim();
-        if (string.IsNullOrWhiteSpace(mime))
-        {
-            throw AppException.BadRequest(
-                "Attachment content type is required.",
-                "CHAT_ATTACHMENT_TYPE_REQUIRED");
-        }
-
-        var isImage = ImageMimeTypes.Contains(mime);
-        var isPdf = string.Equals(mime, "application/pdf", StringComparison.OrdinalIgnoreCase);
-        if (!isImage && !isPdf)
-        {
-            throw AppException.BadRequest(
-                "Please select a JPG, PNG, WEBP image or a PDF file.",
-                "CHAT_ATTACHMENT_TYPE_NOT_ALLOWED");
-        }
-
-        var messageType = isImage ? MessageType.Image : MessageType.File;
+        var attachment = ChatAttachmentPolicy.ValidateMetadata(safeFileName, contentType, fileLength);
+        var mime = attachment.ContentType;
+        var messageType = attachment.IsImage ? MessageType.Image : MessageType.File;
         var content = NormalizeOptionalCaption(caption);
         var conversation = await GetOwnedConversationAsync(userId, conversationId, cancellationToken);
 
@@ -313,44 +293,21 @@ public class ChatService : IChatService
                 "CHAT_BOOTH_UNAVAILABLE");
         }
 
-        await using var buffered = new MemoryStream();
-        await fileStream.CopyToAsync(buffered, cancellationToken);
-        if (buffered.Length == 0)
-        {
-            throw AppException.BadRequest(
-                "Attachment file is required.",
-                "CHAT_ATTACHMENT_REQUIRED");
-        }
-
-        if (buffered.Length != fileLength && fileLength > 0)
-        {
-            // Prefer measured length over declared multipart length.
-            fileLength = buffered.Length;
-        }
-        else
-        {
-            fileLength = buffered.Length;
-        }
-
-        buffered.Position = 0;
+        await using var buffered = await ChatAttachmentPolicy.BufferAndValidateContentAsync(
+            fileStream,
+            attachment,
+            cancellationToken);
+        fileLength = buffered.Length;
         string? storedUrl = null;
         try
         {
-            storedUrl = isImage
-                ? await _fileStorage.SaveImageAsync(
-                    ChatStorageCategory,
-                    buffered,
-                    safeFileName,
-                    mime,
-                    fileLength,
-                    cancellationToken)
-                : await _fileStorage.SaveDocumentAsync(
-                    ChatStorageCategory,
-                    buffered,
-                    safeFileName,
-                    mime,
-                    fileLength,
-                    cancellationToken);
+            storedUrl = await _fileStorage.SaveChatAttachmentAsync(
+                ChatStorageCategory,
+                buffered,
+                safeFileName,
+                mime,
+                fileLength,
+                cancellationToken);
 
             var now = DateTime.UtcNow;
             var message = new Message

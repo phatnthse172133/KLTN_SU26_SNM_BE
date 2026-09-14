@@ -1,4 +1,5 @@
 using ApplicationLayer.Exceptions;
+using ApplicationLayer.Services.Chats;
 using ApplicationLayer.Services.Storage;
 using CloudinaryDotNet;
 using CloudinaryDotNet.Actions;
@@ -80,6 +81,63 @@ public sealed class CloudinaryFileStorageService : IFileStorageService
         }
 
         return await UploadImageAsync(category, stream, fileName, contentType, length, cancellationToken);
+    }
+
+    public async Task<string> SaveChatAttachmentAsync(
+        string category,
+        Stream stream,
+        string fileName,
+        string contentType,
+        long length,
+        CancellationToken cancellationToken = default)
+    {
+        var descriptor = ChatAttachmentPolicy.ValidateMetadata(fileName, contentType, length);
+        ChatAttachmentPolicy.ValidateContent(stream, descriptor);
+
+        if (descriptor.IsImage)
+        {
+            await using var payload = new MemoryStream();
+            stream.Position = 0;
+            await stream.CopyToAsync(payload, cancellationToken);
+            var bytes = payload.ToArray();
+            try
+            {
+                await using var uploadStream = new MemoryStream(bytes, writable: false);
+                var imageResult = await _cloudinary.UploadAsync(new ImageUploadParams
+                {
+                    File = new FileDescription(fileName, uploadStream),
+                    PublicId = BuildPublicId(category),
+                    Overwrite = false,
+                    UseFilename = false,
+                    UniqueFilename = true
+                }, cancellationToken);
+                EnsureUploadSucceeded(imageResult);
+                return imageResult.SecureUrl?.AbsoluteUri
+                    ?? throw AppException.BadRequest("The image could not be uploaded.", "IMAGE_UPLOAD_FAILED");
+            }
+            catch (HttpRequestException)
+            {
+                await using var bridgeStream = new MemoryStream(bytes, writable: false);
+                return await UploadViaBridgeAsync(
+                    category,
+                    bridgeStream,
+                    fileName,
+                    descriptor.ContentType,
+                    "image",
+                    cancellationToken);
+            }
+        }
+
+        stream.Position = 0;
+        var result = await _cloudinary.UploadAsync(new RawUploadParams
+        {
+            File = new FileDescription(fileName, stream),
+            PublicId = BuildPublicId(category),
+            Overwrite = false
+        }, null, cancellationToken);
+        EnsureUploadSucceeded(result);
+        return result.SecureUrl?.AbsoluteUri
+            ?? throw AppException.BadRequest("The document could not be uploaded.", "DOCUMENT_UPLOAD_FAILED");
     }
 
     public Task DeleteAvatarIfManagedAsync(

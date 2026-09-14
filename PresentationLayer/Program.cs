@@ -521,7 +521,26 @@ if (builder.Configuration.GetValue("HttpsRedirection:Enabled", true))
 
 app.UseCors(CustomerAppCorsPolicy);
 
-app.UseStaticFiles();
+var chatAttachmentContentTypes = new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider();
+chatAttachmentContentTypes.Mappings[".jpg"] = "image/jpeg";
+chatAttachmentContentTypes.Mappings[".jpeg"] = "image/jpeg";
+chatAttachmentContentTypes.Mappings[".png"] = "image/png";
+chatAttachmentContentTypes.Mappings[".webp"] = "image/webp";
+chatAttachmentContentTypes.Mappings[".heic"] = "image/heic";
+chatAttachmentContentTypes.Mappings[".heif"] = "image/heif";
+chatAttachmentContentTypes.Mappings[".pdf"] = "application/pdf";
+chatAttachmentContentTypes.Mappings[".doc"] = "application/msword";
+chatAttachmentContentTypes.Mappings[".docx"] = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+chatAttachmentContentTypes.Mappings[".xls"] = "application/vnd.ms-excel";
+chatAttachmentContentTypes.Mappings[".xlsx"] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+chatAttachmentContentTypes.Mappings[".ppt"] = "application/vnd.ms-powerpoint";
+chatAttachmentContentTypes.Mappings[".pptx"] = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+chatAttachmentContentTypes.Mappings[".txt"] = "text/plain";
+
+app.UseStaticFiles(new StaticFileOptions
+{
+    ContentTypeProvider = chatAttachmentContentTypes
+});
 
 // Seed package artwork is shipped with the application. Keep the historic
 // /uploads/images/packages/seed URLs working even when external upload storage
@@ -544,7 +563,8 @@ if (!string.IsNullOrWhiteSpace(uploadRoot))
     app.UseStaticFiles(new StaticFileOptions
     {
         FileProvider = new PhysicalFileProvider(absoluteUploadRoot),
-        RequestPath = "/uploads"
+        RequestPath = "/uploads",
+        ContentTypeProvider = chatAttachmentContentTypes
     });
 }
 

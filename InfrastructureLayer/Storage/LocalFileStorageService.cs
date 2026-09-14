@@ -1,4 +1,5 @@
 using ApplicationLayer.Exceptions;
+using ApplicationLayer.Services.Chats;
 using ApplicationLayer.Services.Storage;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
@@ -387,6 +388,41 @@ public class LocalFileStorageService : IFileStorageService
         await using (var fileStream = new FileStream(fullFilePath, FileMode.Create))
         {
             await stream.CopyToAsync(fileStream, cancellationToken);
+        }
+
+        return $"/uploads/{relativePath}";
+    }
+
+    public async Task<string> SaveChatAttachmentAsync(
+        string category,
+        Stream stream,
+        string fileName,
+        string contentType,
+        long length,
+        CancellationToken cancellationToken = default)
+    {
+        var descriptor = ChatAttachmentPolicy.ValidateMetadata(fileName, contentType, length);
+        ChatAttachmentPolicy.ValidateContent(stream, descriptor);
+
+        var safeCategory = string.IsNullOrWhiteSpace(category)
+            ? "misc"
+            : new string(category.Where(c => char.IsLetterOrDigit(c) || c == '-' || c == '_').ToArray());
+        var randomFileName = $"{Guid.NewGuid():N}{descriptor.Extension}";
+        var relativePath = $"{ImageFolder}/{safeCategory}/{randomFileName}";
+        var fullPath = Path.Combine(StorageRoot, ImageFolder, safeCategory);
+        Directory.CreateDirectory(fullPath);
+
+        var fullFilePath = Path.Combine(fullPath, randomFileName);
+        try
+        {
+            await using var fileStream = new FileStream(fullFilePath, FileMode.CreateNew);
+            stream.Position = 0;
+            await stream.CopyToAsync(fileStream, cancellationToken);
+        }
+        catch
+        {
+            if (File.Exists(fullFilePath)) File.Delete(fullFilePath);
+            throw;
         }
 
         return $"/uploads/{relativePath}";

@@ -19,9 +19,13 @@ public class MapNavigationController : ControllerBase
         _positioning = positioning;
     }
 
+    [HttpGet("api/night-markets/{nightMarketId:guid}/maps")]
+    public async Task<IActionResult> GetMaps(Guid nightMarketId, CancellationToken token)
+        => Ok(await _service.GetPublishedMapsAsync(nightMarketId, token));
+
     [HttpGet("api/night-markets/{nightMarketId:guid}/map")]
-    public async Task<IActionResult> GetMap(Guid nightMarketId, CancellationToken token)
-        => Ok(await _service.GetMapAsync(nightMarketId, token));
+    public async Task<IActionResult> GetMap(Guid nightMarketId, [FromQuery] Guid? layoutId, CancellationToken token)
+        => Ok(await _service.GetMapAsync(nightMarketId, layoutId, token));
 
     [HttpGet("api/layouts/{layoutId:guid}/starting-points")]
     public async Task<IActionResult> StartingPoints(Guid layoutId, [FromQuery] PaginationReq pagination, CancellationToken token)

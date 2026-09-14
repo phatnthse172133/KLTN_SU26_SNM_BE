@@ -100,6 +100,8 @@ public class MarketLayoutService : IMarketLayoutService
             maxLayouts = await _entitlements.GetMaxLayoutsPerMarketAsync(market.MarketOwnerId.Value);
         }
 
+        var sectionCode = NormalizeSectionCode(request.SectionCode, request.LayoutName);
+
         await _unitOfWork.BeginTransactionAsync(cancellationToken);
         try
         {
@@ -117,19 +119,29 @@ public class MarketLayoutService : IMarketLayoutService
                         "LAYOUT_LIMIT_REACHED");
             }
 
-            var resolvedVersion = await _layouts.GetNextVersionAsync(nightMarketId, cancellationToken);
+            var resolvedVersion = await _layouts.GetNextVersionAsync(nightMarketId, sectionCode, cancellationToken);
             await ValidateIdentityAsync(
-                nightMarketId, request.LayoutName, resolvedVersion, null, cancellationToken);
+                nightMarketId, sectionCode, request.LayoutName, resolvedVersion, null, cancellationToken);
 
             var now = DateTime.UtcNow;
             var layout = _mapper.Map<MarketLayout>(request);
             layout.Id = Guid.NewGuid();
             layout.NightMarketId = nightMarketId;
+            layout.SectionCode = sectionCode;
+            layout.SectionName = string.IsNullOrWhiteSpace(request.SectionName) ? request.LayoutName.Trim() : request.SectionName.Trim();
+            layout.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
+            layout.OffsetXMeters = request.OffsetXMeters;
+            layout.OffsetYMeters = request.OffsetYMeters;
+            layout.MarketWidthMeters = request.MapWidthMeters ?? market.BoundaryWidthMeters;
+            layout.MarketLengthMeters = request.MapLengthMeters ?? market.BoundaryHeightMeters;
+            layout.DisplayOrder = request.DisplayOrder;
+            layout.IsDefaultView = false;
             layout.Version = resolvedVersion;
-            layout.Status = MarketLayoutStatus.Inactive;
+            layout.Status = MarketLayoutStatus.Draft;
             layout.IsDeleted = false;
             layout.CreatedAt = now;
             layout.UpdatedAt = now;
+            ValidateSectionInsideMarket(layout, market);
 
             await _layouts.AddAsync(layout);
             await _layouts.SaveChangesAsync();
@@ -153,8 +165,19 @@ public class MarketLayoutService : IMarketLayoutService
         if (layout.Status == MarketLayoutStatus.Active)
             throw AppException.Conflict("Deactivate the market layout before changing its information.");
 
-        await ValidateIdentityAsync(layout.NightMarketId, request.LayoutName, layout.Version, layoutId, cancellationToken);
+        var market = await EnsureNightMarketExistsAsync(layout.NightMarketId, cancellationToken);
+        var sectionCode = NormalizeSectionCode(request.SectionCode, layout.SectionCode);
+        await ValidateIdentityAsync(layout.NightMarketId, sectionCode, request.LayoutName, layout.Version, layoutId, cancellationToken);
         _mapper.Map(request, layout);
+        layout.SectionCode = sectionCode;
+        layout.SectionName = string.IsNullOrWhiteSpace(request.SectionName) ? request.LayoutName.Trim() : request.SectionName.Trim();
+        layout.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
+        layout.OffsetXMeters = request.OffsetXMeters;
+        layout.OffsetYMeters = request.OffsetYMeters;
+        layout.MarketWidthMeters = request.MapWidthMeters ?? layout.MarketWidthMeters ?? market.BoundaryWidthMeters;
+        layout.MarketLengthMeters = request.MapLengthMeters ?? layout.MarketLengthMeters ?? market.BoundaryHeightMeters;
+        layout.DisplayOrder = request.DisplayOrder;
+        ValidateSectionInsideMarket(layout, market);
         layout.UpdatedAt = DateTime.UtcNow;
         _layouts.Update(layout);
 
@@ -510,8 +533,8 @@ public class MarketLayoutService : IMarketLayoutService
         if (!market.BoundaryWidthMeters.HasValue || !market.BoundaryHeightMeters.HasValue || market.BoundaryWidthMeters.Value <= 0 || market.BoundaryHeightMeters.Value <= 0)
             throw AppException.BadRequest("The market boundary dimensions have not been configured. Set the market width and length before continuing.", "MARKET_BOUNDARY_MISSING");
 
-        request.MarketWidthMeters = market.BoundaryWidthMeters.Value;
-        request.MarketLengthMeters = market.BoundaryHeightMeters.Value;
+        request.MarketWidthMeters = layout.MarketWidthMeters ?? market.BoundaryWidthMeters.Value;
+        request.MarketLengthMeters = layout.MarketLengthMeters ?? market.BoundaryHeightMeters.Value;
         request.ZoneConfigs ??= [];
         var physicalPreparation = PhysicalGridCalculator.Prepare(request);
         var hasZoneManagement = await ValidateGenerationEntitlementAsync(market, request);
@@ -619,8 +642,8 @@ public class MarketLayoutService : IMarketLayoutService
         if (!market.BoundaryWidthMeters.HasValue || !market.BoundaryHeightMeters.HasValue || market.BoundaryWidthMeters.Value <= 0 || market.BoundaryHeightMeters.Value <= 0)
             throw AppException.BadRequest("The market boundary dimensions have not been configured. Set the market width and length before continuing.", "MARKET_BOUNDARY_MISSING");
 
-        request.MarketWidthMeters = market.BoundaryWidthMeters.Value;
-        request.MarketLengthMeters = market.BoundaryHeightMeters.Value;
+        request.MarketWidthMeters = layout.MarketWidthMeters ?? market.BoundaryWidthMeters.Value;
+        request.MarketLengthMeters = layout.MarketLengthMeters ?? market.BoundaryHeightMeters.Value;
         request.ZoneConfigs ??= [];
         var physicalPreparation = PhysicalGridCalculator.Prepare(request);
         if (physicalPreparation.Errors.Count > 0)
@@ -912,17 +935,59 @@ public class MarketLayoutService : IMarketLayoutService
         await EnsureLayoutOwnershipOnlyAsync(layout, actorId, cancellationToken);
         var graphResult = await _graphValidation.ValidateAsync(layoutId, cancellationToken);
         var planLimitError = await GetPlanSlotLimitErrorAsync(layout, actorId, cancellationToken);
-        var result = planLimitError is null
-            ? graphResult
-            : new MarketLayoutValidationResponse
-            {
-                Errors = graphResult.Errors.Concat([planLimitError]).ToArray(),
-                Warnings = graphResult.Warnings
-            };
+        var sectionErrors = await GetSectionGeometryErrorsAsync(layout, true, cancellationToken);
+        var errors = graphResult.Errors.Concat(sectionErrors);
+        if (planLimitError is not null) errors = errors.Append(planLimitError);
+        var result = new MarketLayoutValidationResponse
+        {
+            Errors = errors.Distinct().ToArray(),
+            Warnings = graphResult.Warnings
+        };
         return ApiResponse<MarketLayoutValidationResponse>.SuccessResponse(result,
             result.IsValid ? "Market layout is valid." : "Market layout validation failed.");
     }
 
+    public async Task<ApiResponse<MarketLayoutMetricsResponse>> GetMetricsAsync(
+        Guid layoutId, CancellationToken cancellationToken = default, Guid? actorId = null)
+    {
+        var layout = await GetActiveLayoutAsync(layoutId, cancellationToken);
+        await EnsureLayoutOwnershipOnlyAsync(layout, actorId, cancellationToken);
+        return ApiResponse<MarketLayoutMetricsResponse>.SuccessResponse(
+            await BuildMetricsAsync(layout, cancellationToken));
+    }
+
+    public async Task<ApiResponse<MarketLayoutComparisonResponse>> CompareAsync(
+        Guid leftLayoutId, Guid rightLayoutId,
+        CancellationToken cancellationToken = default, Guid? actorId = null)
+    {
+        if (leftLayoutId == rightLayoutId)
+            throw AppException.BadRequest("Select two different map layouts to compare.", "LAYOUT_COMPARE_SAME");
+
+        var left = await GetActiveLayoutAsync(leftLayoutId, cancellationToken);
+        var right = await GetActiveLayoutAsync(rightLayoutId, cancellationToken);
+        await EnsureLayoutOwnershipOnlyAsync(left, actorId, cancellationToken);
+        await EnsureLayoutOwnershipOnlyAsync(right, actorId, cancellationToken);
+        if (left.NightMarketId != right.NightMarketId)
+            throw AppException.BadRequest("Only map layouts from the same night market can be compared.", "LAYOUT_COMPARE_MARKET_MISMATCH");
+
+        var leftMetrics = await BuildMetricsAsync(left, cancellationToken);
+        var rightMetrics = await BuildMetricsAsync(right, cancellationToken);
+        return ApiResponse<MarketLayoutComparisonResponse>.SuccessResponse(new()
+        {
+            Left = _mapper.Map<MarketLayoutResponse>(left),
+            LeftMetrics = leftMetrics,
+            Right = _mapper.Map<MarketLayoutResponse>(right),
+            RightMetrics = rightMetrics,
+            ZoneDifference = rightMetrics.ZoneCount - leftMetrics.ZoneCount,
+            SlotDifference = rightMetrics.TotalSlots - leftMetrics.TotalSlots,
+            AssignedSlotDifference = rightMetrics.AssignedSlots - leftMetrics.AssignedSlots,
+            ZoneAreaDifferenceSquareMeters = rightMetrics.ZoneAreaSquareMeters - leftMetrics.ZoneAreaSquareMeters,
+            BoothAreaDifferenceSquareMeters = rightMetrics.BoothAreaSquareMeters - leftMetrics.BoothAreaSquareMeters,
+            WalkwayAreaDifferenceSquareMeters = rightMetrics.WalkwayOpenAreaSquareMeters - leftMetrics.WalkwayOpenAreaSquareMeters,
+            OccupancyDifferencePercent = rightMetrics.OccupancyPercent - leftMetrics.OccupancyPercent,
+            NavigationReadinessDifferencePercent = rightMetrics.NavigationReadinessPercent - leftMetrics.NavigationReadinessPercent
+        });
+    }
     public async Task<ApiResponse<MarketLayoutResponse>> ActivateAsync(
         Guid layoutId, CancellationToken cancellationToken = default, Guid? actorId = null)
     {
@@ -931,13 +996,14 @@ public class MarketLayoutService : IMarketLayoutService
         await EnsureLayoutOwnershipAsync(layout, actorId, cancellationToken);
         var graphValidation = await _graphValidation.ValidateAsync(layoutId, cancellationToken);
         var planLimitError = await GetPlanSlotLimitErrorAsync(layout, actorId, cancellationToken);
-        var validation = planLimitError is null
-            ? graphValidation
-            : new MarketLayoutValidationResponse
-            {
-                Errors = graphValidation.Errors.Concat([planLimitError]).ToArray(),
-                Warnings = graphValidation.Warnings
-            };
+        var sectionErrors = await GetSectionGeometryErrorsAsync(layout, true, cancellationToken);
+        var activationErrors = graphValidation.Errors.Concat(sectionErrors);
+        if (planLimitError is not null) activationErrors = activationErrors.Append(planLimitError);
+        var validation = new MarketLayoutValidationResponse
+        {
+            Errors = activationErrors.Distinct().ToArray(),
+            Warnings = graphValidation.Warnings
+        };
         if (!validation.IsValid)
         {
             var fieldErrors = new Dictionary<string, string[]>
@@ -955,6 +1021,9 @@ public class MarketLayoutService : IMarketLayoutService
         await _layouts.ActivateExclusiveAsync(layout.NightMarketId, layout.Id, now, cancellationToken);
 
         layout.Status = MarketLayoutStatus.Active;
+        var publishedLayout = (await _layouts.GetPublishedMapsAsync(layout.NightMarketId, cancellationToken))
+            .FirstOrDefault(item => item.Id == layout.Id);
+        if (publishedLayout is not null) layout.IsDefaultView = publishedLayout.IsDefaultView;
         layout.UpdatedAt = now;
         try
         {
@@ -973,7 +1042,24 @@ public class MarketLayoutService : IMarketLayoutService
                 });
         }
         catch { }
-        return ApiResponse<MarketLayoutResponse>.SuccessResponse(_mapper.Map<MarketLayoutResponse>(layout), "Market layout activated successfully.");
+        return ApiResponse<MarketLayoutResponse>.SuccessResponse(_mapper.Map<MarketLayoutResponse>(layout), "Map section published successfully.");
+    }
+
+    public async Task<ApiResponse<MarketLayoutResponse>> SetDefaultViewAsync(
+        Guid layoutId, CancellationToken cancellationToken = default, Guid? actorId = null)
+    {
+        var layout = await GetActiveLayoutAsync(layoutId, cancellationToken);
+        await EnsureLayoutOwnershipAsync(layout, actorId, cancellationToken);
+        if (layout.Status != MarketLayoutStatus.Active)
+            throw AppException.Conflict("Only a published map section can be set as the default view.", "LAYOUT_NOT_PUBLISHED");
+
+        var now = DateTime.UtcNow;
+        await _layouts.SetDefaultViewAsync(layout.NightMarketId, layout.Id, now, cancellationToken);
+        layout.IsDefaultView = true;
+        layout.UpdatedAt = now;
+        return ApiResponse<MarketLayoutResponse>.SuccessResponse(
+            _mapper.Map<MarketLayoutResponse>(layout),
+            "Default map view updated successfully.");
     }
 
     private async Task<string?> GetPlanSlotLimitErrorAsync(
@@ -1000,11 +1086,20 @@ public class MarketLayoutService : IMarketLayoutService
         if (layout.Status != MarketLayoutStatus.Active)
             throw AppException.Conflict("Only an active market layout can be deactivated.");
 
+        var wasDefault = layout.IsDefaultView;
         layout.Status = MarketLayoutStatus.Inactive;
+        layout.IsDefaultView = false;
         layout.UpdatedAt = DateTime.UtcNow;
         _layouts.Update(layout);
 
         await _layouts.SaveChangesAsync();
+        if (wasDefault)
+        {
+            var replacement = (await _layouts.GetPublishedMapsAsync(layout.NightMarketId, cancellationToken))
+                .FirstOrDefault(item => item.Id != layout.Id);
+            if (replacement is not null)
+                await _layouts.SetDefaultViewAsync(layout.NightMarketId, replacement.Id, DateTime.UtcNow, cancellationToken);
+        }
         try
         {
             await _eventPublisher.PublishAsync(new RealtimeEvent
@@ -1081,8 +1176,96 @@ public class MarketLayoutService : IMarketLayoutService
             throw AppException.Forbidden("An active Market subscription is required to perform this action.", "MARKET_SUBSCRIPTION_REQUIRED");
     }
 
+    private async Task<MarketLayoutMetricsResponse> BuildMetricsAsync(
+        MarketLayout layout, CancellationToken cancellationToken)
+    {
+        var editor = await _layouts.GetEditorLayoutAsync(layout.Id, cancellationToken)
+            ?? throw AppException.NotFound("Market layout was not found.");
+        var market = await EnsureNightMarketExistsAsync(layout.NightMarketId, cancellationToken);
+        var blocks = await _layouts.GetBlocksByLayoutIdAsync(layout.Id, cancellationToken);
+        var edges = await _layouts.GetEdgesByLayoutIdAsync(layout.Id, cancellationToken);
+        var zones = await _zones.GetActiveByNightMarketIdAsync(
+            layout.NightMarketId, cancellationToken: cancellationToken);
+        return LayoutMetricsCalculator.Calculate(
+            editor, market.BoundaryWidthMeters, market.BoundaryHeightMeters, blocks, editor.LayoutNodes.ToList(), edges,
+            editor.BoothLocations.ToList(), zones);
+    }
+
+    private async Task<IReadOnlyCollection<string>> GetSectionGeometryErrorsAsync(
+        MarketLayout layout, bool includePublishedOverlap, CancellationToken cancellationToken)
+    {
+        var market = await EnsureNightMarketExistsAsync(layout.NightMarketId, cancellationToken);
+        var errors = ValidateSectionGeometry(layout, market);
+        if (!includePublishedOverlap || errors.Count > 0) return errors;
+
+        var width = layout.MarketWidthMeters ?? market.BoundaryWidthMeters ?? 0;
+        var length = layout.MarketLengthMeters ?? market.BoundaryHeightMeters ?? 0;
+        foreach (var other in await _layouts.GetPublishedMapsAsync(layout.NightMarketId, cancellationToken))
+        {
+            if (other.Id == layout.Id ||
+                other.SectionCode.Equals(layout.SectionCode, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var otherWidth = other.MarketWidthMeters ?? market.BoundaryWidthMeters ?? 0;
+            var otherLength = other.MarketLengthMeters ?? market.BoundaryHeightMeters ?? 0;
+            if (RectanglesOverlap(
+                    layout.OffsetXMeters, layout.OffsetYMeters, width, length,
+                    other.OffsetXMeters, other.OffsetYMeters, otherWidth, otherLength))
+            {
+                errors.Add(
+                    $"Map section '{layout.SectionName}' overlaps published section '{other.SectionName}'. Adjust its physical position or dimensions.");
+            }
+        }
+        return errors;
+    }
+
+    private static void ValidateSectionInsideMarket(MarketLayout layout, NightMarket market)
+    {
+        var errors = ValidateSectionGeometry(layout, market);
+        if (errors.Count > 0)
+            throw AppException.BadRequest(string.Join(" ", errors), "MAP_SECTION_OUTSIDE_MARKET");
+    }
+
+    private static List<string> ValidateSectionGeometry(MarketLayout layout, NightMarket market)
+    {
+        var errors = new List<string>();
+        var marketWidth = market.BoundaryWidthMeters ?? 0;
+        var marketLength = market.BoundaryHeightMeters ?? 0;
+        var width = layout.MarketWidthMeters ?? marketWidth;
+        var length = layout.MarketLengthMeters ?? marketLength;
+
+        if (marketWidth <= 0 || marketLength <= 0)
+            errors.Add("Set the night market boundary width and length before configuring map sections.");
+        if (width <= 0 || length <= 0)
+            errors.Add("Map section width and length must be greater than zero.");
+        if (layout.OffsetXMeters < 0 || layout.OffsetYMeters < 0)
+            errors.Add("Map section offsets cannot be negative.");
+        if (marketWidth > 0 && layout.OffsetXMeters + width > marketWidth + 0.01)
+            errors.Add($"Map section '{layout.SectionName}' exceeds the market width boundary.");
+        if (marketLength > 0 && layout.OffsetYMeters + length > marketLength + 0.01)
+            errors.Add($"Map section '{layout.SectionName}' exceeds the market length boundary.");
+        return errors;
+    }
+
+    private static bool RectanglesOverlap(
+        double leftX, double leftY, double leftWidth, double leftHeight,
+        double rightX, double rightY, double rightWidth, double rightHeight)
+        => leftX < rightX + rightWidth - 0.01 &&
+           leftX + leftWidth > rightX + 0.01 &&
+           leftY < rightY + rightHeight - 0.01 &&
+           leftY + leftHeight > rightY + 0.01;
+
+    private static string NormalizeSectionCode(string? code, string fallback)
+    {
+        var source = string.IsNullOrWhiteSpace(code) ? fallback : code;
+        var normalized = new string(source.Trim().ToUpperInvariant()
+            .Where(character => char.IsLetterOrDigit(character) || character is '-' or '_')
+            .Take(50)
+            .ToArray());
+        return string.IsNullOrWhiteSpace(normalized) ? "MAIN" : normalized;
+    }
     private async Task ValidateIdentityAsync(
-        Guid nightMarketId, string name, int version, Guid? excludeId, CancellationToken cancellationToken)
+        Guid nightMarketId, string sectionCode, string name, int version, Guid? excludeId, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw AppException.BadRequest("Layout name is required.");
@@ -1090,8 +1273,8 @@ public class MarketLayoutService : IMarketLayoutService
         if (version <= 0)
             throw AppException.BadRequest("Layout version must be greater than zero.");
 
-        if (await _layouts.ActiveNameOrVersionExistsAsync(nightMarketId, name, version, excludeId, cancellationToken))
-            throw AppException.Conflict("Layout name or version already exists in this night market.");
+        if (await _layouts.ActiveNameOrVersionExistsAsync(nightMarketId, sectionCode, name, version, excludeId, cancellationToken))
+            throw AppException.Conflict("Layout name already exists, or this section version already exists in the night market.");
     }
 
     private static MarketLayoutValidationResponse BuildValidation(MarketLayout layout)

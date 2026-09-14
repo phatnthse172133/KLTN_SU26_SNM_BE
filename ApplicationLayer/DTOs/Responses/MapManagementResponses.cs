@@ -29,6 +29,14 @@ public class MapNightMarketResponse
 public class MapLayoutResponse
 {
     public Guid Id { get; set; }
+    public string LayoutName { get; set; } = string.Empty;
+    public string SectionCode { get; set; } = string.Empty;
+    public string SectionName { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public double OffsetXMeters { get; set; }
+    public double OffsetYMeters { get; set; }
+    public bool IsDefaultView { get; set; }
+    public int DisplayOrder { get; set; }
     public int Version { get; set; }
     public string? ImageUrl { get; set; }
     public int Width { get; set; }
@@ -40,6 +48,23 @@ public class MapLayoutResponse
     public double? MarketWidthMeters { get; set; }
     public double? MarketLengthMeters { get; set; }
     public double? PixelsPerMeter { get; set; }
+}
+
+public class PublishedMapSectionResponse
+{
+    public Guid Id { get; set; }
+    public string LayoutName { get; set; } = string.Empty;
+    public string SectionCode { get; set; } = string.Empty;
+    public string SectionName { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public int Version { get; set; }
+    public double OffsetXMeters { get; set; }
+    public double OffsetYMeters { get; set; }
+    public double? WidthMeters { get; set; }
+    public double? LengthMeters { get; set; }
+    public bool IsDefaultView { get; set; }
+    public int DisplayOrder { get; set; }
+    public MarketLayoutMetricsResponse Metrics { get; set; } = new();
 }
 
 public class MapLayoutBlockResponse

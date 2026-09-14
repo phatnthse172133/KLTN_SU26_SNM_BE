@@ -6,7 +6,8 @@ namespace ApplicationLayer.Services.MapNavigation;
 
 public interface IMapNavigationService
 {
-    Task<ApiResponse<NightMarketMapResponse>> GetMapAsync(Guid nightMarketId, CancellationToken cancellationToken = default);
+    Task<ApiResponse<NightMarketMapResponse>> GetMapAsync(Guid nightMarketId, Guid? layoutId = null, CancellationToken cancellationToken = default);
+    Task<ApiResponse<IReadOnlyCollection<PublishedMapSectionResponse>>> GetPublishedMapsAsync(Guid nightMarketId, CancellationToken cancellationToken = default);
     Task<ApiResponse<PaginationResp<LayoutNodeResponse>>> GetStartingPointsAsync(
         Guid layoutId, PaginationReq pagination, CancellationToken cancellationToken = default);
     Task<ApiResponse<NearestNodeResponse>> FindNearestNodeAsync(Guid layoutId, NearestNodeRequest request, CancellationToken cancellationToken = default);

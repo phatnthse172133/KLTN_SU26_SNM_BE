@@ -17,6 +17,8 @@ public class MarketLayoutService : IMarketLayoutService
 {
     private const string GeneralAreaZoneName = "General Area";
     private const string GeneralAreaZoneCode = "G";
+    private const double DefaultPixelsPerMeter = 10.0;
+    private const int MaxCanvasDimension = 50000;
 
     private readonly IMarketLayoutRepository _layouts;
     private readonly IMarketMapRepository _marketMaps;
@@ -160,6 +162,7 @@ public class MarketLayoutService : IMarketLayoutService
             layout.CreatedAt = now;
             layout.UpdatedAt = now;
             ValidateSectionInsideMarket(layout, market);
+            ApplyDerivedCanvasDimensions(layout);
 
             await _layouts.AddAsync(layout);
             await _layouts.SaveChangesAsync();
@@ -195,6 +198,8 @@ public class MarketLayoutService : IMarketLayoutService
         layout.MarketLengthMeters = request.MapLengthMeters ?? layout.MarketLengthMeters ?? market.BoundaryHeightMeters;
         layout.DisplayOrder = request.DisplayOrder;
         ValidateSectionInsideMarket(layout, market);
+        await EnsureExistingGraphFitsDerivedCanvasAsync(layout, cancellationToken);
+        ApplyDerivedCanvasDimensions(layout);
         layout.UpdatedAt = DateTime.UtcNow;
         _layouts.Update(layout);
 
@@ -216,6 +221,8 @@ public class MarketLayoutService : IMarketLayoutService
                 "The uploaded layout image URL is invalid.",
                 "LAYOUT_IMAGE_URL_INVALID");
 
+        EnsureCanvasMatchesPhysicalArea(layout, request.Width, request.Height);
+
         _mapper.Map(request, layout);
         layout.UpdatedAt = DateTime.UtcNow;
         _layouts.Update(layout);
@@ -231,6 +238,8 @@ public class MarketLayoutService : IMarketLayoutService
         var layout = await GetActiveLayoutAsync(layoutId, cancellationToken);
         await EnsureLayoutOwnershipAsync(layout, actorId, cancellationToken);
         await EnsureDraftLayoutEditableAsync(layout, cancellationToken);
+
+        EnsureCanvasMatchesPhysicalArea(layout, request.Width, request.Height);
 
         var nodes = (await _layouts.GetNodesByLayoutIdAsync(layoutId, cancellationToken)).ToList();
         var outsideNodes = nodes
@@ -261,6 +270,77 @@ public class MarketLayoutService : IMarketLayoutService
 
         await _layouts.SaveChangesAsync();
         return ApiResponse<MarketLayoutResponse>.SuccessResponse(_mapper.Map<MarketLayoutResponse>(layout), "Market layout dimensions updated successfully.");
+    }
+
+    private static void EnsureCanvasMatchesPhysicalArea(MarketLayout layout, int width, int height)
+    {
+        if (layout.MarketWidthMeters is not > 0 || layout.MarketLengthMeters is not > 0)
+            return;
+
+        var pixelsPerMeter = layout.PixelsPerMeter is > 0
+            ? layout.PixelsPerMeter.Value
+            : DefaultPixelsPerMeter;
+        var expectedWidth = (int)Math.Ceiling(layout.MarketWidthMeters.Value * pixelsPerMeter);
+        var expectedHeight = (int)Math.Ceiling(layout.MarketLengthMeters.Value * pixelsPerMeter);
+        if (width == expectedWidth && height == expectedHeight)
+            return;
+
+        throw AppException.BadRequest(
+            $"Canvas dimensions are calculated automatically from this map area's physical size. " +
+            $"Use {expectedWidth} × {expectedHeight}px ({layout.MarketWidthMeters:0.##} × {layout.MarketLengthMeters:0.##}m at {pixelsPerMeter:0.##}px/m).",
+            "LAYOUT_CANVAS_DERIVED");
+    }
+
+    private static void ApplyDerivedCanvasDimensions(MarketLayout layout)
+    {
+        if (layout.MarketWidthMeters is not > 0 || layout.MarketLengthMeters is not > 0)
+            return;
+
+        var pixelsPerMeter = layout.PixelsPerMeter is > 0
+            ? layout.PixelsPerMeter.Value
+            : DefaultPixelsPerMeter;
+        var width = (int)Math.Ceiling(layout.MarketWidthMeters.Value * pixelsPerMeter);
+        var height = (int)Math.Ceiling(layout.MarketLengthMeters.Value * pixelsPerMeter);
+        if (width > MaxCanvasDimension || height > MaxCanvasDimension)
+            throw AppException.BadRequest(
+                $"The calculated drawing canvas cannot exceed {MaxCanvasDimension:N0}px per side. " +
+                "Reduce the map area's physical size before saving.",
+                "LAYOUT_CANVAS_TOO_LARGE");
+
+        layout.PixelsPerMeter = pixelsPerMeter;
+        layout.Width = width;
+        layout.Height = height;
+    }
+
+    private async Task EnsureExistingGraphFitsDerivedCanvasAsync(
+        MarketLayout layout,
+        CancellationToken cancellationToken)
+    {
+        if (layout.MarketWidthMeters is not > 0 || layout.MarketLengthMeters is not > 0)
+            return;
+
+        var pixelsPerMeter = layout.PixelsPerMeter is > 0
+            ? layout.PixelsPerMeter.Value
+            : DefaultPixelsPerMeter;
+        var expectedWidth = (int)Math.Ceiling(layout.MarketWidthMeters.Value * pixelsPerMeter);
+        var expectedHeight = (int)Math.Ceiling(layout.MarketLengthMeters.Value * pixelsPerMeter);
+        var nodes = await _layouts.GetNodesByLayoutIdAsync(layout.Id, cancellationToken);
+        var blocks = await _layouts.GetBlocksByLayoutIdAsync(layout.Id, cancellationToken);
+        var outsideNodeCount = nodes.Count(node =>
+            node.Xcoordinate < 0 || node.Ycoordinate < 0 ||
+            node.Xcoordinate > expectedWidth || node.Ycoordinate > expectedHeight);
+        var outsideBlockCount = blocks.Count(block =>
+            block.X < 0 || block.Y < 0 ||
+            block.X + block.Width > expectedWidth || block.Y + block.Height > expectedHeight);
+
+        if (outsideNodeCount == 0 && outsideBlockCount == 0)
+            return;
+
+        throw AppException.BadRequest(
+            $"This map area cannot be reduced to {layout.MarketWidthMeters:0.##} × {layout.MarketLengthMeters:0.##}m " +
+            $"because {outsideBlockCount} zone(s) and {outsideNodeCount} map point(s) would fall outside it. " +
+            "Move or regenerate the zones first, then resize the map area.",
+            "LAYOUT_AREA_TOO_SMALL");
     }
 
     public async Task<ApiResponse<SaveGraphResponse>> SaveGraphTransactionalAsync(
@@ -464,7 +544,10 @@ public class MarketLayoutService : IMarketLayoutService
             LayoutId = layoutId,
             FromNodeId = edge.FromNodeId,
             ToNodeId = edge.ToNodeId,
-            Distance = edge.Distance ?? CalculateDistance(nodes, edge.FromNodeId, edge.ToNodeId),
+            // Distance is derived from geometry. Recalculate it on every graph
+            // save so moving a zone and its child points cannot leave stale
+            // routing weights from the previous position.
+            Distance = CalculateDistance(nodes, edge.FromNodeId, edge.ToNodeId),
             IsBidirectional = edge.IsBidirectional,
             IsAccessible = edge.IsAccessible,
             IsDeleted = false,

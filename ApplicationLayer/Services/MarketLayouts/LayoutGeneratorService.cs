@@ -24,6 +24,7 @@ public class LayoutGeneratorService : ILayoutGeneratorService
     private const double BlockPadding = 28.0;
     private const double JunctionOffsetY = -30.0; // Junction sits above the Zone block
     private const double PhysicalJunctionReserveMeters = 4.0;
+    private const double SingleZoneJunctionReserveMeters = 2.0;
     private const double AutoFitFacilityReserveMeters = 7.0;
     private const double CorridorClearance = 12.0;
 
@@ -740,8 +741,11 @@ public class LayoutGeneratorService : ILayoutGeneratorService
 
             // Keep a scale-independent physical corridor above each zone for its
             // junction. Legacy pixel layouts retain their historical 40 px reserve.
+            var physicalJunctionReserve = configuredZones.Count == 1
+                ? SingleZoneJunctionReserveMeters
+                : PhysicalJunctionReserveMeters;
             var junctionReserve = physical
-                ? (request.AutoFitZones ? AutoFitFacilityReserveMeters : PhysicalJunctionReserveMeters) * request.PixelsPerMeter
+                ? (request.AutoFitZones ? AutoFitFacilityReserveMeters : physicalJunctionReserve) * request.PixelsPerMeter
                 : Math.Abs(JunctionOffsetY) + 10;
             double blockYWithAisle = curY + junctionReserve;
 

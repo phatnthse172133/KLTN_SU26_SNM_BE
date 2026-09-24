@@ -47,10 +47,10 @@ public class UpdateMarketLayoutImageRequest
     [Required, StringLength(1000)]
     public string LayoutImageUrl { get; set; } = string.Empty;
 
-    [Range(1, int.MaxValue)]
+    [Range(1, 50000)]
     public int Width { get; set; }
 
-    [Range(1, int.MaxValue)]
+    [Range(1, 50000)]
     public int Height { get; set; }
 }
 
@@ -62,10 +62,10 @@ public class CloneMarketLayoutDraftRequest
 
 public class UpdateMarketLayoutDimensionsRequest
 {
-    [Range(1, int.MaxValue)]
+    [Range(1, 50000)]
     public int Width { get; set; }
 
-    [Range(1, int.MaxValue)]
+    [Range(1, 50000)]
     public int Height { get; set; }
 }
 

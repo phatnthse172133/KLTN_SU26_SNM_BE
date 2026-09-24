@@ -147,8 +147,8 @@ public class NavigationAnchorService : INavigationAnchorService
     private async Task<MarketLayout> EditableLayoutAsync(Guid layoutId, CancellationToken token)
     {
         var layout = await _layouts.GetActiveByIdAsync(layoutId, token) ?? throw AppException.NotFound("Market layout was not found.");
-        if (layout.Status == MarketLayoutStatus.Active)
-            throw AppException.Conflict("Clone the active layout to a draft before editing navigation anchors.", "ACTIVE_LAYOUT_IMMUTABLE");
+        if (!await _layouts.IsEditableDraftAsync(layout.Id, token))
+            throw AppException.Conflict("Only a layout in a draft MarketMap can be edited.", "LAYOUT_NOT_EDITABLE_DRAFT");
         return layout;
     }
 

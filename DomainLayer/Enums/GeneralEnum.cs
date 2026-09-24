@@ -56,6 +56,13 @@ namespace DomainLayer.Enums
             Archived = 3
         }
 
+        public enum MarketMapStatus
+        {
+            Draft = 0,
+            Active = 1,
+            Archived = 2
+        }
+
         public enum LayoutCoordinateUnit
         {
             LayoutUnit = 0

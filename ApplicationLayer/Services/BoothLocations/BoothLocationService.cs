@@ -121,8 +121,8 @@ public class BoothLocationService : IBoothLocationService
     private async Task<MarketLayout> EnsureEditableLayoutAsync(Guid id, CancellationToken token)
     {
         var layout = await EnsureLayoutAsync(id, token);
-        if (layout.Status == MarketLayoutStatus.Active)
-            throw AppException.Conflict("Clone the active layout to a draft before editing its graph.", "ACTIVE_LAYOUT_IMMUTABLE");
+        if (!await _layouts.IsEditableDraftAsync(layout.Id, token))
+            throw AppException.Conflict("Only a layout in a draft MarketMap can be edited.", "LAYOUT_NOT_EDITABLE_DRAFT");
         return layout;
     }
 

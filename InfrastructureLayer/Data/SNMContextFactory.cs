@@ -13,6 +13,14 @@ namespace InfrastructureLayer.Data
     {
         public SNMDbContext CreateDbContext(string[] args)
         {
+            var environmentName = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
+                ?? Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT");
+            if (string.IsNullOrWhiteSpace(environmentName))
+            {
+                throw new InvalidOperationException(
+                    "Set ASPNETCORE_ENVIRONMENT explicitly before running EF commands.");
+            }
+
             var currentDirectory = Directory.GetCurrentDirectory();
             var configPath = new[]
                 {
@@ -23,19 +31,22 @@ namespace InfrastructureLayer.Data
                 .FirstOrDefault(path => File.Exists(Path.Combine(path, "appsettings.json")))
                 ?? throw new DirectoryNotFoundException(
                     "Could not locate appsettings.json for SNMDbContext design-time configuration.");
+            if (string.Equals(environmentName, "Development", StringComparison.OrdinalIgnoreCase))
+            {
+                LoadDotEnv(Path.Combine(configPath, ".env.local"));
+            }
             LoadDotEnv(Path.Combine(configPath, ".env"));
 
             var configuration = new ConfigurationBuilder()
                 .SetBasePath(configPath)
                 .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                .AddJsonFile($"appsettings.{environmentName}.json", optional: true, reloadOnChange: true)
                 .AddEnvironmentVariables()
                 .Build();
 
-            var connectionString = configuration.GetConnectionString("DefaultConnection");
-            if (string.IsNullOrWhiteSpace(connectionString))
-            {
-                throw new InvalidOperationException("ConnectionStrings:DefaultConnection is missing. Set ConnectionStrings__DefaultConnection in PresentationLayer/.env.");
-            }
+            var connectionString = DevelopmentDatabaseSafety.ResolveConnectionString(
+                configuration,
+                environmentName);
 
             var optionsBuilder = new DbContextOptionsBuilder<SNMDbContext>();
             optionsBuilder.UseNpgsql(connectionString);

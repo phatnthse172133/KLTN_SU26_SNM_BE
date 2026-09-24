@@ -157,9 +157,23 @@ public readonly record struct LayoutPhysicalScale(double ScaleX, double ScaleY, 
     public bool IsUniform => Math.Abs(ScaleX - ScaleY) <= 1e-12;
 }
 
+public readonly record struct LayoutCalibrationConflict(
+    string Source,
+    double InferredPhysicalWidthMeters,
+    double InferredPhysicalHeightMeters,
+    string Message);
+
 public static class LayoutPhysicalCalibration
 {
+    private const double ConflictEpsilonMeters = 1e-6;
+
     public static LayoutPhysicalScale? TryResolve(MarketLayout layout, NightMarket? market = null)
+        => TryResolve(layout, market?.BoundaryWidthMeters, market?.BoundaryHeightMeters);
+
+    public static LayoutPhysicalScale? TryResolve(
+        MarketLayout layout,
+        double? boundaryWidthMeters,
+        double? boundaryHeightMeters)
     {
         if (layout.Width > 0 && layout.Height > 0)
         {
@@ -169,10 +183,10 @@ public static class LayoutPhysicalCalibration
                     layout.MarketLengthMeters.Value / layout.Height,
                     "MarketLayoutPhysical");
 
-            if (market?.BoundaryWidthMeters is > 0 && market.BoundaryHeightMeters is > 0)
+            if (boundaryWidthMeters is > 0 && boundaryHeightMeters is > 0)
                 return new(
-                    market.BoundaryWidthMeters.Value / (double)layout.Width,
-                    market.BoundaryHeightMeters.Value / (double)layout.Height,
+                    boundaryWidthMeters.Value / layout.Width,
+                    boundaryHeightMeters.Value / layout.Height,
                     "NightMarketBoundary");
         }
 
@@ -189,6 +203,61 @@ public static class LayoutPhysicalCalibration
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Reports disagreement between the authoritative resolved calibration and
+    /// populated legacy uniform calibration sources. Explicit section physical
+    /// dimensions remain authoritative and conflicts are warnings, not blockers.
+    /// The NightMarket boundary is intentionally not treated as a conflicting
+    /// source because it is the whole-market fallback, not another section size.
+    /// </summary>
+    public static IReadOnlyCollection<LayoutCalibrationConflict> DetectConflicts(
+        MarketLayout layout,
+        double? boundaryWidthMeters = null,
+        double? boundaryHeightMeters = null)
+    {
+        var resolved = TryResolve(layout, boundaryWidthMeters, boundaryHeightMeters);
+        if (!resolved.HasValue || layout.Width <= 0 || layout.Height <= 0)
+            return [];
+
+        var physicalWidth = layout.Width * resolved.Value.ScaleX;
+        var physicalHeight = layout.Height * resolved.Value.ScaleY;
+        var conflicts = new List<LayoutCalibrationConflict>();
+
+        if (layout.PixelsPerMeter is > 0)
+        {
+            var inferredWidth = layout.Width / layout.PixelsPerMeter.Value;
+            var inferredHeight = layout.Height / layout.PixelsPerMeter.Value;
+            AddIfDifferent("PixelsPerMeter", inferredWidth, inferredHeight);
+        }
+
+        if (layout.MetersPerLayoutUnit is > 0)
+        {
+            var metersPerUnit = (double)layout.MetersPerLayoutUnit.Value;
+            AddIfDifferent(
+                "MetersPerLayoutUnit",
+                layout.Width * metersPerUnit,
+                layout.Height * metersPerUnit);
+        }
+
+        return conflicts;
+
+        void AddIfDifferent(string source, double inferredWidth, double inferredHeight)
+        {
+            if (!double.IsFinite(inferredWidth) || !double.IsFinite(inferredHeight)
+                || (Math.Abs(inferredWidth - physicalWidth) <= ConflictEpsilonMeters
+                    && Math.Abs(inferredHeight - physicalHeight) <= ConflictEpsilonMeters))
+                return;
+
+            conflicts.Add(new(
+                source,
+                inferredWidth,
+                inferredHeight,
+                $"Legacy {source} implies {inferredWidth:0.######}m x {inferredHeight:0.######}m, "
+                + $"while authoritative {resolved.Value.Source} calibration resolves "
+                + $"{physicalWidth:0.######}m x {physicalHeight:0.######}m."));
+        }
     }
 }
 

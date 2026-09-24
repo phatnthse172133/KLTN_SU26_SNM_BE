@@ -13,6 +13,7 @@ public static class AuthErrorCodes
     public const string GoogleAuthUnavailable = "GOOGLE_AUTH_UNAVAILABLE";
     public const string InvalidGoogleToken = "INVALID_GOOGLE_TOKEN";
     public const string GoogleAccountLinkRequired = "GOOGLE_ACCOUNT_LINK_REQUIRED";
+    public const string GoogleSubjectConflict = "GOOGLE_SUBJECT_CONFLICT";
     public const string GoogleCustomerOnly = "GOOGLE_CUSTOMER_ONLY";
     public const string InvalidOrExpiredVerificationToken = "INVALID_OR_EXPIRED_VERIFICATION_TOKEN";
     public const string InvalidOrExpiredResetOtp = "INVALID_OR_EXPIRED_RESET_OTP";

@@ -14,7 +14,7 @@ public interface IMarketLayoutService
     Task<ApiResponse<MarketLayoutResponse>> UpdateImageAsync(Guid layoutId, UpdateMarketLayoutImageRequest request, CancellationToken cancellationToken = default, Guid? actorId = null);
     Task<ApiResponse<MarketLayoutResponse>> UpdateDimensionsAsync(Guid layoutId, UpdateMarketLayoutDimensionsRequest request, CancellationToken cancellationToken = default, Guid? actorId = null);
     Task<ApiResponse<MarketLayoutEditorDataResponse>> GetEditorDataAsync(Guid layoutId, CancellationToken cancellationToken = default, Guid? actorId = null);
-    Task<ApiResponse<object>> SaveGraphTransactionalAsync(Guid layoutId, SaveGraphRequest request, CancellationToken cancellationToken = default, Guid? actorId = null);
+    Task<ApiResponse<SaveGraphResponse>> SaveGraphTransactionalAsync(Guid layoutId, SaveGraphRequest request, CancellationToken cancellationToken = default, Guid? actorId = null);
     Task<ApiResponse<MarketLayoutValidationResponse>> ValidateAsync(Guid layoutId, CancellationToken cancellationToken = default, Guid? actorId = null);
     Task<ApiResponse<MarketLayoutMetricsResponse>> GetMetricsAsync(Guid layoutId, CancellationToken cancellationToken = default, Guid? actorId = null);
     Task<ApiResponse<MarketLayoutComparisonResponse>> CompareAsync(Guid leftLayoutId, Guid rightLayoutId, CancellationToken cancellationToken = default, Guid? actorId = null);

@@ -20,15 +20,16 @@ public class LayoutNodeService : ILayoutNodeService
     private readonly IZoneRepository _zones;
     private readonly INightMarketRepository _nightMarkets;
     private readonly ISubscriptionEntitlementService _entitlements;
+    private readonly IMarketResourceQuotaService _resourceQuota;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
 
     public LayoutNodeService(ILayoutNodeRepository nodes, ILayoutEdgeRepository edges,
         IBoothLocationRepository locations, IMarketLayoutRepository layouts, IZoneRepository zones,
         INightMarketRepository nightMarkets, ISubscriptionEntitlementService entitlements,
-        IUnitOfWork unitOfWork, IMapper mapper)
-        => (_nodes, _edges, _locations, _layouts, _zones, _nightMarkets, _entitlements, _unitOfWork, _mapper)
-            = (nodes, edges, locations, layouts, zones, nightMarkets, entitlements, unitOfWork, mapper);
+        IMarketResourceQuotaService resourceQuota, IUnitOfWork unitOfWork, IMapper mapper)
+        => (_nodes, _edges, _locations, _layouts, _zones, _nightMarkets, _entitlements, _resourceQuota, _unitOfWork, _mapper)
+            = (nodes, edges, locations, layouts, zones, nightMarkets, entitlements, resourceQuota, unitOfWork, mapper);
 
     public async Task<ApiResponse<PaginationResp<LayoutNodeResponse>>> GetAllAsync(Guid layoutId, MapListRequest request, CancellationToken cancellationToken = default, Guid? actorId = null)
     {
@@ -50,16 +51,12 @@ public class LayoutNodeService : ILayoutNodeService
     public async Task<ApiResponse<LayoutNodeResponse>> CreateAsync(Guid layoutId, CreateLayoutNodeRequest request, CancellationToken cancellationToken = default, Guid? actorId = null)
     {
         var layout = await GetLayoutAsync(layoutId, cancellationToken);
-        EnsureLayoutEditable(layout);
+        await EnsureLayoutEditableAsync(layout, cancellationToken);
         var market = await EnsureLayoutOwnershipAsync(layout, actorId, cancellationToken);
 
         if (request.NodeType == DomainLayer.Enums.GeneralEnum.LayoutNodeType.BoothSlot && market.MarketOwnerId.HasValue)
-        {
-            var maxSlots = await _entitlements.GetMaxSlotsPerMarketAsync(market.MarketOwnerId.Value);
-            var existingNodes = await _nodes.FindAsync(n => n.LayoutId == layoutId && n.NodeType == DomainLayer.Enums.GeneralEnum.LayoutNodeType.BoothSlot && !n.IsDeleted);
-            if (existingNodes.Count() >= maxSlots)
-                throw AppException.Forbidden($"Your current package allows a maximum of {maxSlots} booth slots per market layout. Please upgrade to add more.", "PLAN_LIMIT_REACHED");
-        }
+            await _resourceQuota.EnsureCanAddBoothSlotsAsync(
+                market.MarketOwnerId.Value, layout.MarketMapId, 1, cancellationToken);
 
         ValidatePosition(layout, request.XCoordinate, request.YCoordinate);
         await ValidateZoneAsync(layout, request.ZoneId, cancellationToken);
@@ -122,17 +119,13 @@ public class LayoutNodeService : ILayoutNodeService
     {
         if (requests.Count == 0) throw AppException.BadRequest("At least one node is required.");
         var layout = await GetLayoutAsync(layoutId, cancellationToken);
-        EnsureLayoutEditable(layout);
+        await EnsureLayoutEditableAsync(layout, cancellationToken);
         var market = await EnsureLayoutOwnershipAsync(layout, actorId, cancellationToken);
 
         var newBoothSlots = requests.Count(r => r.NodeType == DomainLayer.Enums.GeneralEnum.LayoutNodeType.BoothSlot);
         if (newBoothSlots > 0 && market.MarketOwnerId.HasValue)
-        {
-            var maxSlots = await _entitlements.GetMaxSlotsPerMarketAsync(market.MarketOwnerId.Value);
-            var existingNodes = await _nodes.FindAsync(n => n.LayoutId == layoutId && n.NodeType == DomainLayer.Enums.GeneralEnum.LayoutNodeType.BoothSlot && !n.IsDeleted);
-            if (existingNodes.Count() + newBoothSlots > maxSlots)
-                throw AppException.Forbidden($"Your current package allows a maximum of {maxSlots} booth slots per market layout. Please upgrade to add more.", "PLAN_LIMIT_REACHED");
-        }
+            await _resourceQuota.EnsureCanAddBoothSlotsAsync(
+                market.MarketOwnerId.Value, layout.MarketMapId, newBoothSlots, cancellationToken);
 
         foreach (var request in requests)
         {
@@ -160,6 +153,32 @@ public class LayoutNodeService : ILayoutNodeService
             node.Id = Guid.NewGuid(); node.LayoutId = layoutId; node.IsDeleted = false; node.CreatedAt = now; node.UpdatedAt = now;
             return node;
         }).ToList();
+
+        var blocks = await _layouts.GetBlocksByLayoutIdAsync(layoutId, cancellationToken);
+        var existingNodes = await _nodes.GetByLayoutAsync(layoutId, cancellationToken: cancellationToken);
+        foreach (var node in nodes.Where(node =>
+                     node.NodeType == DomainLayer.Enums.GeneralEnum.LayoutNodeType.BoothSlot))
+        {
+            if (!node.LayoutBlockId.HasValue
+                && BoothSlotGeometry.TryResolveOwningBlock(
+                    layoutId, node, blocks, out var resolvedBlock, out _))
+                node.LayoutBlockId = resolvedBlock!.Id;
+        }
+
+        var allNodes = existingNodes.Concat(nodes).ToList();
+        foreach (var node in nodes)
+        {
+            var geometryErrors = LayoutGeometryValidator.ValidateNodeMove(
+                layout, node, node.Xcoordinate, node.Ycoordinate, allNodes, blocks);
+            if (geometryErrors.Count > 0)
+                throw AppException.Validation(
+                    $"Map point '{node.SlotCode ?? node.NodeName ?? node.Id.ToString()}': {string.Join(" ", geometryErrors)}",
+                    new Dictionary<string, string[]> { ["nodes"] = geometryErrors.ToArray() },
+                    "LAYOUT_NODE_GEOMETRY_INVALID");
+        }
+
+        // One AddRange + SaveChanges is atomic in the current EF unit of work:
+        // validation completes for the full incoming batch before any INSERT.
         await _nodes.AddRangeAsync(nodes); await _nodes.SaveChangesAsync();
         return ApiResponse<IReadOnlyCollection<LayoutNodeResponse>>.SuccessResponse(_mapper.Map<List<LayoutNodeResponse>>(nodes), "Layout nodes created successfully.");
     }
@@ -168,16 +187,12 @@ public class LayoutNodeService : ILayoutNodeService
     {
         var node = await GetNodeAsync(id, cancellationToken);
         var layout = await GetLayoutAsync(node.LayoutId, cancellationToken);
-        EnsureLayoutEditable(layout);
+        await EnsureLayoutEditableAsync(layout, cancellationToken);
         var market = await EnsureLayoutOwnershipAsync(layout, actorId, cancellationToken);
 
         if (request.NodeType == DomainLayer.Enums.GeneralEnum.LayoutNodeType.BoothSlot && node.NodeType != DomainLayer.Enums.GeneralEnum.LayoutNodeType.BoothSlot && market.MarketOwnerId.HasValue)
-        {
-            var maxSlots = await _entitlements.GetMaxSlotsPerMarketAsync(market.MarketOwnerId.Value);
-            var existingNodes = await _nodes.FindAsync(n => n.LayoutId == node.LayoutId && n.NodeType == DomainLayer.Enums.GeneralEnum.LayoutNodeType.BoothSlot && !n.IsDeleted);
-            if (existingNodes.Count() >= maxSlots)
-                throw AppException.Forbidden($"Your current package allows a maximum of {maxSlots} booth slots per market layout. Please upgrade to add more.", "PLAN_LIMIT_REACHED");
-        }
+            await _resourceQuota.EnsureCanAddBoothSlotsAsync(
+                market.MarketOwnerId.Value, layout.MarketMapId, 1, cancellationToken);
 
         ValidatePosition(layout, request.XCoordinate, request.YCoordinate);
         await ValidateZoneAsync(layout, request.ZoneId, cancellationToken);
@@ -185,6 +200,15 @@ public class LayoutNodeService : ILayoutNodeService
 
         var positionChanged = request.XCoordinate != node.Xcoordinate || request.YCoordinate != node.Ycoordinate;
         _mapper.Map(request, node); node.UpdatedAt = DateTime.UtcNow;
+        if (node.NodeType == DomainLayer.Enums.GeneralEnum.LayoutNodeType.BoothSlot)
+        {
+            var layoutNodes = await _nodes.GetByLayoutAsync(node.LayoutId, cancellationToken: cancellationToken);
+            var layoutBlocks = await _layouts.GetBlocksByLayoutIdAsync(node.LayoutId, cancellationToken);
+            var geometryErrors = LayoutGeometryValidator.ValidateNodeMove(
+                layout, node, node.Xcoordinate, node.Ycoordinate, layoutNodes, layoutBlocks);
+            if (geometryErrors.Count > 0)
+                throw AppException.BadRequest(geometryErrors[0], "LAYOUT_NODE_GEOMETRY_INVALID");
+        }
         _nodes.Update(node);
         if (positionChanged)
         {
@@ -199,7 +223,7 @@ public class LayoutNodeService : ILayoutNodeService
     {
         var node = await GetNodeAsync(id, cancellationToken);
         var layout = await GetLayoutAsync(node.LayoutId, cancellationToken);
-        EnsureLayoutEditable(layout);
+        await EnsureLayoutEditableAsync(layout, cancellationToken);
         await EnsureLayoutOwnershipAsync(layout, actorId, cancellationToken);
         // A booth-slot swap is identified by the two slot IDs. Its request
         // coordinates are display hints and may be stale after a prior drag,
@@ -217,40 +241,68 @@ public class LayoutNodeService : ILayoutNodeService
                 if (swapNode is null || swapNode.NodeType != DomainLayer.Enums.GeneralEnum.LayoutNodeType.BoothSlot)
                     throw AppException.BadRequest("The booth slot selected for swapping was not found.", "LAYOUT_SWAP_TARGET_INVALID");
 
-                var belongsToSameBlock = node.LayoutBlockId.HasValue
-                    && node.LayoutBlockId == swapNode.LayoutBlockId;
-                var belongsToSameLegacyZone = !node.LayoutBlockId.HasValue
-                    && node.ZoneId.HasValue
-                    && node.ZoneId == swapNode.ZoneId;
-                if (!belongsToSameBlock && !belongsToSameLegacyZone)
+                if (!BoothSlotGeometry.TryResolveOwningBlock(
+                        layout.Id, node, layoutBlocks, out var nodeBlock, out var nodeOwnershipError))
+                    throw AppException.BadRequest(nodeOwnershipError!, "LAYOUT_SLOT_BLOCK_REQUIRED");
+                if (!BoothSlotGeometry.TryResolveOwningBlock(
+                        layout.Id, swapNode, layoutBlocks, out var swapBlock, out var swapOwnershipError))
+                    throw AppException.BadRequest(swapOwnershipError!, "LAYOUT_SLOT_BLOCK_REQUIRED");
+                if (nodeBlock!.Id != swapBlock!.Id)
                     throw AppException.BadRequest("Booth slots can only be swapped inside the same zone.", "LAYOUT_SWAP_OUTSIDE_ZONE");
+
+                // Normalize legacy Zone-only ownership only after it resolves
+                // unambiguously to one LayoutBlock in this layout.
+                node.LayoutBlockId = nodeBlock.Id;
+                swapNode.LayoutBlockId = swapBlock.Id;
 
                 var nodeOldX = node.Xcoordinate;
                 var nodeOldY = node.Ycoordinate;
                 var nodeOldRow = node.RowIndex;
                 var nodeOldColumn = node.ColumnIndex;
+                var swapOldX = swapNode.Xcoordinate;
+                var swapOldY = swapNode.Ycoordinate;
+                var swapOldRow = swapNode.RowIndex;
+                var swapOldColumn = swapNode.ColumnIndex;
 
-                // A swap only exchanges two persisted positions inside the same
-                // Zone. Both positions have already passed geometry validation
-                // when created, so revalidating each slot while the other one
-                // is still in place incorrectly reports a collision.
+                var now = DateTime.UtcNow;
+                node.Xcoordinate = swapOldX;
+                node.Ycoordinate = swapOldY;
+                node.RowIndex = swapOldRow;
+                node.ColumnIndex = swapOldColumn;
+                node.UpdatedAt = now;
+
+                swapNode.Xcoordinate = nodeOldX;
+                swapNode.Ycoordinate = nodeOldY;
+                swapNode.RowIndex = nodeOldRow;
+                swapNode.ColumnIndex = nodeOldColumn;
+                swapNode.UpdatedAt = now;
+
+                var proposedNodes = layoutNodes
+                    .Where(candidate => candidate.Id != node.Id && candidate.Id != swapNode.Id)
+                    .Concat([node, swapNode])
+                    .ToList();
+                var nodeErrors = LayoutGeometryValidator.ValidateNodeMove(
+                    layout, node, node.Xcoordinate, node.Ycoordinate, proposedNodes, layoutBlocks);
+                var swapErrors = LayoutGeometryValidator.ValidateNodeMove(
+                    layout, swapNode, swapNode.Xcoordinate, swapNode.Ycoordinate, proposedNodes, layoutBlocks);
+                if (nodeErrors.Count > 0 || swapErrors.Count > 0)
+                {
+                    node.Xcoordinate = nodeOldX;
+                    node.Ycoordinate = nodeOldY;
+                    node.RowIndex = nodeOldRow;
+                    node.ColumnIndex = nodeOldColumn;
+                    swapNode.Xcoordinate = swapOldX;
+                    swapNode.Ycoordinate = swapOldY;
+                    swapNode.RowIndex = swapOldRow;
+                    swapNode.ColumnIndex = swapOldColumn;
+                    throw AppException.BadRequest(
+                        (nodeErrors.Count > 0 ? nodeErrors : swapErrors)[0],
+                        "LAYOUT_NODE_POSITION_INVALID");
+                }
 
                 await _unitOfWork.BeginTransactionAsync(cancellationToken);
                 try
                 {
-                    var now = DateTime.UtcNow;
-                    node.Xcoordinate = swapNode.Xcoordinate;
-                    node.Ycoordinate = swapNode.Ycoordinate;
-                    node.RowIndex = swapNode.RowIndex;
-                    node.ColumnIndex = swapNode.ColumnIndex;
-                    node.UpdatedAt = now;
-
-                    swapNode.Xcoordinate = nodeOldX;
-                    swapNode.Ycoordinate = nodeOldY;
-                    swapNode.RowIndex = nodeOldRow;
-                    swapNode.ColumnIndex = nodeOldColumn;
-                    swapNode.UpdatedAt = now;
-
                     _nodes.Update(node);
                     _nodes.Update(swapNode);
                     await RecalculateConnectedEdgesAsync(node.LayoutId, node.Id, cancellationToken);
@@ -279,40 +331,10 @@ public class LayoutNodeService : ILayoutNodeService
             if (geometryErrors.Count > 0)
                 throw AppException.BadRequest(geometryErrors[0], "LAYOUT_NODE_POSITION_INVALID");
 
-            var block = layoutBlocks.FirstOrDefault(candidate =>
-                candidate.Id == node.LayoutBlockId
-                || (!node.LayoutBlockId.HasValue && node.ZoneId.HasValue && candidate.ZoneId == node.ZoneId));
-            if (block is not null)
-            {
-                const int columns = 4;
-                const double gap = 12;
-                const double paddingX = 16;
-                // The Market Owner canvas reserves the top of each zone for
-                // its label.  Use the same geometry when resolving a manual
-                // move so the persisted grid and the rendered grid agree.
-                const double paddingTop = 52;
-                const double paddingBottom = 16;
-                var slotCount = layoutNodes.Count(candidate =>
-                    candidate.NodeType == DomainLayer.Enums.GeneralEnum.LayoutNodeType.BoothSlot
-                    && !candidate.IsDeleted
-                    && (candidate.LayoutBlockId == block.Id
-                        || (!candidate.LayoutBlockId.HasValue && candidate.ZoneId.HasValue && candidate.ZoneId == block.ZoneId)));
-                var rows = Math.Max(1, (int)Math.Ceiling(Math.Max(slotCount, 1) / (double)columns));
-                var gridWidth = Math.Max(1, block.Width - paddingX * 2);
-                var gridHeight = Math.Max(1, block.Height - paddingTop - paddingBottom);
-                var cellWidth = Math.Max(1, (gridWidth - gap * (columns - 1)) / columns);
-                var cellHeight = Math.Max(1, (gridHeight - gap * (rows - 1)) / rows);
-                var firstCenterX = block.X + paddingX + cellWidth / 2;
-                var firstCenterY = block.Y + paddingTop + cellHeight / 2;
-                node.ColumnIndex = Math.Clamp(
-                    (int)Math.Round(((double)request.XCoordinate - firstCenterX) / (cellWidth + gap)),
-                    0,
-                    columns - 1);
-                node.RowIndex = Math.Clamp(
-                    (int)Math.Round(((double)request.YCoordinate - firstCenterY) / (cellHeight + gap)),
-                    0,
-                    rows - 1);
-            }
+            // A free-form move is no longer represented as a synthetic four-column
+            // grid cell. The canonical footprint validator above is authoritative.
+            node.RowIndex = null;
+            node.ColumnIndex = null;
         }
         node.Xcoordinate = request.XCoordinate; node.Ycoordinate = request.YCoordinate; node.UpdatedAt = DateTime.UtcNow;
         _nodes.Update(node);
@@ -326,7 +348,7 @@ public class LayoutNodeService : ILayoutNodeService
     {
         var node = await GetNodeAsync(id, cancellationToken);
         var layout = await GetLayoutAsync(node.LayoutId, cancellationToken);
-        EnsureLayoutEditable(layout);
+        await EnsureLayoutEditableAsync(layout, cancellationToken);
         await EnsureLayoutOwnershipAsync(layout, actorId, cancellationToken);
         node.IsAccessible = request.IsAccessible; node.UpdatedAt = DateTime.UtcNow;
         _nodes.Update(node); await _nodes.SaveChangesAsync();
@@ -337,7 +359,7 @@ public class LayoutNodeService : ILayoutNodeService
     {
         var node = await GetNodeAsync(id, cancellationToken);
         var layout = await GetLayoutAsync(node.LayoutId, cancellationToken);
-        EnsureLayoutEditable(layout);
+        await EnsureLayoutEditableAsync(layout, cancellationToken);
         await EnsureLayoutOwnershipAsync(layout, actorId, cancellationToken);
         if (await _locations.GetCurrentByNodeAsync(id, cancellationToken) is not null)
             throw AppException.Conflict("Release the booth location before deleting this node.");
@@ -386,12 +408,12 @@ public class LayoutNodeService : ILayoutNodeService
         => await _nodes.GetActiveByIdAsync(id, token) ?? throw AppException.NotFound("Layout node was not found.", "LAYOUT_NODE_NOT_FOUND");
     private async Task<MarketLayout> GetLayoutAsync(Guid id, CancellationToken token)
         => await _layouts.GetActiveByIdAsync(id, token) ?? throw AppException.NotFound("Market layout was not found.", "LAYOUT_NOT_FOUND");
-    private static void EnsureLayoutEditable(MarketLayout layout)
+    private async Task EnsureLayoutEditableAsync(MarketLayout layout, CancellationToken cancellationToken)
     {
-        if (layout.Status == DomainLayer.Enums.GeneralEnum.MarketLayoutStatus.Active)
+        if (!await _layouts.IsEditableDraftAsync(layout.Id, cancellationToken))
             throw AppException.Conflict(
-                "Deactivate the active layout before editing its map.",
-                "LAYOUT_ACTIVE_EDIT_FORBIDDEN");
+                "Only a layout in a draft MarketMap can be edited.",
+                "LAYOUT_NOT_EDITABLE_DRAFT");
     }
     private async Task<NightMarket> EnsureLayoutOwnershipAsync(MarketLayout layout, Guid? actorId, CancellationToken cancellationToken)
     {

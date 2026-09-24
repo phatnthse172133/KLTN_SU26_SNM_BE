@@ -8,6 +8,9 @@ public interface ILayoutNodeRepository : IGenericRepository<LayoutNode>
     Task<PagedResult<LayoutNode>> GetPagedAsync(
         Guid layoutId, string? keyword, int page, int pageSize, CancellationToken cancellationToken = default);
     Task<IReadOnlyCollection<LayoutNode>> GetByLayoutAsync(Guid layoutId, bool accessibleOnly = false, CancellationToken cancellationToken = default);
+    Task<int> CountBoothSlotsByMarketMapAsync(
+        Guid marketMapId, Guid? excludeLayoutId = null,
+        CancellationToken cancellationToken = default);
     Task<PagedResult<LayoutNode>> GetAvailableBoothAccessPagedAsync(
         Guid layoutId, Guid? zoneId, int page, int pageSize, CancellationToken cancellationToken = default);
     Task<PagedResult<LayoutNode>> GetStartingPointsPagedAsync(

@@ -81,7 +81,7 @@ public static class PackagePolicySeeder
                 "Market Pro allows the Market Owner to manage up to three night markets.",
                 "Each night market may contain up to 150 booth slots.",
                 "Each night market may contain up to five layout configurations.",
-                "Only one layout may be active for a night market at a time.",
+                "Each physical layout section may have only one active version at a time; multiple active sections may form the published night market map.",
                 "Market Pro includes Food, Drink and Dessert zone management.",
                 "Zone capacity and package slot limits remain enforced when generating or editing a layout.",
                 "The Market Owner may use advanced booth management and booth risk indicators.",

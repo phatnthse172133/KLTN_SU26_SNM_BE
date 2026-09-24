@@ -2245,6 +2245,9 @@ namespace InfrastructureLayer.Migrations
                         .HasPrecision(10, 2)
                         .HasColumnType("double precision");
 
+                    b.Property<Guid>("MarketMapId")
+                        .HasColumnType("uuid");
+
                     b.Property<double?>("MarketWidthMeters")
                         .HasPrecision(10, 2)
                         .HasColumnType("double precision");
@@ -2291,7 +2294,7 @@ namespace InfrastructureLayer.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
-                        .HasDefaultValueSql("'Inactive'::character varying");
+                        .HasDefaultValueSql("'Draft'::character varying");
 
                     b.Property<DateTime>("UpdatedAt")
                         .ValueGeneratedOnAdd()
@@ -2308,6 +2311,8 @@ namespace InfrastructureLayer.Migrations
 
                     b.HasKey("Id")
                         .HasName("MarketLayouts_pkey");
+
+                    b.HasIndex("MarketMapId", "NightMarketId");
 
                     b.HasIndex(new[] { "NightMarketId", "LayoutName" }, "ux_marketlayout_market_name_active")
                         .IsUnique()
@@ -2333,6 +2338,62 @@ namespace InfrastructureLayer.Migrations
 
                             t.HasCheckConstraint("ck_marketlayout_positive_scale", "\"MetersPerLayoutUnit\" IS NULL OR \"MetersPerLayoutUnit\" > 0");
                         });
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.MarketMap", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("uuid_generate_v4()");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<Guid>("NightMarketId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("PublishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValueSql("'Draft'::character varying");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<int>("Version")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
+                    b.HasKey("Id")
+                        .HasName("MarketMaps_pkey");
+
+                    b.HasAlternateKey("Id", "NightMarketId")
+                        .HasName("AK_MarketMaps_Id_NightMarketId");
+
+                    b.HasIndex(new[] { "NightMarketId", "Version" }, "ux_marketmap_market_version")
+                        .IsUnique();
+
+                    b.HasIndex(new[] { "NightMarketId" }, "ux_marketmap_one_active_per_market")
+                        .IsUnique()
+                        .HasFilter("\"Status\" = 'Active'");
+
+                    b.ToTable("MarketMaps", (string)null);
                 });
 
             modelBuilder.Entity("DomainLayer.Entities.MarketSubscription", b =>
@@ -5143,6 +5204,28 @@ namespace InfrastructureLayer.Migrations
                         .IsRequired()
                         .HasConstraintName("MarketLayouts_NightMarketId_fkey");
 
+                    b.HasOne("DomainLayer.Entities.MarketMap", "MarketMap")
+                        .WithMany("MarketLayouts")
+                        .HasForeignKey("MarketMapId", "NightMarketId")
+                        .HasPrincipalKey("Id", "NightMarketId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("MarketLayouts_MarketMapId_NightMarketId_fkey");
+
+                    b.Navigation("MarketMap");
+
+                    b.Navigation("NightMarket");
+                });
+
+            modelBuilder.Entity("DomainLayer.Entities.MarketMap", b =>
+                {
+                    b.HasOne("DomainLayer.Entities.NightMarket", "NightMarket")
+                        .WithMany("MarketMaps")
+                        .HasForeignKey("NightMarketId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("MarketMaps_NightMarketId_fkey");
+
                     b.Navigation("NightMarket");
                 });
 
@@ -5764,11 +5847,18 @@ namespace InfrastructureLayer.Migrations
                     b.Navigation("NavigationAnchors");
                 });
 
+            modelBuilder.Entity("DomainLayer.Entities.MarketMap", b =>
+                {
+                    b.Navigation("MarketLayouts");
+                });
+
             modelBuilder.Entity("DomainLayer.Entities.NightMarket", b =>
                 {
                     b.Navigation("Booths");
 
                     b.Navigation("MarketLayouts");
+
+                    b.Navigation("MarketMaps");
 
                     b.Navigation("NightMarketImages");
 

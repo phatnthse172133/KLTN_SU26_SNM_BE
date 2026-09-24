@@ -144,10 +144,10 @@ public class LayoutEdgeService : ILayoutEdgeService
     {
         var layout = await _layouts.GetActiveByIdAsync(layoutId, token)
             ?? throw AppException.NotFound("Market layout was not found.");
-        if (layout.Status == DomainLayer.Enums.GeneralEnum.MarketLayoutStatus.Active)
+        if (!await _layouts.IsEditableDraftAsync(layout.Id, token))
             throw AppException.Conflict(
-                "Deactivate the active layout before editing its map.",
-                "LAYOUT_ACTIVE_EDIT_FORBIDDEN");
+                "Only a layout in a draft MarketMap can be edited.",
+                "LAYOUT_NOT_EDITABLE_DRAFT");
     }
     private async Task EnsureLayoutOwnershipOnlyAsync(Guid layoutId, Guid? actorId, CancellationToken token)
     {

@@ -35,6 +35,15 @@ ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
 var envPath = Path.Combine(Directory.GetCurrentDirectory(), ".env");
 if (!File.Exists(envPath))
     envPath = Path.Combine(AppContext.BaseDirectory, ".env");
+var bootstrapEnvironment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
+    ?? Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
+    ?? Environments.Production;
+if (string.Equals(bootstrapEnvironment, Environments.Development, StringComparison.OrdinalIgnoreCase))
+{
+    var localEnvPath = Path.Combine(Path.GetDirectoryName(envPath)!, ".env.local");
+    if (File.Exists(localEnvPath))
+        SNMContextFactory.LoadDotEnv(localEnvPath);
+}
 if (File.Exists(envPath))
     SNMContextFactory.LoadDotEnv(envPath);
 
@@ -46,6 +55,16 @@ builder.Logging.AddDebug();
 
 // Re-add environment variables so .env values loaded above remain in IConfiguration.
 builder.Configuration.AddEnvironmentVariables();
+
+var effectiveConnectionString = DevelopmentDatabaseSafety.ResolveConnectionString(
+    builder.Configuration,
+    builder.Environment.EnvironmentName);
+builder.Configuration["ConnectionStrings:DefaultConnection"] = effectiveConnectionString;
+if (builder.Environment.IsDevelopment())
+{
+    Console.WriteLine(
+        $"Development database target: {DevelopmentDatabaseSafety.Describe(effectiveConnectionString)}");
+}
 
 var dataProtectionKeysPath = builder.Configuration["DataProtection:KeysPath"];
 if (!string.IsNullOrWhiteSpace(dataProtectionKeysPath))
@@ -450,6 +469,12 @@ var swaggerEnabled = app.Environment.IsDevelopment()
 
 if (app.Configuration.GetValue<bool>("Database:ApplyMigrationsOnStartup"))
 {
+    if (app.Environment.IsDevelopment())
+    {
+        throw new InvalidOperationException(
+            "Automatic migrations are disabled in Development. Inspect migrations explicitly before applying them.");
+    }
+
     await using var migrationScope = app.Services.CreateAsyncScope();
     var database = migrationScope.ServiceProvider.GetRequiredService<SNMDbContext>();
     await database.Database.MigrateAsync();

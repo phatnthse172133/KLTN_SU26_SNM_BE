@@ -110,6 +110,9 @@ public class SaveGraphRequest
     [Required]
     public DateTime ExpectedUpdatedAt { get; set; }
 
+    [Range(1, int.MaxValue)]
+    public int ExpectedGraphRevision { get; set; }
+
     [Required]
     public List<SaveGraphNode> Nodes { get; set; } = new();
 
@@ -194,9 +197,8 @@ public class GenerateLayoutRequest
     public List<ZoneGenerationConfig> ZoneConfigs { get; set; } = new();
 
     /// <summary>
-    /// Total number of booth slots requested by the market owner. During physical
-    /// generation the value is safely reduced to the number that fits inside the
-    /// declared market boundary; it is never increased beyond this request.
+    /// Exact total number of booth slots requested by the market owner. Physical
+    /// generation either creates exactly this count or fails before persistence.
     /// </summary>
     [Range(1, 1000)]
     public int? RequestedBoothCount { get; set; }

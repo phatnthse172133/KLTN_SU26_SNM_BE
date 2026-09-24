@@ -59,6 +59,14 @@ public class MarketLayoutRepository : GenericRepository<MarketLayout>, IMarketLa
             layout => layout.Id == id && !layout.IsDeleted && !layout.NightMarket.IsDeleted,
             cancellationToken);
 
+    public Task<bool> IsEditableDraftAsync(Guid id, CancellationToken cancellationToken = default)
+        => _dbSet.AnyAsync(layout =>
+            layout.Id == id &&
+            !layout.IsDeleted &&
+            layout.Status == MarketLayoutStatus.Draft &&
+            layout.MarketMap.Status == MarketMapStatus.Draft,
+            cancellationToken);
+
     public Task<MarketLayout?> GetEditorLayoutAsync(Guid id, CancellationToken cancellationToken = default)
         => _dbSet.AsNoTracking()
             .AsSplitQuery()
@@ -114,6 +122,60 @@ public class MarketLayoutRepository : GenericRepository<MarketLayout>, IMarketLa
             .Where(block => block.LayoutId == layoutId && !block.IsDeleted)
             .OrderBy(block => block.DisplayOrder)
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyCollection<LayoutBlock>> GetBlocksByLayoutIdsAsync(
+        IReadOnlyCollection<Guid> layoutIds, CancellationToken cancellationToken = default)
+        => await _context.Set<LayoutBlock>().AsNoTracking()
+            .Include(block => block.Zone)
+            .Where(block => layoutIds.Contains(block.LayoutId) && !block.IsDeleted)
+            .OrderBy(block => block.LayoutId)
+            .ThenBy(block => block.DisplayOrder)
+            .ThenBy(block => block.Id)
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyCollection<MarketLayout>> GetCompositionCandidatesByIdsAsync(
+        IReadOnlyCollection<Guid> layoutIds, CancellationToken cancellationToken = default)
+        => await _dbSet.AsNoTracking()
+            .AsSplitQuery()
+            .Include(layout => layout.MarketMap)
+            .Include(layout => layout.LayoutNodes.Where(node => !node.IsDeleted))
+            .Where(layout => layoutIds.Contains(layout.Id))
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyCollection<MarketLayout>> GetEligibleCompositionSourcesAsync(
+        Guid nightMarketId, CancellationToken cancellationToken = default)
+        => await _dbSet.AsNoTracking()
+            .AsSplitQuery()
+            .Include(layout => layout.MarketMap)
+            .Include(layout => layout.LayoutNodes.Where(node => !node.IsDeleted))
+            .Where(layout =>
+                layout.NightMarketId == nightMarketId &&
+                !layout.IsDeleted &&
+                (layout.Status == MarketLayoutStatus.Active ||
+                 (layout.Status == MarketLayoutStatus.Draft &&
+                  layout.MarketMap.Status == MarketMapStatus.Draft &&
+                  layout.MarketMap.Name == MarketMap.LegacyDraftName)))
+            .OrderBy(layout => layout.DisplayOrder)
+            .ThenBy(layout => layout.SectionName)
+            .ThenByDescending(layout => layout.Version)
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyCollection<MarketLayout>> GetOperationalByMarketForUpdateAsync(
+        Guid nightMarketId, CancellationToken cancellationToken = default)
+        => await _dbSet
+            .Where(layout =>
+                layout.NightMarketId == nightMarketId &&
+                !layout.IsDeleted &&
+                layout.Status == MarketLayoutStatus.Active)
+            .ToListAsync(cancellationToken);
+
+    // A layout entitlement applies to one overall map composition. Historical
+    // maps do not consume the current Draft/Active map's section allowance.
+    public Task<int> CountQuotaRelevantLayoutsAsync(
+        Guid marketMapId, CancellationToken cancellationToken = default)
+        => _dbSet.CountAsync(layout =>
+            layout.MarketMapId == marketMapId && !layout.IsDeleted,
+            cancellationToken);
 
     public Task AcquireMarketLockAsync(
         Guid nightMarketId, CancellationToken cancellationToken = default)
@@ -235,14 +297,12 @@ public class MarketLayoutRepository : GenericRepository<MarketLayout>, IMarketLa
     }
 
     public async Task<MarketLayout> CloneToDraftAsync(
-        Guid sourceLayoutId, string? layoutName, DateTime createdAt,
-        CancellationToken cancellationToken = default, int? maxLayouts = null)
+        Guid sourceLayoutId, Guid targetMarketMapId, string? layoutName, DateTime createdAt,
+        CancellationToken cancellationToken = default)
     {
-        await using var transaction = _context.Database.IsRelational()
-            ? await _context.Database.BeginTransactionAsync(cancellationToken)
-            : null;
-
         var source = await _dbSet.AsNoTracking()
+            .AsSplitQuery()
+            .Include(layout => layout.MarketMap)
             .Include(layout => layout.LayoutNodes.Where(node => !node.IsDeleted))
             .Include(layout => layout.LayoutEdges.Where(edge => !edge.IsDeleted))
             .Include(layout => layout.BoothLocations.Where(location => !location.IsDeleted))
@@ -250,23 +310,34 @@ public class MarketLayoutRepository : GenericRepository<MarketLayout>, IMarketLa
             .FirstOrDefaultAsync(layout => layout.Id == sourceLayoutId && !layout.IsDeleted, cancellationToken)
             ?? throw ApplicationLayer.Exceptions.AppException.NotFound("Market layout was not found.");
 
-        if (source.Status != MarketLayoutStatus.Active)
+        var isEditableLegacyDraft = source.Status == MarketLayoutStatus.Draft &&
+            source.MarketMap.Status == MarketMapStatus.Draft &&
+            source.MarketMap.Name == MarketMap.LegacyDraftName;
+        if (source.Status != MarketLayoutStatus.Active && !isEditableLegacyDraft)
             throw ApplicationLayer.Exceptions.AppException.Conflict(
-                "Only an active layout can be cloned.", "LAYOUT_NOT_ACTIVE");
+                "Only an active layout or an editable layout from the legacy draft can be cloned.",
+                "LAYOUT_NOT_ACTIVE");
 
-        if (_context.Database.IsRelational())
-            await _context.Database.ExecuteSqlInterpolatedAsync(
-                $"SELECT pg_advisory_xact_lock(hashtextextended(CAST({source.NightMarketId} AS text), 1))",
-                cancellationToken);
+        var targetMapIsCompatible = await _context.MarketMaps.AnyAsync(map =>
+            map.Id == targetMarketMapId &&
+            map.NightMarketId == source.NightMarketId &&
+            map.Status == MarketMapStatus.Draft,
+            cancellationToken);
+        if (!targetMapIsCompatible)
+            throw ApplicationLayer.Exceptions.AppException.Conflict(
+                "The target draft map does not belong to this night market.",
+                "MARKET_MAP_MISMATCH");
 
-        if (maxLayouts.HasValue)
+        var sourceNodeIds = source.LayoutNodes.Select(node => node.Id).ToHashSet();
+        if (source.LayoutEdges.Any(edge =>
+                !sourceNodeIds.Contains(edge.FromNodeId) ||
+                !sourceNodeIds.Contains(edge.ToNodeId)) ||
+            source.BoothLocations.Any(location => !sourceNodeIds.Contains(location.LayoutNodeId)) ||
+            source.NavigationAnchors.Any(anchor => !sourceNodeIds.Contains(anchor.LayoutNodeId)))
         {
-            var used = await _dbSet.CountAsync(layout => layout.NightMarketId == source.NightMarketId
-                && !layout.IsDeleted, cancellationToken);
-            if (used >= maxLayouts.Value)
-                throw ApplicationLayer.Exceptions.AppException.Forbidden(
-                    $"Your package allows {maxLayouts.Value} layouts per market. This market already has {used}. Upgrade your package or archive an unused layout before creating a copy.",
-                    "LAYOUT_LIMIT_REACHED");
+            throw ApplicationLayer.Exceptions.AppException.Conflict(
+                "The source layout graph contains invalid references and cannot be cloned.",
+                "SOURCE_LAYOUT_CLONE_INVALID");
         }
 
         var nextVersion = await _dbSet
@@ -284,10 +355,11 @@ public class MarketLayoutRepository : GenericRepository<MarketLayout>, IMarketLa
 
         var clone = new MarketLayout
         {
-            Id = Guid.NewGuid(), NightMarketId = source.NightMarketId, LayoutName = nextName,
+            Id = Guid.NewGuid(), NightMarketId = source.NightMarketId,
+            MarketMapId = targetMarketMapId, LayoutName = nextName,
             SectionCode = source.SectionCode, SectionName = source.SectionName,
             Description = source.Description, OffsetXMeters = source.OffsetXMeters,
-            OffsetYMeters = source.OffsetYMeters, IsDefaultView = false,
+            OffsetYMeters = source.OffsetYMeters, IsDefaultView = source.IsDefaultView,
             DisplayOrder = source.DisplayOrder, BasedOnLayoutId = source.Id,
             Version = nextVersion, LayoutImageUrl = source.LayoutImageUrl,
             Width = source.Width, Height = source.Height,
@@ -359,17 +431,83 @@ public class MarketLayoutRepository : GenericRepository<MarketLayout>, IMarketLa
         await _context.BoothLocations.AddRangeAsync(locations, cancellationToken);
         await _context.LayoutNavigationAnchors.AddRangeAsync(anchors, cancellationToken);
         await _context.SaveChangesAsync(cancellationToken);
-        if (transaction is not null) await transaction.CommitAsync(cancellationToken);
         return clone;
     }
 
-    public async Task SaveGraphTransactionalAsync(Guid layoutId, IEnumerable<LayoutBlock> blocks, IEnumerable<LayoutNode> nodes, IEnumerable<LayoutEdge> edges, IEnumerable<Zone>? zoneUpserts = null, CancellationToken cancellationToken = default)
+    public async Task SaveGraphTransactionalAsync(
+        Guid layoutId,
+        IEnumerable<LayoutBlock> blocks,
+        IEnumerable<LayoutNode> nodes,
+        IEnumerable<LayoutEdge> edges,
+        IEnumerable<Zone>? zoneUpserts = null,
+        CancellationToken cancellationToken = default)
+        => await SaveGraphCoreAsync(
+            layoutId, null, null, blocks, nodes, edges, zoneUpserts, cancellationToken);
+
+    public Task<MarketLayout> SaveGraphTransactionalAsync(
+        Guid layoutId,
+        DateTime expectedUpdatedAt,
+        int expectedGraphRevision,
+        IEnumerable<LayoutBlock> blocks,
+        IEnumerable<LayoutNode> nodes,
+        IEnumerable<LayoutEdge> edges,
+        IEnumerable<Zone>? zoneUpserts = null,
+        CancellationToken cancellationToken = default)
+        => SaveGraphCoreAsync(
+            layoutId, expectedUpdatedAt, expectedGraphRevision,
+            blocks, nodes, edges, zoneUpserts, cancellationToken);
+
+    private async Task<MarketLayout> SaveGraphCoreAsync(
+        Guid layoutId,
+        DateTime? expectedUpdatedAt,
+        int? expectedGraphRevision,
+        IEnumerable<LayoutBlock> blocks,
+        IEnumerable<LayoutNode> nodes,
+        IEnumerable<LayoutEdge> edges,
+        IEnumerable<Zone>? zoneUpserts,
+        CancellationToken cancellationToken)
     {
         await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
         var blockList = blocks.ToList();
         var nodeList = nodes.ToList();
         var edgeList = edges.ToList();
         var now = DateTime.UtcNow;
+
+        // Take a row lock and validate both client tokens before touching graph
+        // rows. This closes the gap between the application-level validation
+        // and persistence when two editors save at the same time.
+        var lockedLayout = await _context.MarketLayouts
+            .FromSqlInterpolated($"""
+                SELECT * FROM "MarketLayouts"
+                WHERE "Id" = {layoutId}
+                FOR UPDATE
+                """)
+            .AsNoTracking()
+            .SingleOrDefaultAsync(cancellationToken)
+            ?? throw ApplicationLayer.Exceptions.AppException.NotFound(
+                "Market layout was not found.", "LAYOUT_NOT_FOUND");
+
+        if (expectedUpdatedAt.HasValue && expectedGraphRevision.HasValue &&
+            (lockedLayout.GraphRevision != expectedGraphRevision.Value ||
+             Math.Abs((lockedLayout.UpdatedAt - expectedUpdatedAt.Value).TotalSeconds) > 1))
+        {
+            throw ApplicationLayer.Exceptions.AppException.Conflict(
+                "This layout was changed in another session. Reload it before saving.",
+                "LAYOUT_CONCURRENCY_CONFLICT",
+                new
+                {
+                    CurrentUpdatedAt = lockedLayout.UpdatedAt,
+                    CurrentGraphRevision = lockedLayout.GraphRevision,
+                    ExpectedUpdatedAt = expectedUpdatedAt.Value,
+                    ExpectedGraphRevision = expectedGraphRevision.Value
+                });
+        }
+
+        // ApplyGeneration can have pending dimension/calibration changes on this
+        // context. Reuse that tracked entity instead of reloading it and silently
+        // discarding those changes after the row lock has been acquired.
+        var layout = _context.MarketLayouts.Local.FirstOrDefault(item => item.Id == layoutId)
+            ?? await _context.MarketLayouts.SingleAsync(item => item.Id == layoutId, cancellationToken);
 
         foreach (var zone in zoneUpserts ?? Enumerable.Empty<Zone>())
         {
@@ -486,14 +624,11 @@ public class MarketLayoutRepository : GenericRepository<MarketLayout>, IMarketLa
             }
         }
 
-        var layout = await _context.MarketLayouts.FirstOrDefaultAsync(l => l.Id == layoutId, cancellationToken);
-        if (layout != null)
-        {
-            layout.GraphRevision = checked(layout.GraphRevision + 1);
-            layout.UpdatedAt = now;
-        }
+        layout.GraphRevision = checked(lockedLayout.GraphRevision + 1);
+        layout.UpdatedAt = now;
 
         await _context.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+        return layout;
     }
 }

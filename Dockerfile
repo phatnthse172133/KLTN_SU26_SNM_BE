@@ -44,4 +44,7 @@ COPY --from=publish --chown=$APP_UID:$APP_UID /app/publish/ ./
 
 USER $APP_UID
 
-ENTRYPOINT ["sh", "-c", "./efbundle && exec dotnet PresentationLayer.dll --urls http://0.0.0.0:${PORT:-8080}"]
+# Migrations are applied as an explicit, audited deployment step after the
+# production backup and pending-migration review. Starting or restarting the
+# application must never mutate the production schema implicitly.
+ENTRYPOINT ["sh", "-c", "exec dotnet PresentationLayer.dll --urls http://0.0.0.0:${PORT:-8080}"]

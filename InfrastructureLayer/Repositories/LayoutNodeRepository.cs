@@ -31,6 +31,17 @@ public class LayoutNodeRepository : GenericRepository<LayoutNode>, ILayoutNodeRe
             .Where(x => x.LayoutId == layoutId && !x.IsDeleted && (!accessibleOnly || x.IsAccessible))
             .OrderBy(x => x.CreatedAt).ToListAsync(cancellationToken);
 
+    public Task<int> CountBoothSlotsByMarketMapAsync(
+        Guid marketMapId, Guid? excludeLayoutId = null,
+        CancellationToken cancellationToken = default)
+        => _dbSet.CountAsync(node =>
+            node.Layout.MarketMapId == marketMapId &&
+            !node.Layout.IsDeleted &&
+            (!excludeLayoutId.HasValue || node.LayoutId != excludeLayoutId.Value) &&
+            node.NodeType == LayoutNodeType.BoothSlot &&
+            !node.IsDeleted,
+            cancellationToken);
+
     public async Task<PagedResult<LayoutNode>> GetAvailableBoothAccessPagedAsync(
         Guid layoutId, Guid? zoneId, int page, int pageSize, CancellationToken cancellationToken = default)
     {

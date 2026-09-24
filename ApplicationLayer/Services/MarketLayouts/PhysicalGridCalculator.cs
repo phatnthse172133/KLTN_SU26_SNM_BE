@@ -37,15 +37,25 @@ public static class PhysicalGridCalculator
         var errors = new List<string>();
         var warnings = new List<string>();
 
-        if (request.MarketWidthMeters is not > 0 || request.MarketLengthMeters is not > 0)
+        if (request.MarketWidthMeters is not > 0 || request.MarketLengthMeters is not > 0
+            || !double.IsFinite(request.MarketWidthMeters.Value)
+            || !double.IsFinite(request.MarketLengthMeters.Value))
         {
             errors.Add("Market width and length must both be greater than zero.");
             return new PhysicalLayoutPreparation(true, errors, warnings);
         }
 
         var ppm = request.PixelsPerMeter;
-        if (ppm is < 2 or > 50)
+        if (!double.IsFinite(ppm) || ppm is < 2 or > 50)
             errors.Add("Pixels per meter must be between 2 and 50.");
+
+        if (!double.IsFinite(request.StartXMeters) || request.StartXMeters < 0
+            || !double.IsFinite(request.StartYMeters) || request.StartYMeters < 0
+            || !double.IsFinite(request.ZoneMarginMeters) || request.ZoneMarginMeters < 0)
+            errors.Add("Layout offsets and zone spacing must be finite values greater than or equal to zero.");
+
+        if (errors.Count > 0)
+            return new PhysicalLayoutPreparation(true, errors, warnings);
 
         request.StartX = request.StartXMeters * ppm;
         request.StartY = request.StartYMeters * ppm;
@@ -75,15 +85,12 @@ public static class PhysicalGridCalculator
                 request.DefaultGap = grid.HorizontalGapPixels;
                 request.DefaultColumns = grid.Columns;
 
-                var requestedCapacity = request.DefaultZoneCapacity ?? request.RequestedBoothCount ?? 0;
-                if (requestedCapacity > grid.Capacity)
-                {
-                    errors.Add($"Zone 'General Area' can contain at most {grid.Capacity} booths, but {requestedCapacity} booths were requested.");
-                }
-                else if (requestedCapacity <= 0)
-                {
-                    errors.Add("Zone 'General Area' requires a booth count greater than zero.");
-                }
+                var requestedCount = request.RequestedBoothCount ?? request.DefaultZoneCapacity ?? 0;
+                var allocation = ExactBoothSlotAllocator.Allocate(requestedCount, [grid.Capacity]);
+                if (!allocation.IsSuccessful)
+                    errors.Add(allocation.Error!);
+                else
+                    request.DefaultZoneCapacity = allocation.Allocations[0];
             }
 
             var defaultZoneArea = (request.DefaultZoneWidthMeters ?? 0) * (request.DefaultZoneLengthMeters ?? 0);
@@ -92,6 +99,12 @@ public static class PhysicalGridCalculator
         }
         else
         {
+            var calculatedZones = new List<(ZoneGenerationConfig Config, PhysicalZoneGrid Grid)>();
+            // Physical generation owns per-zone allocations. Start from zero so
+            // an invalid/insufficient preview cannot fall back to stale domain
+            // capacities or fail with an unrelated "capacity required" error.
+            foreach (var config in request.ZoneConfigs)
+                config.Capacity = 0;
             foreach (var config in request.ZoneConfigs)
             {
                 var grid = Calculate(config, ppm, config.ZoneName ?? "Zone", errors);
@@ -102,15 +115,23 @@ public static class PhysicalGridCalculator
                 config.BoothWidth = grid.BoothWidthPixels;
                 config.BoothHeight = grid.BoothHeightPixels;
                 config.Gap = grid.HorizontalGapPixels;
+                calculatedZones.Add((config, grid));
+            }
 
-                var requestedCapacity = config.Capacity ?? 0;
-                if (requestedCapacity > grid.Capacity)
+            if (calculatedZones.Count == request.ZoneConfigs.Count)
+            {
+                var requestedCount = request.RequestedBoothCount ?? 0;
+                var allocation = ExactBoothSlotAllocator.Allocate(
+                    requestedCount,
+                    calculatedZones.Select(item => item.Grid.Capacity).ToArray());
+                if (!allocation.IsSuccessful)
                 {
-                    errors.Add($"Zone '{config.ZoneName ?? "Zone"}' can contain at most {grid.Capacity} booths, but {requestedCapacity} booths were requested.");
+                    errors.Add(allocation.Error!);
                 }
-                else if (requestedCapacity <= 0)
+                else
                 {
-                    errors.Add($"Zone '{config.ZoneName ?? "Zone"}' requires a booth count greater than zero.");
+                    for (var index = 0; index < calculatedZones.Count; index++)
+                        calculatedZones[index].Config.Capacity = allocation.Allocations[index];
                 }
             }
 
@@ -131,7 +152,11 @@ public static class PhysicalGridCalculator
         ICollection<string> errors)
     {
         if (config.ZoneWidthMeters is not > 0 || config.ZoneLengthMeters is not > 0
-            || config.BoothWidthMeters is not > 0 || config.BoothLengthMeters is not > 0)
+            || config.BoothWidthMeters is not > 0 || config.BoothLengthMeters is not > 0
+            || !double.IsFinite(config.ZoneWidthMeters.Value)
+            || !double.IsFinite(config.ZoneLengthMeters.Value)
+            || !double.IsFinite(config.BoothWidthMeters.Value)
+            || !double.IsFinite(config.BoothLengthMeters.Value))
         {
             errors.Add($"Zone '{zoneLabel}' requires valid zone width, zone length, and booth dimensions (all greater than 0 m).");
             return null;
@@ -139,7 +164,7 @@ public static class PhysicalGridCalculator
 
         var gapX = config.HorizontalGapMeters ?? 0;
         var gapY = config.VerticalGapMeters ?? 0;
-        if (gapX < 0 || gapY < 0)
+        if (!double.IsFinite(gapX) || !double.IsFinite(gapY) || gapX < 0 || gapY < 0)
         {
             errors.Add($"Zone '{zoneLabel}' cannot use negative spacing between booths.");
             return null;

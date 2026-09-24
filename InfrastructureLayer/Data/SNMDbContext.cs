@@ -79,6 +79,8 @@ namespace InfrastructureLayer.Data
 
         public virtual DbSet<LayoutNavigationAnchor> LayoutNavigationAnchors { get; set; }
 
+        public virtual DbSet<MarketMap> MarketMaps { get; set; }
+
         public virtual DbSet<MarketLayout> MarketLayouts { get; set; }
 
         public virtual DbSet<Message> Messages { get; set; }
@@ -832,6 +834,35 @@ namespace InfrastructureLayer.Data
                     .HasConstraintName("LayoutNavigationAnchors_LayoutNodeId_fkey");
             });
 
+            modelBuilder.Entity<MarketMap>(entity =>
+            {
+                entity.HasKey(e => e.Id).HasName("MarketMaps_pkey");
+                entity.HasAlternateKey(e => new { e.Id, e.NightMarketId })
+                    .HasName("AK_MarketMaps_Id_NightMarketId");
+
+                entity.ToTable("MarketMaps");
+                entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()");
+                entity.Property(e => e.Name).HasMaxLength(150);
+                entity.Property(e => e.Version).HasDefaultValue(1);
+                entity.Property(e => e.Status)
+                    .HasConversion<string>()
+                    .HasMaxLength(20)
+                    .HasDefaultValueSql("'Draft'::character varying");
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+
+                entity.HasIndex(e => new { e.NightMarketId, e.Version }, "ux_marketmap_market_version")
+                    .IsUnique();
+                entity.HasIndex(e => e.NightMarketId, "ux_marketmap_one_active_per_market")
+                    .IsUnique()
+                    .HasFilter("\"Status\" = 'Active'");
+
+                entity.HasOne(e => e.NightMarket).WithMany(market => market.MarketMaps)
+                    .HasForeignKey(e => e.NightMarketId)
+                    .OnDelete(DeleteBehavior.Restrict)
+                    .HasConstraintName("MarketMaps_NightMarketId_fkey");
+            });
+
             modelBuilder.Entity<MarketLayout>(entity =>
             {
                 entity.HasKey(e => e.Id).HasName("MarketLayouts_pkey");
@@ -866,7 +897,7 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.Status)
                     .HasConversion<string>()
                     .HasMaxLength(20)
-                    .HasDefaultValueSql("'Inactive'::character varying");
+                    .HasDefaultValueSql("'Draft'::character varying");
                 entity.Property(e => e.IsDeleted).HasDefaultValue(false);
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
                 entity.ToTable(table => table.HasCheckConstraint(
@@ -887,6 +918,11 @@ namespace InfrastructureLayer.Data
                 entity.HasIndex(e => e.NightMarketId, "ux_marketlayout_one_default_per_market")
                     .IsUnique()
                     .HasFilter("\"IsDeleted\" = false AND \"Status\" = 'Active' AND \"IsDefaultView\" = true");
+                entity.HasOne(d => d.MarketMap).WithMany(map => map.MarketLayouts)
+                    .HasForeignKey(d => new { d.MarketMapId, d.NightMarketId })
+                    .HasPrincipalKey(map => new { map.Id, map.NightMarketId })
+                    .OnDelete(DeleteBehavior.Restrict)
+                    .HasConstraintName("MarketLayouts_MarketMapId_NightMarketId_fkey");
 
                 entity.HasOne(d => d.NightMarket).WithMany(p => p.MarketLayouts)
                     .HasForeignKey(d => d.NightMarketId)

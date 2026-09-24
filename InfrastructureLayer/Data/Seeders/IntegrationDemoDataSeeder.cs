@@ -17,6 +17,7 @@ public static class IntegrationDemoDataSeeder
     public static readonly Guid MarketId = Id("100");
     public static readonly Guid LayoutId = Id("200");
     public static readonly Guid MainEntranceNodeId = Id("301");
+    private static readonly Guid MarketMapId = Id("150");
 
     private static readonly Guid CustomerRoleId = Id("001");
     private static readonly Guid BoothOwnerRoleId = Id("002");
@@ -226,11 +227,35 @@ public static class IntegrationDemoDataSeeder
         marketCover.ImageUrl = MarketCoverUrl;
         marketCover.UpdatedAt = now;
 
+        var activeMarketMap = db.MarketMaps.Local.SingleOrDefault(x =>
+                x.NightMarketId == MarketId && x.Status == MarketMapStatus.Active)
+            ?? await db.MarketMaps.SingleOrDefaultAsync(x =>
+                x.NightMarketId == MarketId && x.Status == MarketMapStatus.Active, ct);
+        if (activeMarketMap is null)
+        {
+            var latestMapVersion = await db.MarketMaps
+                .Where(x => x.NightMarketId == MarketId)
+                .MaxAsync(x => (int?)x.Version, ct) ?? 0;
+            activeMarketMap = new MarketMap
+            {
+                Id = MarketMapId,
+                NightMarketId = MarketId,
+                Name = "Current Market Map",
+                Version = checked(latestMapVersion + 1),
+                Status = MarketMapStatus.Active,
+                PublishedAt = null,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+            db.MarketMaps.Add(activeMarketMap);
+        }
+
         await AddIfMissingAsync(db.Zones, ZoneAId, () => new Zone { Id = ZoneAId, NightMarketId = MarketId, ZoneName = "Khu A — Đồ nướng & Hải sản", Description = "Các quầy món nóng ở phía bắc layout.", Color = "#E76F51", Status = ZoneStatus.Active, CreatedAt = now, UpdatedAt = now });
         await AddIfMissingAsync(db.Zones, ZoneBId, () => new Zone { Id = ZoneBId, NightMarketId = MarketId, ZoneName = "Khu B — Tráng miệng & Ăn vặt", Description = "Các quầy đồ uống, món ngọt và ăn vặt.", Color = "#2A9D8F", Status = ZoneStatus.Active, CreatedAt = now, UpdatedAt = now });
         await AddIfMissingAsync(db.MarketLayouts, LayoutId, () => new MarketLayout
         {
-            Id = LayoutId, NightMarketId = MarketId, LayoutName = "Mặt bằng demo Phase 03.5", Version = 1,
+            Id = LayoutId, NightMarketId = MarketId, MarketMapId = activeMarketMap.Id,
+            LayoutName = "Mặt bằng demo Phase 03.5", Version = 1,
             LayoutImageUrl = $"{AssetRoot}/layout.svg", Width = 800, Height = 500,
             CoordinateUnit = LayoutCoordinateUnit.LayoutUnit, MetersPerLayoutUnit = 0.1m,
             DistanceCalibrationStatus = DistanceCalibrationStatus.Calibrated,

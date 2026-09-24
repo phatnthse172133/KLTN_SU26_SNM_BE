@@ -385,6 +385,36 @@ public class LayoutGeneratorService : ILayoutGeneratorService
                 now);
         }
 
+        var generatedSlotCount = newNodes.Count(node =>
+            !node.IsDeleted && node.NodeType == LayoutNodeType.BoothSlot);
+        if (request.RequestedBoothCount is int requestedCount
+            && generatedSlotCount != requestedCount)
+        {
+            preview.Errors.Add(
+                $"Generation requested exactly {requestedCount} booth slots but produced {generatedSlotCount}.");
+        }
+
+        var generatedLayout = new MarketLayout
+        {
+            Id = layout.Id,
+            Width = preview.CanvasWidth,
+            Height = preview.CanvasHeight
+        };
+        foreach (var slot in newNodes.Where(node => node.NodeType == LayoutNodeType.BoothSlot))
+        {
+            var slotErrors = LayoutGeometryValidator.ValidateNodeMove(
+                generatedLayout,
+                slot,
+                slot.Xcoordinate,
+                slot.Ycoordinate,
+                newNodes,
+                layoutBlocks);
+            foreach (var error in slotErrors)
+                preview.Errors.Add($"Booth slot '{slot.SlotCode ?? slot.Id.ToString()}': {error}");
+        }
+        preview.Errors = preview.Errors.Distinct().ToList();
+        preview.CanApply = preview.Errors.Count == 0;
+
         return new GenerationResult(layoutBlocks, newNodes, newEdges, preview.CanvasWidth, preview.CanvasHeight, preview);
     }
 

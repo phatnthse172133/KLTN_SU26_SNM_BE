@@ -693,12 +693,6 @@ public class BoothService : IBoothService
             if (await _locations.GetCurrentByNodeAsync(nodeId, cancellationToken) is not null)
                 throw AppException.Conflict("This slot is already occupied.", "SLOT_OCCUPIED");
 
-            var activeBoothCount = await _locations.CountActiveByNightMarketAsync(marketId, cancellationToken);
-            await _entitlements.RequireMarketFeatureAsync(
-                marketOwnerId,
-                entitlement => activeBoothCount < entitlement.MaxSlotsPerMarket,
-                "Your current package has reached its booth slot limit.",
-                "PLAN_LIMIT_REACHED");
             if (node.ZoneId.HasValue)
             {
                 var nodeZone = await _zones.GetByIdAsync(node.ZoneId.Value);
@@ -708,7 +702,7 @@ public class BoothService : IBoothService
                     await _entitlements.RequireMarketFeatureAsync(
                         marketOwnerId,
                         entitlement => entitlement.ZoneManagement,
-                        "Zone management is available with the Pro Market package.",
+                        "Your current subscription does not include zone management.",
                         "ZONE_MANAGEMENT_NOT_INCLUDED");
                 }
             }
@@ -825,15 +819,6 @@ public class BoothService : IBoothService
                 throw AppException.BadRequest("This booth has been banned by the platform.", "BOOTH_BANNED");
 
             var currentLocation = await _locations.GetCurrentByBoothAsync(booth.Id, cancellationToken);
-            if (currentLocation is null)
-            {
-                var activeBoothCount = await _locations.CountActiveByNightMarketAsync(marketId, cancellationToken);
-                await _entitlements.RequireMarketFeatureAsync(
-                    marketOwnerId,
-                    entitlement => activeBoothCount < entitlement.MaxSlotsPerMarket,
-                    "Your current package has reached its booth slot limit.",
-                    "PLAN_LIMIT_REACHED");
-            }
             if (node.ZoneId.HasValue)
             {
                 var nodeZone = await _zones.GetByIdAsync(node.ZoneId.Value);
@@ -843,7 +828,7 @@ public class BoothService : IBoothService
                     await _entitlements.RequireMarketFeatureAsync(
                         marketOwnerId,
                         entitlement => entitlement.ZoneManagement,
-                        "Zone management is available with the Pro Market package.",
+                        "Your current subscription does not include zone management.",
                         "ZONE_MANAGEMENT_NOT_INCLUDED");
                 }
             }

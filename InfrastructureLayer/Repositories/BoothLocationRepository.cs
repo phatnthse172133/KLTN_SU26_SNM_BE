@@ -23,19 +23,27 @@ public class BoothLocationRepository : GenericRepository<BoothLocation>, IBoothL
     }
 
     public Task<BoothLocation?> GetCurrentByBoothAsync(Guid boothId, CancellationToken cancellationToken = default)
-        => _dbSet.AsNoTracking().FirstOrDefaultAsync(x => x.BoothId == boothId && !x.IsDeleted, cancellationToken);
+        => _dbSet.AsNoTracking().FirstOrDefaultAsync(x =>
+            x.BoothId == boothId &&
+            !x.IsDeleted &&
+            x.ReleasedAt == null &&
+            !x.Layout.IsDeleted &&
+            x.Layout.Status == MarketLayoutStatus.Active,
+            cancellationToken);
 
     public Task<BoothLocation?> GetCurrentByLayoutAndBoothAsync(Guid layoutId, Guid boothId, CancellationToken cancellationToken = default)
         => _dbSet.AsNoTracking().FirstOrDefaultAsync(
-            x => x.LayoutId == layoutId && x.BoothId == boothId && !x.IsDeleted,
+            x => x.LayoutId == layoutId && x.BoothId == boothId && !x.IsDeleted && x.ReleasedAt == null,
             cancellationToken);
 
     public Task<BoothLocation?> GetCurrentByNodeAsync(Guid nodeId, CancellationToken cancellationToken = default)
-        => _dbSet.AsNoTracking().FirstOrDefaultAsync(x => x.LayoutNodeId == nodeId && !x.IsDeleted, cancellationToken);
+        => _dbSet.AsNoTracking().FirstOrDefaultAsync(
+            x => x.LayoutNodeId == nodeId && !x.IsDeleted && x.ReleasedAt == null,
+            cancellationToken);
 
     public async Task<IReadOnlyCollection<BoothLocation>> GetCurrentByLayoutAsync(Guid layoutId, bool activeBoothsOnly = false, CancellationToken cancellationToken = default)
         => await _dbSet.AsNoTracking().Include(x => x.Booth)
-            .Where(x => x.LayoutId == layoutId && !x.IsDeleted
+            .Where(x => x.LayoutId == layoutId && !x.IsDeleted && x.ReleasedAt == null
                 && (!activeBoothsOnly || x.Booth.Status == BoothStatus.Active))
             .OrderBy(x => x.SlotNumber).ToListAsync(cancellationToken);
 
@@ -50,6 +58,7 @@ public class BoothLocationRepository : GenericRepository<BoothLocation>, IBoothL
             .Where(location =>
                 location.LayoutId == layoutId &&
                 !location.IsDeleted &&
+                location.ReleasedAt == null &&
                 location.Booth.Status == BoothStatus.Active &&
                 !location.Booth.NightMarket.IsDeleted &&
                 location.Booth.NightMarket.Status == NightMarketStatus.Active &&
@@ -57,16 +66,36 @@ public class BoothLocationRepository : GenericRepository<BoothLocation>, IBoothL
             .OrderBy(location => location.SlotNumber)
             .ToListAsync(cancellationToken);
 
-    public Task<int> CountActiveByNightMarketAsync(Guid nightMarketId, CancellationToken cancellationToken = default)
-        => (from location in _dbSet
-            join layout in _context.MarketLayouts on location.LayoutId equals layout.Id
-            where !location.IsDeleted && layout.NightMarketId == nightMarketId
-            select location).CountAsync(cancellationToken);
+    public async Task<IReadOnlyCollection<Guid>> GetDuplicateBoothIdsByMarketMapAsync(
+        Guid marketMapId, CancellationToken cancellationToken = default)
+        => await _dbSet.AsNoTracking()
+            .Where(location =>
+                location.Layout.MarketMapId == marketMapId &&
+                !location.Layout.IsDeleted &&
+                !location.IsDeleted &&
+                location.ReleasedAt == null)
+            .GroupBy(location => location.BoothId)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .ToListAsync(cancellationToken);
 
     public async Task AssignOrMoveAsync(BoothLocation location, DateTime now, CancellationToken cancellationToken = default)
     {
-        var current = await _dbSet.FirstOrDefaultAsync(x => x.BoothId == location.BoothId && !x.IsDeleted, cancellationToken);
-        if (current is not null)
+        var targetIsPublished = await _context.MarketLayouts.AnyAsync(layout =>
+            layout.Id == location.LayoutId && !layout.IsDeleted && layout.Status == MarketLayoutStatus.Active,
+            cancellationToken);
+
+        var currentLocations = await _dbSet
+            .Where(existing =>
+                existing.BoothId == location.BoothId &&
+                !existing.IsDeleted &&
+                existing.ReleasedAt == null &&
+                (targetIsPublished
+                    ? !existing.Layout.IsDeleted && existing.Layout.Status == MarketLayoutStatus.Active
+                    : existing.LayoutId == location.LayoutId))
+            .ToListAsync(cancellationToken);
+
+        foreach (var current in currentLocations)
         {
             current.IsDeleted = true;
             current.ReleasedAt = now;
@@ -78,7 +107,13 @@ public class BoothLocationRepository : GenericRepository<BoothLocation>, IBoothL
 
     public async Task ReleaseAsync(Guid boothId, DateTime now, CancellationToken cancellationToken = default)
     {
-        var current = await _dbSet.FirstOrDefaultAsync(x => x.BoothId == boothId && !x.IsDeleted, cancellationToken);
+        var current = await _dbSet.FirstOrDefaultAsync(x =>
+            x.BoothId == boothId &&
+            !x.IsDeleted &&
+            x.ReleasedAt == null &&
+            !x.Layout.IsDeleted &&
+            x.Layout.Status == MarketLayoutStatus.Active,
+            cancellationToken);
         if (current is null) return;
         current.IsDeleted = true;
         current.ReleasedAt = now;

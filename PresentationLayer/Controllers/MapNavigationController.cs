@@ -23,6 +23,10 @@ public class MapNavigationController : ControllerBase
     public async Task<IActionResult> GetMaps(Guid nightMarketId, CancellationToken token)
         => Ok(await _service.GetPublishedMapsAsync(nightMarketId, token));
 
+    [HttpGet("api/night-markets/{nightMarketId:guid}/market-map")]
+    public async Task<IActionResult> GetMarketMap(Guid nightMarketId, CancellationToken token)
+        => Ok(await _service.GetActiveMarketMapAsync(nightMarketId, token));
+
     [HttpGet("api/night-markets/{nightMarketId:guid}/map")]
     public async Task<IActionResult> GetMap(Guid nightMarketId, [FromQuery] Guid? layoutId, CancellationToken token)
         => Ok(await _service.GetMapAsync(nightMarketId, layoutId, token));

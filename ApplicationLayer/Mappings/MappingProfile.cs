@@ -133,6 +133,7 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.MarketOwner, o => o.Ignore())
                 .ForMember(d => d.Booths, o => o.Ignore())
                 .ForMember(d => d.MarketLayouts, o => o.Ignore())
+                .ForMember(d => d.MarketMaps, o => o.Ignore())
                 .ForMember(d => d.Zones, o => o.Ignore())
                 .ForMember(d => d.NightMarketImages, o => o.Ignore())
                 .ForMember(d => d.ModerationStatus, o => o.Ignore())
@@ -162,6 +163,7 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.MarketOwner, o => o.Ignore())
                 .ForMember(d => d.Booths, o => o.Ignore())
                 .ForMember(d => d.MarketLayouts, o => o.Ignore())
+                .ForMember(d => d.MarketMaps, o => o.Ignore())
                 .ForMember(d => d.Zones, o => o.Ignore())
                 .ForMember(d => d.NightMarketImages, o => o.Ignore())
                 .ForMember(d => d.ModerationStatus, o => o.Ignore());
@@ -325,6 +327,7 @@ namespace ApplicationLayer.Mappings
             CreateMap<CreateMarketLayoutRequest, MarketLayout>()
                 .ForMember(d => d.Id, o => o.Ignore())
                 .ForMember(d => d.NightMarketId, o => o.Ignore())
+                .ForMember(d => d.MarketMapId, o => o.Ignore())
                 .ForMember(d => d.LayoutName, o => o.MapFrom(s => s.LayoutName.Trim()))
                 .ForMember(d => d.LayoutImageUrl, o => o.Ignore())
                 .ForMember(d => d.BasedOnLayoutId, o => o.Ignore())
@@ -347,12 +350,14 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.MarketWidthMeters, o => o.Ignore())
                 .ForMember(d => d.MarketLengthMeters, o => o.Ignore())
                 .ForMember(d => d.PixelsPerMeter, o => o.Ignore())
+                .ForMember(d => d.MarketMap, o => o.Ignore())
                 .ForMember(d => d.NightMarket, o => o.Ignore());
             CreateMap<UpdateMarketLayoutRequest, MarketLayout>()
                 .IncludeBase<CreateMarketLayoutRequest, MarketLayout>();
             CreateMap<UpdateMarketLayoutImageRequest, MarketLayout>()
                 .ForMember(d => d.Id, o => o.Ignore())
                 .ForMember(d => d.NightMarketId, o => o.Ignore())
+                .ForMember(d => d.MarketMapId, o => o.Ignore())
                 .ForMember(d => d.LayoutName, o => o.Ignore())
                 .ForMember(d => d.SectionCode, o => o.Ignore())
                 .ForMember(d => d.SectionName, o => o.Ignore())
@@ -378,6 +383,7 @@ namespace ApplicationLayer.Mappings
                 .ForMember(d => d.MarketWidthMeters, o => o.Ignore())
                 .ForMember(d => d.MarketLengthMeters, o => o.Ignore())
                 .ForMember(d => d.PixelsPerMeter, o => o.Ignore())
+                .ForMember(d => d.MarketMap, o => o.Ignore())
                 .ForMember(d => d.NightMarket, o => o.Ignore());
             CreateMap<MarketLayout, MarketLayoutResponse>()
                 .ForMember(d => d.Status, o => o.MapFrom(s => s.Status.ToString()))

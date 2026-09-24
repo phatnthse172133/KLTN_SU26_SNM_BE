@@ -7,6 +7,7 @@ using ApplicationLayer.Services.Subscriptions;
 using ApplicationLayer.Services.Realtime;
 using AutoMapper;
 using DomainLayer.Entities;
+using DomainLayer.InterfaceRepositories;
 using DomainLayer.InterfaceRepository;
 using static DomainLayer.Enums.GeneralEnum;
 
@@ -18,27 +19,32 @@ public class MarketLayoutService : IMarketLayoutService
     private const string GeneralAreaZoneCode = "G";
 
     private readonly IMarketLayoutRepository _layouts;
+    private readonly IMarketMapRepository _marketMaps;
     private readonly IZoneRepository _zones;
     private readonly INightMarketRepository _nightMarkets;
     private readonly IMapper _mapper;
     private readonly ILayoutGraphValidationService _graphValidation;
     private readonly ISubscriptionEntitlementService _entitlements;
+    private readonly IMarketResourceQuotaService _resourceQuota;
     private readonly ILayoutGeneratorService _generator;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IRealtimeEventPublisher _eventPublisher;
 
     public MarketLayoutService(
-        IMarketLayoutRepository layouts, IZoneRepository zones,
+        IMarketLayoutRepository layouts, IMarketMapRepository marketMaps, IZoneRepository zones,
         INightMarketRepository nightMarkets, IMapper mapper, ILayoutGraphValidationService graphValidation,
-        ISubscriptionEntitlementService entitlements, ILayoutGeneratorService generator, IUnitOfWork unitOfWork,
+        ISubscriptionEntitlementService entitlements, IMarketResourceQuotaService resourceQuota,
+        ILayoutGeneratorService generator, IUnitOfWork unitOfWork,
         IRealtimeEventPublisher eventPublisher)
     {
         _layouts = layouts;
+        _marketMaps = marketMaps;
         _zones = zones;
         _nightMarkets = nightMarkets;
         _mapper = mapper;
         _graphValidation = graphValidation;
         _entitlements = entitlements;
+        _resourceQuota = resourceQuota;
         _generator = generator;
         _unitOfWork = unitOfWork;
         _eventPublisher = eventPublisher;
@@ -50,16 +56,34 @@ public class MarketLayoutService : IMarketLayoutService
         var source = await GetActiveLayoutAsync(layoutId, cancellationToken);
         await EnsureLayoutOwnershipAsync(source, actorId, cancellationToken);
         var market = await EnsureNightMarketExistsAsync(source.NightMarketId, cancellationToken);
-        int? maxLayouts = null;
         if (market.MarketOwnerId is Guid ownerId)
         {
             if (!await _entitlements.HasActiveMarketSubscriptionAsync(ownerId))
                 throw AppException.Forbidden("An active Market subscription is required to perform this action.", "MARKET_SUBSCRIPTION_REQUIRED");
-            maxLayouts = await _entitlements.GetMaxLayoutsPerMarketAsync(ownerId);
         }
-        var clone = await _layouts.CloneToDraftAsync(layoutId, request.LayoutName, DateTime.UtcNow, cancellationToken, maxLayouts);
-        return ApiResponse<MarketLayoutResponse>.SuccessResponse(
-            _mapper.Map<MarketLayoutResponse>(clone), "Layout copied to a draft. The active layout is unchanged.");
+
+        await _unitOfWork.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            await _layouts.AcquireMarketLockAsync(source.NightMarketId, cancellationToken);
+            var now = DateTime.UtcNow;
+            var targetMap = await _marketMaps.GetOrCreateLegacyDraftAsync(
+                source.NightMarketId, now, cancellationToken);
+            if (market.MarketOwnerId is Guid quotaOwnerId)
+                await _resourceQuota.EnsureCanAddLayoutsAsync(
+                    quotaOwnerId, targetMap.Id, 1, cancellationToken);
+
+            var clone = await _layouts.CloneToDraftAsync(
+                layoutId, targetMap.Id, request.LayoutName, now, cancellationToken);
+            await _unitOfWork.CommitTransactionAsync(cancellationToken);
+            return ApiResponse<MarketLayoutResponse>.SuccessResponse(
+                _mapper.Map<MarketLayoutResponse>(clone), "Layout copied to a draft. The active layout is unchanged.");
+        }
+        catch
+        {
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            throw;
+        }
     }
 
     public async Task<ApiResponse<PaginationResp<MarketLayoutResponse>>> GetAllAsync(
@@ -90,14 +114,11 @@ public class MarketLayoutService : IMarketLayoutService
     {
         var market = await EnsureNightMarketExistsAsync(nightMarketId, cancellationToken);
         EnsureOwnership(market, actorId);
-        int? maxLayouts = null;
         if (market.MarketOwnerId.HasValue)
         {
             var hasSubscription = await _entitlements.HasActiveMarketSubscriptionAsync(market.MarketOwnerId.Value);
             if (!hasSubscription)
                 throw AppException.Forbidden("An active Market subscription is required to perform this action.", "MARKET_SUBSCRIPTION_REQUIRED");
-
-            maxLayouts = await _entitlements.GetMaxLayoutsPerMarketAsync(market.MarketOwnerId.Value);
         }
 
         var sectionCode = NormalizeSectionCode(request.SectionCode, request.LayoutName);
@@ -108,25 +129,22 @@ public class MarketLayoutService : IMarketLayoutService
             // Serialize layout creation per market. This makes both the package-limit
             // check and MAX(version) + 1 allocation atomic across app instances.
             await _layouts.AcquireMarketLockAsync(nightMarketId, cancellationToken);
+            var now = DateTime.UtcNow;
+            var targetMap = await _marketMaps.GetOrCreateLegacyDraftAsync(
+                nightMarketId, now, cancellationToken);
 
-            if (maxLayouts.HasValue)
-            {
-                var currentLayouts = await _layouts.CountAsync(
-                    layout => layout.NightMarketId == nightMarketId && !layout.IsDeleted);
-                if (currentLayouts >= maxLayouts.Value)
-                    throw AppException.Forbidden(
-                        $"Your current package allows a maximum of {maxLayouts.Value} layout(s) per market. Please upgrade to create more.",
-                        "LAYOUT_LIMIT_REACHED");
-            }
+            if (market.MarketOwnerId is Guid ownerId)
+                await _resourceQuota.EnsureCanAddLayoutsAsync(
+                    ownerId, targetMap.Id, 1, cancellationToken);
 
             var resolvedVersion = await _layouts.GetNextVersionAsync(nightMarketId, sectionCode, cancellationToken);
             await ValidateIdentityAsync(
                 nightMarketId, sectionCode, request.LayoutName, resolvedVersion, null, cancellationToken);
 
-            var now = DateTime.UtcNow;
             var layout = _mapper.Map<MarketLayout>(request);
             layout.Id = Guid.NewGuid();
             layout.NightMarketId = nightMarketId;
+            layout.MarketMapId = targetMap.Id;
             layout.SectionCode = sectionCode;
             layout.SectionName = string.IsNullOrWhiteSpace(request.SectionName) ? request.LayoutName.Trim() : request.SectionName.Trim();
             layout.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
@@ -162,8 +180,7 @@ public class MarketLayoutService : IMarketLayoutService
     {
         var layout = await GetActiveLayoutAsync(layoutId, cancellationToken);
         await EnsureLayoutOwnershipAsync(layout, actorId, cancellationToken);
-        if (layout.Status == MarketLayoutStatus.Active)
-            throw AppException.Conflict("Deactivate the market layout before changing its information.");
+        await EnsureDraftLayoutEditableAsync(layout, cancellationToken);
 
         var market = await EnsureNightMarketExistsAsync(layout.NightMarketId, cancellationToken);
         var sectionCode = NormalizeSectionCode(request.SectionCode, layout.SectionCode);
@@ -190,8 +207,7 @@ public class MarketLayoutService : IMarketLayoutService
     {
         var layout = await GetActiveLayoutAsync(layoutId, cancellationToken);
         await EnsureLayoutOwnershipAsync(layout, actorId, cancellationToken);
-        if (layout.Status == MarketLayoutStatus.Active)
-            throw AppException.Conflict("Deactivate the market layout before replacing its image.");
+        await EnsureDraftLayoutEditableAsync(layout, cancellationToken);
 
         if (!Uri.TryCreate(request.LayoutImageUrl, UriKind.RelativeOrAbsolute, out var imageUri)
             || (imageUri.IsAbsoluteUri && imageUri.Scheme is not ("http" or "https"))
@@ -214,8 +230,7 @@ public class MarketLayoutService : IMarketLayoutService
     {
         var layout = await GetActiveLayoutAsync(layoutId, cancellationToken);
         await EnsureLayoutOwnershipAsync(layout, actorId, cancellationToken);
-        if (layout.Status == MarketLayoutStatus.Active)
-            throw AppException.Conflict("Deactivate the market layout before updating its dimensions.");
+        await EnsureDraftLayoutEditableAsync(layout, cancellationToken);
 
         var nodes = (await _layouts.GetNodesByLayoutIdAsync(layoutId, cancellationToken)).ToList();
         var outsideNodes = nodes
@@ -248,13 +263,27 @@ public class MarketLayoutService : IMarketLayoutService
         return ApiResponse<MarketLayoutResponse>.SuccessResponse(_mapper.Map<MarketLayoutResponse>(layout), "Market layout dimensions updated successfully.");
     }
 
-    public async Task<ApiResponse<object>> SaveGraphTransactionalAsync(
+    public async Task<ApiResponse<SaveGraphResponse>> SaveGraphTransactionalAsync(
         Guid layoutId, SaveGraphRequest request, CancellationToken cancellationToken = default, Guid? actorId = null)
     {
         var layout = await GetActiveLayoutAsync(layoutId, cancellationToken);
         await EnsureLayoutOwnershipAsync(layout, actorId, cancellationToken);
-        if (layout.Status == MarketLayoutStatus.Active)
-            throw AppException.Conflict("Deactivate the market layout before modifying the graph.");
+        await EnsureDraftLayoutEditableAsync(layout, cancellationToken);
+
+        if (layout.GraphRevision != request.ExpectedGraphRevision ||
+            Math.Abs((layout.UpdatedAt - request.ExpectedUpdatedAt).TotalSeconds) > 1)
+        {
+            throw AppException.Conflict(
+                "This layout was changed in another session. Reload it before saving.",
+                "LAYOUT_CONCURRENCY_CONFLICT",
+                new
+                {
+                    CurrentUpdatedAt = layout.UpdatedAt,
+                    CurrentGraphRevision = layout.GraphRevision,
+                    request.ExpectedUpdatedAt,
+                    request.ExpectedGraphRevision
+                });
+        }
 
         var market = await EnsureNightMarketExistsAsync(layout.NightMarketId, cancellationToken);
         var existingNodes = await _layouts.GetNodesByLayoutIdAsync(layoutId, cancellationToken);
@@ -262,14 +291,10 @@ public class MarketLayoutService : IMarketLayoutService
             layout.NightMarketId, cancellationToken: cancellationToken);
         if (market.MarketOwnerId != null)
         {
-            var maxSlots = await _entitlements.GetMaxSlotsPerMarketAsync(market.MarketOwnerId.Value);
             var boothSlotsCount = request.Nodes.Count(n => n.NodeType == LayoutNodeType.BoothSlot);
-            if (boothSlotsCount > maxSlots)
-            {
-                throw AppException.Forbidden(
-                    $"Your current package allows a maximum of {maxSlots} booth slots per market layout. Please upgrade to add more.",
-                    "PLAN_LIMIT_REACHED");
-            }
+            await _resourceQuota.EnsureBoothSlotCapacityAsync(
+                market.MarketOwnerId.Value, layout.MarketMapId, layout.Id,
+                boothSlotsCount, cancellationToken);
 
             if (request.Nodes.Any(node => node.ZoneId.HasValue)
                 && !await _entitlements.CanUseZoneManagementAsync(market.MarketOwnerId.Value))
@@ -282,16 +307,11 @@ public class MarketLayoutService : IMarketLayoutService
                         || currentZoneId != node.ZoneId)))
                 {
                     throw AppException.Forbidden(
-                        "Zone management is available with the Pro Market package.",
+                        "Your current subscription does not include zone management.",
                         "ZONE_MANAGEMENT_NOT_INCLUDED");
                 }
             }
         }
-
-        if (Math.Abs((layout.UpdatedAt - request.ExpectedUpdatedAt).TotalSeconds) > 1)
-            throw AppException.Conflict(
-                "This layout was changed in another session. Reload it before saving.",
-                "LAYOUT_VERSION_CONFLICT");
 
         var existingBlocks = await _layouts.GetBlocksByLayoutIdAsync(layoutId, cancellationToken);
         var existingEdges = await _layouts.GetEdgesByLayoutIdAsync(layoutId, cancellationToken);
@@ -417,6 +437,16 @@ public class MarketLayoutService : IMarketLayoutService
                 : now,
             UpdatedAt = now
         }).ToList();
+        var duplicateSlotCode = nodes
+            .Where(node => node.NodeType == LayoutNodeType.BoothSlot)
+            .GroupBy(node => node.SlotCode?.Trim(), StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(group => string.IsNullOrWhiteSpace(group.Key) || group.Count() > 1);
+        if (duplicateSlotCode is not null)
+            throw AppException.BadRequest(
+                string.IsNullOrWhiteSpace(duplicateSlotCode.Key)
+                    ? "Every booth slot must have a slot code."
+                    : $"Booth slot code '{duplicateSlotCode.Key}' is duplicated.",
+                "LAYOUT_SLOT_CODE_DUPLICATED");
         foreach (var node in nodes)
         {
             var nodeErrors = LayoutGeometryValidator.ValidateNodeMove(
@@ -457,16 +487,23 @@ public class MarketLayoutService : IMarketLayoutService
         // router rebuilds safe corridors from the current geometry.
         edges.RemoveAll(edge => EdgeCrossesGeneratedBlock(edge, nodes, blocks));
 
-        await _layouts.SaveGraphTransactionalAsync(layoutId, blocks, nodes, edges, null, cancellationToken);
-        var saved = await _layouts.GetActiveByIdAsync(layoutId, cancellationToken)
-            ?? throw AppException.NotFound("Market layout was not found.");
-        return ApiResponse<object>.SuccessResponse(new
+        var saved = await _layouts.SaveGraphTransactionalAsync(
+            layoutId,
+            request.ExpectedUpdatedAt,
+            request.ExpectedGraphRevision,
+            blocks,
+            nodes,
+            edges,
+            null,
+            cancellationToken);
+        return ApiResponse<SaveGraphResponse>.SuccessResponse(new SaveGraphResponse
         {
             LayoutId = layoutId,
             BlockCount = blocks.Count,
             NodeCount = nodes.Count,
             EdgeCount = edges.Count,
-            saved.UpdatedAt
+            GraphRevision = saved.GraphRevision,
+            UpdatedAt = saved.UpdatedAt
         }, "Layout saved successfully.");
     }
 
@@ -526,8 +563,7 @@ public class MarketLayoutService : IMarketLayoutService
 
         var layout = await GetActiveLayoutAsync(layoutId, cancellationToken);
         await EnsureLayoutOwnershipAsync(layout, actorId, cancellationToken);
-        if (layout.Status == MarketLayoutStatus.Active)
-            throw AppException.Conflict("Deactivate the market layout before modifying the graph.", "LAYOUT_IS_ACTIVE");
+        await EnsureDraftLayoutEditableAsync(layout, cancellationToken);
 
         var market = await EnsureNightMarketExistsAsync(layout.NightMarketId, cancellationToken);
         if (!market.BoundaryWidthMeters.HasValue || !market.BoundaryHeightMeters.HasValue || market.BoundaryWidthMeters.Value <= 0 || market.BoundaryHeightMeters.Value <= 0)
@@ -596,12 +632,13 @@ public class MarketLayoutService : IMarketLayoutService
 
         if (market.MarketOwnerId != null)
         {
-            var maxSlots = await _entitlements.GetMaxSlotsPerMarketAsync(market.MarketOwnerId.Value);
             var slotCount = generationResult.Nodes.Count(n => n.NodeType == LayoutNodeType.BoothSlot);
-            if (slotCount > maxSlots)
+            var quotaError = await _resourceQuota.GetBoothSlotCapacityErrorAsync(
+                market.MarketOwnerId.Value, layout.MarketMapId, layout.Id,
+                slotCount, cancellationToken);
+            if (quotaError is not null)
             {
-                result.Errors.Add(
-                    $"This layout would contain {slotCount} booth slots, but your current package allows a maximum of {maxSlots}. Please upgrade or reduce capacity.");
+                result.Errors.Add(quotaError);
                 result.CanApply = false;
             }
         }
@@ -630,8 +667,7 @@ public class MarketLayoutService : IMarketLayoutService
 
         var layout = await GetActiveLayoutAsync(layoutId, cancellationToken);
         await EnsureLayoutOwnershipAsync(layout, actorId, cancellationToken);
-        if (layout.Status == MarketLayoutStatus.Active)
-            throw AppException.Conflict("Deactivate the market layout before modifying the graph.", "LAYOUT_IS_ACTIVE");
+        await EnsureDraftLayoutEditableAsync(layout, cancellationToken);
 
         if (Math.Abs((layout.UpdatedAt - request.ExpectedUpdatedAt).TotalSeconds) > 1)
             throw AppException.Conflict(
@@ -668,6 +704,15 @@ public class MarketLayoutService : IMarketLayoutService
         // It accurately detects both reduced capacities and omitted zones that drop assigned booths.
         var result = _generator.ComputeGeneration(
             layout, plan.EffectiveZones, existingNodes, boothLocations, plan.NormalizedRequest);
+        var generatedBoothSlotCount = result.Nodes.Count(node =>
+            !node.IsDeleted && node.NodeType == LayoutNodeType.BoothSlot);
+        if (request.RequestedBoothCount is not int requestedBoothCount
+            || generatedBoothSlotCount != requestedBoothCount)
+        {
+            throw AppException.Conflict(
+                $"Generation requested exactly {request.RequestedBoothCount?.ToString() ?? "an unspecified number of"} booth slots but produced {generatedBoothSlotCount}.",
+                "LAYOUT_GENERATION_SLOT_COUNT_MISMATCH");
+        }
         if (!result.Preview.CanApply || physicalPreparation.Errors.Count > 0)
         {
             var msg = result.Preview.Errors.FirstOrDefault()
@@ -683,12 +728,10 @@ public class MarketLayoutService : IMarketLayoutService
 
         if (market.MarketOwnerId != null)
         {
-            var maxSlots = await _entitlements.GetMaxSlotsPerMarketAsync(market.MarketOwnerId.Value);
             var slotCount = result.Nodes.Count(n => n.NodeType == LayoutNodeType.BoothSlot);
-            if (slotCount > maxSlots)
-                throw AppException.Forbidden(
-                    $"Your current package allows a maximum of {maxSlots} booth slots per market layout. Please upgrade to add more.",
-                    "PLAN_LIMIT_REACHED");
+            await _resourceQuota.EnsureBoothSlotCapacityAsync(
+                market.MarketOwnerId.Value, layout.MarketMapId, layout.Id,
+                slotCount, cancellationToken);
         }
 
         // Physical generation fixes the canvas to the declared market dimensions.
@@ -936,12 +979,16 @@ public class MarketLayoutService : IMarketLayoutService
         var graphResult = await _graphValidation.ValidateAsync(layoutId, cancellationToken);
         var planLimitError = await GetPlanSlotLimitErrorAsync(layout, actorId, cancellationToken);
         var sectionErrors = await GetSectionGeometryErrorsAsync(layout, true, cancellationToken);
+        var market = await EnsureNightMarketExistsAsync(layout.NightMarketId, cancellationToken);
+        var calibrationWarnings = LayoutPhysicalCalibration.DetectConflicts(
+                layout, market.BoundaryWidthMeters, market.BoundaryHeightMeters)
+            .Select(conflict => conflict.Message + " Explicit/precedence-resolved physical dimensions remain authoritative.");
         var errors = graphResult.Errors.Concat(sectionErrors);
         if (planLimitError is not null) errors = errors.Append(planLimitError);
         var result = new MarketLayoutValidationResponse
         {
             Errors = errors.Distinct().ToArray(),
-            Warnings = graphResult.Warnings
+            Warnings = graphResult.Warnings.Concat(calibrationWarnings).Distinct().ToArray()
         };
         return ApiResponse<MarketLayoutValidationResponse>.SuccessResponse(result,
             result.IsValid ? "Market layout is valid." : "Market layout validation failed.");
@@ -991,75 +1038,21 @@ public class MarketLayoutService : IMarketLayoutService
     public async Task<ApiResponse<MarketLayoutResponse>> ActivateAsync(
         Guid layoutId, CancellationToken cancellationToken = default, Guid? actorId = null)
     {
-        var layout = await _layouts.GetEditorLayoutAsync(layoutId, cancellationToken)
-                     ?? throw AppException.NotFound("Market layout was not found.");
-        await EnsureLayoutOwnershipAsync(layout, actorId, cancellationToken);
-        var graphValidation = await _graphValidation.ValidateAsync(layoutId, cancellationToken);
-        var planLimitError = await GetPlanSlotLimitErrorAsync(layout, actorId, cancellationToken);
-        var sectionErrors = await GetSectionGeometryErrorsAsync(layout, true, cancellationToken);
-        var activationErrors = graphValidation.Errors.Concat(sectionErrors);
-        if (planLimitError is not null) activationErrors = activationErrors.Append(planLimitError);
-        var validation = new MarketLayoutValidationResponse
-        {
-            Errors = activationErrors.Distinct().ToArray(),
-            Warnings = graphValidation.Warnings
-        };
-        if (!validation.IsValid)
-        {
-            var fieldErrors = new Dictionary<string, string[]>
-            {
-                ["layout"] = validation.Errors.ToArray()
-            };
-            throw AppException.Validation(
-                "This layout cannot be activated yet. " + string.Join(" ", validation.Errors),
-                fieldErrors,
-                "LAYOUT_VALIDATION_FAILED");
-        }
-
-        layout = await GetActiveLayoutAsync(layoutId, cancellationToken);
-        var now = DateTime.UtcNow;
-        await _layouts.ActivateExclusiveAsync(layout.NightMarketId, layout.Id, now, cancellationToken);
-
-        layout.Status = MarketLayoutStatus.Active;
-        var publishedLayout = (await _layouts.GetPublishedMapsAsync(layout.NightMarketId, cancellationToken))
-            .FirstOrDefault(item => item.Id == layout.Id);
-        if (publishedLayout is not null) layout.IsDefaultView = publishedLayout.IsDefaultView;
-        layout.UpdatedAt = now;
-        try
-        {
-            await _eventPublisher.PublishAsync(new RealtimeEvent
-            {
-                EventType = "LayoutActivated",
-                GroupName = RealtimeGroups.Layout(layout.Id),
-                Payload = new { layoutId = layout.Id, nightMarketId = layout.NightMarketId }
-            });
-            if (layout.NightMarketId != Guid.Empty)
-                await _eventPublisher.PublishAsync(new RealtimeEvent
-                {
-                    EventType = "LayoutActivated",
-                    GroupName = RealtimeGroups.Market(layout.NightMarketId),
-                    Payload = new { layoutId = layout.Id, nightMarketId = layout.NightMarketId }
-                });
-        }
-        catch { }
-        return ApiResponse<MarketLayoutResponse>.SuccessResponse(_mapper.Map<MarketLayoutResponse>(layout), "Map section published successfully.");
+        var layout = await GetActiveLayoutAsync(layoutId, cancellationToken);
+        await EnsureLayoutOwnershipOnlyAsync(layout, actorId, cancellationToken);
+        throw AppException.Conflict(
+            "Individual layout activation is disabled. Publish the complete composition through MarketMap activation.",
+            "LAYOUT_ACTIVATION_MANAGED_BY_MARKET_MAP");
     }
 
     public async Task<ApiResponse<MarketLayoutResponse>> SetDefaultViewAsync(
         Guid layoutId, CancellationToken cancellationToken = default, Guid? actorId = null)
     {
         var layout = await GetActiveLayoutAsync(layoutId, cancellationToken);
-        await EnsureLayoutOwnershipAsync(layout, actorId, cancellationToken);
-        if (layout.Status != MarketLayoutStatus.Active)
-            throw AppException.Conflict("Only a published map section can be set as the default view.", "LAYOUT_NOT_PUBLISHED");
-
-        var now = DateTime.UtcNow;
-        await _layouts.SetDefaultViewAsync(layout.NightMarketId, layout.Id, now, cancellationToken);
-        layout.IsDefaultView = true;
-        layout.UpdatedAt = now;
-        return ApiResponse<MarketLayoutResponse>.SuccessResponse(
-            _mapper.Map<MarketLayoutResponse>(layout),
-            "Default map view updated successfully.");
+        await EnsureLayoutOwnershipOnlyAsync(layout, actorId, cancellationToken);
+        throw AppException.Conflict(
+            "Individual layout lifecycle changes are disabled. Publish the complete composition through MarketMap activation.",
+            "LAYOUT_LIFECYCLE_MANAGED_BY_MARKET_MAP");
     }
 
     private async Task<string?> GetPlanSlotLimitErrorAsync(
@@ -1072,60 +1065,25 @@ public class MarketLayoutService : IMarketLayoutService
 
         var nodes = await _layouts.GetNodesByLayoutIdAsync(layout.Id, cancellationToken);
         var slotCount = nodes.Count(node => !node.IsDeleted && node.NodeType == LayoutNodeType.BoothSlot);
-        var maxSlots = await _entitlements.GetMaxSlotsPerMarketAsync(actorId.Value);
-        return slotCount > maxSlots
-            ? $"This layout contains {slotCount} booth slots, but your current package allows a maximum of {maxSlots}. Reduce the layout capacity or upgrade the package."
-            : null;
+        return await _resourceQuota.GetBoothSlotCapacityErrorAsync(
+            actorId.Value, layout.MarketMapId, layout.Id, slotCount, cancellationToken);
     }
 
     public async Task<ApiResponse<MarketLayoutResponse>> DeactivateAsync(
         Guid layoutId, CancellationToken cancellationToken = default, Guid? actorId = null)
     {
         var layout = await GetActiveLayoutAsync(layoutId, cancellationToken);
-        await EnsureLayoutOwnershipAsync(layout, actorId, cancellationToken);
-        if (layout.Status != MarketLayoutStatus.Active)
-            throw AppException.Conflict("Only an active market layout can be deactivated.");
-
-        var wasDefault = layout.IsDefaultView;
-        layout.Status = MarketLayoutStatus.Inactive;
-        layout.IsDefaultView = false;
-        layout.UpdatedAt = DateTime.UtcNow;
-        _layouts.Update(layout);
-
-        await _layouts.SaveChangesAsync();
-        if (wasDefault)
-        {
-            var replacement = (await _layouts.GetPublishedMapsAsync(layout.NightMarketId, cancellationToken))
-                .FirstOrDefault(item => item.Id != layout.Id);
-            if (replacement is not null)
-                await _layouts.SetDefaultViewAsync(layout.NightMarketId, replacement.Id, DateTime.UtcNow, cancellationToken);
-        }
-        try
-        {
-            await _eventPublisher.PublishAsync(new RealtimeEvent
-            {
-                EventType = "LayoutDeactivated",
-                GroupName = RealtimeGroups.Layout(layout.Id),
-                Payload = new { layoutId = layout.Id, nightMarketId = layout.NightMarketId }
-            });
-            if (layout.NightMarketId != Guid.Empty)
-                await _eventPublisher.PublishAsync(new RealtimeEvent
-                {
-                    EventType = "LayoutDeactivated",
-                    GroupName = RealtimeGroups.Market(layout.NightMarketId),
-                    Payload = new { layoutId = layout.Id, nightMarketId = layout.NightMarketId }
-                });
-        }
-        catch { }
-        return ApiResponse<MarketLayoutResponse>.SuccessResponse(_mapper.Map<MarketLayoutResponse>(layout), "Market layout deactivated successfully.");
+        await EnsureLayoutOwnershipOnlyAsync(layout, actorId, cancellationToken);
+        throw AppException.Conflict(
+            "Individual layout lifecycle changes are disabled. Publish another complete composition through MarketMap activation.",
+            "LAYOUT_LIFECYCLE_MANAGED_BY_MARKET_MAP");
     }
 
     public async Task<ApiResponse<object>> DeleteAsync(Guid layoutId, CancellationToken cancellationToken = default, Guid? actorId = null)
     {
         var layout = await GetActiveLayoutAsync(layoutId, cancellationToken);
         await EnsureLayoutOwnershipAsync(layout, actorId, cancellationToken);
-        if (layout.Status == MarketLayoutStatus.Active)
-            throw AppException.Conflict("Deactivate the market layout before archiving it.");
+        await EnsureDraftLayoutEditableAsync(layout, cancellationToken);
 
         var editor = await _layouts.GetEditorLayoutAsync(layoutId, cancellationToken)
             ?? throw AppException.NotFound("Market layout was not found.");
@@ -1145,6 +1103,14 @@ public class MarketLayoutService : IMarketLayoutService
     private async Task<MarketLayout> GetActiveLayoutAsync(Guid id, CancellationToken cancellationToken)
         => await _layouts.GetActiveByIdAsync(id, cancellationToken)
            ?? throw AppException.NotFound("Market layout was not found.");
+
+    private async Task EnsureDraftLayoutEditableAsync(MarketLayout layout, CancellationToken cancellationToken)
+    {
+        if (!await _layouts.IsEditableDraftAsync(layout.Id, cancellationToken))
+            throw AppException.Conflict(
+                "Only a layout in a draft MarketMap can be edited.",
+                "LAYOUT_NOT_EDITABLE_DRAFT");
+    }
 
     private async Task<NightMarket> EnsureNightMarketExistsAsync(Guid id, CancellationToken cancellationToken)
         => await _nightMarkets.GetActiveByIdAsync(id, cancellationToken)
@@ -1238,11 +1204,12 @@ public class MarketLayoutService : IMarketLayoutService
             errors.Add("Set the night market boundary width and length before configuring map sections.");
         if (width <= 0 || length <= 0)
             errors.Add("Map section width and length must be greater than zero.");
-        if (layout.OffsetXMeters < 0 || layout.OffsetYMeters < 0)
+        if (GeometryTolerance.IsNegative(layout.OffsetXMeters)
+            || GeometryTolerance.IsNegative(layout.OffsetYMeters))
             errors.Add("Map section offsets cannot be negative.");
-        if (marketWidth > 0 && layout.OffsetXMeters + width > marketWidth + 0.01)
+        if (marketWidth > 0 && GeometryTolerance.Exceeds(layout.OffsetXMeters + width, marketWidth))
             errors.Add($"Map section '{layout.SectionName}' exceeds the market width boundary.");
-        if (marketLength > 0 && layout.OffsetYMeters + length > marketLength + 0.01)
+        if (marketLength > 0 && GeometryTolerance.Exceeds(layout.OffsetYMeters + length, marketLength))
             errors.Add($"Map section '{layout.SectionName}' exceeds the market length boundary.");
         return errors;
     }
@@ -1250,10 +1217,9 @@ public class MarketLayoutService : IMarketLayoutService
     private static bool RectanglesOverlap(
         double leftX, double leftY, double leftWidth, double leftHeight,
         double rightX, double rightY, double rightWidth, double rightHeight)
-        => leftX < rightX + rightWidth - 0.01 &&
-           leftX + leftWidth > rightX + 0.01 &&
-           leftY < rightY + rightHeight - 0.01 &&
-           leftY + leftHeight > rightY + 0.01;
+        => GeometryTolerance.RectanglesHaveInteriorOverlap(
+            leftX, leftY, leftWidth, leftHeight,
+            rightX, rightY, rightWidth, rightHeight);
 
     private static string NormalizeSectionCode(string? code, string fallback)
     {
@@ -1314,7 +1280,7 @@ public class MarketLayoutService : IMarketLayoutService
 
         if (request.ZoneConfigs is { Count: > 0 })
             throw AppException.Forbidden(
-                "Zone management is available with the Pro Market package.",
+                "Your current subscription does not include zone management.",
                 "ZONE_MANAGEMENT_NOT_INCLUDED");
 
         if (request.DefaultZoneCapacity is not > 0)
@@ -1345,9 +1311,9 @@ public class MarketLayoutService : IMarketLayoutService
             if (string.IsNullOrWhiteSpace(config.ZoneName))
                 throw AppException.BadRequest("Zone name is required for each new zone.", "ZONE_NAME_REQUIRED");
 
-            if (config.Capacity is not > 0)
+            if (config.Capacity is null or < 0)
                 throw AppException.BadRequest(
-                    $"Capacity greater than zero is required for new zone '{config.ZoneName.Trim()}'.",
+                    $"A non-negative allocated capacity is required for new zone '{config.ZoneName.Trim()}'.",
                     "ZONE_CAPACITY_REQUIRED");
         }
     }

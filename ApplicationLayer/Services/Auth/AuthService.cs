@@ -17,7 +17,7 @@ namespace ApplicationLayer.Services.Auth;
 
 public class AuthService : IAuthService
 {
-    private readonly IGenericRepository<User> _userRepository;
+    private readonly IUserRepository _userRepository;
     private readonly IGenericRepository<Role> _roleRepository;
     private readonly IPasswordHasher _passwordHasher;
     private readonly IJwtService _jwtService;
@@ -29,7 +29,7 @@ public class AuthService : IAuthService
     private readonly IRealtimeEventPublisher? _realtimeEvents;
 
     public AuthService(
-        IGenericRepository<User> userRepository,
+        IUserRepository userRepository,
         IGenericRepository<Role> roleRepository,
         IPasswordHasher passwordHasher,
         IJwtService jwtService,
@@ -74,7 +74,7 @@ public class AuthService : IAuthService
         var email = request.Email.Trim().ToLowerInvariant();
         var userName = request.UserName.Trim();
 
-        if (await _userRepository.AnyAsync(user => user.Email == email))
+        if (await _userRepository.AnyAsync(user => user.Email.Trim().ToLower() == email))
         {
             throw AppException.Conflict("Email is already in use.", AuthErrorCodes.EmailAlreadyExists);
         }
@@ -115,7 +115,7 @@ public class AuthService : IAuthService
     public async Task<ApiResponse<AuthResponse>> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default)
     {
         var identity = request.EmailOrUserName.Trim().ToLowerInvariant();
-        var user = await _userRepository.FirstOrDefaultAsync(item => item.Email == identity || item.UserName.ToLower() == identity);
+        var user = await _userRepository.FirstOrDefaultAsync(item => item.Email.Trim().ToLower() == identity || item.UserName.ToLower() == identity);
 
         if (user is null)
         {
@@ -171,46 +171,88 @@ public class AuthService : IAuthService
                 AuthErrorCodes.InvalidGoogleToken);
         }
 
+        if (!googleUser.EmailVerified || string.IsNullOrWhiteSpace(googleUser.Email))
+        {
+            throw AppException.Unauthorized(
+                "Google token is invalid or the email has not been verified.",
+                AuthErrorCodes.InvalidGoogleToken);
+        }
+
         var email = googleUser.Email.Trim().ToLowerInvariant();
-        var user = await _userRepository.FirstOrDefaultAsync(item => item.GoogleId == googleUser.GoogleId);
+        var userByGoogleId = await _userRepository.FirstOrDefaultAsync(item => item.GoogleId == googleUser.GoogleId);
+        var userByEmail = await _userRepository.FirstOrDefaultAsync(item => item.Email.Trim().ToLower() == email);
 
-        if (user is null)
+        // Google subject is the stable external identity. If its verified email now
+        // resolves to a different SNM account, never guess which account to use.
+        if (userByGoogleId is not null)
         {
-            user = await ResolveOrCreateCustomerFromGoogleAsync(googleUser, email, cancellationToken);
+            if (userByEmail is not null && userByEmail.Id != userByGoogleId.Id)
+            {
+                throw GoogleSubjectConflict();
+            }
+
+            await EnsureCustomerRoleAsync(userByGoogleId);
+            return await CreateSessionForActiveUserAsync(userByGoogleId, cancellationToken);
         }
 
-        var role = await _roleRepository.GetByIdAsync(user.RoleId);
-        if (role is null || !string.Equals(role.RoleName, "Customer", StringComparison.Ordinal))
-        {
-            throw AppException.Forbidden(
-                "Google sign-in is only available for customer accounts.",
-                AuthErrorCodes.GoogleCustomerOnly);
-        }
-
+        var user = await ResolveOrCreateCustomerFromGoogleAsync(googleUser, email, userByEmail, cancellationToken);
         return await CreateSessionForActiveUserAsync(user, cancellationToken);
     }
 
     private async Task<User> ResolveOrCreateCustomerFromGoogleAsync(
         GoogleUserInfo googleUser,
         string email,
+        User? userWithSameEmail,
         CancellationToken cancellationToken)
     {
-        var userWithSameEmail = await _userRepository.FirstOrDefaultAsync(item => item.Email == email);
         if (userWithSameEmail is not null)
         {
-            if (!googleUser.EmailVerified)
+            await EnsureCustomerRoleAsync(userWithSameEmail);
+
+            // Linking is allowed only for an already-active Customer. A verified
+            // Google email must not silently activate a pending or disabled account.
+            if (userWithSameEmail.Status == UserStatus.PendingVerification)
             {
-                throw AppException.Conflict(
-                    "An account with this email already exists. Sign in with its existing method before linking Google.",
-                    AuthErrorCodes.GoogleAccountLinkRequired);
+                throw AppException.Forbidden(
+                    "Please verify your email before signing in.",
+                    AuthErrorCodes.EmailNotVerified);
             }
 
-            var existingRole = await _roleRepository.GetByIdAsync(userWithSameEmail.RoleId);
-            if (existingRole is null || !string.Equals(existingRole.RoleName, "Customer", StringComparison.Ordinal))
+            if (userWithSameEmail.Status != UserStatus.Active)
             {
-                throw AppException.Conflict(
-                    "This email is already associated with a non-customer account.",
-                    AuthErrorCodes.GoogleCustomerOnly);
+                throw AppException.Forbidden("Account is not active.", AuthErrorCodes.AccountNotActive);
+            }
+
+            if (!string.IsNullOrWhiteSpace(userWithSameEmail.GoogleId) &&
+                !string.Equals(userWithSameEmail.GoogleId, googleUser.GoogleId, StringComparison.Ordinal))
+            {
+                throw GoogleSubjectConflict();
+            }
+
+            var linkedAt = DateTime.UtcNow;
+            if (!await _userRepository.TryLinkGoogleIdentityAsync(
+                    userWithSameEmail.Id,
+                    googleUser.GoogleId,
+                    linkedAt,
+                    cancellationToken))
+            {
+                await _userRepository.ReloadAsync(userWithSameEmail);
+                if (userWithSameEmail.Status == UserStatus.PendingVerification)
+                {
+                    throw AppException.Forbidden(
+                        "Please verify your email before signing in.",
+                        AuthErrorCodes.EmailNotVerified);
+                }
+
+                if (userWithSameEmail.Status != UserStatus.Active)
+                {
+                    throw AppException.Forbidden("Account is not active.", AuthErrorCodes.AccountNotActive);
+                }
+
+                if (!string.Equals(userWithSameEmail.GoogleId, googleUser.GoogleId, StringComparison.Ordinal))
+                {
+                    throw GoogleSubjectConflict();
+                }
             }
 
             userWithSameEmail.GoogleId = googleUser.GoogleId;
@@ -224,24 +266,10 @@ public class AuthService : IAuthService
                 userWithSameEmail.AvatarUrl = TruncateAvatarUrl(googleUser.AvatarUrl);
             }
 
-            if (userWithSameEmail.Status == UserStatus.PendingVerification)
-            {
-                userWithSameEmail.Status = UserStatus.Active;
-                userWithSameEmail.EmailVerificationTokenHash = null;
-                userWithSameEmail.EmailVerificationTokenExpiresAt = null;
-            }
-
-            userWithSameEmail.UpdatedAt = DateTime.UtcNow;
+            userWithSameEmail.UpdatedAt = linkedAt;
             _userRepository.Update(userWithSameEmail);
             await _userRepository.SaveChangesAsync();
             return userWithSameEmail;
-        }
-
-        if (!googleUser.EmailVerified)
-        {
-            throw AppException.Unauthorized(
-                "Google token is invalid or the email has not been verified.",
-                AuthErrorCodes.InvalidGoogleToken);
         }
 
         var customerRole = await GetOrCreateRoleAsync("Customer");
@@ -268,10 +296,43 @@ public class AuthService : IAuthService
             UpdatedAt = now
         };
 
-        await _userRepository.AddAsync(user);
-        await _userRepository.SaveChangesAsync();
-        return user;
+        if (await _userRepository.TryAddGoogleUserAsync(user, cancellationToken))
+        {
+            return user;
+        }
+
+        // A concurrent request may have created this identity after our lookup.
+        // Re-resolve both unique identities and only accept an exact same-account match.
+        var concurrentSubjectOwner = await _userRepository.FirstOrDefaultAsync(
+            item => item.GoogleId == googleUser.GoogleId);
+        var concurrentEmailOwner = await _userRepository.FirstOrDefaultAsync(
+            item => item.Email.Trim().ToLower() == email);
+        if (concurrentSubjectOwner is not null &&
+            concurrentEmailOwner is not null &&
+            concurrentSubjectOwner.Id == concurrentEmailOwner.Id)
+        {
+            await EnsureCustomerRoleAsync(concurrentSubjectOwner);
+            return concurrentSubjectOwner;
+        }
+
+        throw GoogleSubjectConflict();
     }
+
+    private async Task EnsureCustomerRoleAsync(User user)
+    {
+        var role = await _roleRepository.GetByIdAsync(user.RoleId);
+        if (role is null || !string.Equals(role.RoleName, "Customer", StringComparison.Ordinal))
+        {
+            throw AppException.Conflict(
+                "This Google identity cannot be associated with this account.",
+                AuthErrorCodes.GoogleCustomerOnly);
+        }
+    }
+
+    private static AppException GoogleSubjectConflict()
+        => AppException.Conflict(
+            "This Google identity is already associated with another account.",
+            AuthErrorCodes.GoogleSubjectConflict);
 
     private static string? TruncateAvatarUrl(string? avatarUrl)
     {
@@ -319,7 +380,7 @@ public class AuthService : IAuthService
         EnsureVerificationEmailConfigured();
 
         var email = request.Email.Trim().ToLowerInvariant();
-        var user = await _userRepository.FirstOrDefaultAsync(item => item.Email == email);
+        var user = await _userRepository.FirstOrDefaultAsync(item => item.Email.Trim().ToLower() == email);
 
         if (user is null || user.Status != UserStatus.PendingVerification)
         {
@@ -337,7 +398,8 @@ public class AuthService : IAuthService
         var started = Stopwatch.StartNew();
         EnsurePasswordResetEmailConfigured();
 
-        var user = await _userRepository.FirstOrDefaultAsync(item => item.Email == request.Email.Trim().ToLowerInvariant());
+        var normalizedEmail = request.Email.Trim().ToLowerInvariant();
+        var user = await _userRepository.FirstOrDefaultAsync(item => item.Email.Trim().ToLower() == normalizedEmail);
         if (user is null || user.Status != UserStatus.Active || user.AuthProvider == AuthProvider.Google)
         {
             var skipReason = user is null
@@ -746,7 +808,7 @@ public class AuthService : IAuthService
     private Task<User?> FindActiveUserByEmailAsync(string email)
     {
         return _userRepository.FirstOrDefaultAsync(item =>
-            item.Email == email.Trim().ToLowerInvariant() &&
+            item.Email.Trim().ToLower() == email.Trim().ToLowerInvariant() &&
             item.Status == UserStatus.Active &&
             item.AuthProvider != AuthProvider.Google);
     }

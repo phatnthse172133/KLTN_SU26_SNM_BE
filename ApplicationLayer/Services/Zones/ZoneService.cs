@@ -67,7 +67,7 @@ public class ZoneService : IZoneService
             await _entitlements.RequireMarketFeatureAsync(
                 market.MarketOwnerId.Value,
                 e => e.ZoneManagement,
-                "Your current package does not include zone management. Please upgrade to Market Pro or Enterprise.",
+                "Your current subscription does not include zone management.",
                 "ZONE_MANAGEMENT_NOT_INCLUDED");
         }
         await ValidateZoneIdentityAsync(nightMarketId, request.ZoneName, request.ZoneCode, null, cancellationToken);

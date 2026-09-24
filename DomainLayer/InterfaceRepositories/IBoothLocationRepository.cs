@@ -12,7 +12,8 @@ public interface IBoothLocationRepository : IGenericRepository<BoothLocation>
     Task<BoothLocation?> GetCurrentByNodeAsync(Guid nodeId, CancellationToken cancellationToken = default);
     Task<IReadOnlyCollection<BoothLocation>> GetCurrentByLayoutAsync(Guid layoutId, bool activeBoothsOnly = false, CancellationToken cancellationToken = default);
     Task<IReadOnlyCollection<BoothLocation>> GetCustomerCurrentByLayoutAsync(Guid layoutId, CancellationToken cancellationToken = default);
-    Task<int> CountActiveByNightMarketAsync(Guid nightMarketId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyCollection<Guid>> GetDuplicateBoothIdsByMarketMapAsync(
+        Guid marketMapId, CancellationToken cancellationToken = default);
     Task AssignOrMoveAsync(BoothLocation location, DateTime now, CancellationToken cancellationToken = default);
     Task ReleaseAsync(Guid boothId, DateTime now, CancellationToken cancellationToken = default);
     Task ReleaseAsync(Guid layoutId, Guid boothId, DateTime now, CancellationToken cancellationToken = default);

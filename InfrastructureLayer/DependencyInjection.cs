@@ -22,6 +22,7 @@ using ApplicationLayer.Services.IndoorPositioning;
 using ApplicationLayer.Services.LayoutEdges;
 using ApplicationLayer.Services.LayoutNodes;
 using ApplicationLayer.Services.MapNavigation;
+using ApplicationLayer.Services.MarketMaps;
 using ApplicationLayer.Services.MarketLayouts;
 using ApplicationLayer.Services.MarketOwnerDashboard;
 using ApplicationLayer.Services.Menus;
@@ -91,6 +92,7 @@ namespace InfrastructureLayer
             services.AddScoped<INightMarketImageRepository, NightMarketImageRepository>();
             services.AddScoped<IBoothImageRepository, BoothImageRepository>();
             services.AddScoped<IZoneRepository, ZoneRepository>();
+            services.AddScoped<IMarketMapRepository, MarketMapRepository>();
             services.AddScoped<IMarketLayoutRepository, MarketLayoutRepository>();
             services.AddScoped<ILayoutNodeRepository, LayoutNodeRepository>();
             services.AddScoped<ILayoutEdgeRepository, LayoutEdgeRepository>();
@@ -145,6 +147,7 @@ namespace InfrastructureLayer
             services.AddScoped<IComplaintService, ComplaintService>();
             services.AddScoped<IReviewService, ReviewService>();
             services.AddScoped<IZoneService, ZoneService>();
+            services.AddScoped<IMarketMapService, MarketMapService>();
             services.AddScoped<IMarketLayoutService, MarketLayoutService>();
             services.AddScoped<ILayoutGeneratorService, LayoutGeneratorService>();
             services.AddScoped<ILayoutGraphValidationService, LayoutGraphValidationService>();
@@ -165,6 +168,7 @@ namespace InfrastructureLayer
             services.AddScoped<IPackagePolicyService, PackagePolicyService>();
             services.AddScoped<IPayOSWebhookService, PayOSWebhookService>();
             services.AddScoped<ISubscriptionEntitlementService, SubscriptionEntitlementService>();
+            services.AddScoped<IMarketResourceQuotaService, MarketResourceQuotaService>();
             services.AddScoped<IDashboardService, DashboardService>();
             services.AddScoped<IMarketOwnerDashboardService, MarketOwnerDashboardService>();
             services.AddScoped<IBoothDashboardService, BoothDashboardService>();
@@ -220,9 +224,12 @@ namespace InfrastructureLayer
             // Add HttpContextAccessor
             services.AddHttpContextAccessor();
 
-            services.AddHostedService<EmailOutboxWorker>();
-            services.AddHostedService<SubscriptionExpiryWorker>();
-            services.AddHostedService<OrderCleanupBackgroundService>();
+            if (configuration.GetValue("BackgroundWorkers:Enabled", true))
+            {
+                services.AddHostedService<EmailOutboxWorker>();
+                services.AddHostedService<SubscriptionExpiryWorker>();
+                services.AddHostedService<OrderCleanupBackgroundService>();
+            }
 
             return services;
         }

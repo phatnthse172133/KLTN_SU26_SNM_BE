@@ -13,6 +13,10 @@ public partial class MarketLayout : ISoftDelete
 
     public Guid NightMarketId { get; set; }
 
+    // Transitional aggregate ownership. NightMarketId is intentionally kept for
+    // compatibility and must equal MarketMap.NightMarketId.
+    public Guid MarketMapId { get; set; }
+
     public string LayoutName { get; set; } = null!;
 
     // Layouts sharing SectionCode are versions of the same physical map section.
@@ -63,6 +67,8 @@ public partial class MarketLayout : ISoftDelete
     public virtual ICollection<LayoutEdge> LayoutEdges { get; set; } = new List<LayoutEdge>();
 
     public virtual ICollection<LayoutNavigationAnchor> NavigationAnchors { get; set; } = new List<LayoutNavigationAnchor>();
+
+    public virtual MarketMap MarketMap { get; set; } = null!;
 
     public virtual NightMarket NightMarket { get; set; } = null!;
 }

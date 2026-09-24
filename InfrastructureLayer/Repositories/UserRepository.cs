@@ -2,6 +2,7 @@ using DomainLayer.Entities;
 using DomainLayer.InterfaceRepository;
 using InfrastructureLayer.Data;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using static DomainLayer.Enums.GeneralEnum;
 
 namespace InfrastructureLayer.Repositories;
@@ -77,6 +78,60 @@ public class UserRepository : GenericRepository<User>, IUserRepository
     public async Task ReloadAsync(User entity)
     {
         await _context.Entry(entity).ReloadAsync();
+    }
+
+    public async Task<bool> TryLinkGoogleIdentityAsync(
+        Guid userId,
+        string googleId,
+        DateTime updatedAt,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var updated = await _dbSet
+                .Where(user => user.Id == userId &&
+                               user.Status == UserStatus.Active &&
+                               user.GoogleId == null)
+                .ExecuteUpdateAsync(update => update
+                    .SetProperty(user => user.GoogleId, googleId)
+                    .SetProperty(
+                        user => user.AuthProvider,
+                        user => user.AuthProvider == AuthProvider.Local
+                            ? AuthProvider.LocalGoogle
+                            : user.AuthProvider)
+                    .SetProperty(user => user.UpdatedAt, updatedAt), cancellationToken);
+            return updated == 1;
+        }
+        catch (DbUpdateException exception) when (
+            exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+        {
+            return false;
+        }
+        catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            return false;
+        }
+    }
+
+    public async Task<bool> TryAddGoogleUserAsync(User user, CancellationToken cancellationToken = default)
+    {
+        await _dbSet.AddAsync(user, cancellationToken);
+        try
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+            return true;
+        }
+        catch (DbUpdateException exception) when (
+            exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+        {
+            _context.Entry(user).State = EntityState.Detached;
+            return false;
+        }
+        catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            _context.Entry(user).State = EntityState.Detached;
+            return false;
+        }
     }
     public async Task<Dictionary<Guid, string>> GetUserNamesByIdsAsync(
         List<Guid> userIds,

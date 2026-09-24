@@ -6,6 +6,7 @@ public class MarketLayoutResponse
 {
     public Guid Id { get; set; }
     public Guid NightMarketId { get; set; }
+    public Guid MarketMapId { get; set; }
     public string LayoutName { get; set; } = string.Empty;
     public string SectionCode { get; set; } = string.Empty;
     public string SectionName { get; set; } = string.Empty;
@@ -28,6 +29,16 @@ public class MarketLayoutResponse
     public double? PixelsPerMeter { get; set; }
     public string Status { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+}
+
+public sealed class SaveGraphResponse
+{
+    public Guid LayoutId { get; set; }
+    public int BlockCount { get; set; }
+    public int NodeCount { get; set; }
+    public int EdgeCount { get; set; }
+    public int GraphRevision { get; set; }
     public DateTime UpdatedAt { get; set; }
 }
 

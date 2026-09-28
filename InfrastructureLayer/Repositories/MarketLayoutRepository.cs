@@ -153,8 +153,7 @@ public class MarketLayoutRepository : GenericRepository<MarketLayout>, IMarketLa
                 !layout.IsDeleted &&
                 (layout.Status == MarketLayoutStatus.Active ||
                  (layout.Status == MarketLayoutStatus.Draft &&
-                  layout.MarketMap.Status == MarketMapStatus.Draft &&
-                  layout.MarketMap.Name == MarketMap.LegacyDraftName)))
+                  layout.MarketMap.Status == MarketMapStatus.Draft)))
             .OrderBy(layout => layout.DisplayOrder)
             .ThenBy(layout => layout.SectionName)
             .ThenByDescending(layout => layout.Version)

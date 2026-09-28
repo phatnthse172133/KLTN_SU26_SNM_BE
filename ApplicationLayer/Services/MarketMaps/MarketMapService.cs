@@ -237,11 +237,10 @@ public sealed partial class MarketMapService : IMarketMapService
         var ineligible = sources.FirstOrDefault(layout =>
             layout.Status != MarketLayoutStatus.Active &&
             !(layout.Status == MarketLayoutStatus.Draft &&
-              layout.MarketMap.Status == MarketMapStatus.Draft &&
-              layout.MarketMap.Name.Equals(MarketMap.LegacyDraftName, StringComparison.OrdinalIgnoreCase)));
+              layout.MarketMap.Status == MarketMapStatus.Draft));
         if (ineligible is not null)
             throw AppException.Conflict(
-                $"Layout '{ineligible.Id}' is {ineligible.Status}; only active layouts or editable layouts from the legacy draft can be selected.",
+                $"Layout '{ineligible.Id}' is {ineligible.Status}; only active layouts or layouts from an editable draft map can be selected.",
                 "SOURCE_LAYOUT_NOT_ACTIVE");
 
         var duplicateSection = sources

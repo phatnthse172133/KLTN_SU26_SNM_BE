@@ -27,6 +27,8 @@ public class ReviewService : IReviewService
     private readonly ISubscriptionEntitlementService _entitlements;
     private readonly IConfiguration _configuration;
     private readonly IFileStorageService _fileStorage;
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly TimeProvider _timeProvider;
 
     public ReviewService(
         IReviewRepository reviews,
@@ -38,7 +40,9 @@ public class ReviewService : IReviewService
         IConfiguration configuration,
         IFoodReviewRepository foodReviews,
         IFoodItemRepository foodItems,
-        IFileStorageService fileStorage)
+        IFileStorageService fileStorage,
+        IUnitOfWork unitOfWork,
+        TimeProvider? timeProvider = null)
     {
         _reviews = reviews;
         _booths = booths;
@@ -50,6 +54,8 @@ public class ReviewService : IReviewService
         _foodReviews = foodReviews;
         _foodItems = foodItems;
         _fileStorage = fileStorage;
+        _unitOfWork = unitOfWork;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     public async Task<ApiResponse<CustomerReviewHistoryResponse>> CreateAsync(Guid customerId, CreateReviewRequest request, CancellationToken cancellationToken = default)
@@ -63,7 +69,10 @@ public class ReviewService : IReviewService
         if (await _reviews.ExistsByOrderAsync(request.OrderId))
             throw AppException.Conflict("This order has already been reviewed.");
 
-        var now = DateTime.UtcNow;
+        await ValidateFoodReviewsForOrderAsync(
+            customerId, request.OrderId, request.FoodReviews, cancellationToken);
+
+        var now = UtcNow;
         var review = _mapper.Map<Review>(request);
         review.Id = Guid.NewGuid();
         review.CustomerId = customerId;
@@ -72,12 +81,22 @@ public class ReviewService : IReviewService
         review.CreatedAt = now;
         review.UpdatedAt = now;
 
-        await _reviews.AddAsync(review);
-        if (!await _reviews.TrySaveNewReviewAsync(cancellationToken))
-            throw AppException.Conflict("This order has already been reviewed.", "REVIEW_ALREADY_EXISTS");
+        await _unitOfWork.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            await _reviews.AddAsync(review);
+            if (!await _reviews.TrySaveNewReviewAsync(cancellationToken))
+                throw AppException.Conflict("This order has already been reviewed.", "REVIEW_ALREADY_EXISTS");
 
-        await UpsertFoodReviewsForOrderAsync(customerId, request.OrderId, request.FoodReviews, allowCreate: true, cancellationToken);
-        await _reviews.RefreshBoothAverageRatingAsync(boothId);
+            await UpsertFoodReviewsForOrderAsync(customerId, request.OrderId, request.FoodReviews, allowCreate: true, cancellationToken);
+            await _reviews.RefreshBoothAverageRatingAsync(boothId);
+            await _unitOfWork.CommitTransactionAsync(cancellationToken);
+        }
+        catch
+        {
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            throw;
+        }
         var booth = await _booths.GetByIdAsync(boothId);
         if (booth is not null)
         {
@@ -109,16 +128,30 @@ public class ReviewService : IReviewService
         if (review is null || review.CustomerId != customerId)
             throw AppException.NotFound("Review was not found.", "REVIEW_NOT_FOUND");
 
+        EnsureVisibleForEdit(review.IsVisible);
         EnsureWithinEditWindow(review.CreatedAt);
 
-        review.Rating = request.Rating;
-        review.Content = TextHelper.NormalizeOptionalText(request.Content);
-        review.ImageUrl = TextHelper.NormalizeOptionalText(request.ImageUrl);
-        review.UpdatedAt = DateTime.UtcNow;
-        _reviews.Update(review);
-        await _reviews.SaveChangesAsync();
-        await UpsertFoodReviewsForOrderAsync(customerId, review.OrderId, request.FoodReviews, allowCreate: true, cancellationToken);
-        await _reviews.RefreshBoothAverageRatingAsync(review.BoothId);
+        await ValidateFoodReviewsForOrderAsync(
+            customerId, review.OrderId, request.FoodReviews, cancellationToken);
+
+        await _unitOfWork.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            review.Rating = request.Rating;
+            review.Content = TextHelper.NormalizeOptionalText(request.Content);
+            review.ImageUrl = TextHelper.NormalizeOptionalText(request.ImageUrl);
+            review.UpdatedAt = UtcNow;
+            _reviews.Update(review);
+            await _reviews.SaveChangesAsync();
+            await UpsertFoodReviewsForOrderAsync(customerId, review.OrderId, request.FoodReviews, allowCreate: true, cancellationToken);
+            await _reviews.RefreshBoothAverageRatingAsync(review.BoothId);
+            await _unitOfWork.CommitTransactionAsync(cancellationToken);
+        }
+        catch
+        {
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            throw;
+        }
 
         var updated = await _reviews.GetWithReplyByIdAsync(review.Id);
         return ApiResponse<CustomerReviewHistoryResponse>.SuccessResponse(
@@ -136,7 +169,7 @@ public class ReviewService : IReviewService
                 await ToCustomerResponseAsync(review, cancellationToken), "Review is already hidden.");
 
         review.IsVisible = false;
-        review.UpdatedAt = DateTime.UtcNow;
+        review.UpdatedAt = UtcNow;
         _reviews.Update(review);
         await _reviews.SaveChangesAsync();
         await _reviews.RefreshBoothAverageRatingAsync(review.BoothId);
@@ -209,7 +242,7 @@ public class ReviewService : IReviewService
             throw AppException.NotFound("Review was not found.");
 
         review.IsVisible = request.IsVisible;
-        review.UpdatedAt = DateTime.UtcNow;
+        review.UpdatedAt = UtcNow;
 
         _reviews.Update(review);
         await _reviews.SaveChangesAsync();
@@ -301,7 +334,7 @@ public class ReviewService : IReviewService
         if (await _foodReviews.ExistsByOrderDetailAsync(request.OrderDetailId, cancellationToken))
             throw AppException.Conflict("This order item has already been reviewed.", "FOOD_REVIEW_ALREADY_EXISTS");
 
-        var now = DateTime.UtcNow;
+        var now = UtcNow;
         var foodReview = new FoodReview
         {
             Id = Guid.NewGuid(),
@@ -336,12 +369,13 @@ public class ReviewService : IReviewService
         if (foodReview is null || foodReview.CustomerId != customerId)
             throw AppException.NotFound("Food review was not found.", "FOOD_REVIEW_NOT_FOUND");
 
+        EnsureVisibleForEdit(foodReview.IsVisible);
         EnsureWithinEditWindow(foodReview.CreatedAt);
 
         foodReview.Rating = request.Rating;
         foodReview.Content = TextHelper.NormalizeOptionalText(request.Content);
         foodReview.ImageUrl = TextHelper.NormalizeOptionalText(request.ImageUrl);
-        foodReview.UpdatedAt = DateTime.UtcNow;
+        foodReview.UpdatedAt = UtcNow;
         _foodReviews.Update(foodReview);
         await _foodReviews.SaveChangesAsync();
         await _foodReviews.RefreshFoodItemAverageRatingAsync(foodReview.FoodItemId, cancellationToken);
@@ -360,7 +394,7 @@ public class ReviewService : IReviewService
             return ApiResponse<CustomerFoodReviewHistoryResponse>.SuccessResponse(ToFoodCustomerResponse(foodReview), "Food review is already hidden.");
 
         foodReview.IsVisible = false;
-        foodReview.UpdatedAt = DateTime.UtcNow;
+        foodReview.UpdatedAt = UtcNow;
         _foodReviews.Update(foodReview);
         await _foodReviews.SaveChangesAsync();
         await _foodReviews.RefreshFoodItemAverageRatingAsync(foodReview.FoodItemId, cancellationToken);
@@ -397,17 +431,25 @@ public class ReviewService : IReviewService
 
     private int EditWindowDays => Math.Max(1, _configuration.GetValue("ReviewSettings:EditWindowDays", 7));
 
+    private DateTime UtcNow => _timeProvider.GetUtcNow().UtcDateTime;
+
+    private static void EnsureVisibleForEdit(bool isVisible)
+    {
+        if (!isVisible)
+            throw AppException.BadRequest("Hidden reviews cannot be edited.", "REVIEW_HIDDEN");
+    }
+
     private void EnsureWithinEditWindow(DateTime createdAt)
     {
         var deadline = createdAt.AddDays(EditWindowDays);
-        if (DateTime.UtcNow > deadline)
+        if (UtcNow > deadline)
             throw AppException.BadRequest("The review edit window has expired.", "REVIEW_EDIT_WINDOW_EXPIRED");
     }
 
     private (bool CanEdit, DateTime EditDeadline) GetEditState(DateTime createdAt, bool isVisible)
     {
         var deadline = createdAt.AddDays(EditWindowDays);
-        return (isVisible && DateTime.UtcNow <= deadline, deadline);
+        return (isVisible && UtcNow <= deadline, deadline);
     }
 
     private async Task TryNotifyAsync(NotificationMessage message, CancellationToken cancellationToken)
@@ -517,6 +559,41 @@ public class ReviewService : IReviewService
         };
     }
 
+    private async Task ValidateFoodReviewsForOrderAsync(
+        Guid customerId,
+        Guid orderId,
+        List<CreateFoodReviewRequest>? requests,
+        CancellationToken cancellationToken)
+    {
+        if (requests is null || requests.Count == 0)
+            return;
+
+        if (requests.GroupBy(item => item.OrderDetailId).Any(group => group.Count() > 1))
+            throw AppException.Conflict(
+                "Each order item can only appear once in a review request.",
+                "DUPLICATE_FOOD_REVIEW");
+
+        foreach (var item in requests)
+        {
+            ValidateRating(item.Rating);
+            NormalizeAndValidateFoodContent(item.Content, item.ImageUrl);
+
+            var orderDetail = await _orders.GetCustomerOrderDetailLineAsync(
+                customerId, item.OrderDetailId, cancellationToken)
+                ?? throw AppException.BadRequest(
+                    "Food review must target an item from this order.",
+                    "FOOD_REVIEW_ORDER_DETAIL_INVALID");
+
+            if (orderDetail.OrderId != orderId)
+                throw AppException.BadRequest(
+                    "Food review must target an item from this order.",
+                    "FOOD_REVIEW_ORDER_DETAIL_INVALID");
+
+            if (orderDetail.Order.Status != OrderStatus.Completed)
+                throw AppException.BadRequest("Only completed orders can be reviewed.");
+        }
+    }
+
     private async Task UpsertFoodReviewsForOrderAsync(
         Guid customerId,
         Guid orderId,
@@ -527,16 +604,11 @@ public class ReviewService : IReviewService
         if (requests is null || requests.Count == 0)
             return;
 
-        var distinct = requests
-            .GroupBy(item => item.OrderDetailId)
-            .Select(group => group.Last())
-            .ToList();
-
         var existingByDetail = (await _foodReviews.GetByOrderIdAsync(orderId, cancellationToken))
             .ToDictionary(review => review.OrderDetailId);
         var touchedFoodItemIds = new HashSet<Guid>();
 
-        foreach (var item in distinct)
+        foreach (var item in requests)
         {
             ValidateRating(item.Rating);
             NormalizeAndValidateFoodContent(item.Content, item.ImageUrl);
@@ -557,11 +629,12 @@ public class ReviewService : IReviewService
                 if (existing.CustomerId != customerId)
                     throw AppException.Forbidden("You do not have permission to edit this food review.");
 
+                EnsureVisibleForEdit(existing.IsVisible);
                 EnsureWithinEditWindow(existing.CreatedAt);
                 existing.Rating = item.Rating;
                 existing.Content = content;
                 existing.ImageUrl = imageUrl;
-                existing.UpdatedAt = DateTime.UtcNow;
+                existing.UpdatedAt = UtcNow;
                 _foodReviews.Update(existing);
                 await _foodReviews.SaveChangesAsync();
                 touchedFoodItemIds.Add(existing.FoodItemId);
@@ -571,7 +644,7 @@ public class ReviewService : IReviewService
             if (!allowCreate)
                 continue;
 
-            var now = DateTime.UtcNow;
+            var now = UtcNow;
             var foodReview = new FoodReview
             {
                 Id = Guid.NewGuid(),

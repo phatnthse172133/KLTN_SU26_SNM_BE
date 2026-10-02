@@ -35,7 +35,7 @@ public class ComplaintImageRequest
 
 public class AddComplaintEvidenceRequest
 {
-    [MaxLength(5)]
+    [MinLength(1), MaxLength(5)]
     public List<ComplaintImageRequest> Images { get; set; } = new();
 }
 

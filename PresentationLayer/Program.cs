@@ -18,6 +18,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.OpenApi.Models;
+using Microsoft.OpenApi.Any;
 using PayOS;
 using PresentationLayer.Hubs;
 using PresentationLayer.Middlewares;
@@ -412,6 +413,14 @@ builder.Services.AddHealthChecks()
     .AddCheck<DatabaseReadinessHealthCheck>("postgresql", tags: ["ready"]);
 builder.Services.AddSwaggerGen(options =>
 {
+    options.MapType<ComplaintCategory>(() => new OpenApiSchema
+    {
+        Type = "string",
+        Enum = Enum.GetNames<ComplaintCategory>()
+            .Where(name => name != nameof(ComplaintCategory.PromotionIssue))
+            .Select(name => (IOpenApiAny)new OpenApiString(name))
+            .ToList()
+    });
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Name = "Authorization",

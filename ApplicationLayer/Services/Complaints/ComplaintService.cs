@@ -264,6 +264,10 @@ public class ComplaintService : IComplaintService
             throw AppException.BadRequest("Evidence can only be added while waiting for customer response.", "COMPLAINT_EVIDENCE_NOT_ALLOWED");
 
         var requestedImages = request.Images ?? [];
+        if (requestedImages.Count == 0 || requestedImages.Any(image => string.IsNullOrWhiteSpace(image.ImageUrl)))
+            throw AppException.BadRequest(
+                "At least one valid evidence image is required.",
+                "COMPLAINT_EVIDENCE_REQUIRED");
         var existingCount = complaint.ComplaintImages?.Count ?? 0;
         if (existingCount + requestedImages.Count > 5)
             throw AppException.BadRequest("A complaint can contain at most 5 images.", "COMPLAINT_IMAGE_LIMIT");

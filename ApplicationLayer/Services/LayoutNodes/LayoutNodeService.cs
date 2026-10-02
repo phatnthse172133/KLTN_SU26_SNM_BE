@@ -80,7 +80,7 @@ public class LayoutNodeService : ILayoutNodeService
             if (errors.Count > 0)
                 throw AppException.BadRequest(string.Join(" ", errors), "LAYOUT_NODE_GEOMETRY_INVALID");
         }
-        await _nodes.AddAsync(node); await _nodes.SaveChangesAsync();
+        await _nodes.AddAsync(node); await SaveGraphMutationAsync(layout, cancellationToken);
 
         // A user-facing Gate is stored as an Entrance for backwards-compatible
         // routing. Link it to the nearest junction when it is placed so the
@@ -109,7 +109,7 @@ public class LayoutNodeService : ILayoutNodeService
                     CreatedAt = now,
                     UpdatedAt = now
                 });
-                await _edges.SaveChangesAsync();
+                await SaveGraphMutationAsync(layout, cancellationToken);
             }
         }
         return ApiResponse<LayoutNodeResponse>.SuccessResponse(_mapper.Map<LayoutNodeResponse>(node), "Layout node created successfully.");
@@ -179,7 +179,7 @@ public class LayoutNodeService : ILayoutNodeService
 
         // One AddRange + SaveChanges is atomic in the current EF unit of work:
         // validation completes for the full incoming batch before any INSERT.
-        await _nodes.AddRangeAsync(nodes); await _nodes.SaveChangesAsync();
+        await _nodes.AddRangeAsync(nodes); await SaveGraphMutationAsync(layout, cancellationToken);
         return ApiResponse<IReadOnlyCollection<LayoutNodeResponse>>.SuccessResponse(_mapper.Map<List<LayoutNodeResponse>>(nodes), "Layout nodes created successfully.");
     }
 
@@ -214,8 +214,7 @@ public class LayoutNodeService : ILayoutNodeService
         {
             await RecalculateConnectedEdgesAsync(node.LayoutId, node.Id, cancellationToken);
         }
-        await _nodes.SaveChangesAsync();
-        await _edges.SaveChangesAsync();
+        await SaveGraphMutationAsync(layout, cancellationToken);
         return ApiResponse<LayoutNodeResponse>.SuccessResponse(_mapper.Map<LayoutNodeResponse>(node), "Layout node updated successfully.");
     }
 
@@ -307,7 +306,7 @@ public class LayoutNodeService : ILayoutNodeService
                     _nodes.Update(swapNode);
                     await RecalculateConnectedEdgesAsync(node.LayoutId, node.Id, cancellationToken);
                     await RecalculateConnectedEdgesAsync(swapNode.LayoutId, swapNode.Id, cancellationToken);
-                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+                    await SaveGraphMutationAsync(layout, cancellationToken);
                     await _unitOfWork.CommitTransactionAsync(cancellationToken);
                 }
                 catch
@@ -339,8 +338,7 @@ public class LayoutNodeService : ILayoutNodeService
         node.Xcoordinate = request.XCoordinate; node.Ycoordinate = request.YCoordinate; node.UpdatedAt = DateTime.UtcNow;
         _nodes.Update(node);
         await RecalculateConnectedEdgesAsync(node.LayoutId, node.Id, cancellationToken);
-        await _nodes.SaveChangesAsync();
-        await _edges.SaveChangesAsync();
+        await SaveGraphMutationAsync(layout, cancellationToken);
         return ApiResponse<LayoutNodeResponse>.SuccessResponse(_mapper.Map<LayoutNodeResponse>(node), "Node position updated successfully.");
     }
 
@@ -351,7 +349,7 @@ public class LayoutNodeService : ILayoutNodeService
         await EnsureLayoutEditableAsync(layout, cancellationToken);
         await EnsureLayoutOwnershipAsync(layout, actorId, cancellationToken);
         node.IsAccessible = request.IsAccessible; node.UpdatedAt = DateTime.UtcNow;
-        _nodes.Update(node); await _nodes.SaveChangesAsync();
+        _nodes.Update(node); await SaveGraphMutationAsync(layout, cancellationToken);
         return ApiResponse<LayoutNodeResponse>.SuccessResponse(_mapper.Map<LayoutNodeResponse>(node), "Node accessibility updated successfully.");
     }
 
@@ -376,8 +374,17 @@ public class LayoutNodeService : ILayoutNodeService
         var edges = await _edges.GetByLayoutAsync(node.LayoutId, cancellationToken: cancellationToken);
         _edges.DeleteRange(edges.Where(x => x.FromNodeId == id || x.ToNodeId == id));
         _nodes.Delete(node); node.UpdatedAt = DateTime.UtcNow;
-        await _nodes.SaveChangesAsync();
+        await SaveGraphMutationAsync(layout, cancellationToken);
         return ApiResponse<object>.SuccessResponse(new { node.Id }, "Layout node deleted successfully.");
+    }
+
+    private async Task SaveGraphMutationAsync(MarketLayout layout, CancellationToken cancellationToken)
+    {
+        layout.GraphRevision = checked(layout.GraphRevision + 1);
+        layout.UpdatedAt = DateTime.UtcNow;
+        _layouts.Update(layout);
+        // Node, connected edges and the revision use the same EF unit of work.
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
     private async Task RecalculateConnectedEdgesAsync(Guid layoutId, Guid movedNodeId, CancellationToken cancellationToken)

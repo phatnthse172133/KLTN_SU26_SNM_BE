@@ -1161,9 +1161,40 @@ public class MarketLayoutService : IMarketLayoutService
     {
         var layout = await GetActiveLayoutAsync(layoutId, cancellationToken);
         await EnsureLayoutOwnershipOnlyAsync(layout, actorId, cancellationToken);
-        throw AppException.Conflict(
-            "Individual layout lifecycle changes are disabled. Publish another complete composition through MarketMap activation.",
-            "LAYOUT_LIFECYCLE_MANAGED_BY_MARKET_MAP");
+        await _unitOfWork.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            await _layouts.AcquireMarketLockAsync(layout.NightMarketId, cancellationToken);
+            var map = await _marketMaps.GetManagementDetailForUpdateAsync(layout.MarketMapId, cancellationToken)
+                ?? throw AppException.NotFound("Market map was not found.");
+            var members = map.MarketLayouts.Where(item => !item.IsDeleted).ToArray();
+            if (members.Length != 1 || members[0].Id != layout.Id
+                || map.Name.Equals(MarketMap.LegacyDraftName, StringComparison.OrdinalIgnoreCase))
+                throw AppException.Conflict("Only a single-layout map can be unlocked directly.", "LAYOUT_UNLOCK_REQUIRES_SINGLE_MAP");
+            if (layout.Status != MarketLayoutStatus.Active && layout.Status != MarketLayoutStatus.Inactive)
+                throw AppException.Conflict("Only a published or inactive layout can be unlocked.", "LAYOUT_NOT_LOCKED");
+            if ((layout.Status == MarketLayoutStatus.Active && map.Status != MarketMapStatus.Active)
+                || (layout.Status == MarketLayoutStatus.Inactive && map.Status != MarketMapStatus.Archived))
+                throw AppException.Conflict("The map status changed. Reload it before unlocking.", "LAYOUT_CONCURRENCY_CONFLICT");
+
+            // Reopen the same aggregate. No clone, new layout, or quota allocation.
+            var now = DateTime.UtcNow;
+            map.Status = MarketMapStatus.Draft;
+            map.PublishedAt = null;
+            map.UpdatedAt = now;
+            layout.Status = MarketLayoutStatus.Draft;
+            layout.UpdatedAt = now;
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await _unitOfWork.CommitTransactionAsync(cancellationToken);
+            return ApiResponse<MarketLayoutResponse>.SuccessResponse(
+                _mapper.Map<MarketLayoutResponse>(layout),
+                "Layout unlocked for editing. Publish it again when your changes are ready.");
+        }
+        catch
+        {
+            await _unitOfWork.RollbackTransactionAsync(CancellationToken.None);
+            throw;
+        }
     }
 
     public async Task<ApiResponse<object>> DeleteAsync(Guid layoutId, CancellationToken cancellationToken = default, Guid? actorId = null)

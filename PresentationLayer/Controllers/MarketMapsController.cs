@@ -30,6 +30,12 @@ public sealed class MarketMapsController : ControllerBase
         => Ok(await _service.GetEligibleLayoutsAsync(
             nightMarketId, ActorId, cancellationToken));
 
+    [HttpGet("composition-sources")]
+    public async Task<IActionResult> GetCompositionSources(
+        Guid nightMarketId, CancellationToken cancellationToken)
+        => Ok(await _service.GetCompositionSourcesAsync(
+            nightMarketId, ActorId, cancellationToken));
+
     [HttpGet("{marketMapId:guid}")]
     public async Task<IActionResult> Get(
         Guid nightMarketId, Guid marketMapId, CancellationToken cancellationToken)

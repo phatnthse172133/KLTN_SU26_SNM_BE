@@ -30,6 +30,10 @@ public interface IMarketLayoutRepository : IGenericRepository<MarketLayout>
         IReadOnlyCollection<Guid> layoutIds, CancellationToken cancellationToken = default);
     Task<IReadOnlyCollection<MarketLayout>> GetEligibleCompositionSourcesAsync(
         Guid nightMarketId, CancellationToken cancellationToken = default);
+    // Read-only catalogue of every non-deleted layout in a market, with its
+    // owning MarketMap and live nodes, for composition source selection.
+    Task<IReadOnlyCollection<MarketLayout>> GetCompositionCatalogAsync(
+        Guid nightMarketId, CancellationToken cancellationToken = default);
     Task<IReadOnlyCollection<MarketLayout>> GetOperationalByMarketForUpdateAsync(
         Guid nightMarketId, CancellationToken cancellationToken = default);
     Task<int> CountQuotaRelevantLayoutsAsync(Guid marketMapId, CancellationToken cancellationToken = default);

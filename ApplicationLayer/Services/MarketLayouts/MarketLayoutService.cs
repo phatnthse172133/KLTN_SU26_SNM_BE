@@ -476,6 +476,7 @@ public class MarketLayoutService : IMarketLayoutService
                 Rotation = existing?.Rotation ?? 0,
                 DisplayOrder = existing?.DisplayOrder ?? 0,
                 ConfigJson = existing?.ConfigJson,
+                Zone = existing?.Zone,
                 IsDeleted = false,
                 CreatedAt = existing?.CreatedAt ?? now,
                 UpdatedAt = now
@@ -1064,7 +1065,10 @@ public class MarketLayoutService : IMarketLayoutService
         await EnsureLayoutOwnershipOnlyAsync(layout, actorId, cancellationToken);
         var graphResult = await _graphValidation.ValidateAsync(layoutId, cancellationToken);
         var planLimitError = await GetPlanSlotLimitErrorAsync(layout, actorId, cancellationToken);
-        var sectionErrors = await GetSectionGeometryErrorsAsync(layout, true, cancellationToken);
+        // The draft may intentionally replace sections of the currently active
+        // MarketMap. Only the draft composition, not its predecessor, determines
+        // whether physical areas overlap at publication time.
+        var sectionErrors = await GetSectionGeometryErrorsAsync(layout, false, cancellationToken);
         var market = await EnsureNightMarketExistsAsync(layout.NightMarketId, cancellationToken);
         var calibrationWarnings = LayoutPhysicalCalibration.DetectConflicts(
                 layout, market.BoundaryWidthMeters, market.BoundaryHeightMeters)

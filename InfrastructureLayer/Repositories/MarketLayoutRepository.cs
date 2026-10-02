@@ -151,12 +151,26 @@ public class MarketLayoutRepository : GenericRepository<MarketLayout>, IMarketLa
             .Where(layout =>
                 layout.NightMarketId == nightMarketId &&
                 !layout.IsDeleted &&
+                // Inactive layouts are historical versions of a physical
+                // section and remain valid sources for a new composition.
+                // Archived layouts are intentionally excluded.
                 (layout.Status == MarketLayoutStatus.Active ||
+                 layout.Status == MarketLayoutStatus.Inactive ||
                  (layout.Status == MarketLayoutStatus.Draft &&
-                  layout.MarketMap.Status == MarketMapStatus.Draft &&
-                  layout.MarketMap.Name == MarketMap.LegacyDraftName)))
+                  layout.MarketMap.Status == MarketMapStatus.Draft)))
             .OrderBy(layout => layout.DisplayOrder)
             .ThenBy(layout => layout.SectionName)
+            .ThenByDescending(layout => layout.Version)
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyCollection<MarketLayout>> GetCompositionCatalogAsync(
+        Guid nightMarketId, CancellationToken cancellationToken = default)
+        => await _dbSet.AsNoTracking()
+            .AsSplitQuery()
+            .Include(layout => layout.MarketMap)
+            .Include(layout => layout.LayoutNodes.Where(node => !node.IsDeleted))
+            .Where(layout => layout.NightMarketId == nightMarketId && !layout.IsDeleted)
+            .OrderBy(layout => layout.SectionCode)
             .ThenByDescending(layout => layout.Version)
             .ToListAsync(cancellationToken);
 
@@ -313,9 +327,11 @@ public class MarketLayoutRepository : GenericRepository<MarketLayout>, IMarketLa
         var isEditableLegacyDraft = source.Status == MarketLayoutStatus.Draft &&
             source.MarketMap.Status == MarketMapStatus.Draft &&
             source.MarketMap.Name == MarketMap.LegacyDraftName;
-        if (source.Status != MarketLayoutStatus.Active && !isEditableLegacyDraft)
+        if (source.Status != MarketLayoutStatus.Active &&
+            source.Status != MarketLayoutStatus.Inactive &&
+            !isEditableLegacyDraft)
             throw ApplicationLayer.Exceptions.AppException.Conflict(
-                "Only an active layout or an editable layout from the legacy draft can be cloned.",
+                "Only an active or inactive layout, or an editable layout from the legacy draft, can be cloned.",
                 "LAYOUT_NOT_ACTIVE");
 
         var targetMapIsCompatible = await _context.MarketMaps.AnyAsync(map =>

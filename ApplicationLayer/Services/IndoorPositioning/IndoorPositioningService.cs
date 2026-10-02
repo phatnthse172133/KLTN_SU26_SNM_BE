@@ -117,9 +117,9 @@ public class IndoorPositioningService : IIndoorPositioningService
     private async Task<MarketLayout> ActiveLayoutAsync(Guid id, int version, int revision, CancellationToken token)
     {
         var layout = await _layouts.GetActiveByIdAsync(id, token) ?? throw AppException.NotFound("Market layout was not found.");
-        if (layout.Status != MarketLayoutStatus.Active || !await _markets.CustomerVisibleExistsAsync(layout.NightMarketId, token))
+        if (!await _markets.CustomerVisibleExistsAsync(layout.NightMarketId, token))
             throw AppException.NotFound("An active market layout was not found.");
-        if (layout.Version != version || layout.GraphRevision != revision)
+        if (layout.Status != MarketLayoutStatus.Active || layout.Version != version || layout.GraphRevision != revision)
             throw AppException.Conflict("The market map was updated. Reload before positioning.", "MAP_LAYOUT_VERSION_MISMATCH",
                 new { CurrentLayoutVersion = layout.Version, CurrentGraphRevision = layout.GraphRevision });
         return layout;

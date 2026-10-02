@@ -1,6 +1,8 @@
 using ApplicationLayer.DTOs.Responses;
 using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
+using ApplicationLayer.Services.Realtime;
+using Microsoft.Extensions.Logging;
 using static DomainLayer.Enums.GeneralEnum;
 
 namespace ApplicationLayer.Services.MarketMaps;
@@ -12,6 +14,8 @@ public sealed partial class MarketMapService
         CancellationToken cancellationToken = default)
     {
         var market = await EnsureOwnedMarketAsync(nightMarketId, actorId, cancellationToken);
+        MarketMapDetailResponse response;
+        RealtimeEvent activationEvent;
 
         await _unitOfWork.BeginTransactionAsync(cancellationToken);
         try
@@ -97,15 +101,50 @@ public sealed partial class MarketMapService
                     "The resulting operational layout composition is inconsistent; activation was rolled back.",
                     "ACTIVE_COMPOSITION_INVARIANT_FAILED");
 
+            response = ToDetailResponse(target, market);
+            var defaultLayout = targetLayouts.FirstOrDefault(layout => layout.IsDefaultView)
+                ?? targetLayouts.OrderBy(layout => layout.DisplayOrder).First();
+            // One event represents the atomic composition publication. The top-level
+            // tokens describe its default section; Layouts carries every published section.
+            activationEvent = new RealtimeEvent
+            {
+                EventType = "MarketLayoutActivated",
+                OccurredAt = now,
+                Role = "Customer",
+                Payload = new
+                {
+                    MarketId = nightMarketId,
+                    LayoutId = defaultLayout.Id,
+                    LayoutVersion = defaultLayout.Version,
+                    GraphRevision = defaultLayout.GraphRevision,
+                    MarketMapId = target.Id,
+                    MarketMapVersion = target.Version,
+                    Layouts = targetLayouts.Select(layout => new
+                    {
+                        LayoutId = layout.Id,
+                        LayoutVersion = layout.Version,
+                        GraphRevision = layout.GraphRevision
+                    }).ToArray()
+                }
+            };
             await _unitOfWork.CommitTransactionAsync(cancellationToken);
-            return ApiResponse<MarketMapDetailResponse>.SuccessResponse(
-                ToDetailResponse(target, market),
-                "MarketMap activated successfully.");
         }
         catch
         {
             await _unitOfWork.RollbackTransactionAsync(CancellationToken.None);
             throw;
         }
+
+        // Never publish before commit or attempt to roll back a committed activation
+        // on a transport failure. Request cancellation must not suppress this send.
+        try
+        {
+            await _eventPublisher.PublishAsync(activationEvent, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to publish map activation for market {MarketId}.", nightMarketId);
+        }
+        return ApiResponse<MarketMapDetailResponse>.SuccessResponse(response, "MarketMap activated successfully.");
     }
 }

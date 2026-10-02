@@ -489,6 +489,11 @@ public class MarketLayoutRepository : GenericRepository<MarketLayout>, IMarketLa
         var edgeList = edges.ToList();
         var now = DateTime.UtcNow;
 
+        var marketId = await _dbSet.Where(item => item.Id == layoutId)
+            .Select(item => (Guid?)item.NightMarketId).SingleOrDefaultAsync(cancellationToken)
+            ?? throw ApplicationLayer.Exceptions.AppException.NotFound("Market layout was not found.", "LAYOUT_NOT_FOUND");
+        await AcquireMarketLockAsync(marketId, cancellationToken);
+
         // Take a row lock and validate both client tokens before touching graph
         // rows. This closes the gap between the application-level validation
         // and persistence when two editors save at the same time.
@@ -502,6 +507,11 @@ public class MarketLayoutRepository : GenericRepository<MarketLayout>, IMarketLa
             .SingleOrDefaultAsync(cancellationToken)
             ?? throw ApplicationLayer.Exceptions.AppException.NotFound(
                 "Market layout was not found.", "LAYOUT_NOT_FOUND");
+
+        if (lockedLayout.IsDeleted || lockedLayout.Status != MarketLayoutStatus.Draft ||
+            !await IsEditableDraftAsync(layoutId, cancellationToken))
+            throw ApplicationLayer.Exceptions.AppException.Conflict(
+                "Only a layout in a draft MarketMap can be edited.", "LAYOUT_NOT_EDITABLE_DRAFT");
 
         if (expectedUpdatedAt.HasValue && expectedGraphRevision.HasValue &&
             (lockedLayout.GraphRevision != expectedGraphRevision.Value ||

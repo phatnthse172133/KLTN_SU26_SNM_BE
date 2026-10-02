@@ -4,6 +4,8 @@ using ApplicationLayer.Exceptions;
 using ApplicationLayer.Helppers;
 using ApplicationLayer.Services.Subscriptions;
 using ApplicationLayer.Services.MarketLayouts;
+using ApplicationLayer.Services.Realtime;
+using Microsoft.Extensions.Logging;
 using DomainLayer.Entities;
 using DomainLayer.InterfaceRepositories;
 using DomainLayer.InterfaceRepository;
@@ -28,6 +30,8 @@ public sealed partial class MarketMapService : IMarketMapService
     private readonly IZoneRepository _zones;
     private readonly ILayoutNavigationAnchorRepository _anchors;
     private readonly IBoothLocationRepository _locations;
+    private readonly IRealtimeEventPublisher _eventPublisher;
+    private readonly ILogger<MarketMapService> _logger;
 
     public MarketMapService(
         IMarketMapRepository marketMaps,
@@ -39,7 +43,9 @@ public sealed partial class MarketMapService : IMarketMapService
         ILayoutGraphValidationService graphValidation,
         IZoneRepository zones,
         ILayoutNavigationAnchorRepository anchors,
-        IBoothLocationRepository locations)
+        IBoothLocationRepository locations,
+        IRealtimeEventPublisher eventPublisher,
+        ILogger<MarketMapService> logger)
     {
         _marketMaps = marketMaps;
         _layouts = layouts;
@@ -51,6 +57,8 @@ public sealed partial class MarketMapService : IMarketMapService
         _zones = zones;
         _anchors = anchors;
         _locations = locations;
+        _eventPublisher = eventPublisher;
+        _logger = logger;
     }
 
     public async Task<ApiResponse<IReadOnlyCollection<MarketMapSummaryResponse>>> GetAllAsync(

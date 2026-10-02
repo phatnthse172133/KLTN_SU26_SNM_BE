@@ -145,15 +145,33 @@ namespace InfrastructureLayer.Data
         public override int SaveChanges(bool acceptAllChangesOnSuccess)
         {
             PrepareFoodCategoryMetadata();
-            return base.SaveChanges(acceptAllChangesOnSuccess);
+            try
+            {
+                return base.SaveChanges(acceptAllChangesOnSuccess);
+            }
+            catch (DbUpdateConcurrencyException ex) when (ex.Entries.Any(entry => entry.Entity is MarketLayout))
+            {
+                throw ApplicationLayer.Exceptions.AppException.Conflict(
+                    "This layout changed or was published while editing. Reload and edit a draft.",
+                    "LAYOUT_CONCURRENCY_CONFLICT");
+            }
         }
 
-        public override Task<int> SaveChangesAsync(
+        public override async Task<int> SaveChangesAsync(
             bool acceptAllChangesOnSuccess,
             CancellationToken cancellationToken = default)
         {
             PrepareFoodCategoryMetadata();
-            return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+            try
+            {
+                return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+            }
+            catch (DbUpdateConcurrencyException ex) when (ex.Entries.Any(entry => entry.Entity is MarketLayout))
+            {
+                throw ApplicationLayer.Exceptions.AppException.Conflict(
+                    "This layout changed or was published while editing. Reload and edit a draft.",
+                    "LAYOUT_CONCURRENCY_CONFLICT");
+            }
         }
 
         private void PrepareFoodCategoryMetadata()
@@ -884,7 +902,9 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.MarketLengthMeters).HasPrecision(10, 2);
                 entity.Property(e => e.PixelsPerMeter).HasPrecision(8, 2);
                 entity.Property(e => e.Version).HasDefaultValue(1);
-                entity.Property(e => e.GraphRevision).HasDefaultValue(1);
+                // Optimistic concurrency uses existing columns, with no schema change.
+                // A stale editor cannot overwrite a published layout or lose a revision bump.
+                entity.Property(e => e.GraphRevision).HasDefaultValue(1).IsConcurrencyToken();
                 entity.Property(e => e.CoordinateUnit)
                     .HasConversion<string>()
                     .HasMaxLength(30)
@@ -897,6 +917,7 @@ namespace InfrastructureLayer.Data
                 entity.Property(e => e.Status)
                     .HasConversion<string>()
                     .HasMaxLength(20)
+                    .IsConcurrencyToken()
                     .HasDefaultValueSql("'Draft'::character varying");
                 entity.Property(e => e.IsDeleted).HasDefaultValue(false);
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");

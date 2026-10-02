@@ -200,6 +200,7 @@ public class MarketLayoutService : IMarketLayoutService
         ValidateSectionInsideMarket(layout, market);
         await EnsureExistingGraphFitsDerivedCanvasAsync(layout, cancellationToken);
         ApplyDerivedCanvasDimensions(layout);
+        layout.GraphRevision = checked(layout.GraphRevision + 1);
         layout.UpdatedAt = DateTime.UtcNow;
         _layouts.Update(layout);
 
@@ -224,6 +225,7 @@ public class MarketLayoutService : IMarketLayoutService
         EnsureCanvasMatchesPhysicalArea(layout, request.Width, request.Height);
 
         _mapper.Map(request, layout);
+        layout.GraphRevision = checked(layout.GraphRevision + 1);
         layout.UpdatedAt = DateTime.UtcNow;
         _layouts.Update(layout);
 
@@ -265,6 +267,7 @@ public class MarketLayoutService : IMarketLayoutService
 
         layout.Width = request.Width;
         layout.Height = request.Height;
+        layout.GraphRevision = checked(layout.GraphRevision + 1);
         layout.UpdatedAt = DateTime.UtcNow;
         _layouts.Update(layout);
 

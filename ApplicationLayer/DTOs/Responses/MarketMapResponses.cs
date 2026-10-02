@@ -30,6 +30,59 @@ public sealed class MarketMapLayoutSummaryResponse
     public int DisplayOrder { get; set; }
     public bool IsDefaultView { get; set; }
     public int SlotCount { get; set; }
+    public Guid? BasedOnLayoutId { get; set; }
+}
+
+/// <summary>
+/// Read-only catalogue used by the composition UI. It never changes data and
+/// is derived from existing MarketMap/MarketLayout columns only.
+/// </summary>
+public sealed class MarketMapCompositionSourcesResponse
+{
+    public int? MaxLayoutsPerMarket { get; set; }
+    public int MaxSlotsPerMarket { get; set; }
+    public double? MarketBoundaryWidthMeters { get; set; }
+    public double? MarketBoundaryHeightMeters { get; set; }
+    public IReadOnlyCollection<MarketMapSummaryResponse> Maps { get; set; } = [];
+    public IReadOnlyCollection<CompositionSourceLayoutResponse> Layouts { get; set; } = [];
+}
+
+public sealed class CompositionSourceLayoutResponse
+{
+    public Guid LayoutId { get; set; }
+    public string LayoutName { get; set; } = string.Empty;
+    public string SectionCode { get; set; } = string.Empty;
+    public string SectionName { get; set; } = string.Empty;
+    public int Version { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public int Width { get; set; }
+    public int Height { get; set; }
+    public double? PhysicalWidthMeters { get; set; }
+    public double? PhysicalHeightMeters { get; set; }
+    public double OffsetXMeters { get; set; }
+    public double OffsetYMeters { get; set; }
+    public int ZoneCount { get; set; }
+    public int SlotCount { get; set; }
+    public int GateCount { get; set; }
+    public Guid? BasedOnLayoutId { get; set; }
+    public Guid MarketMapId { get; set; }
+    public string MarketMapName { get; set; } = string.Empty;
+    public int MarketMapVersion { get; set; }
+    public string MarketMapStatus { get; set; } = string.Empty;
+    public bool IsStandalone { get; set; }
+    public bool IsSelectable { get; set; }
+    public string? IneligibleCode { get; set; }
+    public string? IneligibleReason { get; set; }
+    public IReadOnlyCollection<CompositionSourceUsageResponse> UsedBy { get; set; } = [];
+}
+
+public sealed class CompositionSourceUsageResponse
+{
+    public Guid MarketMapId { get; set; }
+    public string MarketMapName { get; set; } = string.Empty;
+    public int MarketMapVersion { get; set; }
+    public string MarketMapStatus { get; set; } = string.Empty;
+    public Guid CloneLayoutId { get; set; }
 }
 
 public sealed class EligibleMarketLayoutResponse

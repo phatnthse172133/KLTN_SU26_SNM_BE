@@ -163,6 +163,17 @@ public class MarketLayoutRepository : GenericRepository<MarketLayout>, IMarketLa
             .ThenByDescending(layout => layout.Version)
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyCollection<MarketLayout>> GetCompositionCatalogAsync(
+        Guid nightMarketId, CancellationToken cancellationToken = default)
+        => await _dbSet.AsNoTracking()
+            .AsSplitQuery()
+            .Include(layout => layout.MarketMap)
+            .Include(layout => layout.LayoutNodes.Where(node => !node.IsDeleted))
+            .Where(layout => layout.NightMarketId == nightMarketId && !layout.IsDeleted)
+            .OrderBy(layout => layout.SectionCode)
+            .ThenByDescending(layout => layout.Version)
+            .ToListAsync(cancellationToken);
+
     public async Task<IReadOnlyCollection<MarketLayout>> GetOperationalByMarketForUpdateAsync(
         Guid nightMarketId, CancellationToken cancellationToken = default)
         => await _dbSet

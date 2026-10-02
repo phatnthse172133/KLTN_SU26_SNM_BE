@@ -16,6 +16,9 @@ public interface IMarketMapService
     Task<ApiResponse<IReadOnlyCollection<EligibleMarketLayoutResponse>>> GetEligibleLayoutsAsync(
         Guid nightMarketId, Guid actorId, CancellationToken cancellationToken = default);
 
+    Task<ApiResponse<MarketMapCompositionSourcesResponse>> GetCompositionSourcesAsync(
+        Guid nightMarketId, Guid actorId, CancellationToken cancellationToken = default);
+
     Task<ApiResponse<MarketMapDetailResponse>> CreateDraftAsync(
         Guid nightMarketId, CreateMarketMapDraftRequest request, Guid actorId,
         CancellationToken cancellationToken = default);

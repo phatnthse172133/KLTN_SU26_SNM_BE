@@ -158,6 +158,26 @@ public static class BoothSlotGeometry
         footprint = default;
         if (string.IsNullOrWhiteSpace(block.ConfigJson))
         {
+            // Layouts created before block-level generator metadata was introduced
+            // can still have valid booth slots and a Zone with the original pixel
+            // footprint. Keep those drafts editable without weakening containment
+            // or overlap validation. New/generated layouts continue to use the
+            // immutable block snapshot below.
+            var legacyZone = block.Zone;
+            if (legacyZone is not null
+                && double.IsFinite(legacyZone.DefaultBoothWidth)
+                && legacyZone.DefaultBoothWidth > 0
+                && double.IsFinite(legacyZone.DefaultBoothHeight)
+                && legacyZone.DefaultBoothHeight > 0)
+            {
+                footprint = new BoothSlotFootprint(
+                    legacyZone.DefaultBoothWidth,
+                    legacyZone.DefaultBoothHeight,
+                    0);
+                error = null;
+                return true;
+            }
+
             error = $"Zone '{block.Name}' has no configured booth footprint.";
             return false;
         }

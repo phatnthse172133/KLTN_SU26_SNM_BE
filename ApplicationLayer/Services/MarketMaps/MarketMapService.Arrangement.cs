@@ -199,13 +199,20 @@ public sealed partial class MarketMapService
 
         AddPlacementIssues(map, market, liveLayouts, null, errors, warnings);
 
+        // Customers need exactly one initial focus area for the published map.
         var defaultCount = liveLayouts.Count(layout => layout.IsDefaultView);
-        if (defaultCount == 0)
-            warnings.Add(Issue("DEFAULT_VIEW_MISSING", "MarketMap has no default-view layout."));
+        if (liveLayouts.Length > 0 && defaultCount == 0)
+            errors.Add(Issue("DEFAULT_VIEW_MISSING", "MarketMap has no default-view layout. Select one area as the default customer view."));
         else if (defaultCount > 1)
             errors.Add(Issue(
                 "MULTIPLE_DEFAULT_VIEWS",
                 "MarketMap has more than one default-view layout; the active-layout database constraint permits only one."));
+
+        if (liveLayouts.Length > 0 && !liveLayouts.Any(layout => layout.LayoutNodes.Any(node =>
+                !node.IsDeleted && node.NodeType == LayoutNodeType.Entrance)))
+            errors.Add(Issue(
+                "COMPOSITION_GATE_REQUIRED",
+                "The market map must contain at least one gate."));
 
         var duplicateBoothIds = await _locations.GetDuplicateBoothIdsByMarketMapAsync(
             map.Id, cancellationToken);

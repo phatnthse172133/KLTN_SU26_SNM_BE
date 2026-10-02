@@ -325,7 +325,8 @@ public sealed partial class MarketMapService : IMarketMapService
             OffsetYMeters = layout.OffsetYMeters,
             DisplayOrder = layout.DisplayOrder,
             IsDefaultView = layout.IsDefaultView,
-            SlotCount = slotCount
+            SlotCount = slotCount,
+            BasedOnLayoutId = layout.BasedOnLayoutId
         };
     }
 

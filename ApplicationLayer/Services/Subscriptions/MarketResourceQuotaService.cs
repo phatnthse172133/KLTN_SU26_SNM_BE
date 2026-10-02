@@ -1,5 +1,8 @@
 using ApplicationLayer.Exceptions;
 using DomainLayer.InterfaceRepository;
+using DomainLayer.InterfaceRepositories;
+using DomainLayer.Entities;
+using static DomainLayer.Enums.GeneralEnum;
 
 namespace ApplicationLayer.Services.Subscriptions;
 
@@ -29,7 +32,7 @@ public interface IMarketResourceQuotaService
 
     Task EnsureCanAddBoothSlotsAsync(
         Guid marketOwnerId, Guid marketMapId, int additionalSlots,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default, Guid? layoutId = null);
 
     Task EnsureBoothSlotCapacityAsync(
         Guid marketOwnerId, Guid marketMapId, Guid layoutId, int proposedLayoutSlotCount,
@@ -49,12 +52,20 @@ public sealed class MarketResourceQuotaService : IMarketResourceQuotaService
     private readonly ISubscriptionEntitlementService _entitlements;
     private readonly IMarketLayoutRepository _layouts;
     private readonly ILayoutNodeRepository _nodes;
+    private readonly IMarketMapRepository _maps;
 
     public MarketResourceQuotaService(
         ISubscriptionEntitlementService entitlements,
         IMarketLayoutRepository layouts,
-        ILayoutNodeRepository nodes)
-        => (_entitlements, _layouts, _nodes) = (entitlements, layouts, nodes);
+        ILayoutNodeRepository nodes, IMarketMapRepository maps)
+        => (_entitlements, _layouts, _nodes, _maps) = (entitlements, layouts, nodes, maps);
+
+    private async Task<bool> IsStandaloneLibraryAsync(Guid mapId, CancellationToken cancellationToken)
+    {
+        var map = await _maps.GetManagementDetailAsync(mapId, cancellationToken);
+        return map?.Status == MarketMapStatus.Draft &&
+            map.Name.Equals(MarketMap.LegacyDraftName, StringComparison.OrdinalIgnoreCase);
+    }
 
     public async Task EnsureMapCompositionCapacityAsync(
         Guid marketOwnerId, int layoutCount, int slotCount,
@@ -100,11 +111,14 @@ public sealed class MarketResourceQuotaService : IMarketResourceQuotaService
 
     public async Task EnsureCanAddBoothSlotsAsync(
         Guid marketOwnerId, Guid marketMapId, int additionalSlots,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, Guid? layoutId = null)
     {
         if (additionalSlots <= 0) return;
         var used = await _nodes.CountBoothSlotsByMarketMapAsync(
             marketMapId, cancellationToken: cancellationToken);
+        if (layoutId.HasValue && await IsStandaloneLibraryAsync(marketMapId, cancellationToken))
+            used = (await _nodes.GetByLayoutAsync(layoutId.Value, cancellationToken: cancellationToken))
+                .Count(node => !node.IsDeleted && node.NodeType == LayoutNodeType.BoothSlot);
         var error = await GetCapacityErrorAsync(marketOwnerId, checked(used + additionalSlots));
         if (error is not null)
             throw AppException.Forbidden(error, "PLAN_LIMIT_REACHED");
@@ -124,8 +138,9 @@ public sealed class MarketResourceQuotaService : IMarketResourceQuotaService
         Guid marketOwnerId, Guid marketMapId, Guid layoutId, int proposedLayoutSlotCount,
         CancellationToken cancellationToken = default)
     {
-        var otherSlots = await _nodes.CountBoothSlotsByMarketMapAsync(
-            marketMapId, layoutId, cancellationToken);
+        var otherSlots = await IsStandaloneLibraryAsync(marketMapId, cancellationToken)
+            ? 0
+            : await _nodes.CountBoothSlotsByMarketMapAsync(marketMapId, layoutId, cancellationToken);
         return await GetCapacityErrorAsync(
             marketOwnerId, checked(otherSlots + proposedLayoutSlotCount));
     }

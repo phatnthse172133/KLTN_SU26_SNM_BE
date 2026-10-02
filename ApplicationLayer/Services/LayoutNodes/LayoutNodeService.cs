@@ -56,7 +56,7 @@ public class LayoutNodeService : ILayoutNodeService
 
         if (request.NodeType == DomainLayer.Enums.GeneralEnum.LayoutNodeType.BoothSlot && market.MarketOwnerId.HasValue)
             await _resourceQuota.EnsureCanAddBoothSlotsAsync(
-                market.MarketOwnerId.Value, layout.MarketMapId, 1, cancellationToken);
+                market.MarketOwnerId.Value, layout.MarketMapId, 1, cancellationToken, layout.Id);
 
         ValidatePosition(layout, request.XCoordinate, request.YCoordinate);
         await ValidateZoneAsync(layout, request.ZoneId, cancellationToken);
@@ -125,7 +125,7 @@ public class LayoutNodeService : ILayoutNodeService
         var newBoothSlots = requests.Count(r => r.NodeType == DomainLayer.Enums.GeneralEnum.LayoutNodeType.BoothSlot);
         if (newBoothSlots > 0 && market.MarketOwnerId.HasValue)
             await _resourceQuota.EnsureCanAddBoothSlotsAsync(
-                market.MarketOwnerId.Value, layout.MarketMapId, newBoothSlots, cancellationToken);
+                market.MarketOwnerId.Value, layout.MarketMapId, newBoothSlots, cancellationToken, layout.Id);
 
         foreach (var request in requests)
         {
@@ -192,7 +192,7 @@ public class LayoutNodeService : ILayoutNodeService
 
         if (request.NodeType == DomainLayer.Enums.GeneralEnum.LayoutNodeType.BoothSlot && node.NodeType != DomainLayer.Enums.GeneralEnum.LayoutNodeType.BoothSlot && market.MarketOwnerId.HasValue)
             await _resourceQuota.EnsureCanAddBoothSlotsAsync(
-                market.MarketOwnerId.Value, layout.MarketMapId, 1, cancellationToken);
+                market.MarketOwnerId.Value, layout.MarketMapId, 1, cancellationToken, layout.Id);
 
         ValidatePosition(layout, request.XCoordinate, request.YCoordinate);
         await ValidateZoneAsync(layout, request.ZoneId, cancellationToken);

@@ -150,10 +150,7 @@ public class MarketLayoutService : IMarketLayoutService
             layout.SectionCode = sectionCode;
             layout.SectionName = string.IsNullOrWhiteSpace(request.SectionName) ? request.LayoutName.Trim() : request.SectionName.Trim();
             layout.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
-            layout.OffsetXMeters = request.OffsetXMeters;
-            layout.OffsetYMeters = request.OffsetYMeters;
-            layout.MarketWidthMeters = request.MapWidthMeters ?? market.BoundaryWidthMeters;
-            layout.MarketLengthMeters = request.MapLengthMeters ?? market.BoundaryHeightMeters;
+            FullMarketLayoutDimensions.Apply(layout, market);
             layout.DisplayOrder = request.DisplayOrder;
             layout.IsDefaultView = false;
             layout.Version = resolvedVersion;
@@ -192,10 +189,7 @@ public class MarketLayoutService : IMarketLayoutService
         layout.SectionCode = sectionCode;
         layout.SectionName = string.IsNullOrWhiteSpace(request.SectionName) ? request.LayoutName.Trim() : request.SectionName.Trim();
         layout.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
-        layout.OffsetXMeters = request.OffsetXMeters;
-        layout.OffsetYMeters = request.OffsetYMeters;
-        layout.MarketWidthMeters = request.MapWidthMeters ?? layout.MarketWidthMeters ?? market.BoundaryWidthMeters;
-        layout.MarketLengthMeters = request.MapLengthMeters ?? layout.MarketLengthMeters ?? market.BoundaryHeightMeters;
+        FullMarketLayoutDimensions.Apply(layout, market);
         layout.DisplayOrder = request.DisplayOrder;
         ValidateSectionInsideMarket(layout, market);
         await EnsureExistingGraphFitsDerivedCanvasAsync(layout, cancellationToken);
@@ -222,9 +216,10 @@ public class MarketLayoutService : IMarketLayoutService
                 "The uploaded layout image URL is invalid.",
                 "LAYOUT_IMAGE_URL_INVALID");
 
-        EnsureCanvasMatchesPhysicalArea(layout, request.Width, request.Height);
-
-        _mapper.Map(request, layout);
+        var market = await EnsureNightMarketExistsAsync(layout.NightMarketId, cancellationToken);
+        FullMarketLayoutDimensions.Apply(layout, market);
+        await EnsureExistingGraphFitsDerivedCanvasAsync(layout, cancellationToken);
+        layout.LayoutImageUrl = request.LayoutImageUrl;
         layout.GraphRevision = checked(layout.GraphRevision + 1);
         layout.UpdatedAt = DateTime.UtcNow;
         _layouts.Update(layout);
@@ -241,7 +236,11 @@ public class MarketLayoutService : IMarketLayoutService
         await EnsureLayoutOwnershipAsync(layout, actorId, cancellationToken);
         await EnsureDraftLayoutEditableAsync(layout, cancellationToken);
 
-        EnsureCanvasMatchesPhysicalArea(layout, request.Width, request.Height);
+        var market = await EnsureNightMarketExistsAsync(layout.NightMarketId, cancellationToken);
+        FullMarketLayoutDimensions.Apply(layout, market);
+        await EnsureExistingGraphFitsDerivedCanvasAsync(layout, cancellationToken);
+        request.Width = layout.Width;
+        request.Height = layout.Height;
 
         var nodes = (await _layouts.GetNodesByLayoutIdAsync(layoutId, cancellationToken)).ToList();
         var outsideNodes = nodes
@@ -656,8 +655,8 @@ public class MarketLayoutService : IMarketLayoutService
         if (!market.BoundaryWidthMeters.HasValue || !market.BoundaryHeightMeters.HasValue || market.BoundaryWidthMeters.Value <= 0 || market.BoundaryHeightMeters.Value <= 0)
             throw AppException.BadRequest("The market boundary dimensions have not been configured. Set the market width and length before continuing.", "MARKET_BOUNDARY_MISSING");
 
-        request.MarketWidthMeters = layout.MarketWidthMeters ?? market.BoundaryWidthMeters.Value;
-        request.MarketLengthMeters = layout.MarketLengthMeters ?? market.BoundaryHeightMeters.Value;
+        request.MarketWidthMeters = market.BoundaryWidthMeters.Value;
+        request.MarketLengthMeters = market.BoundaryHeightMeters.Value;
         request.ZoneConfigs ??= [];
         var physicalPreparation = PhysicalGridCalculator.Prepare(request);
         var hasZoneManagement = await ValidateGenerationEntitlementAsync(market, request);
@@ -765,8 +764,8 @@ public class MarketLayoutService : IMarketLayoutService
         if (!market.BoundaryWidthMeters.HasValue || !market.BoundaryHeightMeters.HasValue || market.BoundaryWidthMeters.Value <= 0 || market.BoundaryHeightMeters.Value <= 0)
             throw AppException.BadRequest("The market boundary dimensions have not been configured. Set the market width and length before continuing.", "MARKET_BOUNDARY_MISSING");
 
-        request.MarketWidthMeters = layout.MarketWidthMeters ?? market.BoundaryWidthMeters.Value;
-        request.MarketLengthMeters = layout.MarketLengthMeters ?? market.BoundaryHeightMeters.Value;
+        request.MarketWidthMeters = market.BoundaryWidthMeters.Value;
+        request.MarketLengthMeters = market.BoundaryHeightMeters.Value;
         request.ZoneConfigs ??= [];
         var physicalPreparation = PhysicalGridCalculator.Prepare(request);
         if (physicalPreparation.Errors.Count > 0)
